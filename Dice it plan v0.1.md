@@ -1,7 +1,7 @@
-# Dice It! — Design Document v0.2
+# Dice it plan v0.1
 
 Premium, single-player, web-first dice roguelite. No ads, no IAP, no timers, no energy, no cash-out.
-Status: design only. Supersedes `PLAN.md` (v0.1).
+Status: design only, no code yet. Decisions below are agreed with the designer (see §16).
 
 ---
 
@@ -11,7 +11,7 @@ Status: design only. Supersedes `PLAN.md` (v0.1).
 
 Pillars (every decision gets checked against these):
 1. **Rolling feels amazing.** The roll itself is the dopamine: tumble, clatter, anticipation, a cascade of scoring. Not a button that shows a number.
-2. **Luck you can lean on.** Randomness is the spice, but the player always has *levers* (build, order, nudges, pins) so wins feel earned and losses feel survivable.
+2. **Luck you can lean on.** Randomness is the spice, but the player always has *levers* (build, order, nudges, rerolls) so wins feel earned and losses feel survivable.
 3. **Whacky, readable builds.** Every run should produce one "I can't believe this works" moment — and the player must be able to *read* why it worked.
 4. **Short, repeatable runs.** ~25 minutes, one more run always. Premium = respect the player's time; the game never makes them wait.
 5. **Content is data.** New dice, faces, combos and relics are table rows, not code. (Also what makes tuning by bot possible.)
@@ -30,7 +30,7 @@ A **run** is a series of **rounds**. Each round gives you a **target score** and
 START RUN (choose Starter Kit, Stake/difficulty, seed)
   └─ ROUND n:  target T, R rolls
         ROLL → dice tumble → faces resolve → combos fire → score cascade
-        (repeat; use Nudges/Pins to steer luck)
+        (repeat; use Nudges/Rerolls to steer luck)
         reach T?  yes → payout → SHOP → ROUND n+1
                   no (rolls out) → RUN OVER → results + unlocks → new run
   └─ BOSS every 3rd round (modifier)
@@ -44,7 +44,7 @@ START RUN (choose Starter Kit, Stake/difficulty, seed)
 - **Early finish**: once target is hit the player can **bank** (end round now, keep remaining rolls as coins) or **keep rolling for overkill** (risk-free, but each extra roll costs 1 saved-roll coin). The old "Cash Out" button lives on as this decision — a greed dial with no downside except opportunity cost. (Bosses can punish greed — see §7.)
 
 ### 3.2 Length target
-8 stages × 3 rounds (2 normal + 1 boss) = 24 rounds; ~1 min per round + shops ≈ 25–35 min per win. Stage count / rolls per round are parameters; the bot tunes toward the length target.
+**Target: 15–20 minutes per winning run.** 5 stages × 3 rounds (2 normal + 1 boss) = 15 rounds; ~45–60 s per round plus ~20–30 s per shop. Stage count, rolls per round (~5–7) and shop pacing are parameters; the bot tunes toward the length target. Losing runs are shorter, so a "one more run" fits in a coffee break.
 
 ## 4. Scoring
 
@@ -56,7 +56,7 @@ Per roll:
 
 Display rules: large numbers use compact notation (1.2K, 3.4M, 5e12). Every contribution animates and is individually labeled so the player can read the math (pillar 3).
 
-Open tuning knob: keep a *separate*, optional "single-currency" Hard Stake where score also is currency (the original design's tension). Cheap to test with the bot.
+**Decided:** score and coins are separate. Optional later idea: a high-Stake variant where score also is currency (the original design's tension) — cheap to test with the bot, not in v1.
 
 ## 5. Dice, faces, and the tray
 
@@ -81,7 +81,7 @@ Each face is either a **number** (value 1…N) or a **special** (see §8). Face 
 ### 5.3 Luck levers (agency)
 - **Nudge**: after a roll, spend a Nudge token to change one die ±1 (or to the adjacent face). Earned from shop/relics/rounds; a few per round.
 - **Reroll one**: spend a token to re-throw a single die. 
-- **Pin (experimental)**: before a roll, pin a die so it keeps its current value and re-scores. Makes combo-chasing a Yahtzee-style decision. *Test with the bot; cut if it flattens the game.*
+- **Pin** (Yahtzee-style hold) is **cut for v1**; revisit after the bot and playtests show whether the game needs more steering.
 - These are *limited*, so luck still matters, but the player is steering. This is the "feeling of luck" + "feeling of control" balance.
 
 ## 6. Combos (the big list)
@@ -222,7 +222,7 @@ Data-driven (price, rarity, weight, trigger, effect). Shared **shop of 3** (as o
 - **Hex**: score nothing but gives a combo level when rolled.
 
 ### 8.5 Wild / Meta
-- **Wild**: counts as any value for combos (player chooses after rolling, or auto-optimal — decide by playtest).
+- **Wild**: counts as any value for combos (**decided: the player chooses** the value after rolling; UI shows the combos each choice would trigger).
 - **Gold**: banks coins directly.
 - **Diamond**: rare meta resource (original idea). Unlocks cosmetic/theme options and special unlock tokens at run end.
 
@@ -335,9 +335,20 @@ Content tables define: id, name key, rarity, base price, weight, trigger, effect
 | Scope creep from infinite content | Data-driven content; MVP = 40 combos/25 specials/5 relics; rest are content drops |
 | Combo reachability with few dice | Combos list tagged with min dice; bot reports reachability per dice count |
 
-## 16. Open questions (small)
-1. Currency model: separate **score vs coins** (recommended) or original "pips are both" as a hard stake?
-2. Is **Pin** (Yahtzee-style hold) in scope for v1, or cut and revisit?
-3. Wild faces: auto-optimal or player chooses?
-4. Target run length: ~25–35 min OK, or shorter (15 min) for pick-up-and-play?
-5. Naming/theme: defer until Milestone 5 (recommended)?
+## 16. Decisions log & open questions
+
+**Decided**
+1. Premium, single-player, web-first (Pixi.js + TypeScript). No ads, IAP, timers, energy or real-money cash-out.
+2. Run structure: rounds with target + roll budget, bosses every 3rd round, shop between rounds.
+3. Score (never spent) and coins (spent) are **separate currencies**.
+4. **Pin is cut** from v1.
+5. **Wild faces: player chooses** the value.
+6. **Run length 15–20 min** (5 stages × 3 rounds as the starting parameter).
+7. 2D dice; rolling feel via deterministic outcome + animation. No skins for now; theme deferred.
+8. Tuning bot is a first-class deliverable.
+
+**Open (not blocking milestone 0–1)**
+1. Theme/name (decide around Milestone 5).
+2. Exact combo and special counts for the MVP cut (currently ~40 combos / ~25 specials / 5 relics).
+3. Whether Nudge/Reroll tokens are enough agency once the bot reports on luck-vs-skill variance.
+4. Landscape/desktop layout details after the portrait prototype.
