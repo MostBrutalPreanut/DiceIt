@@ -17,6 +17,10 @@ export interface RunResult {
   coins: number;
   dice: number;
   rolls: number;
+  /** Dice owned at the start of each round played. */
+  diceByRound: number[];
+  /** score/target of each round played (>=1 means cleared). */
+  ratioByRound: number[];
   run: RunState;
 }
 
@@ -25,17 +29,21 @@ export function playRun(seed: string | number, policy: Policy, opts: PlayOptions
   const run = createRun(seed, opts.config ?? DEFAULT_CONFIG);
   const botRng = new Rng(run.seed ^ 0x9e3779b9);
   const bankEarly = opts.bankEarly ?? true;
+  const diceByRound: number[] = [];
+  const ratioByRound: number[] = [];
 
   while (run.phase === "round" || run.phase === "shop") {
     if (run.phase === "round") {
+      diceByRound.push(run.dice.length);
       while (run.phase === "round") {
         roll(run);
         if (run.phase === "round" && bankEarly && canBank(run)) finishRound(run);
       }
+      ratioByRound.push(run.round!.score / run.round!.target);
     } else {
       for (let p = policy.chooseShop(run, botRng); p; p = policy.chooseShop(run, botRng)) applyPurchase(run, p);
       leaveShop(run);
     }
   }
-  return { won: run.phase === "won", roundsCleared: run.roundIndex, coins: run.coins, dice: run.dice.length, rolls: run.stats.rolls, run };
+  return { won: run.phase === "won", roundsCleared: run.roundIndex, coins: run.coins, dice: run.dice.length, rolls: run.stats.rolls, diceByRound, ratioByRound, run };
 }

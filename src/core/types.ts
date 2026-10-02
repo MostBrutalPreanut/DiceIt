@@ -1,59 +1,69 @@
+/**
+ * Faces are the unit of content. A die scores on its own: its face value, times any multiplier
+ * handed to it by a neighbour. Some faces read other dice (echo, sum, crowd, mult).
+ */
+export type FaceKind =
+  | "num" // scores `value` pips
+  | "mult" // scores 0, multiplies the die to its RIGHT by `value`
+  | "echo" // scores the final score of the die to its LEFT
+  | "crowd" // scores `value` x (number of dice in the tray)
+  | "sum" // scores the sum of every OTHER die's plain number face
+  | "boom"; // scores `value`, then the die self-destructs (the last die in the tray is spared)
+
+export interface Face {
+  kind: FaceKind;
+  value: number;
+}
+
 export interface Die {
   id: number;
-  /** Face values. M0 has number faces only; specials arrive in a later milestone. */
-  faces: number[];
-}
-
-export interface ComboContext {
-  /** Final rolled values, in tray order (left to right). */
-  values: readonly number[];
-  /** Highest face value on each die (same order as `values`). */
-  maxFaces: readonly number[];
-  total: number;
-}
-
-export type ComboRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
-
-export interface ComboDef {
-  id: string;
-  name: string;
-  /** Only the highest-`rank` matching combo of a family fires. No family = always fires independently. */
-  family?: string;
-  rank: number;
-  rarity: ComboRarity;
-  minDice: number;
-  baseChips: number;
-  baseMult: number;
-  /** Added per level above 1. */
-  chipsPerLevel: number;
-  multPerLevel: number;
-  /** Base coin cost of one "Combo Training" purchase at level 1 -> 2. */
-  trainCost: number;
-  detect: (ctx: ComboContext) => boolean;
+  faces: Face[];
 }
 
 export type RollEvent =
-  | { type: "landed"; dieId: number; value: number }
-  | { type: "combo"; comboId: string; level: number; chips: number; mult: number }
-  | { type: "score"; base: number; chips: number; mult: number; total: number };
+  | { type: "landed"; dieId: number; face: Face }
+  | { type: "die"; dieId: number; value: number; mult: number; score: number }
+  | { type: "destroyed"; dieId: number }
+  | { type: "score"; total: number };
 
 export interface RollResult {
-  values: number[];
-  base: number;
-  chips: number;
-  mult: number;
+  faces: Face[];
+  /** Per-die score, tray order. */
+  scores: number[];
   score: number;
-  combos: { id: string; level: number }[];
+  destroyed: number[];
   /** Ordered event stream: the contract between core and (future) view. */
   events: RollEvent[];
 }
 
+export type SpecialRarity = "common" | "uncommon" | "rare";
+
+export interface SpecialDef {
+  id: string;
+  name: string;
+  rarity: SpecialRarity;
+  cost: number;
+  face: Face;
+  text: string;
+}
+
 export type Purchase =
   | { kind: "upgradeFace"; dieId: number; faceIndex: number; cost: number }
+  | { kind: "upgradeDie"; dieId: number; cost: number }
   | { kind: "buyDie"; cost: number }
-  | { kind: "levelCombo"; comboId: string; cost: number };
+  | { kind: "buyVolatile"; cost: number }
+  | { kind: "buySpecial"; specialId: string; dieId: number; faceIndex: number; cost: number };
 
 export type Phase = "round" | "shop" | "won" | "lost";
+
+export interface RunStats {
+  rolls: number;
+  diceLost: number;
+  /** How many times each non-number face kind landed. */
+  faceLands: Record<string, number>;
+  purchases: Record<string, number>;
+  specialsBought: Record<string, number>;
+}
 
 export interface RunState {
   seed: number;
@@ -61,30 +71,14 @@ export interface RunState {
   config: GameConfig;
   dice: Die[];
   nextDieId: number;
-  comboLevels: Record<string, number>;
   coins: number;
   /** 0-based index of the current/next round. */
   roundIndex: number;
   phase: Phase;
-  round: {
-    target: number;
-    rollsLeft: number;
-    rollsTotal: number;
-    score: number;
-    rollsUsed: number;
-  } | null;
-  /** Combo ids offered for training in the current shop. */
-  shopCombos: string[];
+  round: { target: number; rollsLeft: number; rollsTotal: number; score: number; rollsUsed: number } | null;
+  /** Special ids on offer in the current shop (shared across dice, one purchase each). */
+  shopSpecials: string[];
   stats: RunStats;
-}
-
-export interface RunStats {
-  rolls: number;
-  comboTriggers: Record<string, number>;
-  /** comboTriggers bucketed by dice count: diceCount -> comboId -> count; plus rolls per dice count. */
-  rollsByDiceCount: Record<number, number>;
-  comboByDiceCount: Record<number, Record<string, number>>;
-  purchases: Record<string, number>;
 }
 
 export interface GameConfig {
@@ -93,23 +87,29 @@ export interface GameConfig {
   rollsPerRound: number;
   startDice: number;
   maxDice: number;
+  sides: number;
+
   /** Round target = round(targetBase * targetGrowth^roundIndex), times bossTargetMult on boss rounds. */
   targetBase: number;
   targetGrowth: number;
   bossTargetMult: number;
-  /** Coins paid on clear. */
-  clearPayoutBase: number;
-  clearPayoutPerRound: number;
-  coinPerSpareRoll: number;
-  /** Overkill coins = min(overkillCap, floor((score-target)/target * overkillRate)). */
-  overkillRate: number;
-  overkillCap: number;
-  /** Face upgrade cost = upgradeCostPerValue * current face value. */
+
+  /** Payout on clear, all as fractions of the round target so the economy scales with difficulty. */
+  payoutFrac: number;
+  sparePerRollFrac: number;
+  /** Overkill coins = min(overkillCapFrac, (score-target)/target * overkillRateFrac) * target. */
+  overkillRateFrac: number;
+  overkillCapFrac: number;
+
+  /** +1 to one face costs upgradeCostPerValue * current value. */
   upgradeCostPerValue: number;
-  /** Price of the (n+1)th die, indexed by how many dice you own - 1. */
-  dicePrices: number[];
-  shopComboOffers: number;
-  maxComboLevel: number;
-  /** Faces on a new die. */
-  sides: number;
+  /** +1 to every number face on a die costs this fraction of buying them one by one. */
+  upgradeDieDiscount: number;
+  /** Price of a die when you own n dice = round(dieBasePrice * dieGrowth^(n-1)). */
+  dieBasePrice: number;
+  dieGrowth: number;
+  /** Volatile die: faces 1..sides-1 plus a boom face worth boomValue, sold at this fraction of the normal price. */
+  volatileDiscount: number;
+  boomValue: number;
+  shopSpecialOffers: number;
 }

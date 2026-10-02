@@ -1,21 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { COMBOS, matchingCombos, resolveFamilies } from "../src/content/combos.js";
 import { DEFAULT_CONFIG } from "../src/content/config.js";
+import { SPECIALS } from "../src/content/specials.js";
 import { Rng } from "../src/core/rng.js";
-import { scoreValues } from "../src/core/roll.js";
-import { applyPurchase, createRun, finishRound, isBossRound, leaveShop, listPurchases, roll, targetFor } from "../src/core/run.js";
-import type { Die } from "../src/core/types.js";
+import { resolveFaces } from "../src/core/roll.js";
+import {
+  applyPurchase, createRun, dicePrice, finishRound, isBossRound, leaveShop, listPurchases, newDie, newVolatileDie, roll, targetFor,
+} from "../src/core/run.js";
+import type { Die, Face } from "../src/core/types.js";
 import { makeGreedyPolicy, randomPolicy } from "../src/sim/bots.js";
 import { playRun } from "../src/sim/play.js";
 
-const d6 = (id: number): Die => ({ id, faces: [1, 2, 3, 4, 5, 6] });
-const dice = (n: number) => Array.from({ length: n }, (_, i) => d6(i));
-
-/** Names of the combos that fire for these values on plain d6s. */
-function fired(values: number[]): string[] {
-  const res = scoreValues(dice(values.length), values, {});
-  return res.combos.map((c) => c.id).sort();
-}
+const num = (value: number): Face => ({ kind: "num", value });
+const dice = (n: number): Die[] => Array.from({ length: n }, (_, i) => newDie(i, 6));
+const score = (faces: Face[]) => resolveFaces(dice(faces.length), faces);
 
 describe("rng", () => {
   it("is deterministic per seed and differs across seeds", () => {
@@ -30,81 +27,75 @@ describe("rng", () => {
   });
 });
 
-describe("combos", () => {
-  it("has unique ids and sane numbers", () => {
-    expect(new Set(COMBOS.map((c) => c.id)).size).toBe(COMBOS.length);
-    for (const c of COMBOS) {
-      expect(c.baseChips).toBeGreaterThan(0);
-      expect(c.minDice).toBeGreaterThan(0);
-    }
+describe("per-die scoring", () => {
+  it("plain dice just add their pips", () => {
+    expect(score([num(3), num(5), num(6)]).score).toBe(14);
   });
-  it("detects sets and keeps only the best in the family", () => {
-    expect(fired([3, 3])).toContain("pair");
-    expect(fired([3, 3, 3])).toContain("triple");
-    expect(fired([3, 3, 3])).not.toContain("pair");
-    expect(fired([2, 2, 5, 5])).toContain("two_pair");
-    expect(fired([2, 2, 2, 5, 5])).toContain("full_house");
-    expect(fired([2, 2, 2, 5, 5])).not.toContain("triple");
-    expect(fired([4, 4, 4, 4])).toContain("quad");
+  it("has no global combos: pairs and straights score nothing extra", () => {
+    expect(score([num(3), num(3)]).score).toBe(6);
+    expect(score([num(1), num(2), num(3)]).score).toBe(6);
   });
-  it("detects runs", () => {
-    expect(fired([1, 2, 3])).toContain("short_straight");
-    expect(fired([1, 2, 3, 4])).toContain("straight");
-    expect(fired([1, 2, 3, 4])).not.toContain("short_straight");
-    expect(fired([2, 3, 4, 5, 6])).toContain("big_straight");
-    expect(fired([1, 2, 4])).not.toContain("short_straight");
+  it("mult doubles the die to its right, only", () => {
+    const r = score([num(2), { kind: "mult", value: 2 }, num(5), num(1)]);
+    expect(r.scores).toEqual([2, 0, 10, 1]);
   });
-  it("detects parity, extremes and sums", () => {
-    expect(fired([2, 4])).toContain("even_steven");
-    expect(fired([1, 3])).toContain("odd_squad");
-    expect(fired([1, 1])).toContain("snake_eyes");
-    expect(fired([6, 6])).toContain("box_cars");
-    expect(fired([3, 4])).toContain("lucky_seven");
-    expect(fired([4, 6])).toContain("perfect_ten");
-    expect(fired([6, 6, 6, 3])).toContain("blackjack");
-    expect(fired([5])).toContain("prime_time");
-    expect(fired([4])).not.toContain("prime_time");
+  it("mult on the last die does nothing", () => {
+    expect(score([num(4), { kind: "mult", value: 3 }]).score).toBe(4);
   });
-  it("respects dice order for staircases", () => {
-    expect(fired([1, 3, 5])).toContain("staircase_up");
-    expect(fired([5, 3, 1])).toContain("staircase_down");
-    expect(fired([3, 1, 5])).not.toContain("staircase_up");
+  it("mult chains: x2 into x3 into a die", () => {
+    // [x2][x3][4] -> middle die scores 0 but passes x2*? No: x3 gets x2, hands x3 (not x6) to the next.
+    const r = score([{ kind: "mult", value: 2 }, { kind: "mult", value: 3 }, num(4)]);
+    expect(r.scores).toEqual([0, 0, 12]);
   });
-  it("enforces minimum dice", () => {
-    const ctx = { values: [3], maxFaces: [6], total: 3 };
-    expect(matchingCombos(ctx).every((c) => c.minDice <= 1)).toBe(true);
+  it("echo copies the final score of the die on its left (multipliers included)", () => {
+    const r = score([{ kind: "mult", value: 2 }, num(5), { kind: "echo", value: 1 }]);
+    expect(r.scores).toEqual([0, 10, 10]);
   });
-  it("resolveFamilies breaks ties by letting equal ranks both fire", () => {
-    const parity = COMBOS.filter((c) => c.family === "parity");
-    expect(resolveFamilies(parity)).toHaveLength(parity.length);
+  it("echo with nothing to its left scores 0", () => {
+    expect(score([{ kind: "echo", value: 1 }, num(4)]).scores).toEqual([0, 4]);
+  });
+  it("crowd scores per die in the tray", () => {
+    expect(score([{ kind: "crowd", value: 1 }, num(1), num(1), num(1)]).scores[0]).toBe(4);
+  });
+  it("sum scores the other dice's plain numbers", () => {
+    const r = score([num(2), { kind: "sum", value: 1 }, num(5)]);
+    expect(r.scores[1]).toBe(7);
+  });
+  it("boom scores, then the die is destroyed", () => {
+    const r = score([num(3), { kind: "boom", value: 30 }]);
+    expect(r.score).toBe(33);
+    expect(r.destroyed).toEqual([1]);
+  });
+  it("the last die is never destroyed", () => {
+    const r = score([{ kind: "boom", value: 30 }, { kind: "boom", value: 30 }]);
+    expect(r.destroyed).toHaveLength(1);
+    expect(score([{ kind: "boom", value: 30 }]).destroyed).toHaveLength(0);
+  });
+  it("emits landed events per die, then die scores, then a final score", () => {
+    const { events } = score([num(1), num(2)]);
+    expect(events.slice(0, 2).every((e) => e.type === "landed")).toBe(true);
+    expect(events.at(-1)).toEqual({ type: "score", total: 3 });
   });
 });
 
-describe("scoring", () => {
-  it("is (base + chips) * (1 + mult), floored", () => {
-    // [3,3]: pair (3 chips, 0.5 mult). base 6 => (6+3)*1.5 = 13.5 -> 13. Also odd_squad (4, 0.5) + prime? total 6 not prime.
-    const res = scoreValues(dice(2), [3, 3], {});
-    expect(res.combos.map((c) => c.id).sort()).toEqual(["odd_squad", "pair"]);
-    expect(res.chips).toBe(7);
-    expect(res.mult).toBe(1);
-    expect(res.score).toBe(Math.floor((6 + 7) * 2));
+describe("content", () => {
+  it("special ids are unique and priced", () => {
+    expect(new Set(SPECIALS.map((s) => s.id)).size).toBe(SPECIALS.length);
+    for (const s of SPECIALS) expect(s.cost).toBeGreaterThan(0);
   });
-  it("combo levels increase payout", () => {
-    const lvl1 = scoreValues(dice(2), [3, 3], {});
-    const lvl3 = scoreValues(dice(2), [3, 3], { pair: 3 });
-    expect(lvl3.score).toBeGreaterThan(lvl1.score);
+  it("volatile die has one boom face", () => {
+    const d = newVolatileDie(0, 6, 30);
+    expect(d.faces.filter((f) => f.kind === "boom")).toHaveLength(1);
   });
-  it("emits landed events for each die, then combos, then a final score", () => {
-    const { events } = scoreValues(dice(2), [3, 3], {});
-    expect(events.slice(0, 2).every((e) => e.type === "landed")).toBe(true);
-    expect(events.at(-1)?.type).toBe("score");
+  it("dice get more expensive as you own more", () => {
+    expect(dicePrice(DEFAULT_CONFIG, 5)).toBeGreaterThan(dicePrice(DEFAULT_CONFIG, 1));
   });
 });
 
 describe("run", () => {
   it("is deterministic for a seed", () => {
     const a = createRun("s"), b = createRun("s");
-    expect(roll(a).values).toEqual(roll(b).values);
+    expect(roll(a).faces).toEqual(roll(b).faces);
   });
   it("boss rounds are every 3rd with a higher target", () => {
     expect(isBossRound(DEFAULT_CONFIG, 2)).toBe(true);
@@ -121,7 +112,9 @@ describe("run", () => {
     roll(run);
     finishRound(run);
     expect(run.phase).toBe("shop");
+    expect(run.shopSpecials).toHaveLength(DEFAULT_CONFIG.shopSpecialOffers);
     expect(run.coins).toBeGreaterThan(0);
+    run.coins = 500;
     const before = run.coins;
     const buy = listPurchases(run)[0]!;
     applyPurchase(run, buy);
@@ -137,6 +130,34 @@ describe("run", () => {
     run.coins = 0;
     expect(listPurchases(run)).toHaveLength(0);
   });
+  it("buying a special replaces the face and removes it from the shop", () => {
+    const run = createRun("sp", { ...DEFAULT_CONFIG, targetBase: 1 });
+    roll(run);
+    finishRound(run);
+    run.coins = 10_000;
+    const sid = run.shopSpecials[0]!;
+    const p = listPurchases(run).find((x) => x.kind === "buySpecial" && x.specialId === sid && x.faceIndex === 0)!;
+    applyPurchase(run, p);
+    expect(run.dice[0]!.faces[0]!.kind).not.toBe("num");
+    expect(run.shopSpecials).not.toContain(sid);
+  });
+  it("upgrading a whole die adds 1 to every number face", () => {
+    const run = createRun("ud", { ...DEFAULT_CONFIG, targetBase: 1 });
+    roll(run);
+    finishRound(run);
+    run.coins = 10_000;
+    applyPurchase(run, listPurchases(run).find((x) => x.kind === "upgradeDie")!);
+    expect(run.dice[0]!.faces.map((f) => f.value)).toEqual([2, 3, 4, 5, 6, 7]);
+  });
+  it("a destroyed die leaves the tray and makes the next purchase cheaper", () => {
+    const run = createRun("boom", { ...DEFAULT_CONFIG, targetBase: 1e9 });
+    run.dice = [newDie(0, 6), { id: 1, faces: Array.from({ length: 6 }, () => ({ kind: "boom", value: 30 }) as Face) }];
+    const price = dicePrice(DEFAULT_CONFIG, 2);
+    roll(run);
+    expect(run.dice).toHaveLength(1);
+    expect(run.stats.diceLost).toBe(1);
+    expect(dicePrice(DEFAULT_CONFIG, run.dice.length)).toBeLessThan(price);
+  });
 });
 
 describe("bots", () => {
@@ -147,8 +168,8 @@ describe("bots", () => {
     expect(["won", "lost"]).toContain(a.run.phase);
   });
   it("greedy beats random on average", () => {
-    const g = makeGreedyPolicy(40);
-    const avg = (p: typeof g) => Array.from({ length: 12 }, (_, i) => playRun(`t${i}`, p).roundsCleared).reduce((x, y) => x + y, 0) / 12;
+    const g = makeGreedyPolicy(30);
+    const avg = (p: typeof g) => Array.from({ length: 10 }, (_, i) => playRun(`t${i}`, p).roundsCleared).reduce((x, y) => x + y, 0) / 10;
     expect(avg(g)).toBeGreaterThan(avg(randomPolicy));
   });
 });

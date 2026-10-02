@@ -1,4 +1,3 @@
-import { COMBO_BY_ID } from "../content/combos.js";
 import { Rng } from "../core/rng.js";
 import { rollDice } from "../core/roll.js";
 import { applyPurchase, listPurchases } from "../core/run.js";
@@ -19,40 +18,56 @@ export const randomPolicy: Policy = {
   },
 };
 
-/** Mean score of one roll for a dice/levels configuration, with common random numbers so candidates compare fairly. */
-function expectedRoll(dice: readonly Die[], levels: Record<string, number>, samples: number): number {
+function lowestNumFace(d: Die): number {
+  let best = -1;
+  d.faces.forEach((f, i) => {
+    if (f.kind === "num" && (best < 0 || f.value < (d.faces[best]?.value ?? Infinity))) best = i;
+  });
+  return best;
+}
+
+/** Mean roll score, and mean dice lost per roll, with common random numbers so candidates compare fairly. */
+function evaluate(dice: readonly Die[], samples: number): { mean: number; lost: number } {
   const rng = new Rng(12345);
   let sum = 0;
-  for (let i = 0; i < samples; i++) sum += rollDice(dice, levels, rng).score;
-  return sum / samples;
+  let lost = 0;
+  for (let i = 0; i < samples; i++) {
+    const r = rollDice(dice, rng);
+    sum += r.score;
+    lost += r.destroyed.length;
+  }
+  return { mean: sum / samples, lost: lost / samples };
 }
 
-function cloneDice(dice: readonly Die[]): Die[] {
-  return dice.map((d) => ({ id: d.id, faces: [...d.faces] }));
-}
-
-/** Gain in expected-roll-score per coin, estimated by Monte Carlo. A reasonable "competent but not clever" player. */
-export function makeGreedyPolicy(samples = 150): Policy {
+/**
+ * "Competent but not clever": picks the purchase with the best gain in expected roll score per coin (Monte Carlo).
+ * Self-destructing dice are charged for the dice they are expected to lose (`lossHorizon` rolls of that die's output).
+ */
+export function makeGreedyPolicy(samples = 60, lossHorizon = 6): Policy {
+  const value = (dice: readonly Die[]) => {
+    const { mean, lost } = evaluate(dice, samples);
+    return mean - lost * (mean / Math.max(1, dice.length)) * lossHorizon;
+  };
   return {
     name: "greedy",
     chooseShop(run) {
-      const options = listPurchases(run);
+      const options = listPurchases(run).filter((p) => {
+        // Prune: upgrading/replacing anything but a die's lowest number face is never better for the same cost.
+        if (p.kind === "upgradeFace" || p.kind === "buySpecial") {
+          const d = run.dice.find((x) => x.id === p.dieId)!;
+          return p.faceIndex === lowestNumFace(d);
+        }
+        return true;
+      });
       if (!options.length) return null;
-      const before = expectedRoll(run.dice, run.comboLevels, samples);
+      const before = value(run.dice);
       let best: Purchase | null = null;
       let bestRatio = 0;
       for (const p of options) {
-        const dice = cloneDice(run.dice);
-        const levels = { ...run.comboLevels };
-        if (p.kind === "upgradeFace") {
-          const d = dice.find((x) => x.id === p.dieId)!;
-          d.faces[p.faceIndex] = (d.faces[p.faceIndex] as number) + 1;
-        } else if (p.kind === "buyDie") {
-          dice.push({ id: -1, faces: Array.from({ length: run.config.sides }, (_, i) => i + 1) });
-        } else {
-          levels[p.comboId] = (levels[p.comboId] ?? 1) + 1;
-        }
-        const ratio = (expectedRoll(dice, levels, samples) - before) / p.cost;
+        const tmp = structuredClone(run);
+        tmp.coins = Number.MAX_SAFE_INTEGER;
+        applyPurchase(tmp, p);
+        const ratio = (value(tmp.dice) - before) / p.cost;
         if (ratio > bestRatio) {
           bestRatio = ratio;
           best = p;
@@ -67,5 +82,3 @@ export const POLICIES: Record<string, () => Policy> = {
   random: () => randomPolicy,
   greedy: () => makeGreedyPolicy(),
 };
-
-export { applyPurchase, COMBO_BY_ID };
