@@ -19,12 +19,34 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForSelector('canvas');
-  // there is no default machine: the first visit asks for one, and each machine names its Big Boi
-  await page.waitForSelector('#themePick .cab');
-  check(await page.locator('#themePick .cab').count() === 3, 'the first visit offers three machines to pick from');
-  check(/Foreman/.test(await page.innerText('#themePick')) && /Cook/.test(await page.innerText('#themePick')) && /Dragon/.test(await page.innerText('#themePick')), 'each machine says what its Big Boi does');
-  await page.click('#themePick .cab[data-theme="factory"]');
-  check(await page.isHidden('#themePick'), 'picking a machine closes the picker');
+  // the main menu: the title over a demo machine that plays itself, and nothing to resume on a first visit
+  await page.waitForSelector('#menu .mbtn');
+  const title = await page.innerText('#menu .mtitle');
+  check(/BIG BOI/.test(title) && /PINBALL DESIGNER/.test(title), 'the main menu shows the title');
+  check(await page.locator('#menu [data-act="resume"]').count() === 0, 'a first visit has nothing to resume');
+  check(await page.evaluate(() => window.__pinball.attract() && window.__pinball.game.mode === 'round' && window.__pinball.game.goalOverride === Infinity), 'the attract table plays a demo round behind the menu');
+  check(await page.isHidden('#left') && await page.isHidden('#right'), 'the panels make room for the attract table');
+  await page.evaluate(() => window.__pinball.demo(12));
+  check(await page.evaluate(() => window.__pinball.game.scorer.score > 0), 'the bot scores on the attract table');
+  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.run.v2')) === null, 'the attract table never saves');
+  await page.screenshot({ path: `${out}/smoke-0-menu.png` });
+  // there is no default machine: New Game shows the three cabinets, and each machine names its Big Boi
+  await page.click('#menu [data-act="new"]');
+  await page.waitForSelector('#menu .cab');
+  check(await page.locator('#menu .cab').count() === 3, 'New Game offers three machines to pick from');
+  const picker = await page.innerText('#menu');
+  check(/Foreman/.test(picker) && /Cook/.test(picker) && /Dragon/.test(picker), 'each machine says what its Big Boi does');
+  await page.waitForFunction(() => document.querySelectorAll('#menu .cab .art svg').length === 3);
+  check(true, 'each card shows its full cabinet');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${out}/smoke-0b-picker.png` });
+  await page.keyboard.press('Escape');
+  check(await page.isVisible('#menu .mpanel'), 'Esc goes back from the picker to the main menu');
+  await page.keyboard.press('Enter'); // New Game has the focus
+  await page.waitForSelector('#menu .cab');
+  await page.click('#menu .cab[data-theme="factory"]');
+  check(await page.isHidden('#menu'), 'picking a machine closes the menu');
+  check(!(await page.evaluate(() => window.__pinball.attract())), 'and stops the attract table');
   check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.theme.v1')) === 'factory', 'the machine choice is saved');
   check(await page.evaluate(() => window.__pinball.game.machine) === 'factory', 'the run is on the picked machine');
   check(/Next boss/i.test(await page.innerText('#bossBox')), 'the scoreboard names the next boss');
@@ -282,6 +304,84 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(ov.x <= 1 && ov.y <= 1 && ov.width >= 1430, 'the lose screen greys out the whole page');
   check(await page.locator('#overlay .summary .roundmap svg').count() === 1 && /total points/i.test(await page.innerText('#overlay')), 'the lose screen shows the map and the total points');
   await page.screenshot({ path: `${out}/smoke-4-run-over.png` });
+  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.run.v2')) === null, 'a lost run is cleared from storage');
+
+  // the lost run is on the scoreboard, with the machine it ended as
+  const lsGet = (k) => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), k);
+  await page.click('#btnToMenu');
+  check(await page.isVisible('#menu .mpanel') && await page.locator('#menu [data-act="resume"]').count() === 0, 'the lose screen goes to the main menu, with nothing to resume');
+  await page.click('#menu [data-act="scores"]');
+  check(await page.locator('#menu .sbrow').count() === 1 && /Lost/.test(await page.innerText('#menu .sbrow')), 'the scoreboard lists the lost run');
+  await page.waitForFunction(() => { const i = document.querySelector('#sbDetail img.thumb'); return i && i.naturalWidth > 0; });
+  check(true, 'the picked run shows its final build as a picture');
+  check((await lsGet('pinball-roguelite.scoreboard.v1'))[0].parts.length >= 4, 'the record keeps the final build, part by part');
+  await page.screenshot({ path: `${out}/smoke-5-scoreboard.png` });
+  await page.keyboard.press('Escape');
+
+  // settings: a flipper rebound, a reserved key refused, graphics and volume saved and used at once
+  await page.click('#menu [data-act="settings"]');
+  await page.click('#menu [data-bind="left"]');
+  await page.keyboard.press('KeyM');
+  check(/taken/.test(await page.innerText('#bindMsg')), 'a key the game uses cannot be bound');
+  await page.keyboard.press('KeyA');
+  check((await lsGet('pinball-roguelite.settings.v1')).keys.left === 'KeyA' && (await page.innerText('#menu [data-bind="left"]')) === 'A', 'the left flippers can be moved to another key');
+  await page.click('#menu [data-q="low"]');
+  check((await lsGet('pinball-roguelite.settings.v1')).quality === 'low' && await page.evaluate(() => window.__pinball.renderer.app.renderer.resolution === 1), 'low graphics is saved and drawn at 1x at once');
+  await page.click('#menu [data-q="high"]');
+  await page.$eval('#menu input[data-vol="music"]', (el) => { el.value = '35'; el.dispatchEvent(new Event('input')); });
+  check((await lsGet('pinball-roguelite.settings.v1')).music === 0.35, 'the music volume is saved');
+  await page.screenshot({ path: `${out}/smoke-6-settings.png` });
+  await page.keyboard.press('Escape');
+
+  // a new run: Esc pauses it, and the sim holds still under the pause menu
+  await page.click('#menu [data-act="new"]');
+  await page.click('#menu .cab[data-theme="diner"]');
+  await page.click('#btnStart');
+  await page.waitForTimeout(400);
+  await page.keyboard.press('Escape');
+  check(await page.isVisible('#menu .pausecard'), 'Esc during a round opens the pause menu');
+  const t0 = await page.evaluate(() => window.__pinball.game.sim.time);
+  await page.waitForTimeout(500);
+  check(await page.evaluate(() => window.__pinball.game.sim.time) === t0, 'the sim holds still while paused');
+  await page.screenshot({ path: `${out}/smoke-7-pause.png` });
+  await page.click('#menu [data-act="unpause"]');
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => window.__pinball.game.sim.time) > t0, 'Resume carries on');
+  // the rebound key works the flippers
+  const leftAngle = () => page.evaluate(() => window.__pinball.game.sim.flipperStates().find((f) => f.side === 'L' && f.uid === undefined).angle);
+  const rest = await leftAngle();
+  await page.keyboard.down('KeyA');
+  await page.waitForTimeout(250);
+  const up = await leftAngle();
+  await page.keyboard.up('KeyA');
+  check(Math.abs(up - rest) > 0.3, `the rebound key raises the left flippers (${rest.toFixed(2)} -> ${up.toFixed(2)})`);
+  // the visible pause button, then Quit to Main Menu keeps the run, and Resume brings it back
+  await page.click('#btnPause');
+  await page.click('#menu [data-act="quit"]');
+  check(await page.locator('#menu [data-act="resume"]').count() === 1 && (await lsGet('pinball-roguelite.run.v2')) !== null, 'quitting to the main menu keeps the run saved');
+  await page.screenshot({ path: `${out}/smoke-8-menu-resume.png` });
+  await page.click('#menu [data-act="resume"]');
+  check(await page.isHidden('#menu') && await page.evaluate(() => window.__pinball.game.machine === 'diner' && window.__pinball.game.mode === 'workshop'), 'Resume loads the run back (a round in play starts over)');
+  // New Game while a run exists asks first; Keep it keeps it
+  await page.keyboard.press('Escape');
+  await page.click('#menu [data-act="quit"]');
+  await page.click('#menu [data-act="new"]');
+  check(await page.isVisible('#menu .mconfirm'), 'New Game over a saved run asks before abandoning it');
+  await page.click('#menu .mconfirm [data-no]');
+  check(await page.locator('#menu [data-act="resume"]').count() === 1, 'Keep it keeps the run');
+  // Abandon Run from the pause menu: confirm, onto the scoreboard as abandoned, the save cleared
+  await page.click('#menu [data-act="resume"]');
+  await page.evaluate(() => { window.__pinball.game.round = 4; });
+  await page.keyboard.press('Escape');
+  await page.click('#menu [data-act="abandon"]');
+  await page.click('#menu .mconfirm [data-yes]');
+  const board = await lsGet('pinball-roguelite.scoreboard.v1');
+  check(board.length === 2 && board.some((r) => r.result === 'abandoned' && r.machine === 'diner' && r.cleared === 3), 'an abandoned run goes on the scoreboard');
+  check((await lsGet('pinball-roguelite.run.v2')) === null && await page.locator('#menu [data-act="resume"]').count() === 0, 'and the save is cleared');
+  // keyboard: arrows move the focus, Enter goes
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  check(await page.isVisible('#menu .setcard') || await page.locator('#menu .sbrow').count() > 0, 'the arrows and Enter drive the main menu');
 
   if (errors.length) fail('console errors:\n' + errors.join('\n'));
   else console.log('ok: no console errors');

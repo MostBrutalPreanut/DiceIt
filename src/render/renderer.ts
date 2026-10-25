@@ -2,8 +2,8 @@ import { Application, Container, Graphics, Rectangle, Sprite, Texture, type Text
 import { dialValue, footprint, lampStats, LEVEL_RADIUS, PARTS, SMALL_FLIPPER, type PartId, type PartInstance } from '../data/parts';
 import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
-import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, TABLE_W } from '../sim/constants';
-import { ledgeSeg } from '../sim/table';
+import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, FLIPPER_REST, TABLE_W } from '../sim/constants';
+import { FLIPPER_PIVOTS, ledgeSeg } from '../sim/table';
 import { flat, label, P, Prop, ribbon, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
 import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
@@ -129,6 +129,16 @@ export class Renderer {
     this.calm = on;
     this.particles.calm = on;
     this.dmd.calm = on;
+  }
+
+  /** Graphics quality (settings): low draws at 1x with no particle debris, smoke or glow; high is the full look. */
+  setQuality(low: boolean) {
+    this.particles.lite = low;
+    this.glowLayer.visible = !low;
+    const res = low ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+    if (this.app.renderer.resolution === res) return;
+    this.app.renderer.resolution = res;
+    this.flush(); // every baked texture was made at the old resolution
   }
 
   /** The backbox's dot-matrix display: a comment scrolls in from the right, holds, then clears. */
@@ -769,6 +779,27 @@ export class Renderer {
     const holder = new Container();
     holder.addChild(decalSprite(this.theme, { look, rarity }, size / 2, size / 2, size * 0.33, 1, -6));
     return this.toCanvas(holder, size, size, 2);
+  }
+
+  /** A finished build as a small picture of the whole machine, parts where they stood (the scoreboard's thumbnails). */
+  tableShot(parts: { def: PartId; x: number; y: number; angle: number; level?: number }[], w: number, h: number, opts: { theme?: Theme; ledge?: number; decals?: (StuckDecal | null)[] } = {}): HTMLCanvasElement {
+    const t = opts.theme ?? this.theme, k = TIP_K, kz = kzFor(k), ext = machineExtent(k, kz);
+    const S = Math.min((w - 4) / (RIM.hw * 2 + 1.6), (h - 4) / (ext.top + ext.bottom));
+    const v: View = { S, ox: w / 2 - RIM.cx * S, oy: h / 2 + ((ext.top - ext.bottom) / 2) * S, k, kz, shx: 0, lw: Math.max(0.8, S * 0.14) };
+    const holder = new Container();
+    holder.addChild(buildMachine(v, t, opts.decals ?? DECAL_SLOT_POS.map(() => null), opts.ledge));
+    const flips = new Graphics();
+    for (const [side, f] of [[1, FLIPPER_PIVOTS.L], [-1, FLIPPER_PIVOTS.R]] as const) drawFlipper(flips, v, t, f.x, f.y, -side * FLIPPER_REST, side);
+    holder.addChild(flips);
+    // far parts first, as on the table; extra flippers are drawn at rest
+    for (const p of [...parts].sort((a, b) => b.y - a.y)) {
+      if (p.def === 'flipper' || p.def === 'flipperR') {
+        const g = new Graphics(), side = p.def === 'flipper' ? 1 : -1;
+        drawFlipper(g, v, t, p.x, p.y, -side * FLIPPER_REST, side, FLIPPER_LENGTH * SMALL_FLIPPER);
+        holder.addChild(g);
+      } else holder.addChild(drawPart(v, t, p.def, p.x, p.y, p.angle, { level: p.level, letter: t.laneWord[0], mood: 'happy' }));
+    }
+    return this.toCanvas(holder, w, h, 2);
   }
 
   private toCanvas(holder: Container, w: number, h: number, res: number): HTMLCanvasElement {

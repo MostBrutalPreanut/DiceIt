@@ -78,6 +78,8 @@ export class Particles {
   private smoke: Smoke[] = [];
   private stickers: { c: Container; x: number; y: number; z: number; vx: number; vy: number; vz: number; spin: number; age: number; life: number; rot: number }[] = [];
   calm = false;
+  /** Low graphics: no debris, stars, puffs or smoke; the score stickers and stamps still carry the numbers. */
+  lite = false;
 
   constructor(private renderer: Renderer, private theme: Theme) {
     this.pc = new ParticleContainer({ dynamicProperties: { position: true, rotation: true, vertex: true, color: true, uvs: true } });
@@ -118,7 +120,7 @@ export class Particles {
   private t(key: string) { return this.tex.get(key) ?? this.tex.get('puff')!; }
 
   private add(o: Omit<P3, 'p' | 'age' | 'bounced'>, tex: Texture) {
-    if (this.live.length >= MAX_PARTICLES) return;
+    if (this.live.length >= MAX_PARTICLES || this.lite) return;
     const p = new Particle({ texture: tex, anchorX: 0.5, anchorY: 0.5 });
     this.pc.addParticle(p);
     this.live.push({ ...o, p, age: 0, bounced: false });
@@ -148,7 +150,7 @@ export class Particles {
   }
   /** Smoke is air: a soft tapered ribbon, no outline, that curls up and thins, then snaps off. */
   smokeAt(x: number, y: number, z: number, w = 1) {
-    if (this.smoke.length > 12) return;
+    if (this.smoke.length > 12 || this.lite) return;
     this.smoke.push({ age: 0, life: 0.6 + Math.random() * 0.4, x, y, z, dir: Math.random() < 0.5 ? -1 : 1, w });
   }
 

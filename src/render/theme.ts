@@ -44,7 +44,7 @@ export interface Theme {
 }
 
 export const FACTORY: Theme = {
-  id: 'factory', name: 'FREE PLAY', tagline: 'FUNHOUSE FACTORY',
+  id: 'factory', name: 'BIG BOI', tagline: 'FUNHOUSE FACTORY',
   bg: '#f6d54a', paper: '#fff8e6', ink: '#3b2a4a', shadeTint: '#6a4fa0',
   floor: '#fbe7a1', floor2: '#f2d77a', rail: '#e9e4f0', rim: '#8f7ad6', metal: '#d9dbe6', rubber: '#3b2a4a',
   accent: '#ff5d8f', glow: '#fff4a8', smoke: '#ffffff', dmd: '#ff9a3c', screen: '#241a26',
@@ -60,7 +60,7 @@ export const FACTORY: Theme = {
 };
 
 export const DINER: Theme = {
-  id: 'diner', name: 'FREE PLAY', tagline: 'SHORT ORDER',
+  id: 'diner', name: 'BIG BOI', tagline: 'SHORT ORDER',
   bg: '#d7cfc1', paper: '#f6efdf', ink: '#3a2219', shadeTint: '#7a3a26',
   floor: '#e7b257', floor2: '#d99b3e', rail: '#f6efdf', rim: '#c8553d', metal: '#c3cdd0', rubber: '#3a2219',
   accent: '#d9473b', glow: '#ffe3a0', smoke: '#fbf6ea', dmd: '#ffb347', screen: '#2a1a14',
@@ -76,7 +76,7 @@ export const DINER: Theme = {
 };
 
 export const CASTLE: Theme = {
-  id: 'castle', name: 'FREE PLAY', tagline: 'CASTLE CRASH',
+  id: 'castle', name: 'BIG BOI', tagline: 'CASTLE CRASH',
   bg: '#cbbba8', paper: '#f4efe6', ink: '#3d2f2a', shadeTint: '#4f63a6',
   floor: '#9cc25a', floor2: '#bcd776', rail: '#eef1f4', rim: '#b7713e', metal: '#dfe5ec', rubber: '#3d2f2a',
   accent: '#e2704f', glow: '#ffe6a0', smoke: '#ffffff', dmd: '#ffc04d', screen: '#221c22',

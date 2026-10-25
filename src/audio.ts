@@ -45,9 +45,10 @@ export class AudioFx {
       this.master.gain.value = this.muted ? 0 : 0.35;
       this.master.connect(this.ctx.destination);
       this.sfx = this.ctx.createGain();
+      this.sfx.gain.value = this.sfxVol;
       this.sfx.connect(this.master);
       this.music = this.ctx.createGain();
-      this.music.gain.value = this.musicOn ? MUSIC_VOL : 0;
+      this.music.gain.value = this.musicOn ? MUSIC_VOL * this.musicVol : 0;
       this.music.connect(this.master);
       const len = this.ctx.sampleRate * 0.5;
       this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
@@ -67,7 +68,18 @@ export class AudioFx {
 
   setMusic(on: boolean) {
     this.musicOn = on;
-    if (this.music && this.ctx) this.music.gain.setTargetAtTime(on ? MUSIC_VOL : 0, this.ctx.currentTime, 0.2);
+    if (this.music && this.ctx) this.music.gain.setTargetAtTime(on ? MUSIC_VOL * this.musicVol : 0, this.ctx.currentTime, 0.2);
+  }
+
+  /** The settings' volumes, 0..1 each, on top of the mix above (0 is off). */
+  musicVol = 1;
+  sfxVol = 1;
+  setVolumes(music: number, sfx: number) {
+    this.musicVol = music;
+    this.sfxVol = sfx;
+    if (!this.ctx) return;
+    this.sfx?.gain.setTargetAtTime(sfx, this.ctx.currentTime, 0.05);
+    this.music?.gain.setTargetAtTime(this.musicOn ? MUSIC_VOL * music : 0, this.ctx.currentTime, 0.1);
   }
 
   /** Each theme has its own tune. */
