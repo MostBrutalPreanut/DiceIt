@@ -10,9 +10,9 @@ import {
   TYPE, box, coin, curl, debris, esc, f, groundRing, impact, line, P, poly, Prop, puff, ribbon, ring, scoreSticker, shadow, sparkle, stamp, type Pt, type View,
 } from './draw';
 import { ball, drawPart, flipper, glowDisk, type PartState } from './props';
-import { CASTLE, DINER, FACTORY, mat, mix, THEMES, type Theme } from './themes';
+import { CASTLE, DINER, FACTORY, mat, mix, roleClashes, THEMES, type Theme } from './themes';
 import {
-  arcadeButton, awning, ballTray, card, coinStack, crank, decal, DECALS, emptySlot, goalTube, housing, multDial, odometer, pegboard, receipt, shelfItem, text, toolbox, tooltip,
+  arcadeButton, awning, ballTray, card, coinStack, decal, DECALS, emptySlot, faint, fitIcon, goalTube, housing, label, LW, multDial, odometer, offerCard, pill, receipt, text, tile, toolbox, tooltip,
 } from './ui';
 
 const OUT = process.argv[2] || 'docs/concept';
@@ -252,7 +252,7 @@ function surround(v: View, t: Theme): string {
   const items: { y: number; svg: string }[] = [];
   const add = (y: number, svg: string) => items.push({ y, svg });
   if (t.surround === 'factory') {
-    for (const [x, y, r, h, c] of [[-5.5, 44, 2.2, 6, t.role.pop], [-4.8, 30, 1.6, 4, t.role.mega], [31.5, 40, 2.4, 7, t.accent], [31, 22, 1.5, 3.5, t.role.pop]] as const) {
+    for (const [x, y, r, h, c] of [[-7, 44, 2.2, 6, t.role.pop], [-6.4, 30, 1.6, 4, t.role.mega], [31.5, 40, 2.4, 7, t.accent], [31, 22, 1.5, 3.5, t.role.pop]] as const) {
       const p = new Prop(v, t);
       add(y, shadow(v, t, x, y, r * 1.1, r * 1.1, 0.25));
       p.cyl(x, y, r, 0, h, mat(t, t.metal));
@@ -260,9 +260,7 @@ function surround(v: View, t: Theme): string {
       p.cyl(x, y, r * 0.5, h, 0.5, mat(t, t.metal));
       add(y, p.svg());
     }
-    const pipe = new Prop(v, t);
-    pipe.prism(box(-3, 37, 0.45, 6, 0), 2.2, 0.8, mat(t, t.metal));
-    add(36.9, pipe.svg());
+    add(29.9, pipe(v, t, [[-4.9, 44, 3], [-3.3, 44, 3], [-3.3, 30, 2], [-4.85, 30, 2]], [-3.3, 37, 2.5]));
   } else if (t.surround === 'diner') {
     for (const [x, y, c, h] of [[-4.5, 42, '#d9473b', 5], [-6.2, 39, '#f2c14e', 4.2], [-4.6, 28, '#7f9c3c', 3.4], [31, 40, '#d9473b', 4.6], [32.5, 37, '#f6efdf', 3], [31.5, 24, '#f2c14e', 3.8]] as const) {
       const p = new Prop(v, t);
@@ -288,6 +286,25 @@ function surround(v: View, t: Theme): string {
   }
   return items.sort((a, b) => b.y - a.y).map((i) => i.svg).join('');
 }
+/** A metal pipe through sim points (x, y, z): ink, body, a highlight, round elbows and flanges at the ends. */
+function pipe(v: View, t: Theme, pts: [number, number, number][], valve?: [number, number, number]) {
+  const sp = pts.map(([x, y, z]) => P(v, x, y, z)), w = v.S * 0.7, m = mat(t, t.metal);
+  const d = line(sp), st = (width: number, c: string) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${f(width)}" stroke-linejoin="round" stroke-linecap="butt"/>`;
+  const flange = (a: Pt, b: Pt) => { // a short collar across the pipe at a, facing along a→b
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L, ux = dx / L, uy = dy / L, r = w * 0.75, th = v.S * 0.18;
+    const q: Pt[] = [[a[0] + nx * r, a[1] + ny * r], [a[0] + nx * r + ux * th, a[1] + ny * r + uy * th], [a[0] - nx * r + ux * th, a[1] - ny * r + uy * th], [a[0] - nx * r, a[1] - ny * r]];
+    return `<path d="${poly(q)}" fill="${m.light}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.8)}" stroke-linejoin="round"/>`;
+  };
+  return st(w + v.lw * 2, t.ink) + st(w, m.mid) + `<path d="${line(sp.map(([x, y]) => [x - w * 0.22, y - w * 0.12] as Pt))}" fill="none" stroke="${m.light}" stroke-width="${f(w * 0.22)}" stroke-linejoin="round"/>` +
+    flange(sp[0], sp[1]) + flange(sp[sp.length - 1], sp[sp.length - 2]) + (valve ? valveWheel(t, P(v, ...valve), v.S * 0.85, v.lw) : '');
+}
+/** A hand wheel on a pipe: the one detail that makes a grey bar read as plumbing. */
+function valveWheel(t: Theme, [x, y]: Pt, r: number, lw: number) {
+  const spokes = [0, 1, 2, 3].map((i) => { const a = (i * Math.PI) / 4 + 0.4; return `M${f(x - Math.cos(a) * r)} ${f(y - Math.sin(a) * r)}L${f(x + Math.cos(a) * r)} ${f(y + Math.sin(a) * r)}`; }).join('');
+  return `<path d="${spokes}" stroke="${t.ink}" stroke-width="${f(lw * 2.2)}" stroke-linecap="round"/><path d="${spokes}" stroke="${t.accent}" stroke-width="${f(lw * 0.9)}" stroke-linecap="round"/>` +
+    `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="none" stroke="${t.ink}" stroke-width="${f(lw * 3)}"/><circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="none" stroke="${t.accent}" stroke-width="${f(lw * 1.4)}"/>` +
+    `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r * 0.28)}" fill="${t.metal}" stroke="${t.ink}" stroke-width="${f(lw * 0.8)}"/>`;
+}
 const hullOf = (pts: Pt[]) => { // tiny local hull to keep surround self-contained
   const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const cr = (o: Pt, a: Pt, b: Pt) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
@@ -299,53 +316,66 @@ const hullOf = (pts: Pt[]) => { // tiny local hull to keep surround self-contain
 
 // ------------------------------------------------------------------ HUD pieces
 function dmd(t: Theme, x: number, y: number, w: number, h: number, msg: string) {
-  const id = uid('dmd_' + t.id);
-  return `<defs><pattern id="${id}" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="#1d1420"/><circle cx="2.5" cy="2.5" r="1.7" fill="#000" opacity="0"/></pattern>` +
-    `<mask id="${id}m"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#fff"/>${Array.from({ length: Math.ceil(w / 5) }, (_, i) => `<rect x="${x + i * 5 + 3.6}" y="${y}" width="1.4" height="${h}" fill="#000"/>`).join('')}${Array.from({ length: Math.ceil(h / 5) }, (_, i) => `<rect x="${x}" y="${y + i * 5 + 3.6}" width="${w}" height="1.4" fill="#000"/>`).join('')}</mask></defs>` +
-    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="#241a26" stroke="${t.ink}" stroke-width="3.5"/>` +
-    `<g mask="url(#${id}m)"><text x="${x + w / 2}" y="${y + h * 0.68}" text-anchor="middle" font-family="${TYPE.dmd}" font-weight="400" font-size="${h * 0.62}" fill="${t.dmd}" letter-spacing="3">${esc(msg)}</text></g>`;
+  const id = uid('dmd_' + t.id), fs = h * 0.6;
+  // the text is centred on its measured cap height, so it sits mid-panel top to bottom
+  return `<defs><mask id="${id}m"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#fff"/>${Array.from({ length: Math.ceil(w / 5) }, (_, i) => `<rect x="${x + i * 5 + 3.6}" y="${y}" width="1.4" height="${h}" fill="#000"/>`).join('')}${Array.from({ length: Math.ceil(h / 5) }, (_, i) => `<rect x="${x}" y="${y + i * 5 + 3.6}" width="${w}" height="1.4" fill="#000"/>`).join('')}</mask></defs>` +
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="#241a26" stroke="${t.ink}" stroke-width="${LW.frame}"/>` +
+    `<g mask="url(#${id}m)">${text(t, x + w / 2, y + h / 2, msg, fs, { font: TYPE.dmd, w: 400, anchor: 'middle', mid: true, spacing: 3, fill: t.dmd })}</g>`;
 }
 
 function marquee(t: Theme, x: number, y: number, w: number, h: number, msg: string) {
   const bulbs = [] as string[];
   const n = Math.round(w / 26);
-  for (let i = 0; i <= n; i++) for (const yy of [y + 9, y + h - 9]) bulbs.push(`<circle cx="${f(x + 14 + (i * (w - 28)) / n)}" cy="${yy}" r="5" fill="${i % 2 ? t.glow : mix(t.glow, t.shadeTint, 0.45)}" stroke="${t.ink}" stroke-width="2"/>`);
+  for (let i = 0; i <= n; i++) for (const yy of [y + 10, y + h - 10]) bulbs.push(`<circle cx="${f(x + 16 + (i * (w - 32)) / n)}" cy="${yy}" r="5" fill="${i % 2 ? t.glow : mix(t.glow, t.shadeTint, 0.45)}" stroke="${t.ink}" stroke-width="${LW.detail}"/>`);
   return card(t, x, y, w, h, t.rim, 16) + bulbs.join('') + dmd(t, x + 22, y + 22, w - 44, h - 44, msg);
 }
 
+// Both panels: 320 wide, content on a 30 px margin (x+30 .. x+290), titles on the same baseline.
+const PW = 320, M = 30, CW = PW - 2 * M;
+
 function hudLeft(t: Theme, x: number, y: number) {
-  const o: string[] = [housing(t, x, y, 300, 880)];
-  o.push(text(t, x + 30, y + 66, 'FREE PLAY', 38, { w: 700, fill: t.accent, stroke: t.ink }));
-  o.push(`<g transform="translate(${x + 30} ${y + 82}) rotate(-2)">${card(t, 0, 0, 196, 32, t.role.coin, 16)}${text(t, 98, 22, 'ROUND 4 · MAIN EVENT', 14, { w: 700, anchor: 'middle' })}</g>`);
-  o.push(text(t, x + 32, y + 150, 'SCORE', 14, { w: 700, fill: mix(t.ink, t.paper, 0.4), spacing: 2 }));
-  o.push(odometer(t, x + 46, y + 160, '12480', 40, 58));
-  o.push(goalTube(t, x + 30, y + 262, 236, 0.69, t.role.pop));
-  o.push(text(t, x + 30, y + 312, 'GOAL 18,000', 16, { w: 700 }) + text(t, x + 268, y + 312, '5,520 to go', 15, { w: 500, anchor: 'end', fill: mix(t.ink, t.paper, 0.35) }));
-  // Mult dial on the left, balls and money stacked on the right
-  o.push(multDial(t, x + 92, y + 408, 62, 1.43));
-  o.push(text(t, x + 92, y + 446, '×1.43', 26, { w: 700, anchor: 'middle' }) + text(t, x + 92, y + 466, 'MULT', 12, { w: 700, anchor: 'middle', spacing: 2, fill: mix(t.ink, t.paper, 0.4) }));
-  o.push(text(t, x + 230, y + 346, 'BALLS', 12, { w: 700, anchor: 'middle', spacing: 2, fill: mix(t.ink, t.paper, 0.4) }));
-  o.push(ballTray(t, x + 172, y + 360, 2));
-  o.push(coinStack(t, x + 196, y + 448, 4) + text(t, x + 262, y + 456, '$11', 26, { w: 700, anchor: 'end' }));
-  o.push(text(t, x + 262, y + 476, 'MONEY', 12, { w: 700, anchor: 'end', spacing: 2, fill: mix(t.ink, t.paper, 0.4) }));
-  o.push(receipt(t, x + 34, y + 512, 232, 'THIS BALL', [
-    [t.role.pop, 'Pop Bumper ×3', '4,210'], [t.role.mega, 'Big Boi', '3,150'], [t.role.bank, 'Drop Targets', '1,880'], [t.role.lane, 'Lanes ' + t.laneWord, '740'], [t.role.coin, 'Cha-Ching', '$5 · 320'],
+  const o: string[] = [housing(t, x, y, PW, 880)], L = x + M, R = x + PW - M;
+  o.push(text(t, L, y + 70, 'FREE PLAY', 38, { w: 700, fill: t.accent, stroke: t.ink }));
+  // round and stage: Opener · Main · Boss, the current one lit
+  o.push(tile(t, L, y + 88, CW, 40));
+  o.push(text(t, L + 14, y + 108, 'ROUND 4', 19, { w: 700, mid: true }));
+  ['OPEN', 'MAIN', 'BOSS'].forEach((s, i) => {
+    const pw = 44, px = R - 12 - (3 - i) * pw - (2 - i) * 5, cur = i === 1, done = i === 0;
+    o.push(`<rect x="${px}" y="${y + 98}" width="${pw}" height="20" rx="10" fill="${cur ? t.accent : done ? mix(t.paper, t.shadeTint, 0.25) : t.paper}" stroke="${t.ink}" stroke-width="${LW.detail}"/>`);
+    o.push(text(t, px + pw / 2, y + 108, s, 10.5, { w: 800, anchor: 'middle', mid: true, spacing: 0.6, fill: cur ? t.paper : done ? faint(t) : t.ink }));
+  });
+  o.push(label(t, L, y + 160, 'Score'));
+  o.push(odometer(t, x + PW / 2, y + 174, '12480', 44, 64));
+  o.push(label(t, L, y + 280, 'Goal') + text(t, L + 46, y + 280, '18,000', 14, { w: 800 }) + label(t, R, y + 280, '5,520 to go', 'end'));
+  o.push(goalTube(t, L, y + 292, CW, 0.69, t.role.pop));
+  // two instrument tiles: Mult and Balls, labelled the same way, values on one line
+  const ty = y + 340, tw = (CW - 10) / 2, th = 136;
+  o.push(tile(t, L, ty, tw, th) + tile(t, L + tw + 10, ty, tw, th));
+  o.push(label(t, L + 14, ty + 24, 'Mult') + label(t, L + tw + 24, ty + 24, 'Balls'));
+  o.push(multDial(t, L + tw / 2, ty + 84, 44, 1.43));
+  o.push(ballTray(t, L + tw + 10 + tw / 2, ty + 72, 2));
+  o.push(text(t, L + tw / 2, ty + 114, '×1.43', 22, { w: 700, anchor: 'middle', mid: true }));
+  o.push(text(t, L + tw + 10 + tw / 2, ty + 114, '2 LEFT', 22, { w: 700, anchor: 'middle', mid: true }));
+  o.push(receipt(t, L, y + 506, CW, 'This ball', [
+    [t.role.pop, 'Pop Bumper ×3', '4,210'], [t.role.mega === t.paper ? t.accent : t.role.mega, 'Big Boi', '3,150'], [t.role.bank, 'Drop Targets', '1,880'], [t.role.lane, 'Lanes ' + t.laneWord, '740'], [t.role.coin, 'Cha-Ching', '$5 · 320'],
   ], '10,300'));
-  o.push(arcadeButton(t, x + 24, y + 790, 'CASH OUT', 'Tab'));
+  o.push(arcadeButton(t, L, y + 784, CW, 'CASH OUT', 'TAB'));
   return o.join('');
 }
 
 function hudRight(t: Theme, x: number, y: number) {
-  const o: string[] = [housing(t, x, y, 330, 880, mix(t.rim, t.shadeTint, 0.1))];
-  o.push(`<clipPath id="peg_${t.id}"><rect x="${x + 12}" y="${y + 12}" width="306" height="856" rx="14"/></clipPath><g clip-path="url(#peg_${t.id})">${pegboard(t, x + 12, y + 12, 306, 856)}</g>`);
-  o.push(`<rect x="${x + 12}" y="${y + 12}" width="306" height="856" rx="14" fill="none" stroke="${t.ink}" stroke-width="3"/>`);
-  o.push(awning(t, x + 14, y + 26, 302, 9));
-  o.push(`<g transform="translate(${x + 30} ${y + 86}) rotate(-3)">${card(t, 0, 0, 118, 44, t.paper, 10)}${text(t, 59, 32, 'PARTS', 26, { w: 700, anchor: 'middle', fill: t.accent, stroke: t.ink })}</g>`);
-  o.push(crank(t, x + 270, y + 122, 'Reroll $1'));
+  const o: string[] = [housing(t, x, y, PW, 880)], L = x + M, R = x + PW - M;
+  o.push(awning(t, x + 16, y - 34, PW - 32, 8)); // the shop canopy hangs over the housing
+  o.push(text(t, L, y + 70, 'PARTS', 38, { w: 700, fill: t.accent, stroke: t.ink }));
+  o.push(pill(t, R - 116, y + 70 - (0.71 * 38) / 2, 116, 'REROLL  $1', t.paper));
+  o.push(tile(t, L, y + 88, CW, 40));
+  // money lives with the shop; the coin stack comes first so flying coins land on it without crossing text
+  o.push(coinStack(t, L + 30, y + 108, 3) + text(t, L + 58, y + 108, '$6', 22, { w: 700, mid: true }));
+  o.push(text(t, R - 14, y + 108, '+$3 per spare ball', 12.5, { w: 600, mid: true, anchor: 'end', fill: faint(t) }));
   const recipes: Record<string, string[]> = { printer: ['Catches a ball: 200,', 'prints a 2nd ball.'], lamp: ['Lit: parts in its', 'glow score +25%.'], spinner: ['10 per spin. Fast', 'balls spin more.'] };
-  (['printer', 'lamp', 'spinner'] as PartId[]).forEach((id, i) => o.push(shelfItem(t, id, x + 26, y + 168 + i * 166, 280, recipes[id])));
-  o.push(text(t, x + 30, y + 680 + 46, 'drag a part here to store it', 13, { w: 500, fill: mix(t.ink, t.paper, 0.3) }));
-  o.push(toolbox(t, x + 26, y + 744, 278, ['coin', 'deflector', 'uplight']));
+  (['printer', 'lamp', 'spinner'] as PartId[]).forEach((id, i) => o.push(offerCard(t, id, L, y + 146 + i * 182, CW, recipes[id], id !== 'printer', 170)));
+  o.push(label(t, L, y + 730, 'Toolbox') + text(t, R, y + 730, 'drag a part in to store it', 12, { w: 600, anchor: 'end', fill: faint(t) }));
+  o.push(toolbox(t, L, y + 750, CW, ['coin', 'deflector', 'uplight', null])); // ends at y + 852, level with Cash Out
   return o.join('');
 }
 
@@ -358,50 +388,50 @@ function screen(t: Theme): string {
   o.push(surround(v, t));
   o.push(playfield(v, t, BUILD));
   o.push(marquee(t, 560, 22, 480, 112, 'BIG BOI SAYS OOF'));
-  o.push(hudLeft(t, 22, 60) + hudRight(t, 1248, 60));
+  o.push(hudLeft(t, 24, 60) + hudRight(t, W - 24 - PW, 60));
   // hovering Big Boi: the card answers what it is, what it pays now and why, and how to change it
   const [MX, MY] = P(v, 12, 34.2, 1.2);
   o.push(`<ellipse cx="${f(MX)}" cy="${f(P(v, 12, 34.2)[1])}" rx="${f(2.5 * v.S)}" ry="${f(2.5 * v.S * v.k)}" fill="none" stroke="${t.paper}" stroke-width="4" stroke-dasharray="10 7"/>`);
   const [LX, LY] = P(v, 15.6, 29.6, 2);
   o.push(`<path d="M${f(LX)} ${f(LY)}Q${f(LX + 10)} ${f(MY - 10)} ${f(MX + 2.2 * v.S)} ${f(MY + 6)}" fill="none" stroke="${t.ink}" stroke-width="3" stroke-dasharray="2 8" stroke-linecap="round"/>`);
-  o.push(tooltip(t, 905, 312, 330, [MX + 2.1 * v.S, MY + 4], {
+  o.push(tooltip(t, 900, 330, 330, [MX + 2.1 * v.S, MY + 4], {
     id: 'mega', title: 'Big Boi', chip: 'Bumper', level: 2, now: 'Next hit pays 472',
     math: [['275', 'base + Lv 2'], ['+20%', 'Lamp glow'], ['×1.43', 'your Mult']],
     recipe: ['Scores 250 per hit, times your Mult.', 'Each hit: +0.1 Mult this ball.'],
-    stats: 'This ball: 12 hits · 3,150 pts · Mult +1.2', dial: ['Kick', 0.35, 'soft kick, more pts'],
+    stats: 'This ball: 12 hits · 3,150 pts · Mult +1.2', dial: ['Kick', 0.35, 'soft kick, more points', 'hard kick, fewer'],
     keys: 'drag to move · R rotate · Del store · between rounds',
   }));
-  // the coin's flight path to the money counter: the effect points at its consequence
+  // a coin flies from the Cha-Ching bumper to MONEY on the parts side: the effect points at its consequence
   const [CX, CY] = P(v, 18.6, 33.6, 1.1);
-  const arc: Pt[] = Array.from({ length: 30 }, (_, i) => { const u = i / 29; return [CX + (250 - CX) * u, CY - v.S * 1.6 + (410 - CY + v.S * 1.6) * u - Math.sin(u * Math.PI) * 260]; });
+  const sx = CX + v.S * 0.4, sy = CY - v.S * 1.4, ex = W - 24 - PW + M + 30, ey = 60 + 100, cx = 1150, cy = 110;
+  const arc: Pt[] = Array.from({ length: 30 }, (_, i) => { const u = i / 29, a = (1 - u) ** 2, b = 2 * u * (1 - u), c = u * u; return [a * sx + b * cx + c * ex, a * sy + b * cy + c * ey]; });
   o.push(`<path d="${line(arc)}" fill="none" stroke="${t.ink}" stroke-width="3" stroke-dasharray="2 11" stroke-linecap="round" opacity="0.55"/>`);
-  for (const [u, sq] of [[0.3, 0.3], [0.55, 1], [0.8, 0.6]] as const) {
+  for (const [u, sq] of [[0.22, 0.3], [0.46, 1], [0.7, 0.6]] as const) {
     const p = arc[Math.round(u * 29)];
-    o.push(coin(t, p[0], p[1], 12 + u * 6, sq, 2.4));
+    o.push(coin(t, p[0], p[1], 11 + u * 5, sq, 2.4));
   }
-  o.push(`<text x="${W - 26}" y="${H - 14}" text-anchor="end" font-family="'${TYPE.ui}'" font-weight="600" font-size="14" fill="${mix(t.ink, t.bg, 0.4)}">concept mock-up · ${esc(t.tagline.toLowerCase())} theme · drawn from the real table geometry</text>`);
+  o.push(`<text x="${W / 2}" y="${H - 14}" text-anchor="middle" font-family="'${TYPE.ui}'" font-weight="600" font-size="13" fill="${mix(t.ink, t.bg, 0.4)}">concept mock-up · ${esc(t.tagline.toLowerCase())} theme · drawn from the real table geometry</text>`);
   return svgDoc(W, H, o.join(''));
 }
 
 // ------------------------------------------------------------------ parts sheet
 function partsSheet(): string {
   const ids: PartId[] = ['pop', 'coin', 'mega', 'sling', 'spinner', 'bank', 'lane', 'uplight', 'lamp', 'printer', 'deflector', 'flipper'];
-  const W = 1560, rowH = 156, blockH = 2 * rowH + 64, H = 90 + THEMES.length * blockH;
+  // a strict grid: 24 px padding in every block, 16 px gutters, one shared scale so sizes stay true
+  const W = 1560, pad = 24, gut = 16, head = 58, cellH = 150, cols = 6;
+  const bx = 24, bw = W - 48, cellW = (bw - pad * 2 - gut * (cols - 1)) / cols, blockH = head + cellH * 2 + gut + pad;
+  const H = 96 + THEMES.length * (blockH + 20);
   const o: string[] = [`<rect width="${W}" height="${H}" fill="#efe8dc"/>`];
-  o.push(`<text x="40" y="58" font-family="'${TYPE.display}'" font-weight="400" font-size="34" fill="#3b2a4a">One silhouette per part · three theme kits</text>`);
+  o.push(text(FACTORY, bx, 62, 'ONE SILHOUETTE PER PART · THREE THEME KITS', 32, { w: 700 }));
   THEMES.forEach((t, b) => {
-    const y0 = 90 + b * blockH;
-    o.push(card(t, 24, y0, W - 48, blockH - 20, t.bg, 22));
-    o.push(text(t, 48, y0 + 40, t.tagline, 24, { w: 700, fill: t.paper, stroke: t.ink }));
+    const y0 = 96 + b * (blockH + 20);
+    o.push(card(t, bx, y0, bw, blockH, t.bg, 22));
+    o.push(text(t, bx + pad, y0 + head / 2 + 4, t.tagline, 24, { w: 700, fill: t.paper, stroke: t.ink, mid: true }));
     ids.forEach((id, i) => {
-      const col = i % 6, row = Math.floor(i / 6), cx = 140 + col * 252, cy = y0 + 70 + row * rowH;
-      o.push(card(t, cx - 104, cy, 208, rowH - 16, t.floor, 16));
-      const S = id === 'mega' ? 20 : id === 'bank' ? 17 : id === 'flipper' ? 19 : 26;
-      const v: View = { S, ox: cx, oy: cy + 86, k: 0.85, kz: 0.6, shx: 0, lw: 2.2 };
-      const a = id === 'sling' ? -0.55 : id === 'spinner' ? 0.25 : id === 'deflector' ? 0.4 : 0;
-      o.push(id === 'flipper' ? flipper({ ...v, ox: cx - 2.1 * S }, t, 0, 0.6, 1)
-        : drawPart(v, t, id, 0, 0, a, { lit: true, glow: 2.2, value: id === 'pop' ? '100' : id === 'mega' ? '250' : undefined, down: [2], smoke: id === 'printer', letter: t.laneWord[0], target: 'pop' }));
-      o.push(text(t, cx, cy + rowH - 26, PARTS[id].name, 14, { w: 600, anchor: 'middle' }));
+      const col = i % cols, row = Math.floor(i / cols), x = bx + pad + col * (cellW + gut), y = y0 + head + row * (cellH + gut);
+      o.push(card(t, x, y, cellW, cellH, t.floor, 16));
+      o.push(fitIcon(t, id, x + cellW / 2, y + 62, cellW - 30, 90, { fixedS: 23, k: 0.8, st: { value: id === 'pop' ? '100' : id === 'mega' ? '250' : undefined, smoke: false } }));
+      o.push(text(t, x + cellW / 2, y + cellH - 20, PARTS[id].name, 14, { w: 700, anchor: 'middle', mid: true }));
     });
   });
   return svgDoc(W, H, o.join(''));
@@ -436,12 +466,13 @@ function particleSheet(): string {
   o.push(text(t, 40, 60, 'Particles are stickers', 36, { w: 700, fill: t.paper, stroke: t.ink }));
   o.push(text(t, 40, 96, 'solid shapes, ink outline, theme palette · they pop in, hold, and shrink out on a 12 fps step · only air (smoke, glow, trails) is soft', 18, { w: 500 }));
   const fx0 = 640;
-  ['spawn', 'overshoot', 'hold', 'shrink', 'gone'].forEach((s, i) => o.push(text(t, fx0 + i * 190, 134, s, 15, { w: 600, anchor: 'middle', fill: mix(t.ink, t.bg, 0.3) })));
+  ['spawn', 'overshoot', 'hold', 'shrink', 'end'].forEach((s, i) => o.push(text(t, fx0 + i * 190, 134, s, 15, { w: 600, anchor: 'middle', fill: mix(t.ink, t.bg, 0.3) })));
   rows.forEach((r, j) => {
     const y = 150 + j * rowH;
     o.push(card(t, 24, y, W - 48, rowH - 12, r.name === 'Smoke ribbon' ? t.rim : j % 2 ? t.paper : mix(t.paper, t.floor, 0.5), 16));
-    o.push(text(t, 48, y + 38, r.name, 22, { w: 700 }));
-    r.spec.forEach((s, k) => o.push(text(t, 250, y + 26 + k * 21, s, 14.5, { w: 500 })));
+    const cy = y + (rowH - 12) / 2;
+    o.push(text(t, 48, cy, r.name, 22, { w: 700, mid: true }));
+    r.spec.forEach((s, k) => o.push(text(t, 250, cy + (k - 1) * 21, s, 14.5, { w: 500, mid: true })));
     frames.forEach((k, i) => o.push(r.draw(fx0 + i * 190, y + rowH / 2 - 6, k, i)));
   });
   return svgDoc(W, H, o.join(''));
@@ -537,8 +568,8 @@ function relicSheet(): string {
     o.push(card(t, x, y, 264, 186, i === 1 ? '#fff4c9' : t.paper, 14));
     o.push(decal(t, d, x + 60, y + 62, 34, 1, -5 + i * 4));
     o.push(text(t, x + 112, y + 46, d.name, 19, { w: 700 }) + text(t, x + 112, y + 68, d.rarity === 'wild' ? 'Wild' : d.rarity === 'rare' ? 'Rare' : 'Common', 13, { w: 600, fill: t.accent }));
-    d.effect.forEach((e, k) => o.push(text(t, x + 18, y + 124 + k * 18, e, 13.5, { w: 500 })));
-    o.push(`<rect x="${x + 18}" y="${y + 150}" width="80" height="26" rx="13" fill="${i === 1 ? t.accent : t.paper}" stroke="${t.ink}" stroke-width="2.4"/>` + text(t, x + 58, y + 168, 'Stick it', 13, { w: 700, anchor: 'middle', fill: i === 1 ? t.paper : t.ink }));
+    d.effect.forEach((e, k) => o.push(text(t, x + 18, y + 114 + k * 18, e, 13.5, { w: 600 })));
+    o.push(pill(t, x + 18, y + 162, 100, 'STICK IT', i === 1 ? t.accent : t.paper, '', 30));
   });
   // where they live: the apron, cropped from the real table
   const v: View = { S: 24, ox: 1000, oy: 1010 + 0, k: 0.9, kz: 0.55, shx: 0, lw: 2.4 };
@@ -554,9 +585,12 @@ function relicSheet(): string {
     ['Swap', 'Between rounds, peel one off to make room. A peeled decal is gone, so choosing is the game.'],
     ['Read', 'Hover a decal for the same card as a part: what it does, what it did this ball.'],
   ];
-  notes.forEach(([h, b], i) => {
-    o.push(text(t, 1004, 176 + i * 92, h, 19, { w: 700, fill: t.accent }));
-    wrap(b, 58).forEach((ln, k) => o.push(text(t, 1004, 200 + i * 92 + k * 20, ln, 15, { w: 500 })));
+  let ny = 176; // flow layout: every block is followed by the same gap, whatever its length
+  notes.forEach(([h, b]) => {
+    o.push(text(t, 1004, ny, h, 19, { w: 700, fill: t.accent }));
+    const lines = wrap(b, 58);
+    lines.forEach((ln, k) => o.push(text(t, 1004, ny + 24 + k * 20, ln, 15, { w: 500 })));
+    ny += 24 + lines.length * 20 + 26;
   });
   return svgDoc(W, H, o.join(''));
 }
@@ -651,6 +685,7 @@ function svgDoc(w: number, h: number, body: string) {
 
 async function main() {
   mkdirSync(OUT, { recursive: true });
+  for (const w of THEMES.flatMap((t) => roleClashes(t))) console.warn('colour check:', w);
   const sheets: Record<string, string> = {
     'screen-factory': screen(FACTORY), 'screen-diner': screen(DINER), 'screen-castle': screen(CASTLE),
     'parts-sheet': partsSheet(), 'particles': particleSheet(), 'key-art-lineup': keyArt(),
@@ -659,7 +694,9 @@ async function main() {
   const require = createRequire(import.meta.url);
   const { chromium } = require('playwright');
   const browser = await chromium.launch();
+  const only = process.env.ONLY?.split(','); // e.g. ONLY=screen-factory,parts-sheet for a quick look
   for (const [name, svg] of Object.entries(sheets)) {
+    if (only && !only.includes(name)) continue;
     const m = svg.match(/width="(\d+)" height="(\d+)"/)!;
     const page = await browser.newPage({ viewport: { width: +m[1], height: +m[2] } });
     await page.setContent(`<!doctype html><html><head><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Baloo+2:wght@500;700;800&family=Lilita+One&family=Titan+One&family=Luckiest+Guy&family=Bungee&family=Nunito:wght@500;600;700;800&family=DotGothic16&family=Silkscreen&family=VT323&display=swap"><style>html,body{margin:0}</style></head><body>${svg}</body></html>`, { waitUntil: 'networkidle' });
@@ -669,6 +706,7 @@ async function main() {
     await page.close();
     console.log('wrote', `${OUT}/${name}.png`);
   }
+  if (only && !only.includes('backdrops')) { await browser.close(); return; }
   // the drifting backdrops as a looping GIF: 6 s at 12 fps
   const frames = `${OUT}/.frames`, N = 72;
   mkdirSync(frames, { recursive: true });

@@ -42,8 +42,8 @@ export const FACTORY: Theme = {
   floor: '#fbe7a1', floor2: '#f2d77a', rail: '#e9e4f0', rim: '#8f7ad6', metal: '#d9dbe6', rubber: '#3b2a4a',
   accent: '#ff5d8f', glow: '#fff4a8', smoke: '#ffffff', dmd: '#ff9a3c',
   role: {
-    pop: '#3cc3b1', coin: '#ffae2b', mega: '#8a63f2', sling: '#ff6b6b', spinner: '#55d08f', lane: '#62b8ff',
-    printer: '#ff8fc8', flipper: '#ff6b6b', lamp: '#fff1a0', uplight: '#ffffff', bank: '#ef476f', deflector: '#b8b2cc',
+    pop: '#3cc3b1', coin: '#ffae2b', mega: '#8a63f2', sling: '#ff6b6b', spinner: '#a3d143', lane: '#62b8ff',
+    printer: '#ff8fc8', flipper: '#ff6b6b', lamp: '#fff1a0', uplight: '#ffffff', bank: '#c2417a', deflector: '#b8b2cc',
   },
   popMotif: 'rivets', debris: 'bolt', laneWord: 'FUN', backdrop: 'squiggle', floorArt: 'plates', surround: 'factory',
 };
@@ -55,7 +55,7 @@ export const DINER: Theme = {
   accent: '#d9473b', glow: '#ffe3a0', smoke: '#fbf6ea', dmd: '#ffb347',
   role: {
     pop: '#d9473b', coin: '#f2c14e', mega: '#f6efdf', sling: '#7f9c3c', spinner: '#5e8c8a', lane: '#f08a4b',
-    printer: '#b9c6c9', flipper: '#f6efdf', lamp: '#ffe08a', uplight: '#ffffff', bank: '#d9473b', deflector: '#8a6a4a',
+    printer: '#b9c6c9', flipper: '#f6efdf', lamp: '#ffe08a', uplight: '#ffffff', bank: '#7a4a2e', deflector: '#a9b4b6',
   },
   popMotif: 'awning', debris: 'pea', laneWord: 'EAT', backdrop: 'waves', floorArt: 'checker', surround: 'diner',
 };
@@ -66,8 +66,8 @@ export const CASTLE: Theme = {
   floor: '#9cc25a', floor2: '#bcd776', rail: '#eef1f4', rim: '#b7713e', metal: '#dfe5ec', rubber: '#3d2f2a',
   accent: '#e2704f', glow: '#ffe6a0', smoke: '#ffffff', dmd: '#ffc04d',
   role: {
-    pop: '#e2704f', coin: '#f2c14e', mega: '#eef1f4', sling: '#b7713e', spinner: '#4c86c6', lane: '#7fc0e8',
-    printer: '#e9eef2', flipper: '#eef1f4', lamp: '#ffd36e', uplight: '#ffffff', bank: '#c94f46', deflector: '#8b5a35',
+    pop: '#e2704f', coin: '#f2c14e', mega: '#eef1f4', sling: '#8b5a35', spinner: '#4c86c6', lane: '#7fc0e8',
+    printer: '#d8c3a5', flipper: '#eef1f4', lamp: '#f59ad0', uplight: '#ffffff', bank: '#8e6bb0', deflector: '#6f6a64',
   },
   popMotif: 'cone', debris: 'leaf', laneWord: 'WIN', backdrop: 'curls', floorArt: 'meadow', surround: 'castle',
 };
@@ -89,3 +89,24 @@ export const mat = (t: Theme, base: string): Mat => ({
   shade: mix(base, t.shadeTint, 0.34),
   light: mix(base, '#ffffff', 0.5),
 });
+
+/** A role colour that is safe as a thin line or bar on paper: very light colours are pulled towards ink. */
+export const legible = (t: Theme, c: string) => {
+  const [r, g, b] = hx(c).map((n) => n / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.72 ? mix(c, t.ink, 0.45) : c;
+};
+
+/**
+ * The per-theme check from the art direction: scoring parts must be told apart by colour within a
+ * theme (shape is the first cue, colour the second). Returns the pairs that are too close.
+ */
+export function roleClashes(t: Theme, min = 70): string[] {
+  const ids = ['pop', 'coin', 'mega', 'sling', 'spinner', 'lane', 'printer', 'lamp', 'bank'] as const;
+  const out: string[] = [];
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+    const a = hx(t.role[ids[i]]), b = hx(t.role[ids[j]]);
+    const d = Math.hypot(a[0] - b[0], (a[1] - b[1]) * 1.3, a[2] - b[2]); // green weighted: the eye is most sensitive to it
+    if (d < min) out.push(`${t.id}: ${ids[i]} and ${ids[j]} are too close (${Math.round(d)})`);
+  }
+  return out;
+}

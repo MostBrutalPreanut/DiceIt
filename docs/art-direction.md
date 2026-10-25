@@ -1,4 +1,4 @@
-# Art direction: Toybox Diorama (draft v0.2)
+# Art direction: Toybox Diorama (v0.3)
 
 What the five style references have in common, how that becomes a look for a pinball game, how one kit can produce many themed machines, and what particles, UI, type and motion should look like. The concept sheets in [concept/](concept/) are **generated from the game's own table geometry and part data** (`npm run concept`, source in `tools/concept/`), so they are a working prototype of the pipeline, not paintings we have to match by hand.
 
@@ -7,7 +7,9 @@ What the five style references have in common, how that becomes a look for a pin
 | ![](concept/before-neon.png) | ![](concept/screen-factory.png) |
 | Today: neon placeholder | Concept: *Funhouse Factory* theme, same table, same build |
 
-v0.2 changes from feedback: the HUD panels became objects (a scoreboard machine, a parts counter); a hover tooltip; apron stickers became **relic decals**; livelier Lane Rollover and Level Light; the **goofy type pairing** (Luckiest Guy + Nunito + DotGothic16); slowly drifting backdrops instead of dots; **the machine tilts, not the camera**; a plan for bigger and more parts (§10).
+v0.3 is the art-director polish pass: one layout grid for both panels, three line weights, text centred on measured cap heights, parts centred in their boxes by their drawn bounds, money moved to the shop side, Buy buttons, a real pipe in the factory surround, and an automated colour check that fixed six clashing part colours (rules in §7). Themes are a player choice; there is no default.
+
+v0.2 changes from feedback: the HUD panels became objects (a scoreboard machine, a parts counter); a hover tooltip; apron stickers became **relic decals**; livelier Lane Rollover and Level Light; the **goofy type pairing** (Luckiest Guy + Nunito + DotGothic16); slowly drifting backdrops instead of dots; **the machine tilts, not the camera**; a plan for bigger and more parts (§11).
 
 ## 1. What connects the references
 
@@ -43,7 +45,7 @@ Call it **Toybox Diorama**: the machine is a handmade toy world on a cabinet, dr
 - **Keep heights low.** Parts stand 0.5 to 2 ball diameters tall. A ball passing behind a tall part is drawn on top of it anyway (or as an x-ray outline) so it is never hidden.
 - **Draw far things first** (sort by sim y); walls are continuous stacked strokes.
 
-**Layers of a machine (each one themed):** cabinet rim and side art · playfield floor art · inserts (the only glowing things) · walls and rails · parts · balls and trails · particles · live-value tags and score stickers · apron decals (§7) · backbox (marquee with the DMD) · surroundings (the diorama base) · the drifting backdrop (§9).
+**Layers of a machine (each one themed):** cabinet rim and side art · playfield floor art · inserts (the only glowing things) · walls and rails · parts · balls and trails · particles · live-value tags and score stickers · apron decals (§8) · backbox (marquee with the DMD) · surroundings (the diorama base) · the drifting backdrop (§10).
 
 **Readability budget:** the ball is the brightest, highest-contrast object (near-white with an ink outline everywhere); parts are mid-value; the floor is the lowest contrast; effects may cover the floor but not the ball.
 
@@ -78,12 +80,14 @@ A theme is a data row (`tools/concept/themes.ts`), the same idea as the parts ca
 | `laneWord` | what the Lane Rollovers spell, one letter each | FUN / EAT / WIN |
 | `debris` | the theme's confetti | bolts and gears / peas and sprinkles / leaves and stone chips |
 | `surround` | the diorama the table stands in | tanks and pipes / condiment bottles / pine trees |
-| `backdrop` | the drifting page behind the machine (§9) | squiggles / waves / smoke curls |
+| `backdrop` | the drifting page behind the machine (§10) | squiggles / waves / smoke curls |
 | backglass | title, tagline banner, the mascot (Big Boi in the theme's skin) | |
 
 **The two dull parts, redone.** The **Lane Rollover** is now a real lane: two guide posts, a wire switch and a lit letter insert, and the lanes in a set **spell the theme's word** (F-U-N), the way real machines do, so "light them all" reads at a glance. The **Level Light** is now a glass dome over a bulb, tinted by the part type it levels up, with rank chevrons on the floor and rays when lit, so it says "this upgrades Pop Bumpers" without a tooltip.
 
 ![](concept/key-art-lineup.png)
+
+**Themes are a player choice.** There is no default machine; the player picks the theme (in the run setup or the options), and a theme changes looks only.
 
 **Cost of a new machine** once the kit is in the game: about 25 colour tokens, one motif, one floor pattern, one lane word, one debris shape, a surround set, a backdrop style and a backglass. No new part drawings. A theme can also carry rules (the Diner could be the "Tax Man" boss table), but that is a design question for later.
 
@@ -122,20 +126,23 @@ The references have almost no "effects" in the usual sense (glows, sparks, addit
 
 The left and right panels were flat cards: clear, but boring. They are now objects that belong in the diorama, built from the same kit (the arcade button, the balls and the parts on the shelves are drawn by the same prop code as the table). Every piece still shows exactly the same information as before.
 
+Both panels are the same width (320 px) on the same grid, so the table sits dead centre; their titles share a baseline, their first tiles share a row, and their last elements end on the same line.
+
 **Left: the scoreboard** (a housing with screws, paper inside)
-- **Score on odometer drums.** Fixed-width digit drums, the last one mid-roll while points tick. Fixed widths also stop the number wobbling as it changes.
-- **Goal as a glass tube** filling with the theme's Pop colour, bubbles rising, a flag at the goal, and "5,520 to go" under it (the number you actually need).
-- **Mult as a pressure dial.** Cool, warm and hot zones; the needle swings when a Mult stamp lands.
-- **Balls in a tray** (real ball sprites, used ones as dashed ghosts) and **money as a coin stack** that grows when coins fly in.
-- **The ledger as a receipt** printed out of a slot, with dotted leaders and a ball total. A new line prints when a new part scores.
-- **Cash Out is a big arcade button** with its key on a label (Tab).
+- **Round strip:** "ROUND 4" and three stage pills (Open, Main, Boss), the current one lit. No tilted sticker.
+- **Score on odometer drums:** fixed-width digits that roll as points tick, so the number never wobbles. A still frame shows them at rest.
+- **Goal:** "GOAL 18,000" and "5,520 TO GO" (the number you actually need) over a glass tube filling with the theme's Pop colour. The goal flag is a round badge on the tube's end cap, on the same centre line.
+- **Mult and Balls as two matching instrument tiles:** the Mult dial (face, zones, ticks and needle share one centre, the pivot) and the ball tray, each labelled the same way with its value on the same line.
+- **The ledger as a receipt** printed out of a slot, with dotted leaders and a ball total.
+- **Cash Out:** a big arcade button with its key (TAB).
 
-**Right: the parts counter** (an awning over a pegboard)
-- Offers stand on **shelves** as the real 3D parts, with a **hanging price tag** and a taped recipe card.
-- **Reroll is a crank** (the sharpener reference), with its price on it.
-- **The inventory is a toolbox** with the stored parts in compartments; drag a part into it to store it.
+**Right: the parts counter** (the same housing, a striped canopy hanging over its top edge)
+- **Title row:** "PARTS" on the same baseline as "FREE PLAY", with a Reroll pill.
+- **Money lives here,** with the shop: a coin stack, the balance, and "+$3 per spare ball". Coins from the table fly onto the stack, which sits first in the row so they never cross text.
+- **Offer cards:** the part standing on a plinth (centred by its drawn bounds and resting on the plinth), the name, the flavour line, the recipe with a bar in the part's colour, and a **Buy button** that greys out when you can't afford it.
+- **Toolbox:** stored parts sit centred in compartments, an empty compartment shows a dashed outline, and the hint says "drag a part in to store it".
 
-**Rules that keep it clear:** information never hides behind decoration (labels in the UI face, values in the display face, one idea per widget); every widget animates only when its value changes; one hot accent per panel (the Cash Out button, the awning).
+**Rules that keep it clear:** information never hides behind decoration (labels in the UI face, values in the display face, one idea per widget); every widget animates only when its value changes; one hot accent per panel (the Cash Out button, the canopy).
 
 ### Tooltips: what it is, what it pays now, why, how to change it
 
@@ -151,7 +158,24 @@ The hover card (Big Boi in the screen above) has a fixed anatomy, generated from
 
 The card has a tail to the part, the part gets a dashed selection ring, and the card never covers the part itself. The same card is used for shop items, toolbox items and decals.
 
-## 7. Relics are decals
+## 7. Polish rules (the art-director pass)
+
+What separates "nice concept" from "ready to ship" is a handful of rules applied everywhere. The concept code enforces most of them, so they will carry into the game.
+
+| Rule | How it is applied |
+|---|---|
+| **One grid** | Panels 320 px wide with a 30 px content margin; titles on one baseline; matching tiles share rows; both panels end on the same bottom line. Sheets use 24 px padding and 16 px gutters. |
+| **Three line weights** | 3.5 px for frames and cards, 2.5 px for widgets inside them, 1.8 px for fine detail (`LW` in `ui.ts`). Props use their own scale-relative line. |
+| **Centre text on cap height, not the baseline guess** | Cap heights measured in the browser (Luckiest Guy 0.71, Nunito 0.72, DotGothic16 0.82 of the size); chips, buttons, the DMD and table rows are centred with them. Letter-spacing is compensated when text is centred. |
+| **Centre art by what is drawn** | Icons in shelves, toolboxes and sheets are fitted and centred by their real drawn bounds (height included), not by their footprint. UI boxes fit the part to the box; the parts sheet keeps one shared scale so relative sizes stay true. |
+| **Only stuck-on things tilt** | Stickers, decals, score popups and stamps may sit at an angle; fixtures (panels, receipts, cards, buttons) are square. |
+| **Fixed-width numbers** | Score drums and money never change width as they tick. |
+| **Light colours become legible** | A role colour that is too light for a thin bar on paper is pulled towards ink (`legible()`), e.g. the Lamp's pale yellow. |
+| **The colour check** | `npm run concept` warns when two scoring parts in a theme are too close in colour (`roleClashes()`). It caught six pairs, now fixed: Factory Spinner vs Pop and targets vs Slingshot; Diner targets vs Pop; Castle Slingshot vs Pop, Lamp vs Cha-Ching and Big Boi, Ball Printer vs Big Boi and the lanes. |
+| **Every detail must explain itself** | A grey bar between two tanks read as a glitch; it is now a pipe with elbows, flanges and a valve wheel. If a detail needs a caption, redraw it or remove it. |
+| **States must agree** | A greyed Buy button needs a balance that can't afford it ($6 against a $7 Ball Printer). |
+
+## 8. Relics are decals
 
 ![](concept/relics.png)
 
@@ -165,7 +189,7 @@ The stickers on the apron became **relic decals**: run-long rules (the "Rules" c
 
 The six on the sheet are placeholders to show the range, not balanced designs: *Free Refills* (first drain comes back), *Tip Jar* (+$1 per 10 Pop hits), *Rubber Ducky* (Slingshots kick harder and score more), *Gold Star* (Level Lights also give Mult), *Overtime* (longer ball clock, spinners pay double late), *No Refunds* (full sell refunds, dearer rerolls; it would also settle open question 4 of the plan for players who want it).
 
-## 8. Typography: the goofy pairing
+## 9. Typography: the goofy pairing
 
 ![](concept/fonts.png)
 
@@ -179,7 +203,7 @@ All candidates are free (SIL Open Font License) on Google Fonts. **Chosen: C, Go
 
 **One rule decides which face:** bold text at 19 px or larger uses the display face, everything else the UI face (that is literally how the concept code chooses). Luckiest Guy is all caps and has one weight, so it is never bolded (fake bold smears it) and never used for sentences. It sits a little high on its baseline; nudge it down about 6% of its size. The others stay on the sheet for comparison: Fredoka (what the first concepts used), Baloo 2, Lilita One, Titan One, Bungee, and Silkscreen or VT323 for the DMD.
 
-## 9. The backdrop drifts
+## 10. The backdrop drifts
 
 ![](concept/backdrops.gif)
 
@@ -190,7 +214,7 @@ The plain dot grid became **hand-drawn line marks that drift slowly**, one style
 - **Seamless:** every mark lives in a repeating tile and drifts exactly one tile per loop, so it is one cheap tiling sprite in the game, scrolled with a phase.
 - **It can react, slightly:** speed up a little during multiball or a hot Mult, freeze on TILT, and stop entirely in Calm mode.
 
-## 10. Plan: bigger parts and more parts (when we are ready)
+## 11. Plan: bigger parts and more parts (when we are ready)
 
 We will add many more parts and much bigger ones (ramps, an upper playfield, the legendary toys: the Hand, the Castle, the Head). Nothing changes now; this is how the art side should be built when that starts, so every new part arrives already themed.
 
@@ -235,29 +259,29 @@ The base layer is generated from the part's collision `shape`, so the art's foot
 
 **7. Order of work** when the time comes: prop spec and primitive library in `src/render` → port the 12 existing parts to specs (they double as the test set) → size-class rules and the cutaway → layers and the first ramp → the first L toy in one theme, then its versions in the other two.
 
-## 11. How to build the look in the game (PixiJS v8)
+## 12. How to build the look in the game (PixiJS v8)
 
 1. **Theme kit module** (`src/render/theme.ts`): move the tokens and `mat()` from `tools/concept/themes.ts` into `src`. Replace the colours hard-coded in `renderer.ts` with role colours from the theme.
-2. **Prop drawing → textures.** Port the prop drawers (`props.ts`) from SVG strings to Pixi `Graphics` calls (nearly one to one: `poly`, `circle`, `fill`, `stroke`), then to the data specs of §10. Draw each part type × state × theme **once** into a texture (`renderer.generateTexture`) and show sprites; redraw only when a theme or a part's state changes. Today the renderer clears and redraws every shape every frame.
+2. **Prop drawing → textures.** Port the prop drawers (`props.ts`) from SVG strings to Pixi `Graphics` calls (nearly one to one: `poly`, `circle`, `fill`, `stroke`), then to the data specs of §11. Draw each part type × state × theme **once** into a texture (`renderer.generateTexture`) and show sprites; redraw only when a theme or a part's state changes. Today the renderer clears and redraws every shape every frame.
 3. **Projection in one place, with the machine tilt.** Add `P(x, y, z)` with `k` animated between workshop (1.0) and play (0.86), and the nudge spring as a transform on the machine container; pointer picking inverts it on the floor plane.
 4. **Floor art, the surround and the backdrop** as static or tiling layers, rendered once per layout; the backdrop is a `TilingSprite` scrolled by phase.
 5. **Particles:** bake each particle shape per theme into a small atlas, run them in a `ParticleContainer`, and apply the scale curve and the 12 fps frame step in the update. Stickers stay `Container`s with text.
 6. **HUD:** rebuild the panels as Pixi containers (or keep them as HTML styled to match; the HTML route is faster and keeps text crisp, the Pixi route lets coins fly into the money stack without crossing layers). My default: HTML panels plus a transparent Pixi overlay for the flying effects.
 7. **Fonts:** bundle Luckiest Guy, Nunito and DotGothic16 (all OFL) locally.
-8. **Content:** the hero theme first (Factory), then Diner and Castle as the proof that a theme is only data.
+8. **Content:** all three themes together, picked by the player, which is also the proof that a theme is only data.
 
 Suggested order: theme tokens and colours (a day), projection, tilt and rails (a day or two), prop textures for the 12 parts (several days), particles (a few days), HUD reskin with tooltips and decal slots (a few days), backdrop (hours). It fits M3 ("art direction") in the roadmap, but the token step is cheap enough to do earlier.
 
-## 12. Open questions
+## 13. Decisions and open questions
+
+Decided: **themes are a player choice** (no default machine); the implementation follows §12 (including HTML panels with a Pixi overlay for effects that fly between the table and the panels), when the time comes.
 
 | # | Question | My default |
 |---|---|---|
-| 1 | Which theme is the default machine? | Funhouse Factory: it *is* the premise (a machine that shouldn't exist) |
-| 2 | Should themes change rules, or only looks? | Looks only at first; tie themes to bosses or stages later |
-| 3 | How many decal slots, and can you buy more? | 4 to start; +1 from an Apron Extension upgrade; peeling is free but destroys the decal |
-| 4 | HUD in HTML or in Pixi? | HTML panels with a Pixi overlay for effects that fly between table and panel |
-| 5 | A dark theme for night play? | Yes, later: "Night Shift" with the same tokens, which would also suit the Night Shift boss |
-| 6 | Hand-painted art from an artist later? | The kit sets the rules an artist would follow; hero art (backglass, key art, L toys) is where a human illustrator adds the most |
+| 1 | Should themes change rules, or only looks? | Looks only at first; tie themes to bosses or stages later |
+| 2 | How many decal slots, and can you buy more? | 4 to start; +1 from an Apron Extension upgrade; peeling is free but destroys the decal |
+| 3 | A dark theme for night play? | Yes, later: "Night Shift" with the same tokens, which would also suit the Night Shift boss |
+| 4 | Hand-painted art from an artist later? | The kit sets the rules an artist would follow; hero art (backglass, key art, L toys) is where a human illustrator adds the most |
 
 ## Sources
 
