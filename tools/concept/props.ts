@@ -2,10 +2,10 @@
 // theme only supplies colours and one motif, so every machine gets every part for free.
 import { PARTS, type PartId } from '../../src/data/parts';
 import { BALL_R, FLIPPER_LENGTH, FLIPPER_REST } from '../../src/sim/constants';
-import { box, curl, f, groundRing, P, poly, Prop, ribbon, ring, shadow, shadowPoly, valueTag, type View } from './draw';
+import { box, curl, f, TYPE, groundRing, line, P, poly, Prop, ribbon, ring, shadow, shadowPoly, sparkle, valueTag, type View } from './draw';
 import { mat, mix, type Theme } from './themes';
 
-export interface PartState { lit?: boolean; down?: number[]; value?: string; face?: 'happy' | 'oof'; smoke?: boolean; hit?: boolean; glow?: number }
+export interface PartState { letter?: string; target?: PartId; lit?: boolean; down?: number[]; value?: string; face?: 'happy' | 'oof'; smoke?: boolean; hit?: boolean; glow?: number }
 
 export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, angle = 0, st: PartState = {}): string {
   const def = PARTS[id], role = mat(t, t.role[id]), metal = mat(t, t.metal), rubber = mat(t, t.rubber);
@@ -72,17 +72,45 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.cyl(ends[1][0], ends[1][1], 0.22, 0, 1.25, metal);
       break;
     }
-    case 'lane': case 'uplight': {
-      const lit = !!st.lit, c = t.role[id === 'uplight' ? 'pop' : 'lane'];
-      if (lit) under += glowDisk(v, t, x, y, r * 2.2, c);
-      const outer = ring(x, y, r).map(([a, b]) => P(v, a, b, 0.01));
-      p.face(poly(outer), mat(t, t.metal).mid, { line: 0.4 });
-      const shape = id === 'lane'
-        ? [[0, 0.62], [0.5, 0.05], [0.24, 0.05], [0.24, -0.5], [-0.24, -0.5], [-0.24, 0.05], [-0.5, 0.05]] // arrow insert
-        : Array.from({ length: 10 }, (_, i) => { const a = Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? 0.27 : 0.64; return [Math.cos(a) * rr, Math.sin(a) * rr]; });
-      const ins = shape.map(([a, b]) => P(v, x + a * r, y + b * r, 0.02));
-      p.face(poly(ins), lit ? mix(c, '#ffffff', 0.25) : mix(c, t.shadeTint, 0.55), { line: 0.4, sil: false });
-      if (lit) p.face(poly(ins.map(([a, b]) => [a - v.S * 0.08, b - v.S * 0.08] as [number, number]).slice(0, 3)), '#ffffff', { line: 0, sil: false });
+    case 'lane': {
+      // a real lane: two guide posts, a wire switch and a lit letter; the lanes spell a word per theme
+      const lit = !!st.lit, c = t.role.lane;
+      if (lit) under += glowDisk(v, t, x, y, r * 2.1, c, 0.6);
+      const insert = box(x, y, r * 0.5, r * 0.78, 0, r * 0.45);
+      p.face(poly(box(x, y, r * 0.62, r * 0.9, 0, r * 0.55).map(([a, b]) => P(v, a, b, 0.01))), mat(t, t.metal).mid, { line: 0.4 });
+      p.face(poly(insert.map(([a, b]) => P(v, a, b, 0.02))), lit ? mix(c, '#ffffff', 0.3) : mix(c, t.shadeTint, 0.6), { line: 0.4, sil: false });
+      const wire = [P(v, x - r * 0.34, y + r * 0.55, 0), P(v, x - r * 0.2, y + r * 0.55, 0.4), P(v, x + r * 0.2, y + r * 0.55, 0.4), P(v, x + r * 0.34, y + r * 0.55, 0)];
+      p.raw(`<path d="${line(wire)}" fill="none" stroke="${t.ink}" stroke-width="${f(v.lw * 1.5)}" stroke-linejoin="round" stroke-linecap="round"/><path d="${line(wire)}" fill="none" stroke="${t.metal}" stroke-width="${f(v.lw * 0.55)}" stroke-linejoin="round" stroke-linecap="round"/>`);
+      const [LX, LY] = P(v, x, y - r * 0.18, 0.02), fs = v.S * 1.05;
+      p.raw(`<text x="${f(LX)}" y="${f(LY + fs * 0.38)}" text-anchor="middle" font-family="'${TYPE.display}'" font-weight="400" font-size="${f(fs)}" fill="${lit ? t.ink : mix(c, t.shadeTint, 0.9)}"${lit ? ` stroke="${t.paper}" stroke-width="${f(v.lw * 0.9)}" paint-order="stroke"` : ''}>${st.letter ?? 'A'}</text>`);
+      for (const s of [-1, 1]) p.cyl(x + s * r * 0.95, y, 0.17, 0, 0.55, mat(t, t.metal));
+      if (lit) over += sparkle(t, P(v, x, y, 0)[0] + v.S * 0.75, P(v, x, y, 0)[1] - v.S * 0.75, v.S * 0.3, t.paper, v.lw);
+      break;
+    }
+    case 'uplight': {
+      // a glass dome over a bulb, tinted by the part type it levels up, with rank chevrons on the floor
+      const lit = !!st.lit, c = t.role[st.target ?? 'pop'];
+      if (lit) under += glowDisk(v, t, x, y, r * 2.3, c, 0.7);
+      for (let k = 0; k < 3; k++) {
+        const yy = y - r * 0.9 - k * 0.42;
+        const chev = [[-0.42, 0], [0, 0.3], [0.42, 0], [0.42, -0.16], [0, 0.14], [-0.42, -0.16]].map(([a, b]) => P(v, x + a, yy + b, 0.02));
+        p.face(poly(chev), lit && k < 2 ? mix(c, '#ffffff', 0.2) : mix(c, t.shadeTint, 0.6), { line: 0.3, sil: false });
+      }
+      under += shadow(v, t, x, y, r * 0.8, r * 0.8);
+      p.cyl(x, y, r * 0.78, 0, 0.18, mat(t, t.metal));
+      const glass = lit ? mix(c, '#ffffff', 0.35) : mix(c, t.shadeTint, 0.45);
+      const dome = [0, 0.35, 0.6, 0.8, 0.93, 1].flatMap((u) => ring(x, y, r * 0.6 * Math.cos((u * Math.PI) / 2), 24).map(([a, b]) => P(v, a, b, 0.18 + u * 0.85)));
+      p.face(poly(hullPts(dome)), glass);
+      const [BX, BY] = P(v, x, y, 0.55);
+      p.raw(`<circle cx="${f(BX)}" cy="${f(BY)}" r="${f(v.S * 0.2)}" fill="${lit ? '#ffffff' : mix(c, t.shadeTint, 0.7)}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.4)}"/>`);
+      p.raw(`<path d="M${f(BX - v.S * 0.34)} ${f(BY - v.S * 0.2)}q${f(v.S * 0.05)} ${f(-v.S * 0.32)} ${f(v.S * 0.3)} ${f(-v.S * 0.4)}" fill="none" stroke="#fff" stroke-width="${f(v.lw * 0.8)}" stroke-linecap="round" opacity="0.9"/>`);
+      if (lit) {
+        const [TX, TY] = P(v, x, y, 1.1);
+        for (let k = 0; k < 6; k++) {
+          const a = -Math.PI / 2 + (k - 2.5) * 0.5, r0 = v.S * 0.75, r1 = v.S * 1.15;
+          over += `<path d="M${f(TX + Math.cos(a) * r0)} ${f(TY + Math.sin(a) * r0)}L${f(TX + Math.cos(a) * r1)} ${f(TY + Math.sin(a) * r1)}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.9)}" stroke-linecap="round"/>`;
+        }
+      }
       break;
     }
     case 'lamp': {

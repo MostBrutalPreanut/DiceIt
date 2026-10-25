@@ -6,6 +6,11 @@ import { mat, mix, type Mat, type Theme } from './themes';
 export interface View { S: number; ox: number; oy: number; k: number; kz: number; shx: number; lw: number }
 export type Pt = [number, number];
 
+/** Typography (the goofy pairing): a display face for big bold things, a UI face for reading, a DMD face. */
+export const TYPE = { display: 'Luckiest Guy', ui: 'Nunito', dmd: 'DotGothic16' };
+const DISP = () => `font-family="'${TYPE.display}'" font-weight="400"`;
+const UIF = (w: number) => `font-family="'${TYPE.ui}'" font-weight="${w}"`;
+
 export const f = (n: number) => (Math.round(n * 10) / 10).toString();
 export const P = (v: View, x: number, y: number, z = 0): Pt => [v.ox + (x + y * v.shx) * v.S, v.oy - (y * v.k + z * v.kz) * v.S];
 export const poly = (pts: Pt[]) => 'M' + pts.map((p) => f(p[0]) + ' ' + f(p[1])).join('L') + 'Z';
@@ -106,7 +111,7 @@ export function valueTag(v: View, t: Theme, x: number, y: number, z: number, tex
   const [X, Y] = P(v, x, y, z);
   const fs = Math.max(9, v.S * 0.62), w = fs * (0.62 * text.length + 0.9), h = fs * 1.35;
   return `<g transform="translate(${f(X)} ${f(Y)}) rotate(-4)"><rect x="${f(-w / 2)}" y="${f(-h / 2)}" width="${f(w)}" height="${f(h)}" rx="${f(h / 2)}" fill="${color}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.7)}"/>` +
-    `<text y="${f(fs * 0.36)}" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="${f(fs)}" fill="${t.ink}">${esc(text)}</text></g>`;
+    `<text y="${f(fs * 0.36)}" text-anchor="middle" ${DISP()} font-size="${f(fs)}" fill="${t.ink}">${esc(text)}</text></g>`;
 }
 
 // ---------------------------------------------------------------- particles
@@ -138,7 +143,7 @@ export function coin(t: Theme, cx: number, cy: number, r: number, squash: number
   const gold = t.role.coin, rx = Math.max(r * Math.abs(squash), r * 0.12);
   return `<ellipse cx="${f(cx + r * 0.12)}" cy="${f(cy)}" rx="${f(rx)}" ry="${f(r)}" fill="${mix(gold, t.shadeTint, 0.4)}" stroke="${t.ink}" stroke-width="${f(lw)}"/>` +
     `<ellipse cx="${f(cx)}" cy="${f(cy)}" rx="${f(rx)}" ry="${f(r)}" fill="${gold}" stroke="${t.ink}" stroke-width="${f(lw)}"/>` +
-    (Math.abs(squash) > 0.5 ? `<text x="${f(cx)}" y="${f(cy + r * 0.38)}" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="${f(r * 1.1)}" fill="${t.ink}" transform="translate(${f(cx)} 0) scale(${f(Math.abs(squash))} 1) translate(${f(-cx)} 0)">$</text>` : '');
+    (Math.abs(squash) > 0.5 ? `<text x="${f(cx)}" y="${f(cy + r * 0.38)}" text-anchor="middle" ${DISP()} font-size="${f(r * 1.1)}" fill="${t.ink}" transform="translate(${f(cx)} 0) scale(${f(Math.abs(squash))} 1) translate(${f(-cx)} 0)">$</text>` : '');
 }
 export function debris(t: Theme, cx: number, cy: number, s: number, rot: number, lw: number, i = 0) {
   const g = (inner: string) => `<g transform="translate(${f(cx)} ${f(cy)}) rotate(${f(rot)})">${inner}</g>`;
@@ -183,13 +188,13 @@ export function scoreSticker(t: Theme, x: number, y: number, main: string, sub: 
   return `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(rot)})">` +
     `<rect x="${f(-w / 2 + 4 * scale)}" y="${f(-h / 2 + 5 * scale)}" width="${f(w)}" height="${f(h)}" rx="${f(12 * scale)}" fill="${t.shadeTint}" opacity="0.25"/>` +
     `<rect x="${f(-w / 2)}" y="${f(-h / 2)}" width="${f(w)}" height="${f(h)}" rx="${f(12 * scale)}" fill="${t.paper}" stroke="${t.ink}" stroke-width="${f(3 * scale)}"/>` +
-    `<text y="${f(-h / 2 + fs + 4 * scale)}" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="${f(fs)}" fill="${color}" stroke="${t.ink}" stroke-width="${f(2.4 * scale)}" paint-order="stroke">${esc(main)}</text>` +
-    `<text y="${f(h / 2 - 9 * scale)}" text-anchor="middle" font-family="Fredoka" font-weight="500" font-size="${f(fs2)}" fill="${t.ink}">${esc(sub)}</text></g>`;
+    `<text y="${f(-h / 2 + fs + 4 * scale)}" text-anchor="middle" ${DISP()} font-size="${f(fs)}" fill="${color}" stroke="${t.ink}" stroke-width="${f(2.4 * scale)}" paint-order="stroke">${esc(main)}</text>` +
+    `<text y="${f(h / 2 - 9 * scale)}" text-anchor="middle" ${UIF(700)} font-size="${f(fs2)}" fill="${t.ink}">${esc(sub)}</text></g>`;
 }
 export function stamp(t: Theme, x: number, y: number, R: number, text: string, color: string, rot: number) {
   return `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(rot)})"><path d="${poly(star(0, 0, R * 1.25, R * 1.02, 14))}" fill="${color}" stroke="${t.ink}" stroke-width="3" stroke-linejoin="round"/>` +
     `<circle r="${f(R * 0.8)}" fill="${t.paper}" stroke="${t.ink}" stroke-width="2.5"/>` +
-    `<text y="${f(R * 0.28)}" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="${f(R * 0.78)}" fill="${t.ink}">${esc(text)}</text></g>`;
+    `<text y="${f(R * 0.28)}" text-anchor="middle" ${DISP()} font-size="${f(R * 0.78)}" fill="${t.ink}">${esc(text)}</text></g>`;
 }
 /** A ground ring under a hit part: sells the contact and stays in the playfield plane. */
 export function groundRing(v: View, t: Theme, x: number, y: number, r: number, color: string, w: number) {

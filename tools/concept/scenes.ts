@@ -1,31 +1,37 @@
 // Composes the concept sheets from the real table geometry and part data, then renders them to PNG.
 //   npx vite-node tools/concept/scenes.ts [outDir]      (default docs/concept)
-import { mkdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { PARTS, type PartId } from '../../src/data/parts';
 import { LANE_WALL_X, TABLE_H, TABLE_W } from '../../src/sim/constants';
 import { FLIPPER_PIVOTS, tableOutline, tableSegments } from '../../src/sim/table';
 import {
-  box, coin, curl, debris, esc, f, groundRing, impact, line, P, poly, Prop, puff, ribbon, ring, scoreSticker, shadow, sparkle, stamp, type Pt, type View,
+  TYPE, box, coin, curl, debris, esc, f, groundRing, impact, line, P, poly, Prop, puff, ribbon, ring, scoreSticker, shadow, sparkle, stamp, type Pt, type View,
 } from './draw';
 import { ball, drawPart, flipper, glowDisk, type PartState } from './props';
 import { CASTLE, DINER, FACTORY, mat, mix, THEMES, type Theme } from './themes';
+import {
+  arcadeButton, awning, ballTray, card, coinStack, crank, decal, DECALS, emptySlot, goalTube, housing, multDial, odometer, pegboard, receipt, shelfItem, text, toolbox, tooltip,
+} from './ui';
 
 const OUT = process.argv[2] || 'docs/concept';
+let uidN = 0;
+const uid = (p: string) => `${p}${uidN++}`;
 
 // ------------------------------------------------------------------ the playfield
 interface Placed { id: PartId; x: number; y: number; a?: number; st?: PartState }
 
 /** A mid-run build on the real table: the three starter pops plus a dozen bought parts. */
 const BUILD: Placed[] = [
-  { id: 'lane', x: 9.6, y: 48.4, st: { lit: true } }, { id: 'lane', x: 13, y: 48.9, st: { lit: true } }, { id: 'lane', x: 16.4, y: 48.4 },
+  { id: 'lane', x: 9.6, y: 48.4, st: { lit: true, letter: '0' } }, { id: 'lane', x: 13, y: 48.9, st: { lit: true, letter: '1' } }, { id: 'lane', x: 16.4, y: 48.4, st: { letter: '2' } },
   { id: 'pop', x: 17, y: 44.5, st: { value: '115' } }, { id: 'pop', x: 11, y: 45.5, st: { value: '115', hit: true } }, { id: 'pop', x: 6, y: 42, st: { value: '115' } },
   { id: 'printer', x: 19.8, y: 39.6, a: 0, st: { smoke: true, value: '200' } },
   { id: 'coin', x: 18.6, y: 33.6 }, { id: 'coin', x: 5.6, y: 35.4 },
   { id: 'mega', x: 12, y: 34.2, st: { value: '275', face: 'oof', hit: true } },
   { id: 'deflector', x: 2.6, y: 30.5, a: 1.0 },
-  { id: 'lamp', x: 16.8, y: 27.6, st: { lit: true, glow: 5 } },
-  { id: 'uplight', x: 3.4, y: 25.4, st: { lit: true } }, { id: 'uplight', x: 7.6, y: 27.2 },
+  { id: 'lamp', x: 15.6, y: 29.6, st: { lit: true, glow: 6 } },
+  { id: 'uplight', x: 3.4, y: 25.4, st: { lit: true, target: 'pop' } }, { id: 'uplight', x: 7.6, y: 27.6, st: { target: 'pop' } },
   { id: 'spinner', x: 21.4, y: 24.5, a: 1.35 },
   { id: 'bank', x: 12, y: 22.4, a: 0, st: { down: [1] } },
   { id: 'sling', x: 4.4, y: 17.6, a: -1.05 }, { id: 'sling', x: 19.6, y: 17.6, a: 1.05 },
@@ -111,10 +117,59 @@ function rails(v: View, t: Theme) {
   return o;
 }
 
+/**
+ * The page behind the machine: hand-drawn squiggles, wavy contour lines or loose smoke curls, a hair
+ * darker than the background. u in [0, 1) is the loop phase: everything drifts one tile and wiggles one
+ * period per loop, so it animates seamlessly (a 6-8 s loop in game, frozen in Calm mode).
+ */
+function backdrop(t: Theme, W: number, H: number, u: number, style = t.backdrop): string {
+  const ink = mix(t.bg, t.shadeTint, 0.17), TAU = Math.PI * 2, o: string[] = [`<rect width="${W}" height="${H}" fill="${t.bg}"/>`];
+  const sw = `fill="none" stroke="${ink}" stroke-linecap="round" stroke-linejoin="round"`;
+  if (style === 'waves') {
+    for (let y0 = -40; y0 < H + 60; y0 += 54) {
+      const pts: Pt[] = [];
+      for (let x = -20; x <= W + 20; x += 12) pts.push([x, y0 + Math.sin(x / 120 + TAU * u + y0 * 0.03) * 9 + Math.sin(x / 47 - TAU * u) * 2.5]);
+      o.push(`<path d="${line(pts)}" ${sw} stroke-width="3"/>`);
+    }
+    return o.join('');
+  }
+  const tile = style === 'curls' ? 260 : 180, rnd = rng(style === 'curls' ? 5 : 3), n = style === 'curls' ? 2 : 4;
+  const marks = Array.from({ length: n }, () => ({ x: rnd() * tile, y: rnd() * tile, a: rnd() * 180, len: 50 + rnd() * 40, ph: rnd() * TAU }));
+  const dx = u * tile, dy = style === 'curls' ? 0 : -u * tile; // ~40 px/s over a 6 s loop
+  for (let X = -tile; X < W + tile; X += tile) for (let Y = -tile; Y < H + tile; Y += tile) for (const m of marks) {
+    const cx = X + m.x + dx, cy = Y + m.y + dy, wob = Math.sin(TAU * u + m.ph);
+    if (style === 'curls') {
+      o.push(ribbon(curl(cx - 70, cy + 30, 150, 26 + wob * 6, 2.3), 14, 2, ink, 1));
+    } else {
+      const pts: Pt[] = [];
+      for (let i = 0; i <= 24; i++) {
+        const s = i / 24 - 0.5;
+        const px = s * m.len, py = Math.sin(s * TAU * 1.6 + m.ph + TAU * u) * (6 + wob * 1.5);
+        const a = (m.a * Math.PI) / 180;
+        pts.push([cx + px * Math.cos(a) - py * Math.sin(a), cy + px * Math.sin(a) + py * Math.cos(a)]);
+      }
+      o.push(`<path d="${line(pts)}" ${sw} stroke-width="3.5"/>`);
+    }
+  }
+  return o.join('');
+}
+
+/** Three backdrops side by side behind a score card, for the animated preview. */
+function backdropPreview(u: number): string {
+  const W = 1500, H = 420, o: string[] = [];
+  [FACTORY, DINER, CASTLE].forEach((t, i) => {
+    const x0 = i * 500, id = 'bp' + i;
+    o.push(`<clipPath id="${id}"><rect x="${x0}" y="0" width="500" height="${H}"/></clipPath><g clip-path="url(#${id})"><g transform="translate(${x0} 0)">${backdrop(t, 500, H, u)}`);
+    o.push(card(t, 110, 120, 280, 160, t.paper, 18) + text(t, 134, 162, 'SCORE', 14, { w: 700, spacing: 2 }) + text(t, 132, 222, '12,480', 52, { w: 700 }) + text(t, 134, 258, t.tagline.toLowerCase() + ' · ' + t.backdrop, 14, { w: 500 }));
+    o.push('</g></g>');
+  });
+  return svgDoc(W, H, o.join(''));
+}
+
 function rng(seed: number) { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); }
 
-function playfield(v: View, t: Theme, build: Placed[], fx = true): string {
-  const clip = 'clip_' + t.id + '_' + Math.round(v.S);
+function playfield(v: View, t: Theme, build: Placed[], fx = true, decals?: typeof DECALS): string {
+  const clip = uid('clip_' + t.id);
   const out: string[] = [];
   out.push(`<defs><clipPath id="${clip}"><path d="${poly(floorPoly().map(([x, y]) => P(v, x, y)))}"/></clipPath></defs>`);
   // the cabinet rim around the field (ground level)
@@ -126,20 +181,23 @@ function playfield(v: View, t: Theme, build: Placed[], fx = true): string {
   const apron = new Prop(v, t);
   apron.prism(apronPoly(), 0, 0.5, mat(t, t.rim));
   out.push(apron.svg());
-  const [AX, AY] = P(v, 4.3, 5.4, 0.5);
-  out.push(`<g transform="translate(${f(AX)} ${f(AY)}) rotate(-2)"><rect x="${f(-v.S * 3)}" y="${f(-v.S * 1.1)}" width="${f(v.S * 6)}" height="${f(v.S * 2.2)}" rx="${f(v.S * 0.3)}" fill="${t.paper}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.6)}"/>` +
-    `<text y="${f(v.S * 0.15)}" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="${f(v.S * 0.78)}" fill="${t.ink}">${esc(t.tagline.split(' ')[0])}</text></g>`);
-  const [BX, BY] = P(v, 19.8, 5.4, 0.5);
-  out.push(`<g transform="translate(${f(BX)} ${f(BY)}) rotate(2)"><rect x="${f(-v.S * 3)}" y="${f(-v.S * 1.1)}" width="${f(v.S * 6)}" height="${f(v.S * 2.2)}" rx="${f(v.S * 0.3)}" fill="${t.paper}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.6)}"/>` +
-    `<text y="${f(v.S * 0.15)}" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="${f(v.S * 0.62)}" fill="${t.ink}">3 BALLS · $3 EACH</text></g>`);
-
+  // relic decals stuck on the apron: two slots each side, one still free
+  const slots: [number, number][] = [[2.6, 6.6], [5.6, 4.4], [18.4, 4.4], [21.4, 6.6]];
+  const stuck = decals ?? [DECALS[0], DECALS[1], DECALS[2]];
+  slots.forEach(([x, y], i) => {
+    const [X, Y] = P(v, x, y, 0.5), R = v.S * 1.05;
+    out.push(stuck[i] ? decal(t, stuck[i], X, Y, R, v.k, [-8, 5, -4, 7][i]) : emptySlot(t, X, Y, R * 0.9, v.k));
+  });
   // everything with height goes into one painter's list, far (high y) first
   const items: { y: number; svg: string }[] = [];
   out.push(rails(v, t));
   const plunger = new Prop(v, t);
   plunger.cyl(25, 1.4, 0.45, 0, 0.5, mat(t, t.accent));
   items.push({ y: 1.4, svg: plunger.svg() });
-  for (const q of build) items.push({ y: q.y, svg: drawPart(v, t, q.id, q.x, q.y, q.a ?? 0, q.st) });
+  for (const q of build) {
+    const st = q.id === 'lane' ? { ...q.st, letter: t.laneWord[Number(q.st?.letter ?? 0)] } : q.st;
+    items.push({ y: q.y, svg: drawPart(v, t, q.id, q.x, q.y, q.a ?? 0, st) });
+  }
   items.push({ y: FLIPPER_PIVOTS.L.y, svg: flipper(v, t, FLIPPER_PIVOTS.L.x, FLIPPER_PIVOTS.L.y, 1) });
   items.push({ y: FLIPPER_PIVOTS.R.y, svg: flipper(v, t, FLIPPER_PIVOTS.R.x, FLIPPER_PIVOTS.R.y, -1, true) });
 
@@ -240,18 +298,12 @@ const hullOf = (pts: Pt[]) => { // tiny local hull to keep surround self-contain
 };
 
 // ------------------------------------------------------------------ HUD pieces
-const card = (t: Theme, x: number, y: number, w: number, h: number, fill = t.paper, r = 18) =>
-  `<rect x="${x + 6}" y="${y + 7}" width="${w}" height="${h}" rx="${r}" fill="${t.shadeTint}" opacity="0.28"/>` +
-  `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" stroke="${t.ink}" stroke-width="3.5"/>`;
-const text = (t: Theme, x: number, y: number, s: string, size: number, opts: { w?: number; fill?: string; anchor?: string; stroke?: string } = {}) =>
-  `<text x="${x}" y="${y}" font-family="Fredoka" font-weight="${opts.w ?? 600}" font-size="${size}" fill="${opts.fill ?? t.ink}" text-anchor="${opts.anchor ?? 'start'}"${opts.stroke ? ` stroke="${opts.stroke}" stroke-width="${size * 0.14}" paint-order="stroke" stroke-linejoin="round"` : ''}>${esc(s)}</text>`;
-
 function dmd(t: Theme, x: number, y: number, w: number, h: number, msg: string) {
-  const id = 'dmd_' + t.id;
+  const id = uid('dmd_' + t.id);
   return `<defs><pattern id="${id}" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="#1d1420"/><circle cx="2.5" cy="2.5" r="1.7" fill="#000" opacity="0"/></pattern>` +
     `<mask id="${id}m"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#fff"/>${Array.from({ length: Math.ceil(w / 5) }, (_, i) => `<rect x="${x + i * 5 + 3.6}" y="${y}" width="1.4" height="${h}" fill="#000"/>`).join('')}${Array.from({ length: Math.ceil(h / 5) }, (_, i) => `<rect x="${x}" y="${y + i * 5 + 3.6}" width="${w}" height="1.4" fill="#000"/>`).join('')}</mask></defs>` +
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="#241a26" stroke="${t.ink}" stroke-width="3.5"/>` +
-    `<g mask="url(#${id}m)"><text x="${x + w / 2}" y="${y + h * 0.68}" text-anchor="middle" font-family="JetBrains Mono" font-weight="800" font-size="${h * 0.52}" fill="${t.dmd}" letter-spacing="3">${esc(msg)}</text></g>`;
+    `<g mask="url(#${id}m)"><text x="${x + w / 2}" y="${y + h * 0.68}" text-anchor="middle" font-family="${TYPE.dmd}" font-weight="400" font-size="${h * 0.62}" fill="${t.dmd}" letter-spacing="3">${esc(msg)}</text></g>`;
 }
 
 function marquee(t: Theme, x: number, y: number, w: number, h: number, msg: string) {
@@ -261,62 +313,39 @@ function marquee(t: Theme, x: number, y: number, w: number, h: number, msg: stri
   return card(t, x, y, w, h, t.rim, 16) + bulbs.join('') + dmd(t, x + 22, y + 22, w - 44, h - 44, msg);
 }
 
-function partIcon(t: Theme, id: PartId, cx: number, cy: number, S: number) {
-  const v: View = { S, ox: cx, oy: cy, k: 0.8, kz: 0.6, shx: 0, lw: Math.max(1.6, S * 0.13) };
-  const a = id === 'sling' ? -0.6 : id === 'spinner' || id === 'deflector' ? 0.5 : 0;
-  if (id === 'flipper') return flipper({ ...v, ox: cx - 2 * S }, t, 0, 0, 1);
-  return drawPart(v, t, id, 0, 0, a, { lit: true, glow: 2.2, value: id === 'pop' ? '100' : undefined, smoke: false });
-}
-
 function hudLeft(t: Theme, x: number, y: number) {
-  const o: string[] = [card(t, x, y, 300, 880)];
-  o.push(text(t, x + 24, y + 58, 'FREE PLAY', 40, { w: 700, fill: t.accent, stroke: t.ink }));
-  o.push(`<g transform="translate(${x + 24} ${y + 78})">${card(t, 0, 0, 200, 34, t.role.coin, 17)}${text(t, 100, 24, 'ROUND 4 · MAIN EVENT', 15, { w: 700, anchor: 'middle' })}</g>`);
-  o.push(text(t, x + 24, y + 160, 'SCORE', 16, { w: 600, fill: mix(t.ink, t.paper, 0.35) }));
-  o.push(text(t, x + 22, y + 218, '12,480', 58, { w: 700 }));
-  o.push(`<rect x="${x + 24}" y="${y + 236}" width="252" height="22" rx="11" fill="${mix(t.paper, t.shadeTint, 0.15)}" stroke="${t.ink}" stroke-width="3"/><rect x="${x + 24}" y="${y + 236}" width="${252 * 0.69}" height="22" rx="11" fill="${t.role.pop}" stroke="${t.ink}" stroke-width="3"/>`);
-  o.push(text(t, x + 24, y + 284, 'GOAL 18,000', 17, { w: 600 }) + text(t, x + 276, y + 284, 'BALL 2 / 3', 17, { w: 600, anchor: 'end' }));
-  // mult, balls, money as three stickers
-  const chip = (cx: number, label: string, val: string, c: string, rot: number) =>
-    `<g transform="translate(${cx} ${y + 350}) rotate(${rot})">${card(t, -44, -40, 88, 80, c, 16)}${text(t, 0, -12, label, 13, { w: 600, anchor: 'middle' })}${text(t, 0, 26, val, 28, { w: 700, anchor: 'middle' })}</g>`;
-  o.push(chip(x + 66, 'MULT', '×1.43', t.role.mega === t.paper ? t.role.lane : mix(t.role.mega, '#ffffff', 0.45), -3));
-  o.push(chip(x + 150, 'BALLS', '●●○', mix(t.role.lane, '#ffffff', 0.4), 2));
-  o.push(chip(x + 234, 'MONEY', '$11', t.role.coin, -2));
-  // the ledger: why it scored
-  o.push(text(t, x + 24, y + 450, 'THIS BALL', 16, { w: 600, fill: mix(t.ink, t.paper, 0.35) }));
-  const rows: [PartId, string, string][] = [['pop', 'Pop Bumper ×3', '4,210'], ['mega', 'Big Boi', '3,150'], ['bank', 'Drop-Target Bank', '1,880'], ['lane', 'Lane Rollover', '740'], ['coin', 'Cha-Ching', '$5 · 320']];
-  rows.forEach(([id, name, pts], i) => {
-    const yy = y + 486 + i * 52;
-    o.push(`<rect x="${x + 20}" y="${yy - 22}" width="260" height="44" rx="12" fill="${i % 2 ? t.paper : mix(t.paper, t.shadeTint, 0.07)}"/>`);
-    o.push(`<circle cx="${x + 42}" cy="${yy}" r="11" fill="${t.role[id]}" stroke="${t.ink}" stroke-width="2.5"/>`);
-    o.push(text(t, x + 62, yy + 6, name, 17, { w: 500 }) + text(t, x + 272, yy + 6, pts, 17, { w: 700, anchor: 'end' }));
-  });
-  o.push(`<g transform="translate(${x + 24} ${y + 790})">${card(t, 0, 0, 252, 60, t.accent, 18)}${text(t, 126, 40, 'CASH OUT  ⇥', 24, { w: 700, anchor: 'middle', fill: t.paper, stroke: t.ink })}</g>`);
+  const o: string[] = [housing(t, x, y, 300, 880)];
+  o.push(text(t, x + 30, y + 66, 'FREE PLAY', 38, { w: 700, fill: t.accent, stroke: t.ink }));
+  o.push(`<g transform="translate(${x + 30} ${y + 82}) rotate(-2)">${card(t, 0, 0, 196, 32, t.role.coin, 16)}${text(t, 98, 22, 'ROUND 4 · MAIN EVENT', 14, { w: 700, anchor: 'middle' })}</g>`);
+  o.push(text(t, x + 32, y + 150, 'SCORE', 14, { w: 700, fill: mix(t.ink, t.paper, 0.4), spacing: 2 }));
+  o.push(odometer(t, x + 46, y + 160, '12480', 40, 58));
+  o.push(goalTube(t, x + 30, y + 262, 236, 0.69, t.role.pop));
+  o.push(text(t, x + 30, y + 312, 'GOAL 18,000', 16, { w: 700 }) + text(t, x + 268, y + 312, '5,520 to go', 15, { w: 500, anchor: 'end', fill: mix(t.ink, t.paper, 0.35) }));
+  // Mult dial on the left, balls and money stacked on the right
+  o.push(multDial(t, x + 92, y + 408, 62, 1.43));
+  o.push(text(t, x + 92, y + 446, '×1.43', 26, { w: 700, anchor: 'middle' }) + text(t, x + 92, y + 466, 'MULT', 12, { w: 700, anchor: 'middle', spacing: 2, fill: mix(t.ink, t.paper, 0.4) }));
+  o.push(text(t, x + 230, y + 346, 'BALLS', 12, { w: 700, anchor: 'middle', spacing: 2, fill: mix(t.ink, t.paper, 0.4) }));
+  o.push(ballTray(t, x + 172, y + 360, 2));
+  o.push(coinStack(t, x + 196, y + 448, 4) + text(t, x + 262, y + 456, '$11', 26, { w: 700, anchor: 'end' }));
+  o.push(text(t, x + 262, y + 476, 'MONEY', 12, { w: 700, anchor: 'end', spacing: 2, fill: mix(t.ink, t.paper, 0.4) }));
+  o.push(receipt(t, x + 34, y + 512, 232, 'THIS BALL', [
+    [t.role.pop, 'Pop Bumper ×3', '4,210'], [t.role.mega, 'Big Boi', '3,150'], [t.role.bank, 'Drop Targets', '1,880'], [t.role.lane, 'Lanes ' + t.laneWord, '740'], [t.role.coin, 'Cha-Ching', '$5 · 320'],
+  ], '10,300'));
+  o.push(arcadeButton(t, x + 24, y + 790, 'CASH OUT', 'Tab'));
   return o.join('');
 }
 
 function hudRight(t: Theme, x: number, y: number) {
-  const o: string[] = [card(t, x, y, 330, 880)];
-  o.push(text(t, x + 24, y + 52, 'SHOP', 32, { w: 700, fill: t.accent, stroke: t.ink }));
-  o.push(`<g transform="translate(${x + 214} ${y + 22})">${card(t, 0, 0, 92, 40, t.paper, 14)}${text(t, 46, 27, 'Reroll $1', 15, { w: 600, anchor: 'middle' })}</g>`);
-  const offers: PartId[] = ['printer', 'lamp', 'spinner'];
-  offers.forEach((id, i) => {
-    const def = PARTS[id], yy = y + 86 + i * 196;
-    o.push(card(t, x + 18, yy, 294, 178, mix(t.paper, t.role[id], 0.12), 16));
-    o.push(`<circle cx="${x + 76}" cy="${yy + 72}" r="44" fill="${mix(t.paper, t.shadeTint, 0.08)}" stroke="${t.ink}" stroke-width="2.5"/>`);
-    o.push(partIcon(t, id, x + 76, yy + 82, id === 'spinner' ? 16 : 22));
-    o.push(text(t, x + 134, yy + 40, def.name, 21, { w: 700 }));
-    o.push(text(t, x + 134, yy + 64, def.blurb.length > 26 ? def.blurb.slice(0, 25) + '…' : def.blurb, 13.5, { w: 500, fill: mix(t.ink, t.paper, 0.3) }));
-    o.push(`<g transform="translate(${x + 244} ${yy + 92}) rotate(6)">${card(t, -32, -20, 64, 40, t.role.coin, 20)}${text(t, 0, 9, '$' + def.cost, 22, { w: 700, anchor: 'middle' })}</g>`);
-    const recipe = id === 'printer' ? ['Catches a ball, scores 200,', 'prints a second ball.'] : id === 'lamp' ? ['Lit: parts in its glow', 'score +25%.'] : ['10 per spin. Faster', 'balls spin more.'];
-    recipe.forEach((r, k) => o.push(text(t, x + 36, yy + 138 + k * 20, r, 15, { w: 500 })));
-    o.push(`<rect x="${x + 28}" y="${yy + 122}" width="4" height="40" rx="2" fill="${t.role[id]}"/>`);
-  });
-  o.push(text(t, x + 24, y + 712, 'INVENTORY', 16, { w: 600, fill: mix(t.ink, t.paper, 0.35) }));
-  (['coin', 'deflector', 'uplight'] as PartId[]).forEach((id, i) => {
-    o.push(card(t, x + 24 + i * 96, y + 728, 84, 84, t.paper, 14));
-    o.push(partIcon(t, id, x + 66 + i * 96, y + 776, id === 'deflector' ? 13 : 18));
-  });
+  const o: string[] = [housing(t, x, y, 330, 880, mix(t.rim, t.shadeTint, 0.1))];
+  o.push(`<clipPath id="peg_${t.id}"><rect x="${x + 12}" y="${y + 12}" width="306" height="856" rx="14"/></clipPath><g clip-path="url(#peg_${t.id})">${pegboard(t, x + 12, y + 12, 306, 856)}</g>`);
+  o.push(`<rect x="${x + 12}" y="${y + 12}" width="306" height="856" rx="14" fill="none" stroke="${t.ink}" stroke-width="3"/>`);
+  o.push(awning(t, x + 14, y + 26, 302, 9));
+  o.push(`<g transform="translate(${x + 30} ${y + 86}) rotate(-3)">${card(t, 0, 0, 118, 44, t.paper, 10)}${text(t, 59, 32, 'PARTS', 26, { w: 700, anchor: 'middle', fill: t.accent, stroke: t.ink })}</g>`);
+  o.push(crank(t, x + 270, y + 122, 'Reroll $1'));
+  const recipes: Record<string, string[]> = { printer: ['Catches a ball: 200,', 'prints a 2nd ball.'], lamp: ['Lit: parts in its', 'glow score +25%.'], spinner: ['10 per spin. Fast', 'balls spin more.'] };
+  (['printer', 'lamp', 'spinner'] as PartId[]).forEach((id, i) => o.push(shelfItem(t, id, x + 26, y + 168 + i * 166, 280, recipes[id])));
+  o.push(text(t, x + 30, y + 680 + 46, 'drag a part here to store it', 13, { w: 500, fill: mix(t.ink, t.paper, 0.3) }));
+  o.push(toolbox(t, x + 26, y + 744, 278, ['coin', 'deflector', 'uplight']));
   return o.join('');
 }
 
@@ -324,12 +353,24 @@ function screen(t: Theme): string {
   const W = 1600, H = 1000;
   const v: View = { S: 16, ox: 592, oy: 942, k: 0.9, kz: 0.55, shx: 0, lw: 2.2 };
   const o: string[] = [`<rect width="${W}" height="${H}" fill="${t.bg}"/>`];
-  for (let x = 20; x < W; x += 28) for (let y = 20; y < H; y += 28) o.push(`<circle cx="${x}" cy="${y}" r="2" fill="${mix(t.bg, t.shadeTint, 0.18)}"/>`);
+  o.push(backdrop(t, W, H, 0));
   o.push(`<ellipse cx="800" cy="955" rx="300" ry="26" fill="${t.shadeTint}" opacity="0.22"/>`);
   o.push(surround(v, t));
   o.push(playfield(v, t, BUILD));
   o.push(marquee(t, 560, 22, 480, 112, 'BIG BOI SAYS OOF'));
   o.push(hudLeft(t, 22, 60) + hudRight(t, 1248, 60));
+  // hovering Big Boi: the card answers what it is, what it pays now and why, and how to change it
+  const [MX, MY] = P(v, 12, 34.2, 1.2);
+  o.push(`<ellipse cx="${f(MX)}" cy="${f(P(v, 12, 34.2)[1])}" rx="${f(2.5 * v.S)}" ry="${f(2.5 * v.S * v.k)}" fill="none" stroke="${t.paper}" stroke-width="4" stroke-dasharray="10 7"/>`);
+  const [LX, LY] = P(v, 15.6, 29.6, 2);
+  o.push(`<path d="M${f(LX)} ${f(LY)}Q${f(LX + 10)} ${f(MY - 10)} ${f(MX + 2.2 * v.S)} ${f(MY + 6)}" fill="none" stroke="${t.ink}" stroke-width="3" stroke-dasharray="2 8" stroke-linecap="round"/>`);
+  o.push(tooltip(t, 905, 312, 330, [MX + 2.1 * v.S, MY + 4], {
+    id: 'mega', title: 'Big Boi', chip: 'Bumper', level: 2, now: 'Next hit pays 472',
+    math: [['275', 'base + Lv 2'], ['+20%', 'Lamp glow'], ['×1.43', 'your Mult']],
+    recipe: ['Scores 250 per hit, times your Mult.', 'Each hit: +0.1 Mult this ball.'],
+    stats: 'This ball: 12 hits · 3,150 pts · Mult +1.2', dial: ['Kick', 0.35, 'soft kick, more pts'],
+    keys: 'drag to move · R rotate · Del store · between rounds',
+  }));
   // the coin's flight path to the money counter: the effect points at its consequence
   const [CX, CY] = P(v, 18.6, 33.6, 1.1);
   const arc: Pt[] = Array.from({ length: 30 }, (_, i) => { const u = i / 29; return [CX + (250 - CX) * u, CY - v.S * 1.6 + (410 - CY + v.S * 1.6) * u - Math.sin(u * Math.PI) * 260]; });
@@ -338,7 +379,7 @@ function screen(t: Theme): string {
     const p = arc[Math.round(u * 29)];
     o.push(coin(t, p[0], p[1], 12 + u * 6, sq, 2.4));
   }
-  o.push(`<text x="${W - 26}" y="${H - 14}" text-anchor="end" font-family="Fredoka" font-weight="500" font-size="14" fill="${mix(t.ink, t.bg, 0.4)}">concept mock-up · ${esc(t.tagline.toLowerCase())} theme · drawn from the real table geometry</text>`);
+  o.push(`<text x="${W - 26}" y="${H - 14}" text-anchor="end" font-family="'${TYPE.ui}'" font-weight="600" font-size="14" fill="${mix(t.ink, t.bg, 0.4)}">concept mock-up · ${esc(t.tagline.toLowerCase())} theme · drawn from the real table geometry</text>`);
   return svgDoc(W, H, o.join(''));
 }
 
@@ -347,7 +388,7 @@ function partsSheet(): string {
   const ids: PartId[] = ['pop', 'coin', 'mega', 'sling', 'spinner', 'bank', 'lane', 'uplight', 'lamp', 'printer', 'deflector', 'flipper'];
   const W = 1560, rowH = 156, blockH = 2 * rowH + 64, H = 90 + THEMES.length * blockH;
   const o: string[] = [`<rect width="${W}" height="${H}" fill="#efe8dc"/>`];
-  o.push(`<text x="40" y="58" font-family="Fredoka" font-weight="700" font-size="34" fill="#3b2a4a">One silhouette per part · three theme kits</text>`);
+  o.push(`<text x="40" y="58" font-family="'${TYPE.display}'" font-weight="400" font-size="34" fill="#3b2a4a">One silhouette per part · three theme kits</text>`);
   THEMES.forEach((t, b) => {
     const y0 = 90 + b * blockH;
     o.push(card(t, 24, y0, W - 48, blockH - 20, t.bg, 22));
@@ -359,7 +400,7 @@ function partsSheet(): string {
       const v: View = { S, ox: cx, oy: cy + 86, k: 0.85, kz: 0.6, shx: 0, lw: 2.2 };
       const a = id === 'sling' ? -0.55 : id === 'spinner' ? 0.25 : id === 'deflector' ? 0.4 : 0;
       o.push(id === 'flipper' ? flipper({ ...v, ox: cx - 2.1 * S }, t, 0, 0.6, 1)
-        : drawPart(v, t, id, 0, 0, a, { lit: id !== 'uplight', glow: 2.2, value: id === 'pop' ? '100' : id === 'mega' ? '250' : undefined, down: [2], smoke: id === 'printer' }));
+        : drawPart(v, t, id, 0, 0, a, { lit: true, glow: 2.2, value: id === 'pop' ? '100' : id === 'mega' ? '250' : undefined, down: [2], smoke: id === 'printer', letter: t.laneWord[0], target: 'pop' }));
       o.push(text(t, cx, cy + rowH - 26, PARTS[id].name, 14, { w: 600, anchor: 'middle' }));
     });
   });
@@ -452,11 +493,11 @@ function backglass(t: Theme, x: number, y: number, w: number, h: number) {
   o.push(drawPart(mv, t, 'mega', 0, 0, 0, { face: 'happy' }));
   for (const [dx, dy, s] of [[-0.36, -0.12, 0.08], [0.38, 0.02, 0.06], [0.3, -0.3, 0.045]] as const) o.push(sparkle(t, cx + dx * w, cy + dy * h, s * w, t.paper, 2.5));
   o.push('</g>');
-  o.push(`<text x="${f(cx + 5)}" y="${f(y + h * 0.27 + 6)}" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="${f(w * 0.16)}" fill="${t.ink}">${esc(t.name)}</text>`);
-  o.push(`<text x="${f(cx)}" y="${f(y + h * 0.27)}" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="${f(w * 0.16)}" fill="${t.paper}" stroke="${t.ink}" stroke-width="${f(w * 0.014)}" paint-order="stroke" stroke-linejoin="round">${esc(t.name)}</text>`);
+  o.push(`<text x="${f(cx + 5)}" y="${f(y + h * 0.27 + 6)}" text-anchor="middle" font-family="'${TYPE.display}'" font-weight="400" font-size="${f(w * 0.16)}" fill="${t.ink}">${esc(t.name)}</text>`);
+  o.push(`<text x="${f(cx)}" y="${f(y + h * 0.27)}" text-anchor="middle" font-family="'${TYPE.display}'" font-weight="400" font-size="${f(w * 0.16)}" fill="${t.paper}" stroke="${t.ink}" stroke-width="${f(w * 0.014)}" paint-order="stroke" stroke-linejoin="round">${esc(t.name)}</text>`);
   const bw = w * 0.62, by = y + h * 0.31;
   o.push(`<g transform="rotate(-3 ${f(cx)} ${f(by)})"><rect x="${f(cx - bw / 2)}" y="${f(by)}" width="${f(bw)}" height="${f(h * 0.1)}" rx="6" fill="${t.accent}" stroke="${t.ink}" stroke-width="3"/>` +
-    `<text x="${f(cx)}" y="${f(by + h * 0.075)}" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="${f(h * 0.065)}" fill="${t.paper}">${esc(t.tagline)}</text></g>`);
+    `<text x="${f(cx)}" y="${f(by + h * 0.075)}" text-anchor="middle" font-family="'${TYPE.display}'" font-weight="400" font-size="${f(h * 0.065)}" fill="${t.paper}">${esc(t.tagline)}</text></g>`);
   const n = 14;
   for (let i = 0; i <= n; i++) for (const yy of [y + 7, y + h - 7]) o.push(`<circle cx="${f(x + 12 + (i * (w - 24)) / n)}" cy="${f(yy)}" r="4" fill="${i % 2 ? t.glow : mix(t.glow, t.shadeTint, 0.4)}" stroke="${t.ink}" stroke-width="1.6"/>`);
   return o.join('');
@@ -465,11 +506,143 @@ function backglass(t: Theme, x: number, y: number, w: number, h: number) {
 function keyArt(): string {
   const W = 2400, H = 1400;
   const o: string[] = [`<rect width="${W}" height="${H}" fill="#e9e1d3"/>`];
-  for (let x = 30; x < W; x += 36) for (let y = 30; y < H; y += 36) o.push(`<circle cx="${x}" cy="${y}" r="2.2" fill="#d8cdbb"/>`);
+  o.push(backdrop({ ...FACTORY, bg: '#e9e1d3', shadeTint: '#8a7a64' }, W, H, 0, 'squiggle'));
   [DINER, FACTORY, CASTLE].forEach((t, i) => o.push(cabinet(t, 130 + i * 760, 930 - (i === 1 ? 30 : 0), 14.5)));
-  o.push(`<text x="${W / 2}" y="1375" text-anchor="middle" font-family="Fredoka" font-weight="700" font-size="40" fill="#3b2a4a">three machines, one kit: same parts, same physics, new tokens</text>`);
+  o.push(`<text x="${W / 2}" y="1375" text-anchor="middle" font-family="'${TYPE.display}'" font-weight="400" font-size="40" fill="#3b2a4a">three machines, one kit: same parts, same physics, new tokens</text>`);
   return svgDoc(W, H, o.join(''));
 }
+
+
+// ------------------------------------------------------------------ relics as decals
+function relicSheet(): string {
+  const t = FACTORY, W = 1560, H = 1020;
+  const o: string[] = [`<rect width="${W}" height="${H}" fill="${t.bg}"/>`];
+  o.push(text(t, 40, 62, 'Relics are decals', 36, { w: 700, fill: t.paper, stroke: t.ink }));
+  o.push(text(t, 40, 98, 'rules you win from major upgrades, stuck on the apron · the rim colour shows rarity · hover any decal for its card', 18, { w: 500 }));
+  const rar: Record<string, string> = { common: 'Common', rare: 'Rare', wild: 'Wild' };
+  DECALS.forEach((d, i) => {
+    const col = i % 3, row = Math.floor(i / 3), x = 40 + col * 300, y = 130 + row * 300;
+    o.push(card(t, x, y, 280, 280, t.paper, 18));
+    o.push(decal(t, d, x + 140, y + 100, 58, 1, [-6, 4, -3, 5, -4, 6][i]));
+    o.push(text(t, x + 140, y + 196, d.name, 22, { w: 700, anchor: 'middle' }));
+    const rc = d.rarity === 'wild' ? t.accent : d.rarity === 'rare' ? t.role.coin : mix(t.paper, t.shadeTint, 0.15);
+    o.push(`<rect x="${x + 106}" y="${y + 206}" width="68" height="22" rx="11" fill="${rc}" stroke="${t.ink}" stroke-width="2"/>` + text(t, x + 140, y + 222, rar[d.rarity], 12.5, { w: 700, anchor: 'middle' }));
+    d.effect.forEach((e, k) => o.push(text(t, x + 140, y + 250 + k * 18, e, 14, { w: 500, anchor: 'middle' })));
+  });
+  // how they arrive: the Rules column of a major upgrade
+  o.push(card(t, 40, 730, 880, 270, t.rim, 18));
+  o.push(text(t, 64, 772, 'MAJOR UPGRADE · RULES', 22, { w: 700, fill: t.paper, stroke: t.ink }) + text(t, 896, 772, 'pick one', 17, { w: 600, fill: t.paper, anchor: 'end' }));
+  [DECALS[4], DECALS[3], DECALS[5]].forEach((d, i) => {
+    const x = 64 + i * 284, y = 792;
+    o.push(card(t, x, y, 264, 186, i === 1 ? '#fff4c9' : t.paper, 14));
+    o.push(decal(t, d, x + 60, y + 62, 34, 1, -5 + i * 4));
+    o.push(text(t, x + 112, y + 46, d.name, 19, { w: 700 }) + text(t, x + 112, y + 68, d.rarity === 'wild' ? 'Wild' : d.rarity === 'rare' ? 'Rare' : 'Common', 13, { w: 600, fill: t.accent }));
+    d.effect.forEach((e, k) => o.push(text(t, x + 18, y + 124 + k * 18, e, 13.5, { w: 500 })));
+    o.push(`<rect x="${x + 18}" y="${y + 150}" width="80" height="26" rx="13" fill="${i === 1 ? t.accent : t.paper}" stroke="${t.ink}" stroke-width="2.4"/>` + text(t, x + 58, y + 168, 'Stick it', 13, { w: 700, anchor: 'middle', fill: i === 1 ? t.paper : t.ink }));
+  });
+  // where they live: the apron, cropped from the real table
+  const v: View = { S: 24, ox: 1000, oy: 1010 + 0, k: 0.9, kz: 0.55, shx: 0, lw: 2.4 };
+  const cid = uid('apron');
+  o.push(`<defs><clipPath id="${cid}"><rect x="980" y="560" width="560" height="430" rx="18"/></clipPath></defs>`);
+  o.push(card(t, 980, 560, 560, 430, t.floor, 18));
+  o.push(`<g clip-path="url(#${cid})">${playfield({ ...v, ox: 968, oy: 1000 }, t, BUILD.filter((b) => b.y < 20), false, [DECALS[0], DECALS[3], DECALS[2]])}</g>`);
+  o.push(`<rect x="980" y="560" width="560" height="430" rx="18" fill="none" stroke="${t.ink}" stroke-width="3.5"/>`);
+  o.push(card(t, 980, 130, 560, 410, t.paper, 18));
+  const notes = [
+    ['Where', 'Four slots on the apron, two each side, like the rule cards on a real machine. Upgrades can add slots (Apron Extension) or new places (side rails, backglass).'],
+    ['When', 'You win them from the Rules column of a major upgrade, and some shops sell them. They take effect at once.'],
+    ['Swap', 'Between rounds, peel one off to make room. A peeled decal is gone, so choosing is the game.'],
+    ['Read', 'Hover a decal for the same card as a part: what it does, what it did this ball.'],
+  ];
+  notes.forEach(([h, b], i) => {
+    o.push(text(t, 1004, 176 + i * 92, h, 19, { w: 700, fill: t.accent }));
+    wrap(b, 58).forEach((ln, k) => o.push(text(t, 1004, 200 + i * 92 + k * 20, ln, 15, { w: 500 })));
+  });
+  return svgDoc(W, H, o.join(''));
+}
+const wrap = (s: string, n: number) => s.split(' ').reduce<string[]>((a, w) => {
+  if (!a.length || (a[a.length - 1] + ' ' + w).length > n) a.push(w); else a[a.length - 1] += ' ' + w;
+  return a;
+}, []);
+
+// ------------------------------------------------------------------ font options
+const FONTS: { family: string; role: string; note: string; weight: number; ui?: number }[] = [
+  { family: 'Fredoka', role: 'display + UI', note: 'rounded geometric, 5 weights, calm and friendly', weight: 700, ui: 500 },
+  { family: 'Baloo 2', role: 'display + UI', note: 'rounder and chunkier, 5 weights, great numbers', weight: 800, ui: 500 },
+  { family: 'Lilita One', role: 'display only', note: 'one heavy weight, poster-like, pair with Nunito', weight: 400 },
+  { family: 'Titan One', role: 'display only', note: 'bubbly and loud, best for the backglass and stamps', weight: 400 },
+  { family: 'Luckiest Guy', role: 'chosen · display', note: 'comic-book caps, the goofiest option', weight: 400 },
+  { family: 'Bungee', role: 'display only', note: 'arcade signage caps, very "machine"', weight: 400 },
+  { family: 'Nunito', role: 'UI and body', note: 'rounded sans for recipes and tooltips', weight: 800, ui: 500 },
+];
+function fontSheet(): string {
+  const t = FACTORY, W = 1560, rowH = 118, H = 150 + FONTS.length * rowH + 250;
+  const o: string[] = [`<rect width="${W}" height="${H}" fill="#efe8dc"/>`];
+  o.push(text(t, 40, 60, 'Font options (all free, OFL, on Google Fonts)', 34, { w: 700 }));
+  o.push(text(t, 40, 94, 'each row sets the same game text: the title, the numbers, a score sticker and a recipe line', 17, { w: 500, fill: mix(t.ink, t.paper, 0.3) }));
+  FONTS.forEach((fo, i) => {
+    const y = 120 + i * rowH, F = fo.family;
+    o.push(card(t, 24, y, W - 48, rowH - 14, fo.family === 'Luckiest Guy' || fo.family === 'Nunito' ? '#fff4c9' : t.paper, 16));
+    o.push(text(t, 48, y + 38, F, 22, { w: 700, font: 'Fredoka' }));
+    o.push(text(t, 48, y + 62, fo.role, 14, { w: 600, font: 'Fredoka', fill: t.accent }));
+    o.push(text(t, 48, y + 82, fo.note, 13, { w: 500, font: 'Fredoka', fill: mix(t.ink, t.paper, 0.3) }));
+    o.push(text(t, 400, y + 70, 'FREE PLAY', 46, { w: fo.weight, font: F, fill: t.accent, stroke: t.ink }));
+    o.push(text(t, 700, y + 66, '12,480  ×1.43  $11', 34, { w: fo.weight, font: F }));
+    o.push(`<g transform="translate(1100 ${y + 52}) rotate(-5)"><rect x="-58" y="-30" width="116" height="60" rx="12" fill="${t.paper}" stroke="${t.ink}" stroke-width="3"/>${text(t, 0, 12, '+165', 32, { w: fo.weight, font: F, fill: t.role.pop, stroke: t.ink, anchor: 'middle' })}</g>`);
+    o.push(text(t, 1190, y + 46, 'Pop Bumper', 19, { w: fo.ui ?? fo.weight, font: F }));
+    o.push(text(t, 1190, y + 70, 'Scores 100 per hit, times', 15, { w: fo.ui ?? fo.weight, font: F }));
+    o.push(text(t, 1190, y + 90, 'your Mult.', 15, { w: fo.ui ?? fo.weight, font: F }));
+  });
+  const y = 140 + FONTS.length * rowH;
+  o.push(card(t, 24, y, 740, 220, '#241a26', 16));
+  o.push(text(t, 48, y + 40, 'DMD (dot-matrix) faces', 20, { w: 700, font: 'Fredoka', fill: t.paper }));
+  [['DotGothic16', 'BIG BOI SAYS OOF'], ['Silkscreen', 'BIG BOI SAYS OOF'], ['VT323', 'BIG BOI SAYS OOF']].forEach(([F, m], i) => {
+    o.push(text(t, 48, y + 92 + i * 46, m, 34, { w: 400, font: F, fill: t.dmd, spacing: 2 }) + text(t, 740, y + 92 + i * 46, F, 15, { w: 500, font: 'Fredoka', fill: mix(t.paper, t.ink, 0.3), anchor: 'end' }));
+  });
+  o.push(card(t, 790, y, 746, 220, t.paper, 16));
+  o.push(text(t, 814, y + 40, 'Suggested pairings', 20, { w: 700, font: 'Fredoka' }));
+  [['A · Safe', 'Fredoka 700 titles · Fredoka 500 UI · DotGothic16 DMD'], ['B · Chunky toy', 'Baloo 2 800 titles and numbers · Nunito UI · Silkscreen DMD'],
+    ['C · Goofy (chosen)', 'Luckiest Guy stickers and backglass · Nunito UI · DotGothic16 DMD'], ['D · Arcade', 'Bungee marquee and buttons · Baloo 2 numbers · Nunito UI']].forEach(([h, b], i) => {
+    o.push(text(t, 814, y + 78 + i * 36, h, 16, { w: 700, font: 'Fredoka', fill: t.accent }) + text(t, 990, y + 78 + i * 36, b, 15, { w: 500, font: 'Fredoka' }));
+  });
+  return svgDoc(W, H, o.join(''));
+}
+
+// ------------------------------------------------------------------ the machine tilts
+function tiltSheet(): string {
+  const t = FACTORY, W = 1600, H = 900, S = 10.5;
+  const o: string[] = [`<rect width="${W}" height="${H}" fill="${t.bg}"/>`];
+  o.push(text(t, 40, 58, 'The machine tilts, not the camera', 34, { w: 700, fill: t.paper, stroke: t.ink }));
+  const unlit = BUILD.map((b) => ({ ...b, st: { ...b.st, lit: false, hit: false, smoke: false } }));
+  const panels: { title: string; lines: string[]; k: number; kz: number; rot: number; dx: number; build: Placed[]; fx?: boolean; dmdMsg: string; dark?: boolean }[] = [
+    { title: 'Workshop: flat', lines: ['Lies flat for exact placement:', 'the footprint is the collision.'], k: 1, kz: 0.3, rot: 0, dx: 0, build: BUILD, dmdMsg: 'WORKSHOP' },
+    { title: 'Play: tips towards you', lines: ['Eases to k 0.86 over 0.4 s at', 'Start round. Parts show sides.'], k: 0.86, kz: 0.6, rot: 0, dx: 0, build: BUILD, fx: true, dmdMsg: 'BALL 2' },
+    { title: 'Nudge: the cabinet shoves', lines: ['A spring on offset and lean.', 'Only the sim gets the impulse.'], k: 0.86, kz: 0.6, rot: 2.2, dx: 16, build: BUILD, dmdMsg: 'CAREFUL' },
+    { title: 'TILT: lights out', lines: ['Tips hard, every lamp goes out,', 'flippers die, the ball drains.'], k: 0.8, kz: 0.6, rot: -5, dx: -10, build: unlit, dmdMsg: 'TILT', dark: true },
+  ];
+  panels.forEach((pn, i) => {
+    const x0 = 24 + i * 392, cx = x0 + 186;
+    o.push(card(t, x0, 90, 372, 790, t.paper, 18));
+    const v: View = { S, ox: cx - 13 * S, oy: 735, k: pn.k, kz: pn.kz, shx: 0, lw: 1.7 };
+    const pivot = P(v, 13, 0);
+    if (i === 2) { // resting outline and shove lines
+      o.push(`<path d="${poly(box(13, 26.1, 14.6, 27.5, 0, 1.2).map(([x, y]) => P(v, x, y)))}" fill="none" stroke="${t.ink}" stroke-width="2.4" stroke-dasharray="6 6" opacity="0.5"/>`);
+      for (const yy of [260, 330, 400]) o.push(`<path d="M${x0 + 18} ${yy}h26" stroke="${t.ink}" stroke-width="4" stroke-linecap="round"/>`);
+    }
+    o.push(`<g transform="translate(${pn.dx} 0) rotate(${pn.rot} ${f(pivot[0])} ${f(pivot[1])})">`);
+    o.push(playfield(v, t, pn.build, pn.fx ?? false));
+    if (i === 0) for (let x = 2; x <= 22; x += 2) for (let y = 15; y <= 48; y += 2) { const [X, Y] = P(v, x, y); o.push(`<circle cx="${f(X)}" cy="${f(Y)}" r="1.5" fill="${t.ink}" opacity="0.35"/>`); }
+    if (pn.dark) o.push(`<path d="${poly(box(13, 26.1, 14.6, 27.5, 0, 1.2).map(([x, y]) => P(v, x, y)))}" fill="#1d1420" opacity="0.38"/>`);
+    o.push(dmd(t, cx - 110, P(v, 13, 53)[1] - 64, 220, 50, pn.dmdMsg));
+    o.push('</g>');
+    if (pn.dark) o.push(stampText(t, cx, 430, 'TILT'));
+    o.push(text(t, x0 + 22, 790, pn.title, 21, { w: 700 }));
+    pn.lines.forEach((ln, k) => o.push(text(t, x0 + 22, 816 + k * 20, ln, 15, { w: 500 })));
+  });
+  return svgDoc(W, H, o.join(''));
+}
+const stampText = (t: Theme, x: number, y: number, s: string) =>
+  `<g transform="translate(${x} ${y}) rotate(-12)"><rect x="-110" y="-44" width="220" height="88" rx="14" fill="none" stroke="${t.accent}" stroke-width="9"/>${text(t, 0, 26, s, 72, { w: 700, anchor: 'middle', fill: t.accent })}</g>`;
 
 // ------------------------------------------------------------------ output
 function svgDoc(w: number, h: number, body: string) {
@@ -481,6 +654,7 @@ async function main() {
   const sheets: Record<string, string> = {
     'screen-factory': screen(FACTORY), 'screen-diner': screen(DINER), 'screen-castle': screen(CASTLE),
     'parts-sheet': partsSheet(), 'particles': particleSheet(), 'key-art-lineup': keyArt(),
+    'relics': relicSheet(), 'fonts': fontSheet(), 'tilt': tiltSheet(),
   };
   const require = createRequire(import.meta.url);
   const { chromium } = require('playwright');
@@ -488,14 +662,26 @@ async function main() {
   for (const [name, svg] of Object.entries(sheets)) {
     const m = svg.match(/width="(\d+)" height="(\d+)"/)!;
     const page = await browser.newPage({ viewport: { width: +m[1], height: +m[2] } });
-    await page.setContent(`<!doctype html><html><head><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap"><style>html,body{margin:0}</style></head><body>${svg}</body></html>`);
+    await page.setContent(`<!doctype html><html><head><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Baloo+2:wght@500;700;800&family=Lilita+One&family=Titan+One&family=Luckiest+Guy&family=Bungee&family=Nunito:wght@500;600;700;800&family=DotGothic16&family=Silkscreen&family=VT323&display=swap"><style>html,body{margin:0}</style></head><body>${svg}</body></html>`, { waitUntil: 'networkidle' });
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${OUT}/${name}.png` });
     await page.close();
     console.log('wrote', `${OUT}/${name}.png`);
   }
+  // the drifting backdrops as a looping GIF: 6 s at 12 fps
+  const frames = `${OUT}/.frames`, N = 72;
+  mkdirSync(frames, { recursive: true });
+  const page = await browser.newPage({ viewport: { width: 1500, height: 420 } });
+  for (let i = 0; i < N; i++) {
+    await page.setContent(`<!doctype html><html><head><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Nunito:wght@500;600;700;800&display=swap"><style>html,body{margin:0}</style></head><body>${backdropPreview(i / N)}</body></html>`, { waitUntil: 'networkidle' });
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: `${frames}/${String(i).padStart(3, '0')}.png` });
+  }
   await browser.close();
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '12', '-i', `${frames}/%03d.png`, '-vf', 'scale=1000:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=64[p];[b][p]paletteuse=dither=none', `${OUT}/backdrops.gif`]);
+  rmSync(frames, { recursive: true });
+  console.log('wrote', `${OUT}/backdrops.gif`);
 }
 
 main();

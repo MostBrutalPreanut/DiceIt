@@ -30,6 +30,8 @@ export interface Theme {
   role: Record<PartId, string>;
   popMotif: Motif;
   debris: Debris;
+  backdrop: 'squiggle' | 'waves' | 'curls'; // the page behind the machine, drifting slowly
+  laneWord: string; // the lane rollovers spell this, one letter each
   floorArt: 'plates' | 'checker' | 'meadow';
   surround: 'factory' | 'diner' | 'castle';
 }
@@ -43,7 +45,7 @@ export const FACTORY: Theme = {
     pop: '#3cc3b1', coin: '#ffae2b', mega: '#8a63f2', sling: '#ff6b6b', spinner: '#55d08f', lane: '#62b8ff',
     printer: '#ff8fc8', flipper: '#ff6b6b', lamp: '#fff1a0', uplight: '#ffffff', bank: '#ef476f', deflector: '#b8b2cc',
   },
-  popMotif: 'rivets', debris: 'bolt', floorArt: 'plates', surround: 'factory',
+  popMotif: 'rivets', debris: 'bolt', laneWord: 'FUN', backdrop: 'squiggle', floorArt: 'plates', surround: 'factory',
 };
 
 export const DINER: Theme = {
@@ -55,7 +57,7 @@ export const DINER: Theme = {
     pop: '#d9473b', coin: '#f2c14e', mega: '#f6efdf', sling: '#7f9c3c', spinner: '#5e8c8a', lane: '#f08a4b',
     printer: '#b9c6c9', flipper: '#f6efdf', lamp: '#ffe08a', uplight: '#ffffff', bank: '#d9473b', deflector: '#8a6a4a',
   },
-  popMotif: 'awning', debris: 'pea', floorArt: 'checker', surround: 'diner',
+  popMotif: 'awning', debris: 'pea', laneWord: 'EAT', backdrop: 'waves', floorArt: 'checker', surround: 'diner',
 };
 
 export const CASTLE: Theme = {
@@ -67,7 +69,7 @@ export const CASTLE: Theme = {
     pop: '#e2704f', coin: '#f2c14e', mega: '#eef1f4', sling: '#b7713e', spinner: '#4c86c6', lane: '#7fc0e8',
     printer: '#e9eef2', flipper: '#eef1f4', lamp: '#ffd36e', uplight: '#ffffff', bank: '#c94f46', deflector: '#8b5a35',
   },
-  popMotif: 'cone', debris: 'leaf', floorArt: 'meadow', surround: 'castle',
+  popMotif: 'cone', debris: 'leaf', laneWord: 'WIN', backdrop: 'curls', floorArt: 'meadow', surround: 'castle',
 };
 
 export const THEMES = [FACTORY, DINER, CASTLE];
