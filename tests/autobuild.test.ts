@@ -59,6 +59,14 @@ describe('the auto-builder', () => {
     expect(m.layout.parts.filter((p) => !p.placed)).toHaveLength(2); // the input machine is not touched
   });
 
+  it('never moves, swaps or benches the Big Boi', () => {
+    const m = owned();
+    const boi = m.layout.parts.find((p) => p.def === 'mega')!;
+    const r = autoBuild(m, { ...tiny, steps: 60 });
+    const after = r.machine.layout.parts.find((p) => p.def === 'mega')!;
+    expect([after.placed, after.x, after.y]).toEqual([true, boi.x, boi.y]);
+  });
+
   it('is deterministic for a seed', () => {
     const cfg = { ...tiny, steps: 1, placeTries: 1 };
     const a = autoBuild(owned(), cfg);

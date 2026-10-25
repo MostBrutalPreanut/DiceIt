@@ -167,8 +167,9 @@ export function autoBuild(m: Machine, o: BuildOptions): BuildResult {
 
   // phase B: hill-climb
   for (let step = 0; step < o.steps; step++) {
-    const placed = layout.parts.filter((p) => p.placed);
-    const loose = layout.parts.filter((p) => !p.placed);
+    // the Big Boi is part of the machine: never moved, swapped or benched
+    const placed = layout.parts.filter((p) => p.placed && !p.fixed);
+    const loose = layout.parts.filter((p) => !p.placed && !p.fixed);
     const part = placed.length ? placed[Math.floor(rng.next() * placed.length)] : undefined;
     const roll = rng.next();
     const undo: (() => void)[] = [];
