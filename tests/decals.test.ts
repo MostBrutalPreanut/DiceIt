@@ -262,6 +262,17 @@ describe('what the decals do: cash', () => {
     expect(g.sell(1)).toBe(3); // a Pop Bumper
   });
 
+  it('Bargain Bin marks a half-price offer in the shop at once, and peeling it takes the discount back', () => {
+    const g = new Game();
+    expect(g.shop.bargain ?? null).toBeNull();
+    take(g, 'bargain');
+    const slot = g.shop.bargain!;
+    expect(g.shop.offers[slot]).toBeTruthy();
+    expect(g.priceAt(slot)).toBe(Math.max(1, Math.ceil(g.priceOf(g.shop.offers[slot]!) / 2)));
+    expect(g.peel(0)).toBe(true);
+    expect(g.shop.bargain).toBeNull();
+  });
+
   it('Wide Shelf adds a part to the shop at once, and to every later shop', () => {
     const g = new Game();
     expect(g.shop.offers).toHaveLength(4);

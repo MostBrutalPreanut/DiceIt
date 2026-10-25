@@ -406,14 +406,23 @@ export class Game {
   private stick(d: DecalPick) {
     this.decals.push({ ...d });
     this.mods = this.workshopMods();
-    // a bigger shelf shows the extra part straight away
-    const extra = this.mods.shopSlots - this.shop.offers.length;
-    if (extra > 0) {
-      const rng = new Rng(this.runSeed * 31 + this.round * 7 + this.decals.length);
-      const more = rollOffers(rng, extra, this.round, this.shop.offers.filter((x): x is PartId => !!x));
-      this.shop.offers.push(...more);
-    }
+    this.fitShop();
     this.toWorkshop(); // new ball physics and the like apply to the sim straight away
+  }
+
+  /**
+   * The shop catches up with the decals at once (it was rolled before the boss's decal was picked): a bigger
+   * shelf shows its extra part, the Bargain Bin marks a half-price offer, and a peeled Bargain Bin takes it back.
+   */
+  private fitShop() {
+    const rng = new Rng(this.runSeed * 31 + this.round * 7 + this.decals.length);
+    const extra = this.mods.shopSlots - this.shop.offers.length;
+    if (extra > 0) this.shop.offers.push(...rollOffers(rng, extra, this.round, this.shop.offers.filter((x): x is PartId => !!x)));
+    if (!this.mods.bargain) this.shop.bargain = null;
+    else if (this.shop.bargain == null || !this.shop.offers[this.shop.bargain]) {
+      const open = this.shop.offers.map((id, i) => (id ? i : -1)).filter((i) => i >= 0);
+      this.shop.bargain = open.length ? open[Math.floor(rng.next() * open.length)] : null;
+    }
   }
 
   /**
@@ -425,6 +434,8 @@ export class Game {
     if (!d || !this.editable) return false;
     this.checkpoint();
     this.decals.splice(slot, 1);
+    this.mods = this.workshopMods();
+    this.fitShop();
     this.toWorkshop();
     this.enforceToolbox(); // a peeled Big Toolbox leaves less room
     return true;
