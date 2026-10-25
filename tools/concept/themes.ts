@@ -44,6 +44,7 @@ export const FACTORY: Theme = {
   role: {
     pop: '#3cc3b1', coin: '#ffae2b', mega: '#8a63f2', sling: '#ff6b6b', spinner: '#a3d143', lane: '#62b8ff',
     printer: '#ff8fc8', flipper: '#ff6b6b', lamp: '#fff1a0', uplight: '#ffffff', bank: '#c2417a', deflector: '#b8b2cc',
+    kickback: '#5b8cff', saver: '#c5e84a', vari: '#ff9a3c',
   },
   popMotif: 'rivets', debris: 'bolt', laneWord: 'FUN', backdrop: 'squiggle', floorArt: 'plates', surround: 'factory',
 };
@@ -56,6 +57,7 @@ export const DINER: Theme = {
   role: {
     pop: '#d9473b', coin: '#f2c14e', mega: '#f6efdf', sling: '#7f9c3c', spinner: '#5e8c8a', lane: '#f08a4b',
     printer: '#b9c6c9', flipper: '#f6efdf', lamp: '#ffe08a', uplight: '#ffffff', bank: '#7a4a2e', deflector: '#a9b4b6',
+    kickback: '#4f7f9c', saver: '#9bb84d', vari: '#e07a3f',
   },
   popMotif: 'awning', debris: 'pea', laneWord: 'EAT', backdrop: 'waves', floorArt: 'checker', surround: 'diner',
 };
@@ -68,6 +70,7 @@ export const CASTLE: Theme = {
   role: {
     pop: '#e2704f', coin: '#f2c14e', mega: '#eef1f4', sling: '#8b5a35', spinner: '#4c86c6', lane: '#7fc0e8',
     printer: '#d8c3a5', flipper: '#eef1f4', lamp: '#f59ad0', uplight: '#ffffff', bank: '#8e6bb0', deflector: '#6f6a64',
+    kickback: '#5a6fb5', saver: '#a6d65a', vari: '#d98a3a',
   },
   popMotif: 'cone', debris: 'leaf', laneWord: 'WIN', backdrop: 'curls', floorArt: 'meadow', surround: 'castle',
 };

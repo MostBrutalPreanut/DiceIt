@@ -27,9 +27,15 @@
 
       <div class="label">TILT</div>
       <div class="tiltbar"><div id="tiltFill"></div></div>
+      <div id="clockBox"><div class="label">BALL CLOCK <b id="clockSec"></b></div>
+        <div class="tiltbar"><div id="clockFill"></div></div></div>
+
+      <div id="upgradesBox" hidden>
+        <div class="label">UPGRADES <span class="hint" style="letter-spacing:0">hover for what each does</span></div>
+        <div id="upgradeChips"></div>
+      </div>
 
       <div id="actions">
-        <button id="btnStart" class="primary">Start round</button>
         <button id="btnCash" hidden>Cash out (Tab)</button>
       </div>
 
@@ -49,6 +55,14 @@
 
     <main id="center">
       <div id="dmd"><span id="dmdText">INSERT COIN</span></div>
+      <div id="stepper" hidden>
+        <ol>
+          <li id="stepShop" class="step"><b>1</b><span>Shop</span><i id="stepShopNote"></i></li>
+          <li id="stepUpgrade" class="step" hidden><b>2</b><span>Upgrade</span><i id="stepUpgradeNote"></i></li>
+          <li id="stepInstall" class="step"><b>3</b><span>Install</span><i id="stepInstallNote"></i></li>
+        </ol>
+        <button id="btnStart" class="primary">Start round</button>
+      </div>
       <div id="stage"></div>
       <div id="overlay" hidden></div>
       <div id="touch" aria-label="Touch controls">
@@ -67,6 +81,8 @@
             <div id="inventoryHint" class="hint">Empty.</div>
           </div>
         </div>
+
+        <div id="upgradeBox" class="card" hidden></div>
 
         <div id="selected" class="card" hidden></div>
 
@@ -104,6 +120,12 @@
             <button id="labLevelUp">Levels +1</button>
             <button id="labLevelDown">Levels −1</button>
           </div>
+          <div class="row" style="margin-top:8px">
+            <select id="labUpgrade" aria-label="Upgrade to take"></select>
+            <button id="labTake" style="flex:none">Take</button>
+            <button id="labDrop" style="flex:none">Clear all</button>
+          </div>
+          <div class="hint">Takes any major upgrade for free (the offer rules do not apply here).</div>
         </div>
         <div class="row">
           <button id="btnTest">Test ball (Space)</button>

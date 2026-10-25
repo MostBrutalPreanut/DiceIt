@@ -1,6 +1,7 @@
 import './style.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { dialValue, footprint, PART_IDS, PARTS, sellPrice, type PartInstance } from './data/parts';
+import { dialValue, footprint, PART_IDS, PARTS, type PartDef, type PartInstance } from './data/parts';
+import { BOSS_EVERY, COLUMN_NAMES, offerText, SKIP_PAY, UPGRADE_IDS, UPGRADES, type UpgradeId, type UpgradeOffer } from './data/upgrades';
 import { AudioFx } from './audio';
 import { Game, goalFor, parseRun, type Arrangement, type GameEvent, type Payout } from './game/game';
 import type { ScoreEvent } from './game/scoring';
@@ -52,6 +53,9 @@ async function main() {
   const sayKey = (k: CalloutKey, vars?: Record<string, string | number>) => say(callout(k, vars));
   say('INSERT COIN');
 
+  /** What the recipe sentences need to know: this part type's level and the run's upgrades. */
+  const ctxFor = (def: PartDef) => ({ level: game.levels[def.id] ?? 0, mods: game.mods });
+
   // ---- workshop panels: shop, inventory, selected part ---------------------------------------------
   /** Test Lab: every part in the game, free, instead of 4 rotating offers. */
   function renderCatalog() {
@@ -62,7 +66,7 @@ async function main() {
     box.innerHTML = PART_IDS.map((id) => {
       const def = PARTS[id];
       return `<div class="offer" data-id="${id}"><div class="top">${dot(def)}<span class="name">${def.name}</span><span class="cost">free</span>
-        <button data-add="${id}">Add</button></div><div class="hint">${def.blurb}</div>${descHtml(def, undefined, game.levels[id] ?? 0)}</div>`;
+        <button data-add="${id}">Add</button></div><div class="hint">${def.blurb}</div>${descHtml(def, undefined, ctxFor(def))}</div>`;
     }).join('');
     box.querySelectorAll<HTMLElement>('.offer').forEach((el) => {
       const def = PARTS[el.dataset.id as keyof typeof PARTS];
@@ -95,10 +99,10 @@ async function main() {
     rb.disabled = !game.canAfford(game.rerollCost);
     $('offers').innerHTML = game.shop.offers.map((id, i) => {
       if (!id) return `<div class="offer sold"><div class="top"><span class="name">Sold</span></div></div>`;
-      const def = PARTS[id];
-      return `<div class="offer"><div class="top">${dot(def)}<span class="name">${def.name}</span><span class="cost">$${def.cost}</span>
-        <button data-buy="${i}" ${game.canAfford(def.cost) ? '' : 'disabled'}>Buy</button></div>
-        <div class="hint">${def.blurb}</div>${descHtml(def)}</div>`;
+      const def = PARTS[id], price = game.priceOf(id);
+      return `<div class="offer"><div class="top">${dot(def)}<span class="name">${def.name}</span><span class="cost">${price < def.cost ? `<s>$${def.cost}</s> ` : ''}$${price}</span>
+        <button data-buy="${i}" ${game.canAfford(price) ? '' : 'disabled'}>Buy</button></div>
+        <div class="hint">${def.blurb}</div>${descHtml(def, undefined, ctxFor(def))}</div>`;
     }).join('');
     const slotIds = game.shop.offers.map((id, i) => ({ id, i })).filter((o) => o.id);
     $('offers').querySelectorAll<HTMLElement>('.offer:not(.sold)').forEach((el, n) => {
@@ -128,7 +132,7 @@ async function main() {
     $('inventory').innerHTML = inv.map((p) => {
       const def = PARTS[p.def];
       return `<div class="item ${armed === p.uid ? 'armed' : ''} ${selected === p.uid ? 'sel' : ''}" data-uid="${p.uid}">
-        <div class="top">${dot(def)}<span class="name">${def.name}</span><span class="hint">${armed === p.uid ? 'click the table' : 'click to place'}</span></div></div>`;
+        <div class="top">${dot(def)}<span class="name">${def.name}</span>${p.fresh ? '<span class="new">NEW</span>' : ''}<span class="hint">${armed === p.uid ? 'click the table' : 'click to place'}</span></div></div>`;
     }).join('');
     for (const el of $('inventory').querySelectorAll<HTMLElement>('.item')) {
       const part = game.part(Number(el.dataset.uid))!;
@@ -157,14 +161,14 @@ async function main() {
     card.innerHTML = `
       <h3>${dot(def)}${def.name} <span class="hint" style="margin-left:auto">${inst.placed ? 'on the board' : 'in inventory'}</span></h3>
       <div class="blurb">${def.blurb}</div>
-      ${descHtml(def, inst, game.levels[def.id] ?? 0)}
+      ${descHtml(def, inst, ctxFor(def))}
       ${def.dials.map((d) => `<div class="dial"><div class="row2"><span>${d.label}</span><b id="dv-${d.id}">${d.fmt ? d.fmt(dialValue(inst, d.id)) : dialValue(inst, d.id)}</b></div>
         <input data-dial="${d.id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${dialValue(inst, d.id)}" /><div class="hint">${d.tradeoff}</div></div>`).join('')}
       <div class="live" id="selLive">${liveText(inst)}</div>
       <div class="btnrow">
         ${def.rotatable ? '<button id="btnRotL">⟲ 15°</button><button id="btnRotR">15° ⟳</button>' : ''}
         ${inst.placed ? '<button id="btnStore">Store</button>' : ''}
-        <button id="btnSell">Sell $${sellPrice(def)}</button>
+        <button id="btnSell">Sell $${game.sellValue(def)}</button>
       </div>`;
     for (const input of card.querySelectorAll<HTMLInputElement>('input[data-dial]')) {
       for (const ev of ['pointerdown', 'keydown'] as const) input.addEventListener(ev, () => game.checkpoint());
@@ -173,7 +177,7 @@ async function main() {
         game.setDial(inst.uid, d.id, Number(input.value));
         $(`dv-${d.id}`).textContent = d.fmt ? d.fmt(Number(input.value)) : input.value;
         // the recipe text follows the dial
-        card.querySelector('.desc')!.outerHTML = descHtml(def, inst, game.levels[def.id] ?? 0);
+        card.querySelector('.desc')!.outerHTML = descHtml(def, inst, ctxFor(def));
         persist();
       };
     }
@@ -209,7 +213,51 @@ async function main() {
     refreshWorkshop();
   }
 
+  // ---- major upgrades: the three cards, and the chips that list what the run has taken ----------------
+  const offerTitle = (o: UpgradeOffer) => UPGRADES[o.id].name + (o.target ? ` · ${PARTS[o.target].name}s` : '');
+  let upgradeKey = '';
+  function renderUpgrades() {
+    const box = $('upgradeBox');
+    const show = game.pending !== null && game.editable;
+    box.hidden = !show;
+    const key = JSON.stringify([game.pending, game.picks]);
+    if (key !== upgradeKey) {
+      upgradeKey = key;
+      if (game.pending) {
+        box.innerHTML = `<h3>Choose an upgrade<small>one of three for the rest of the run, or take $${SKIP_PAY} instead</small></h3>
+          ${game.pending.map((o, i) => {
+            const d = UPGRADES[o.id];
+            return `<button class="ucard c-${d.column} r-${d.rarity}" data-pick="${i}"><span class="head"><b>${offerTitle(o)}</b><span class="tag">${COLUMN_NAMES[d.column].toUpperCase()}</span></span>
+              <span class="txt">${offerText(o)}</span><span class="rar">${d.rarity.toUpperCase()}</span></button>`;
+          }).join('')}
+          <button id="btnSkip">Skip: take $${SKIP_PAY}</button>`;
+        box.querySelectorAll<HTMLButtonElement>('button[data-pick]').forEach((b) => {
+          b.onclick = () => {
+            audio.unlock();
+            const o = game.pending?.[Number(b.dataset.pick)];
+            if (!game.chooseUpgrade(Number(b.dataset.pick))) return;
+            audio.goal();
+            say(`${o ? UPGRADES[o.id].name.toUpperCase() : 'UPGRADE'} INSTALLED. THE MACHINE IS DIFFERENT NOW`);
+            persist();
+            afterHistory();
+          };
+        });
+        ($('btnSkip') as HTMLButtonElement).onclick = () => { if (game.skipUpgrade()) { sayKey('skipped'); persist(); afterHistory(); } };
+      }
+      // the run's upgrades, grouped, with what each does on hover
+      const groups = new Map<string, { o: UpgradeOffer; n: number }>();
+      for (const p of game.picks) {
+        const k = `${p.id}:${p.target ?? ''}`;
+        groups.set(k, { o: p, n: (groups.get(k)?.n ?? 0) + 1 });
+      }
+      $('upgradesBox').hidden = groups.size === 0;
+      $('upgradeChips').innerHTML = [...groups.values()].map(({ o, n }) =>
+        `<span class="chip" title="${offerText(o).replace(/"/g, '&quot;')}">${offerTitle(o)}${n > 1 ? ` ×${n}` : ''}</span>`).join('');
+    }
+  }
+
   function refreshWorkshop() {
+    renderUpgrades();
     renderShop();
     renderInventory();
     renderSelected();
@@ -307,7 +355,7 @@ async function main() {
   /** The full recipe of a part, shown while hovering a shop offer or an inventory item. */
   function showDefTip(def: (typeof PARTS)[keyof typeof PARTS], inst: PartInstance | undefined, cx: number, cy: number) {
     const tip = $('tip');
-    tip.innerHTML = `<h4>${dot(def)}${def.name}</h4><div class="hint">${def.blurb}</div>${descHtml(def, inst, game.levels[def.id] ?? 0)}`;
+    tip.innerHTML = `<h4>${dot(def)}${def.name}</h4><div class="hint">${def.blurb}</div>${descHtml(def, inst, ctxFor(def))}`;
     tip.hidden = false;
     placeTip(cx, cy);
   }
@@ -316,7 +364,7 @@ async function main() {
     const tip = $('tip');
     const inst = hover != null && !dragging ? game.part(hover) : undefined;
     if (!inst) { tip.hidden = true; return; }
-    tip.innerHTML = tipHtml(inst, { label: game.scorer.label(inst), row: game.scorer.ledger.get(inst.uid), level: game.scorer.levelOf(inst.def) });
+    tip.innerHTML = tipHtml(inst, { label: game.scorer.label(inst), row: game.scorer.ledger.get(inst.uid), ctx: ctxFor(PARTS[inst.def]) });
     tip.hidden = false;
     const w = tip.offsetWidth, h = tip.offsetHeight;
     tip.style.left = `${Math.min(cx + 16, innerWidth - w - 8)}px`;
@@ -437,6 +485,15 @@ async function main() {
   $('labBalls4').onclick = () => { audio.unlock(); game.labBalls(4); };
   $('labBalls12').onclick = () => { audio.unlock(); game.labBalls(12); };
   $('labClear').onclick = () => { game.clearBoard(); afterHistory(); };
+  const labUpgrade = $('labUpgrade') as HTMLSelectElement;
+  labUpgrade.innerHTML = UPGRADE_IDS.map((id) => `<option value="${id}">${COLUMN_NAMES[UPGRADES[id].column]}: ${UPGRADES[id].name}</option>`).join('');
+  $('labTake').onclick = () => {
+    const id = labUpgrade.value as UpgradeId;
+    if (game.labUpgrade(id)) say(`${UPGRADES[id].name.toUpperCase()} TAKEN. FREE. NOTHING COUNTS`);
+    else say('NOTHING TO AIM THAT AT. OWN A PART FIRST');
+    afterHistory();
+  };
+  $('labDrop').onclick = () => { game.labClearUpgrades(); afterHistory(); };
   $('labLevelUp').onclick = () => { game.levelAll(1); afterHistory(); };
   $('labLevelDown').onclick = () => { game.levelAll(-1); afterHistory(); };
 
@@ -445,12 +502,19 @@ async function main() {
     switch (ev.type) {
       case 'flipper': audio.flipper(ev.on); break;
       case 'launch': audio.launch(ev.power); if (ev.power < 62) sayKey('weakPlunge'); break;
-      case 'drain': audio.drain(); if (game.mode !== 'workshop' || ev.reason === 'timeout') sayKey('drain'); break;
+      case 'drain': audio.drain(); if (ev.reason === 'timeout' && game.mode === 'round') sayKey('clock'); else if (game.mode !== 'workshop' || ev.reason === 'timeout') sayKey('drain'); break;
       case 'nudge': audio.nudge(); break;
       case 'tilt': audio.tilt(); renderer.onTilt(); sayKey('tilt'); break;
       case 'ballSearch': sayKey('search'); break;
       case 'rescue': sayKey('rescue'); break;
       case 'extraBall': sayKey('printed'); renderer.onBigMoment(); audio.goal(); break;
+      case 'ballSaved': {
+        const saver = game.part(ev.uid);
+        if (saver) renderer.onSaved(saver.x, saver.y);
+        sayKey('saved'); renderer.onBigMoment(); audio.goal();
+        break;
+      }
+      case 'partHit': if (ev.kicked) { audio.launch(70); sayKey('kicked'); } break;
       default: break;
     }
   };
@@ -478,8 +542,8 @@ async function main() {
         <div class="hint">Score ${fmt(game.scorer.score)} vs goal ${fmt(game.scorer.goal)}</div><br/>
         ${payout.lines.map((l) => `<div class="pay"><span>${l.label}</span><span>$${l.amount}</span></div>`).join('')}
         <div class="pay total"><span>Total</span><span>$${payout.total}</span></div><div class="hint">Cash on hand: $${game.money}. Spend it in the shop.</div><br/>
-        <button class="primary" id="btnNext">To the workshop</button></div>`;
-      ($('btnNext') as HTMLButtonElement).onclick = () => { overlay.hidden = true; game.continueAfterRound(); sayKey('workshop'); refreshWorkshop(); persist(); };
+        <button class="primary" id="btnNext">${game.round % BOSS_EVERY === 0 ? 'Choose an upgrade' : 'To the workshop'}</button></div>`;
+      ($('btnNext') as HTMLButtonElement).onclick = () => { overlay.hidden = true; game.continueAfterRound(); sayKey(game.pending ? 'upgrade' : 'workshop'); refreshWorkshop(); persist(); };
     } else {
       overlay.innerHTML = `<div class="card"><h3>Run over</h3>
         <div class="hint">Score ${fmt(game.scorer.score)} vs goal ${fmt(game.scorer.goal)} on round ${game.round}.</div><br/>
@@ -489,6 +553,27 @@ async function main() {
   }
 
   // ---- HUD ------------------------------------------------------------------------------------------------------
+  /** The between-rounds bar: Shop, Upgrade (only when one is owed or was just taken), Install, and the one big button. */
+  function updateStepper() {
+    const bar = $('stepper');
+    bar.hidden = game.mode !== 'workshop';
+    if (bar.hidden) return;
+    const owed = game.pending !== null;
+    const up = $('stepUpgrade');
+    up.hidden = !owed && !game.resolved;
+    up.className = `step ${owed ? 'owed' : 'done'}`;
+    $('stepUpgradeNote').textContent = owed ? 'pick 1 of 3' : game.resolved === 'skipped' ? `skipped, +$${SKIP_PAY}` : game.resolved ? UPGRADES[game.resolved.id].name : '';
+    $('stepShop').className = `step ${owed ? '' : 'active'}`;
+    $('stepShopNote').textContent = game.sandbox ? 'free' : `$${game.money}`;
+    const inv = game.inventory.length, fresh = game.inventory.filter((p) => p.fresh).length;
+    $('stepInstall').className = `step ${!owed && inv > 0 ? 'active' : ''}`;
+    $('stepInstallNote').textContent = inv ? `${inv} to place${fresh ? `, ${fresh} new` : ''}` : 'board is set';
+    const start = $('btnStart') as HTMLButtonElement;
+    start.disabled = owed;
+    start.title = owed ? 'Pick an upgrade (or skip it) first' : '';
+    start.classList.toggle('ready', !owed && inv === 0);
+  }
+
   function updateHud(dt: number) {
     const sc = game.scorer;
     const inRound = game.mode === 'round' || game.mode === 'roundEnd' || game.mode === 'runOver';
@@ -501,9 +586,14 @@ async function main() {
     const goal = inRound ? sc.goal : goalFor(game.round);
     $('goal').textContent = fmt(goal);
     $('goalFill').style.width = inRound ? `${Math.min(100, (sc.score / goal) * 100)}%` : '0%';
-    $('balls').textContent = inRound ? '●'.repeat(Math.max(0, game.ballsLeft)) + '○'.repeat(Math.max(0, 3 - game.ballsLeft)) : '∞';
+    $('balls').textContent = inRound ? '●'.repeat(Math.max(0, game.ballsLeft)) + '○'.repeat(Math.max(0, game.ballsPerRound - game.ballsLeft)) : '∞';
     $('tiltFill').style.width = `${Math.min(100, game.sim.tiltMeter * 100)}%`;
-    ($('btnStart') as HTMLButtonElement).hidden = game.mode !== 'workshop';
+    const clock = game.sim.clockLeft;
+    ($('clockBox') as HTMLElement).hidden = game.mode !== 'round';
+    $('clockSec').textContent = clock === null ? `${game.sim.clockTotal} s` : `${Math.ceil(clock)} s`;
+    $('clockFill').style.width = `${clock === null ? 100 : (clock / game.sim.clockTotal) * 100}%`;
+    $('clockFill').classList.toggle('low', clock !== null && clock < 10);
+    updateStepper();
     ($('btnCash') as HTMLButtonElement).hidden = !(game.mode === 'round' && sc.goalReached);
     $('workshop').hidden = game.mode !== 'workshop';
     ($('btnUndo') as HTMLButtonElement).disabled = !game.canUndo;

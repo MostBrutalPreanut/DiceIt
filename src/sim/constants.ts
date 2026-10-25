@@ -42,10 +42,14 @@ export const FLIPPER_TORQUE = 60000;
 export const BUILD_AREA = { x0: 2, x1: 22, y0: 15, y1: 48 };
 
 export const BALL_SEARCH_AFTER = 3.5;
-export const BALL_TIMEOUT = 90;
+/** A ball (with every ball it turns into) lasts at most this long after its first launch. Late-game balls hit it often, which keeps rounds near 2.5 minutes. */
+export const BALL_TIMEOUT = 60;
 export const NUDGE_SPEED = 7;
 export const NUDGE_TILT = 0.4;
 export const TILT_DECAY = 0.3;
 
 /** Balls on the table at once (the Ball Printer stops printing here). */
 export const MAX_BALLS = 4;
+
+/** Seconds after a launch during which a Ball Saver returns a drained ball to the plunger lane. */
+export const SAVER_WINDOW = 8;

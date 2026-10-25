@@ -1,4 +1,5 @@
-import { dialFactor, dialValue, lampBonus, LEVEL_TARGETS, MAX_LEVEL, PARTS, type PartId, type PartInstance } from '../data/parts';
+import { dialFactor, dialValue, grownPoints, lampStats, LEVEL_TARGETS, modFactor, PARTS, tierOf, type PartId, type PartInstance } from '../data/parts';
+import { neutralMods, type Mods } from '../data/mods';
 import type { SimEvent } from '../sim/sim';
 
 /**
@@ -23,6 +24,8 @@ export interface ScoreEvent {
   notes: string[];
   label?: string;
   spins?: number;
+  /** Vari-target: index of the tier this hit reached. */
+  tier?: number;
 }
 
 export interface LedgerRow {
@@ -43,6 +46,9 @@ export interface ScorerOpts {
   levels?: Partial<Record<PartId, number>>;
   /** Called when a Level Light set completes. Returns the new level, or null if already at the cap. */
   onLevelUp?: (id: PartId) => number | null;
+  /** The run's upgrades (neutral if absent). */
+  mods?: Mods;
+  /** Overrides the Mult every ball starts with (default: the mods' `startMult`). */
   baseMult?: number;
 }
 
@@ -59,10 +65,23 @@ export class Scorer {
   private roundLit = new Set<number>();
   private levels: Partial<Record<PartId, number>>;
   private onLevelUp?: (id: PartId) => number | null;
+  private mods: Mods;
+  /** Scoring hits so far this round and this ball (Gold Ball and Lucky Seven count them). */
+  private roundHits = 0;
+  private ballHits = 0;
+  /**
+   * What the limits in the recipes have let through so far. Every source that compounds (growth, Mult, set
+   * bonuses, coins) has a cap: this ledger of what has been paid is how the caps are kept. Per ball: Mult and
+   * sets. Per round: money.
+   */
+  private multPaid = new Map<string, number>();
+  private setsPaid = new Map<string, number>();
+  private moneyPaid = new Map<string, number>();
   readonly baseMult: number;
 
   constructor(public goal: number, private getParts: () => PartInstance[] = () => [], opts: ScorerOpts = {}) {
-    this.baseMult = opts.baseMult ?? 1;
+    this.mods = opts.mods ?? neutralMods();
+    this.baseMult = opts.baseMult ?? this.mods.startMult;
     this.mult = this.baseMult;
     this.levels = opts.levels ?? {};
     this.onLevelUp = opts.onLevelUp;
@@ -79,11 +98,25 @@ export class Scorer {
   /** Called when a round (not a ball) starts: the Level Lights go dark. */
   resetRound() {
     this.roundLit.clear();
+    this.roundHits = 0;
+    this.moneyPaid.clear();
     this.startBall();
+  }
+
+  /** How much of `want` a cap lets through (all of it when there is no cap); what passes is recorded against the key. */
+  private take(paid: Map<string, number>, key: string, want: number, cap: number | undefined): number {
+    if (want <= 0) return 0;
+    const used = paid.get(key) ?? 0;
+    const got = cap === undefined ? want : Math.max(0, Math.min(want, cap - used));
+    paid.set(key, used + got);
+    return got;
   }
 
   startBall() {
     this.mult = this.baseMult;
+    this.ballHits = 0;
+    this.multPaid.clear();
+    this.setsPaid.clear();
     this.hitsByType.clear();
     this.lit.clear();
   }
@@ -101,9 +134,9 @@ export class Scorer {
     let sum = 0, count = 0;
     for (const l of this.placed()) {
       if (PARTS[l.def].kind !== 'lamp' || !this.lit.has(l.uid)) continue;
-      const r = dialValue(l, 'radius');
-      if (Math.hypot(l.x - inst.x, l.y - inst.y) <= r) {
-        sum += lampBonus(r);
+      const lamp = lampStats(dialValue(l, 'radius'), this.mods);
+      if (Math.hypot(l.x - inst.x, l.y - inst.y) <= lamp.radius) {
+        sum += lamp.bonus;
         count++;
       }
     }
@@ -111,20 +144,22 @@ export class Scorer {
   }
 
   /** What this part would score per event right now, before Mult. Null for parts that do not score. */
-  baseNow(inst: PartInstance, spins = 1): number | null {
+  baseNow(inst: PartInstance, spins = 1, tierX = 1): number | null {
     const r = PARTS[inst.def].recipe;
     if (!r.points) return null;
-    const grown = (r.grow ?? 0) * this.hitsOf(inst.def);
+    const grown = grownPoints(r, this.hitsOf(inst.def));
     const lvl = (r.perLevel ?? 0) * this.levelOf(inst.def);
-    return Math.round((r.points + lvl + grown) * spins * dialFactor(inst) * (1 + this.lampBonusAt(inst).sum));
+    return Math.round((r.points + lvl + grown) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum));
   }
 
   /** The short number drawn on the part itself ("100", "10/spin", "+25%"). */
   label(inst: PartInstance): string | null {
     const def = PARTS[inst.def];
-    if (def.kind === 'lamp') return `+${Math.round(lampBonus(dialValue(inst, 'radius')) * 100)}%`;
+    if (def.kind === 'lamp') return `+${Math.round(lampStats(dialValue(inst, 'radius'), this.mods).bonus * 100)}%`;
     const n = this.baseNow(inst);
     if (n === null) return null;
+    const tiers = def.recipe.tiers;
+    if (tiers) return `${n}-${this.baseNow(inst, 1, tiers[tiers.length - 1].x)}`; // soft hit to smash
     return def.recipe.per === 'spin' ? `${n}/spin` : String(n);
   }
 
@@ -150,6 +185,11 @@ export class Scorer {
 
   /** Turn one physical event into zero or more attributed score events. */
   consume(ev: SimEvent): ScoreEvent[] {
+    // lane change: a flipper button shifts which lanes are lit
+    if (ev.type === 'flipper') {
+      if (ev.on) this.shiftLanes(ev.side === 'L' ? -1 : 1);
+      return [];
+    }
     if (ev.type !== 'partHit') return [];
     const inst = this.getParts().find((p) => p.uid === ev.uid && p.placed);
     if (!inst) return [];
@@ -169,24 +209,44 @@ export class Scorer {
 
     // a drop-target bank with every target down pays its set bonus (the individual hits scored already)
     if (def.kind === 'bank' && ev.bankComplete) {
-      out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', r.setBonus!.points, r.setBonus!.mult, 0, [`${r.setBonus!.points} bank bonus`], 'BANK COMPLETE'));
+      if (this.take(this.setsPaid, inst.def, 1, r.setCap) === 0) return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`${r.setCap} sets this ball`], 'BANK SETS MAXED')];
+      const pts = r.setBonus!.points * this.mods.setFactor;
+      out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, r.setBonus!.mult * this.mods.setFactor, 0, [`${pts} bank bonus`], 'BANK COMPLETE'));
       return out;
     }
 
     if (r.points) {
       const spins = ev.spins ?? 1;
-      const grown = (r.grow ?? 0) * this.hitsOf(inst.def);
+      const grown = grownPoints(r, this.hitsOf(inst.def));
       const level = (r.perLevel ?? 0) * this.levelOf(inst.def);
       const factor = dialFactor(inst);
       const lamp = this.lampBonusAt(inst);
+      const tier = tierOf(inst, ev.speed);
       const notes = [`${r.points}${spins > 1 ? ` x${spins} spins` : ''} base`];
       if (level) notes.push(`+${level} level`);
       if (grown) notes.push(`+${grown} grown`);
+      if (tier) notes.push(`x${tier.x} ${tier.name} hit`);
       if (Math.abs(factor - 1) > 0.001) notes.push(`x${Math.round(factor * 100) / 100} dial`);
+      const oc = this.mods.overclock[inst.def] ?? 0;
+      if (oc) notes.push(`+${Math.round(oc * 100)}% overclock`);
+      if (this.mods.pointsFactor !== 1) notes.push(`x${Math.round(this.mods.pointsFactor * 100) / 100} ball`);
       if (lamp.sum) notes.push(`+${Math.round(lamp.sum * 100)}% lamp`);
-      const base = Math.round((r.points + level + grown) * spins * factor * (1 + lamp.sum));
+      this.roundHits++;
+      this.ballHits++;
+      const lucky = this.mods.luckyEvery > 0 && this.ballHits % this.mods.luckyEvery === 0;
+      if (lucky) notes.push('x2 lucky seven');
+      const goldDue = this.mods.goldEvery > 0 && this.roundHits % this.mods.goldEvery === 0 ? 1 : 0;
+      const gold = this.take(this.moneyPaid, 'gold', goldDue, this.mods.goldCap || undefined);
+      if (gold) notes.push('+$1 gold ball');
+      const multGain = this.take(this.multPaid, inst.def, r.mult ?? 0, r.multCap);
+      if (r.mult && multGain < r.mult) notes.push('Mult maxed for this ball');
+      const coins = this.take(this.moneyPaid, inst.def, r.money ?? 0, r.moneyCap);
+      if (r.money && coins < r.money) notes.push('coin limit reached');
+      const base = Math.round((r.points + level + grown) * spins * (tier?.x ?? 1) * factor * modFactor(inst.def, this.mods) * (1 + lamp.sum) * (lucky ? 2 : 1));
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
-      out.push(this.award(inst, ev.t, ev.x, ev.y, 'hit', base, r.mult ?? 0, r.money ?? 0, notes, undefined, ev.spins));
+      const scored = this.award(inst, ev.t, ev.x, ev.y, 'hit', base, multGain, coins + gold, notes, undefined, ev.spins);
+      if (tier) scored.tier = r.tiers!.indexOf(tier);
+      out.push(scored);
     }
 
     // Level Lights (Space Cadet's bumper upgrade lanes): each pass toggles the light; when every light
@@ -212,12 +272,33 @@ export class Scorer {
     if (r.lights && def.kind === 'rollover') {
       this.lit.add(inst.uid);
       const lanes = this.placed().filter((p) => p.def === inst.def);
-      if (r.setBonus && lanes.every((l) => this.lit.has(l.uid))) {
+      // a set needs at least two lanes: a lone lane would "complete" itself on every roll (the auto-builder found that exploit)
+      if (r.setBonus && lanes.length >= 2 && lanes.every((l) => this.lit.has(l.uid))) {
         for (const l of lanes) this.lit.delete(l.uid);
-        out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', r.setBonus.points, r.setBonus.mult, 0, [`${r.setBonus.points} set bonus`], 'LANES COMPLETE'));
+        if (this.take(this.setsPaid, inst.def, 1, r.setCap) === 0) {
+          out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`${r.setCap} sets this ball`], 'LANE SETS MAXED'));
+        } else {
+          const pts = r.setBonus.points * this.mods.setFactor;
+          out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, r.setBonus.mult * this.mods.setFactor, 0, [`${pts} set bonus`], 'LANES COMPLETE'));
+        }
       }
     }
     return out;
+  }
+
+  /**
+   * Lane change: shift the lit Lane Rollovers one lane along (left to right by position, wrapping round).
+   * The number lit never changes, so shifting cannot complete a set; it only moves where the dark lane is.
+   */
+  private shiftLanes(dir: -1 | 1) {
+    const lanes = this.placed().filter((p) => p.def === 'lane').sort((a, b) => a.x - b.x || a.y - b.y);
+    const n = lanes.length;
+    if (n < 2) return;
+    const was = lanes.map((l) => this.lit.has(l.uid));
+    lanes.forEach((l, i) => {
+      if (was[(i - dir + n) % n]) this.lit.add(l.uid);
+      else this.lit.delete(l.uid);
+    });
   }
 
   ledgerRows(): LedgerRow[] {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { computeMods } from '../src/data/upgrades';
 import { DT, SUBSTEPS } from '../src/sim/constants';
 import { starterLayout } from '../src/sim/layout';
 import { escapeFuzz, flipperTunnelTrials } from '../tools/stress';
@@ -30,5 +31,17 @@ describe('physics robustness (the Cult of PiN test)', () => {
     // (Long balls are fine and expected: a skilled bot can sustain a ball until the 90 s clock.)
     expect(r.stuckSearches).toBe(0);
     expect(r.drained + r.timeouts).toBe(r.balls);
+  });
+
+  it('the ball upgrades (Rubber, Glass, Twin) keep the same guarantees: no tunnelling, no escapes, nothing stuck', () => {
+    const mods = computeMods([{ id: 'rubber' }, { id: 'glass' }, { id: 'twin' }]);
+    const t = flipperTunnelTrials({ dt: DT, substeps: SUBSTEPS, trials: 600, seed: 7, mods });
+    expect(t.tunnels).toBe(0);
+    for (const m of [mods, computeMods([{ id: 'rubber' }]), computeMods([{ id: 'heavy' }])]) {
+      const r = escapeFuzz(starterLayout(), 40, DT, SUBSTEPS, m);
+      expect(r.escapes).toBe(0);
+      expect(r.stuckSearches).toBe(0);
+      expect(r.drained + r.timeouts).toBe(r.balls);
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makePart, type PartInstance } from '../src/data/parts';
+import { describe as describePart, makePart, PARTS, type PartInstance } from '../src/data/parts';
 import { Scorer } from '../src/game/scoring';
 import { starterLayout } from '../src/sim/layout';
 import type { SimEvent } from '../src/sim/sim';
@@ -228,5 +228,111 @@ describe('levels, Level Lights and drop-target banks', () => {
     expect(done[0].label).toBe('BANK COMPLETE');
     expect(done[0].base).toBe(300);
     expect(done[0].multAfter).toBeCloseTo(1.3);
+  });
+});
+
+describe('Kickback and Ball Saver', () => {
+  it('a kick pays 150 times Mult and explains itself; the saver scores nothing', () => {
+    const { s, parts } = setup([makePart('kickback', 10, 10, 30, true), makePart('saver', 11, 14, 30, true)]);
+    const kick = s.consume(hit(10, { kicked: true }))[0];
+    expect(kick.base).toBe(150);
+    expect(kick.notes).toEqual(['150 base']);
+    expect(s.label(parts.find((p) => p.uid === 10)!)).toBe('150');
+    expect(s.consume({ type: 'ballSaved', t: 0, uid: 11, ballId: 2 })).toEqual([]);
+    expect(s.label(parts.find((p) => p.uid === 11)!)).toBeNull();
+  });
+});
+
+describe('Vari-Target: harder hits pay more', () => {
+  const vari = (stiff?: number) => {
+    const v = makePart('vari', 20, 12, 30, true);
+    if (stiff !== undefined) v.dials.stiff = stiff;
+    return v;
+  };
+  const score = (v: PartInstance, speed: number) => {
+    const { s } = setup([v]);
+    return s.consume(hit(20, { speed }))[0];
+  };
+
+  it('pays x1, x2, x4 or x8 of 40 by how fast the ball was going, and says which', () => {
+    const v = vari();
+    expect([5, 15, 35, 70].map((sp) => score(v, sp).base)).toEqual([40, 80, 160, 320]);
+    expect(score(v, 70).notes).toEqual(['40 base', 'x8 smash hit']);
+    expect(score(v, 70).tier).toBe(3);
+    expect(score(v, 5).tier).toBe(0);
+  });
+
+  it('a stiffer target needs a harder hit per tier but pays more', () => {
+    const stiff = vari(2); // thresholds x2, payout x1.5
+    expect(score(stiff, 35).base).toBe(Math.round(40 * 2 * 1.5)); // 35 is only "firm" at stiffness 2 (needs 56 for hard)
+    expect(score(stiff, 120).base).toBe(Math.round(40 * 8 * 1.5));
+    const soft = vari(0.5); // thresholds x0.5, payout x0.75
+    expect(score(soft, 35).base).toBe(Math.round(40 * 8 * 0.75)); // 25 is already a smash
+  });
+
+  it('the label on the part is the soft-to-smash range, and the description matches the dial', () => {
+    const { s } = setup([vari()]);
+    const part = vari();
+    expect(s.label(part)).toBe('40-320');
+    const text = describePart(PARTS.vari, part).map((l) => l.text).join(' ');
+    expect(text).toContain('x8 smash (50+ speed)');
+    part.dials.stiff = 2;
+    expect(describePart(PARTS.vari, part).map((l) => l.text).join(' ')).toContain('x8 smash (100+ speed)');
+  });
+});
+
+describe('Lane change: the flipper buttons shift the lit lanes', () => {
+  const lanes = () => [makePart('lane', 30, 6, 30, true), makePart('lane', 31, 12, 30, true), makePart('lane', 32, 18, 30, true)];
+  const flip = (side: 'L' | 'R', on = true): SimEvent => ({ type: 'flipper', t: 0, side, on });
+  const lit = (s: Scorer) => [30, 31, 32].map((u) => s.isLit(u));
+
+  it('moves the lit lane left or right, wrapping round, and never completes the set', () => {
+    const { s } = setup(lanes());
+    s.consume(hit(31)); // the middle lane lights
+    expect(lit(s)).toEqual([false, true, false]);
+    s.consume(flip('L'));
+    expect(lit(s)).toEqual([true, false, false]);
+    s.consume(flip('L'));
+    expect(lit(s)).toEqual([false, false, true]); // wrapped round
+    s.consume(flip('R'));
+    expect(lit(s)).toEqual([true, false, false]);
+    s.consume(hit(31));
+    expect(lit(s)).toEqual([true, true, false]);
+    s.consume(flip('R'));
+    expect(lit(s)).toEqual([false, true, true]); // two lit stay two lit
+    expect(s.ledger.get(30)).toBeUndefined(); // shifting scored nothing
+  });
+
+  it('lets you steer the dark lane: shift it under the ball to finish the set', () => {
+    const { s } = setup(lanes());
+    s.consume(hit(30));
+    s.consume(hit(31));
+    expect(lit(s)).toEqual([true, true, false]);
+    const done = s.consume(hit(32)).find((e) => e.kind === 'bonus');
+    expect(done?.label).toBe('LANES COMPLETE');
+  });
+
+  it('ignores a button release and other lit things', () => {
+    const { s } = setup(lanes());
+    s.consume(hit(31));
+    s.consume(flip('L', false));
+    expect(lit(s)).toEqual([false, true, false]);
+    const mix = setup([...lanes(), makePart('lamp', 41, 9, 36, true)]);
+    mix.s.consume(hit(41));
+    mix.s.consume(flip('L'));
+    expect(mix.s.isLit(41)).toBe(true); // a lamp is not a lane
+  });
+});
+
+describe('a lone lane is not a set', () => {
+  it('one Lane Rollover just scores and lights; it never pays the set bonus by itself', () => {
+    const { s } = setup([makePart('lane', 10, 8, 30, true)]);
+    for (let i = 0; i < 5; i++) {
+      const out = s.consume(hit(10));
+      expect(out).toHaveLength(1);
+      expect(out[0].kind).toBe('hit');
+    }
+    expect(s.mult).toBe(1);
+    expect(s.isLit(10)).toBe(true);
   });
 });

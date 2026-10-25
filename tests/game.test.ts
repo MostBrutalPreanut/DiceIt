@@ -199,3 +199,25 @@ describe('a round with several balls on the table', () => {
     expect(g.sim.ballCount).toBe(1); // the next ball is waiting in the lane
   });
 });
+
+describe('ball saver in a round', () => {
+  it('a saved ball does not cost one of the three balls, and the lane is ready for the next shot', () => {
+    const g = new Game();
+    g.sandbox = true;
+    g.clearBoard();
+    const saver = g.grant('saver')!;
+    expect(g.place(saver.uid, 12, 30)).toBe(true);
+    g.startRound();
+    let saved = false, drained = false;
+    for (let i = 0; i < 240 * 20 && !saved && !drained; i++) {
+      const res = g.step({ ...NO_INPUT, plunge: i < 230 });
+      saved = res.sim.some((e) => e.type === 'ballSaved');
+      drained = res.sim.some((e) => e.type === 'drain');
+      expect(res.game.some((e) => e.type === 'ballEnd')).toBe(false);
+    }
+    expect(saved).toBe(true);
+    expect(g.ballsLeft).toBe(3);
+    expect(g.mode).toBe('round');
+    expect(g.sim.awaitingPlunge).toBe(true);
+  });
+});

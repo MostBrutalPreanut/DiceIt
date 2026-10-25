@@ -12,6 +12,7 @@
     "smoke": "node tools/smoke.cjs",
     "physics-report": "vite-node tools/report-physics.ts",
     "balance": "vite-node tools/balance.ts",
+    "clears": "vite-node tools/clears.ts",
     "build:single": "vite build -c vite.single.config.ts",
     "artifact": "npm run build:single && node tools/make-artifact.mjs",
     "concept": "vite-node tools/concept/scenes.ts"
