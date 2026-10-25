@@ -218,7 +218,8 @@ export class DecalPicker {
   }
 
   private onKey(e: KeyboardEvent) {
-    if (this.phase !== 'intro' && this.phase !== 'open') { if (this.phase === 'outro' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); e.stopPropagation(); } return; }
+    // while the pick flies nothing else may change the run (not even an undo): it lands in a moment
+    if (this.phase !== 'intro' && this.phase !== 'open') { if (this.phase === 'outro') { e.preventDefault(); e.stopPropagation(); } return; }
     if (this.docked || this.root.hidden) return;
     const t = e.target as HTMLElement;
     if (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA') return;
