@@ -131,6 +131,13 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.keyboard.press('Delete');
   const after = await state();
   check(after.money === before + 1 && after.placed === 2 && after.inv === 4, `storing into a full toolbox sells the part for half ($${before} -> $${after.money})`);
+  check(await page.isHidden('#toolSell'), 'the toolbox shows no Sell button until a part in it is picked');
+  await page.click('#inventory .item[data-uid]');
+  check((await page.innerText('#toolSell')) === 'SELL $1', 'picking a toolbox part puts a Sell button with its price on the latch');
+  await page.screenshot({ path: `${out}/smoke-2d-toolbox-sell.png`, clip: await (await page.$('#inventoryBox')).boundingBox() });
+  await page.click('#toolSell');
+  const sold = await state();
+  check(sold.inv === 3 && sold.money === after.money + 1, 'Sell sells it for half and frees the slot');
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
   // relic decals: earn one from a Rules card, read it on the apron, peel it off

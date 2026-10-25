@@ -237,7 +237,22 @@ async function main() {
     const cells = inv.map((p) => `<div class="item ${armed === p.uid ? 'armed' : ''} ${selected === p.uid ? 'sel' : ''}" data-uid="${p.uid}"><img alt="${PARTS[p.def].name}" src="${iconURL(p.def, 64, 64)}">${p.fresh ? '<span class="new">NEW</span>' : ''}</div>`);
     const slots = Math.max(TOOLBOX_SLOTS, Math.ceil(inv.length / TOOLBOX_SLOTS) * TOOLBOX_SLOTS); // the Test Lab has no limit
     $('inventory').innerHTML = cells.join('') + '<div class="item empty"></div>'.repeat(slots - inv.length);
-    $('toolboxNote').textContent = game.sandbox ? 'no limit in the Test Lab' : `${inv.length}/${TOOLBOX_SLOTS} · full? storing sells for half`;
+    // a part picked up from the toolbox can be sold right there: the latch becomes a Sell button with its price
+    const held = selected !== null ? inv.find((p) => p.uid === selected) : undefined;
+    const sell = $('toolSell') as HTMLButtonElement;
+    sell.hidden = !held || !game.editable;
+    $('inventoryBox').classList.toggle('selling', !sell.hidden);
+    if (held) {
+      sell.textContent = `SELL $${game.sandbox ? 0 : game.sellValue(PARTS[held.def])}`;
+      sell.onclick = () => {
+        const refund = game.sell(held.uid);
+        selected = armed = null;
+        audio.remove();
+        say(refund ? `SOLD FOR $${refund}. NO REFUNDS ON FEELINGS` : 'SOLD. THE LAB GIVES NOTHING BACK');
+        persist();
+        refreshWorkshop();
+      };
+    }
     for (const el of $('inventory').querySelectorAll<HTMLElement>('.item[data-uid]')) {
       const part = game.part(Number(el.dataset.uid))!;
       el.onmouseenter = (e) => tipPart(PARTS[part.def], part, e.clientX, e.clientY, false);
