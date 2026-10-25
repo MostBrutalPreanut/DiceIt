@@ -45,6 +45,12 @@ export function cloneLayout(l: Layout): Layout {
   return { ...l, parts: l.parts.map((p) => ({ ...p, dials: { ...p.dials } })) };
 }
 
+/** Room between a part (its footprint) and a cabinet wall or another part: a ball and a bit. */
+export const WALL_GAP = 1.1;
+
+/** Parts a ball bounces off (the rest it rolls over or through: lights, spinners, saucers, kickbacks, floor inserts). */
+const solid = (id: PartId) => !['rollover', 'lamp', 'spinner', 'saucer', 'kickback', 'saver', 'strip'].includes(PARTS[id].kind);
+
 const segCache = new Map<number, ReturnType<typeof tableSegments>>();
 const segsFor = (ledge: number = LEDGE.default) => {
   let s = segCache.get(ledge);
@@ -61,12 +67,14 @@ function distToSegment(px: number, py: number, s: { x1: number; y1: number; x2: 
 export function canPlace(layout: Layout, id: PartId, x: number, y: number, ignoreUid?: number): boolean {
   const r = footprint(PARTS[id]);
   if (x - r < BUILD_AREA.x0 || x + r > BUILD_AREA.x1 || y - r < BUILD_AREA.y0 || y + r > BUILD_AREA.y1) return false;
-  // keep clear of the cabinet walls (the dome and chamfer are not rectangles)
-  for (const s of segsFor(layout.ledge)) if (distToSegment(x, y, s) < r + 0.3) return false;
+  // keep clear of the cabinet walls (the dome and chamfer are not rectangles), with room for a ball between: a gap
+  // narrower than the ball is a pocket it can come to rest in (the same room the ledge keeps from the parts)
+  for (const s of segsFor(layout.ledge)) if (distToSegment(x, y, s) < r + WALL_GAP) return false;
   for (const p of layout.parts) {
     if (!p.placed || p.uid === ignoreUid) continue;
     if (underFloor(id) !== underFloor(p.def)) continue; // a part may stand on a floor light (a Glow Strip)
-    const min = r + footprint(PARTS[p.def]) + 0.9; // leave room for a ball between parts
+    // leave room for a ball between parts; two solid ones need a ball and a bit, or the gap is a pocket a ball rests in
+    const min = r + footprint(PARTS[p.def]) + (solid(id) && solid(p.def) ? WALL_GAP : 0.9);
     if (Math.hypot(p.x - x, p.y - y) < min) return false;
   }
   return true;
@@ -76,7 +84,7 @@ export function canPlace(layout: Layout, id: PartId, x: number, y: number, ignor
 export function canPlaceLedge(layout: Layout, y: number): boolean {
   if (y !== clampLedge(y)) return false;
   const s = ledgeSeg(y);
-  for (const p of layout.parts) if (p.placed && distToSegment(p.x, p.y, s) < footprint(PARTS[p.def]) + 1.1) return false;
+  for (const p of layout.parts) if (p.placed && distToSegment(p.x, p.y, s) < footprint(PARTS[p.def]) + WALL_GAP) return false;
   return true;
 }
 

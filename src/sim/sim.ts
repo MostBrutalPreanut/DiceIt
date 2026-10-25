@@ -1,7 +1,7 @@
 import * as B from 'phaser-box2d/dist/PhaserBox2D.js';
 import { dialValue, PARTS, SMALL_FLIPPER, triPoints, type PartInstance } from '../data/parts';
 import {
-  BALL_R, BALL_SEARCH_AFTER, BALL_SPAWN, BALL_TIMEOUT, DT, FLIPPER_LENGTH, FLIPPER_REST,
+  BALL_R, BALL_SEARCH_AFTER, BALL_SEARCH_AGAIN, BALL_SEARCH_KICKS, BALL_SPAWN, BALL_TIMEOUT, DT, FLIPPER_LENGTH, FLIPPER_REST,
   FLIPPER_SPEED_DOWN, FLIPPER_SPEED_UP, FLIPPER_TORQUE, FLIPPER_UP, LANE_FLOOR_Y, LANE_TOP_Y,
   LANE_WALL_X, MAX_BALL_SPEED, MAX_BALLS, NUDGE_SPEED, NUDGE_TILT, PLUNGE_CHARGE_TIME, PLUNGE_DRIFT,
   PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, SAVER_WINDOW, SUBSTEPS, TABLE_H, TABLE_W, TILT_DECAY, WALL_RESTITUTION,
@@ -9,7 +9,7 @@ import {
 import { neutralMods, simModsOf, type SimMods } from '../data/mods';
 import { cloneLayout, type Layout } from './layout';
 import { Rng } from './rng';
-import { FLIPPER_PIVOTS, TABLE_POSTS, tableSegments } from './table';
+import { FLIPPER_PIVOTS, isLaneGate, LANE_GATE, TABLE_POSTS, tableSegments } from './table';
 
 /** What the player is doing this tick. `nudge` is a one-tick pulse: -1 left, 1 right, 0 none. */
 export interface Input {
@@ -32,7 +32,8 @@ export type SimEvent =
   | { type: 'flipper'; t: number; side: 'L' | 'R'; on: boolean }
   | { type: 'nudge'; t: number; dir: number; tilt: number }
   | { type: 'tilt'; t: number }
-  | { type: 'ballSearch'; t: number; ballId: number }
+  /** A ball that stopped moving: the sim kicks it where it is, and if kicks do not free it, `relaunch`: it goes back to the plunger (not lost). */
+  | { type: 'ballSearch'; t: number; ballId: number; relaunch?: boolean }
   | { type: 'rescue'; t: number; ballId: number };
 
 export interface BallState {
@@ -69,6 +70,11 @@ interface BallRef {
   saveUntil: number;
   /** Speed just before the last step: the impact speed, since the contact has already bounced it by the time we see it. */
   preSpeed: number;
+  /** Ball searches in a row at about the same spot (kicks that did not free it), and where the last one was. */
+  searches: number;
+  searchAt: { x: number; y: number; t: number } | null;
+  /** Put back in the plunger lane by a ball search: its next launch opens no new save window. */
+  relaunched: boolean;
 }
 interface FlipperRef {
   fid: number;
@@ -106,6 +112,8 @@ interface PartRef {
 const BANK_OFFSETS = [-1.75, 0, 1.75];
 const BANK_HALF = { hw: 0.8, hh: 0.38 };
 const BANK_RESET_AFTER = 0.8;
+/** How far the peak of the goal's back bar rises above its ends (a slope of about 6 degrees). */
+const GOAL_ROOF = 0.3;
 
 export interface SimOptions {
   dt?: number;
@@ -122,6 +130,16 @@ export interface SimOptions {
 const simMods = (m?: Partial<SimMods>): SimMods => ({ ...simModsOf(neutralMods()), ...m });
 
 const V = (x: number, y: number) => new B.b2Vec2(x, y);
+
+/**
+ * A bar (a Slingshot, a Deflector, a target) with every face very slightly peaked: laid flat, or stood on end, it is
+ * never a level shelf a ball can sit on; the ball rolls off. The peaks are too low to see or to change a bounce.
+ */
+function peakedBox(hw: number, hh: number) {
+  const a = Math.min(0.15, hw * 0.08), b = Math.min(0.05, hh * 0.25);
+  const pts = [V(-hw, -hh), V(0, -hh - a), V(hw, -hh), V(hw + b, 0), V(hw, hh), V(0, hh + a), V(-hw, hh), V(-hw - b, 0)];
+  return B.b2MakePolygon(B.b2ComputeHull(pts, pts.length), 0);
+}
 
 /**
  * The deterministic pinball simulation. It owns the Box2D world and nothing about
@@ -179,6 +197,7 @@ export class Sim {
     wd.maximumLinearVelocity = MAX_BALL_SPEED;
     wd.restitutionThreshold = 2;
     this.worldId = B.CreateWorld({ worldDef: wd }).worldId;
+    B.b2World_SetPreSolveCallback(this.worldId, (a: any, b: any) => this.gateContact(a, b), null);
     this.build(layout);
   }
 
@@ -250,8 +269,13 @@ export class Sim {
     sd.friction = 0.05;
     sd.restitution = WALL_RESTITUTION;
     sd.userData = { kind: 'wall' };
+    const gate = B.b2DefaultShapeDef();
+    gate.friction = 0.05;
+    gate.restitution = 0.3;
+    gate.userData = { kind: 'gate' };
+    gate.enablePreSolveEvents = true;
     for (const g of tableSegments(ledge)) {
-      B.b2CreateSegmentShape(this.ground, sd, new B.b2Segment(V(g.x1, g.y1), V(g.x2, g.y2)));
+      B.b2CreateSegmentShape(this.ground, isLaneGate(g) ? gate : sd, new B.b2Segment(V(g.x1, g.y1), V(g.x2, g.y2)));
     }
     const post = B.b2DefaultShapeDef();
     post.friction = 0.05;
@@ -346,7 +370,8 @@ export class Sim {
     else if (def.shape.type === 'tri') {
       const pts = triPoints(def.shape.hw, def.shape.hh).map(([a, b]) => V(a, b));
       B.b2CreatePolygonShape(body, sd, B.b2MakePolygon(B.b2ComputeHull(pts, pts.length), 0.15));
-    } else B.b2CreatePolygonShape(body, sd, B.b2MakeBox(def.shape.hw, def.shape.hh));
+    } else if (sd.isSensor) B.b2CreatePolygonShape(body, sd, B.b2MakeBox(def.shape.hw, def.shape.hh));
+    else B.b2CreatePolygonShape(body, sd, peakedBox(def.shape.hw, def.shape.hh));
     const kb = def.kind === 'kickback';
     this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body, armed: kb ? true : undefined, readyAt: kb ? 0 : undefined });
   }
@@ -360,7 +385,9 @@ export class Sim {
     wall.friction = 0.05;
     wall.restitution = 0.5;
     wall.userData = { kind: 'wall' };
-    B.b2CreatePolygonShape(ref.body, wall, B.b2MakeOffsetBox(2.65, 0.14, V(0, 0.95), 0));
+    // the back bar has a shallow peak on its far side, so a ball that lands on the frame rolls off it instead of resting there
+    const bar = [V(-2.65, 0.81), V(2.65, 0.81), V(2.65, 1.09), V(0, 1.09 + GOAL_ROOF), V(-2.65, 1.09)];
+    B.b2CreatePolygonShape(ref.body, wall, B.b2MakePolygon(B.b2ComputeHull(bar, bar.length), 0));
     for (const sx of [-1, 1]) B.b2CreatePolygonShape(ref.body, wall, B.b2MakeOffsetBox(0.14, 0.5, V(sx * 2.55, 0.5), 0));
     const line = B.b2DefaultShapeDef();
     line.isSensor = true;
@@ -497,7 +524,7 @@ export class Sim {
     sd.userData = { kind: 'ball', id };
     B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), BALL_R));
     B.b2Body_SetGravityScale(body, this.mods.ballGravity);
-    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0, preSpeed: 0 });
+    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0, preSpeed: 0, searches: 0, searchAt: null, relaunched: false });
     return id;
   }
 
@@ -598,7 +625,9 @@ export class Sim {
           // like Space Cadet's plunger: the shot is never exactly the charge you gave it
           const boosted = power * (1 + this.rng.range(0, PLUNGE_NOISE));
           B.b2Body_SetLinearVelocity(ball.body, V(this.rng.range(-PLUNGE_DRIFT, PLUNGE_DRIFT), boosted));
-          ball.saveUntil = this.armedSaver() || this.netsUsed < this.mods.extraSaves ? t + SAVER_WINDOW : 0;
+          // a ball the ball search put back in the lane is still the same ball: it gets no fresh save window
+          ball.saveUntil = !ball.relaunched && (this.armedSaver() || this.netsUsed < this.mods.extraSaves) ? t + SAVER_WINDOW : 0;
+          ball.relaunched = false;
           if (this.clockStart === null) this.clockStart = t;
           this.events.push({ type: 'launch', t, ballId: ball.id, power });
           this.awaitingPlunge = false;
@@ -608,14 +637,15 @@ export class Sim {
       this.plungeWasHeld = input.plunge;
     }
 
-    // nudge: a velocity kick on every live ball, paid for with tilt
+    // nudge: a velocity kick on every live ball, paid for with tilt (a ball waiting in the lane is not in play; in a
+    // multiball the others still are, so a ball back at the plunger does not lock the nudge)
     this.nudgeCooldown = Math.max(0, this.nudgeCooldown - this.dt);
     this.tiltMeter = Math.max(0, this.tiltMeter - TILT_DECAY * this.dt);
-    if (input.nudge !== 0 && !this.awaitingPlunge && this.nudgeCooldown === 0 && !this.tilted) {
+    if (input.nudge !== 0 && this.balls.some((b) => !b.held && !this.inLane(b)) && this.nudgeCooldown === 0 && !this.tilted) {
       this.nudgeCooldown = 0.15;
       this.tiltMeter += NUDGE_TILT;
       for (const b of this.balls) {
-        if (b.held) continue;
+        if (b.held || this.inLane(b)) continue;
         const v = B.b2Body_GetLinearVelocity(b.body);
         B.b2Body_SetLinearVelocity(b.body, V(v.x + input.nudge * NUDGE_SPEED * this.mods.nudge, v.y + 2 * this.mods.nudge));
       }
@@ -679,6 +709,22 @@ export class Sim {
   private inLane(b: BallRef) {
     const p = B.b2Body_GetPosition(b.body);
     return p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y;
+  }
+
+  /**
+   * The pre-solve filter (only the lane gate asks): the gate is one-way. It stops a ball that is above it, or was a
+   * tick ago (a fast one), unless that ball is on its way up out of the lane; a plunged ball passes through.
+   */
+  private gateContact(shapeA: any, shapeB: any): boolean {
+    const a = B.b2Shape_GetUserData(shapeA), b = B.b2Shape_GetUserData(shapeB);
+    const ball = a?.kind === 'ball' ? shapeA : b?.kind === 'ball' ? shapeB : null;
+    if (!ball || (a?.kind !== 'gate' && b?.kind !== 'gate')) return true;
+    const body = B.b2Shape_GetBody(ball);
+    const p = B.b2Body_GetPosition(body), v = B.b2Body_GetLinearVelocity(body);
+    const g = LANE_GATE, len = Math.hypot(g.x2 - g.x1, g.y2 - g.y1);
+    const nx = -(g.y2 - g.y1) / len, ny = (g.x2 - g.x1) / len; // the gate's upper (playfield) side
+    const side = (p.x - g.x1) * nx + (p.y - g.y1) * ny, vn = v.x * nx + v.y * ny;
+    return (side > 0 || side - vn * this.dt > 0) && vn < 1;
   }
 
   private release(b: BallRef) {
@@ -853,7 +899,7 @@ export class Sim {
       let reason: 'drain' | 'timeout' | null = null;
       if (p.y < 2.2 && !inLane) reason = 'drain';
       else if (expired && !inLane) reason = 'timeout';
-      else if (b.age > BALL_TIMEOUT && !this.awaitingPlunge) reason = 'timeout';
+      else if (b.age > BALL_TIMEOUT && !inLane) reason = 'timeout';
       // a ball that leaves the table any other way is a bug; treat it as a drain so a run can't soft-lock
       else if (p.x < -1 || p.x > TABLE_W + 1 || p.y > TABLE_H + 2) reason = 'drain';
 
@@ -874,18 +920,68 @@ export class Sim {
 
       if (this.rescueOn) this.rescueFromFlippers(b);
 
-      // ball search: a motionless ball gets a kick instead of stalling the round
-      if (!this.awaitingPlunge && Math.hypot(v.x, v.y) < 0.6) {
+      // ball search: a motionless ball gets a kick instead of stalling the round. Not one waiting in the lane, and
+      // not one the player is cradling on a raised flipper: that one is not stuck, it is being held.
+      if (!inLane && Math.hypot(v.x, v.y) < 0.6 && !this.onRaisedFlipper(p.x, p.y)) {
         b.slowTime += this.dt;
-        if (b.slowTime > BALL_SEARCH_AFTER) {
-          b.slowTime = 0;
-          B.b2Body_SetLinearVelocity(b.body, V(this.rng.range(-8, 8), this.rng.range(10, 18)));
-          this.events.push({ type: 'ballSearch', t, ballId: b.id });
-        }
+        if (b.slowTime > (b.searches > 0 ? BALL_SEARCH_AGAIN : BALL_SEARCH_AFTER)) this.ballSearch(b, p.x, p.y);
       } else {
         b.slowTime = 0;
       }
     }
+  }
+
+  /**
+   * A ball that has stopped moving: kick it where it is, harder and in a wilder direction if it is still in the same
+   * spot after the last kick, and after BALL_SEARCH_KICKS kicks put it back in the plunger lane. A ball search never
+   * costs the player the ball: the ball and its score carry on, and the ball clock keeps running.
+   */
+  private ballSearch(b: BallRef, x: number, y: number) {
+    const t = this.time;
+    b.slowTime = 0;
+    const last = b.searchAt;
+    b.searches = last && Math.hypot(last.x - x, last.y - y) < 1.5 && t - last.t < 15 ? b.searches + 1 : 1;
+    b.searchAt = { x, y, t };
+    if (b.searches <= BALL_SEARCH_KICKS) {
+      if (b.searches === 1) B.b2Body_SetLinearVelocity(b.body, V(this.rng.range(-8, 8), this.rng.range(10, 18)));
+      else {
+        // still there: kick harder, any way but straight down
+        const a = this.rng.range(-2.2, 2.2), s = this.rng.range(20, 30);
+        B.b2Body_SetLinearVelocity(b.body, V(-Math.sin(a) * s, Math.cos(a) * s));
+      }
+      this.events.push({ type: 'ballSearch', t, ballId: b.id });
+      return;
+    }
+    // nothing frees it: back to the plunger
+    const at = this.laneSpot(b);
+    B.b2Body_SetTransform(b.body, V(at.x, at.y), B.b2MakeRot(0));
+    B.b2Body_SetLinearVelocity(b.body, V(0, 0));
+    B.b2Body_SetAngularVelocity(b.body, 0);
+    b.prevLocal.clear();
+    b.searches = 0;
+    b.searchAt = null;
+    b.saveUntil = 0;
+    b.relaunched = true;
+    this.awaitingPlunge = true;
+    this.plungeCharge = 0;
+    this.plungeWasHeld = true; // require a fresh press
+    this.events.push({ type: 'ballSearch', t, ballId: b.id, relaunch: true });
+  }
+
+  /** Where a ball sent back to the plunger goes: the spawn point, or behind the balls already waiting there (never on top of one). */
+  private laneSpot(except?: BallRef): { x: number; y: number } {
+    const waiting = this.balls.filter((o) => o !== except && this.inLane(o)).length;
+    return { x: BALL_SPAWN.x, y: BALL_SPAWN.y + waiting * BALL_R * 2.2 };
+  }
+
+  /** Is (x, y) a ball resting on a flipper that is held up (cradled)? */
+  private onRaisedFlipper(x: number, y: number): boolean {
+    for (const f of this.flippers) {
+      if (!f.on) continue;
+      const q = this.localTo(f, x, y);
+      if (q.lx > -0.6 && q.lx < f.length + 0.3 && q.ly > 0 && q.ly < 0.62 + BALL_R + 0.3) return true;
+    }
+    return false;
   }
 
   /** A placed Ball Saver that has not saved a ball yet this ball. */
@@ -903,7 +999,8 @@ export class Sim {
     else this.netsUsed++;
     B.b2DestroyBody(b.body);
     this.balls = this.balls.filter((x) => x !== b);
-    const id = this.addBall(BALL_SPAWN.x, BALL_SPAWN.y, 0, 0);
+    const at = this.laneSpot();
+    const id = this.addBall(at.x, at.y, 0, 0);
     this.awaitingPlunge = true;
     this.plungeCharge = 0;
     this.plungeWasHeld = true; // require a fresh press
