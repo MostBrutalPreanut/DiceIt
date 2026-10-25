@@ -55,8 +55,8 @@ export interface Mods {
   kickFactor: number;
   /** Saves per ball that need no Ball Saver part (the same 8 s window). */
   extraSaves: number;
-  /** Times each Kickback fires per ball. */
-  kickbackCharges: number;
+  /** Multiplier on how long a Kickback takes to recharge. */
+  kickbackCooldown: number;
   /** Seconds each ball's clock lasts. */
   ballClock: number;
   /** The flipper buttons work the other side's flippers. */
@@ -124,7 +124,7 @@ export function neutralMods(): Mods {
   return {
     ballsPerRound: 3, interestPer: 0, interestCap: 0, roundBonus: 0, unusedBallPay: 3, couponOff: 0, sellRate: 0.5, shopSlots: 4,
     toolboxSlots: 4, locks: 1, freeRerolls: 0, overshootFactor: 1, bossBonus: 0, perTypePay: 0, perDecalPay: 0, bargain: false, payCut: 0,
-    ballBounce: 0, ballGravity: 1, nudge: 1, spinBoost: 1, twin: false, printerExtra: 0, kickFactor: 1, extraSaves: 0, kickbackCharges: 1,
+    ballBounce: 0, ballGravity: 1, nudge: 1, spinBoost: 1, twin: false, printerExtra: 0, kickFactor: 1, extraSaves: 0, kickbackCooldown: 1,
     ballClock: 60, swapFlippers: false, magnet: null,
     pointsFactor: 1, goldEvery: 0, goldCap: 0, luckyEvery: 0, luckyX: 2, overclock: {}, levelBonus: {}, levelAll: 0, lampRadius: 0, lampBonus: 0,
     setFactor: 1, startMult: 1, startMultPerPart: 0, startMultPerEmpty: 0, hotFactor: 1, spinMult: 1, multiballX: 1, lastBallX: 1, cashPer: 0, cashCap: 0,
@@ -134,6 +134,6 @@ export function neutralMods(): Mods {
 }
 
 /** The slice of the mods the physics simulation needs. */
-export type SimMods = Pick<Mods, 'ballBounce' | 'ballGravity' | 'nudge' | 'spinBoost' | 'twin' | 'printerExtra' | 'kickFactor' | 'extraSaves' | 'kickbackCharges' | 'swapFlippers' | 'magnet'>;
-export const SIM_MOD_KEYS: (keyof SimMods)[] = ['ballBounce', 'ballGravity', 'nudge', 'spinBoost', 'twin', 'printerExtra', 'kickFactor', 'extraSaves', 'kickbackCharges', 'swapFlippers', 'magnet'];
+export type SimMods = Pick<Mods, 'ballBounce' | 'ballGravity' | 'nudge' | 'spinBoost' | 'twin' | 'printerExtra' | 'kickFactor' | 'extraSaves' | 'kickbackCooldown' | 'swapFlippers' | 'magnet'>;
+export const SIM_MOD_KEYS: (keyof SimMods)[] = ['ballBounce', 'ballGravity', 'nudge', 'spinBoost', 'twin', 'printerExtra', 'kickFactor', 'extraSaves', 'kickbackCooldown', 'swapFlippers', 'magnet'];
 export const simModsOf = (m: Mods): SimMods => Object.fromEntries(SIM_MOD_KEYS.map((k) => [k, m[k]])) as unknown as SimMods;

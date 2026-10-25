@@ -15,7 +15,7 @@ const hit = (uid: number, extra: Partial<Extract<SimEvent, { type: 'partHit' }>>
   ({ type: 'partHit', t: 0, uid, ballId: 1, x: 0, y: 0, speed: 10, ...extra });
 const layoutOf = (...parts: ReturnType<typeof makePart>[]): Layout => ({ parts, gravity: 50, nextUid: 100 });
 const view = (owned: PartId[], over: Partial<RunView> = {}): RunView => ({
-  owned: owned.map((d, i) => makePart(d, i + 1, 10, 30, true)), levels: {}, decals: [], round: 4, ...over,
+  owned: owned.map((d, i) => makePart(d, i + 1, 10, 30, true)), decals: [], round: 4, ...over,
 });
 const modsOf = (...ids: (DecalId | DecalPick)[]): Mods => computeMods(ids.map((i) => (typeof i === 'string' ? { id: i } : i)));
 function take(g: Game, id: DecalId, target?: PartId) {
@@ -86,8 +86,8 @@ describe('offering decals', () => {
     for (const s of seeds) for (const o of rollDecalPick(s, v, 3)) expect(['glass', 'heavy', 'bumperCar', 'targetPractice', 'lightShow']).not.toContain(o.id);
   });
 
-  it('a part type at the level cap is no longer offered a level up', () => {
-    expect(candidateTargets(DECALS.levelUp, view(['pop', 'coin'], { levels: { pop: MAX_LEVEL } }))).toEqual(['coin']);
+  it('Level Up is only aimed at part types that have levels', () => {
+    expect(candidateTargets(DECALS.levelUp, view(['pop', 'deflector', 'saver']))).toEqual(['pop']);
   });
 
   it('is deterministic for a seed', () => {
@@ -335,7 +335,7 @@ describe('what the decals do: the ball', () => {
       return 40 - sim.ballStates()[0].y;
     };
     expect(fall(m) / fall(neutralMods())).toBeCloseTo(0.8, 1);
-    expect(describePart(PARTS.spinner, undefined, { mods: m }).map((l) => l.text).join(' ')).toContain('1 to 15 spins');
+    expect(describePart(PARTS.spinner, undefined, { mods: m }).map((l) => l.text).join(' ')).toContain('Up to 15 spins');
   });
 
   it('Gold Ball pays $1 on every 10th scoring hit of a round', () => {
@@ -374,14 +374,13 @@ describe('what the decals do: the ball', () => {
     expect(g.sim.clockTotal).toBe(80);
   });
 
-  it('Free Kick fires every Kickback twice a ball', () => {
+  it('Free Kick makes Kickbacks recharge twice as fast', () => {
     const sim = createSim(layoutOf(makePart('kickback', 1, 12, 25, true)), { mods: modsOf('freeKick') });
-    let kicks = 0;
-    for (let n = 0; n < 3; n++) {
-      sim.addBall(12, 28, 0, -5);
-      for (let i = 0; i < 240 * 2; i++) for (const e of sim.step(NO_INPUT)) if (e.type === 'partHit' && e.kicked) kicks++;
-    }
-    expect(kicks).toBe(2);
+    sim.addBall(12, 28, 0, -5);
+    for (let i = 0; i < 40; i++) sim.step(NO_INPUT);
+    expect(sim.kickbackStates().get(1)).toBe(false);
+    for (let i = 0; i < 240 * 2.2; i++) sim.step(NO_INPUT);
+    expect(sim.kickbackStates().get(1)).toBe(true); // 2 s instead of 4
   });
 });
 
@@ -409,7 +408,7 @@ describe('what the decals do: scoring and builds', () => {
 
   it('descriptions follow every decal that changes a number', () => {
     const text = (id: PartId, m: Mods, inst = makePart(id, 1)) => describePart(PARTS[id], inst, { mods: m }).map((l) => l.text).join(' ');
-    expect(text('lamp', modsOf('lamps'))).toContain('within 7 units scores +40%');
+    expect(text('lamp', modsOf('lamps'))).toContain('within 7 units +14%');
     expect(text('printer', modsOf('printerPlus'))).toContain('Prints 2 more balls');
     expect(text('lane', modsOf('sets'))).toContain('+400 points and +1 Mult');
     expect(text('bank', modsOf('sets'))).toContain('+600 points and +0.6 Mult');
@@ -417,11 +416,12 @@ describe('what the decals do: scoring and builds', () => {
   });
 
   it('Jackpot Sets doubles the points and the Mult of a lane set and a bank set', () => {
-    const lanes = [makePart('lane', 1, 6, 30, true), makePart('lane', 2, 12, 30, true)];
+    const lanes = [makePart('lane', 1, 6, 30, true), makePart('lane', 2, 12, 30, true), makePart('lane', 3, 18, 30, true)];
     const s = new Scorer(1e9, () => lanes, { mods: modsOf('sets') });
     s.startBall();
     s.consume(hit(1));
-    const done = s.consume(hit(2)).find((e) => e.kind === 'bonus')!;
+    s.consume(hit(2));
+    const done = s.consume(hit(3)).find((e) => e.kind === 'bonus')!;
     expect(done.base).toBe(400);
     expect(done.multAfter - done.multBefore).toBeCloseTo(1);
     const bank = new Scorer(1e9, () => [makePart('bank', 5, 12, 30, true)], { mods: modsOf('sets') });

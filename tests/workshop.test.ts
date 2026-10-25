@@ -126,12 +126,13 @@ describe('the test lab', () => {
     l.clearBoard();
     expect(l.placed.map((p) => p.def)).toEqual(['mega']); // the fixed Big Boi stays
     expect(l.inventory).toHaveLength(3);
+    const pop = l.layout.parts.find((p) => p.def === 'pop')!;
     l.levelAll(2);
-    expect(l.levels.pop).toBe(2);
+    expect(pop.level).toBe(2);
     l.levelAll(10);
-    expect(l.levels.pop).toBe(MAX_LEVEL);
+    expect(pop.level).toBe(MAX_LEVEL);
     l.levelAll(-10);
-    expect(l.levels.pop).toBe(0);
+    expect(pop.level).toBe(0);
   });
 
   it('selling in the lab refunds nothing, selling for real refunds half', () => {

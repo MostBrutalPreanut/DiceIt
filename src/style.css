@@ -198,6 +198,7 @@ select { font: 600 13px var(--ui); background: var(--paper); color: var(--ink); 
 .plinth { grid-area: icon; align-self: stretch; border-radius: 8px; display: grid; place-items: center; }
 .plinth img { width: 52px; height: 52px; display: block; }
 .offer .name { grid-area: name; font-family: var(--display); font-size: 16px; line-height: 1.05; transform: translateY(2px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.offer .plinth .pack { position: absolute; top: 3px; right: 3px; font: 800 12px var(--ui); color: var(--ink); background: var(--paper); border: 1.4px solid var(--ink); border-radius: 6px; padding: 0 4px; line-height: 16px; }
 .offer .blurb { grid-area: blurb; font-size: 12px; color: var(--faint); line-height: 1.25; align-self: start; margin-top: 2px; }
 .offer .buyrow { grid-area: buy; display: flex; align-items: center; gap: 4px; }
 .offer .buyrow s { color: var(--faint); font-size: 11px; }

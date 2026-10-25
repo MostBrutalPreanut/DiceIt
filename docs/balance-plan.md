@@ -22,36 +22,42 @@ each machine's Big Boi pulls the run towards a different build:
 
 | Rarity | In the shop from | Weight (× the part's own) | Price | Parts |
 |---|---|---|---|---|
-| Common | round 1 | 1 | $1–4 | Pop Bumper, Cha-Ching Bumper, Slingshot, Spinner, Lane Rollover, Lamp, Vari-Target, Deflector, Kickback |
-| Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $5–6 | Drop-Target Bank, Level Light, Ball Saver, Extra Flipper, **Ding-Dong Bell**, **Piggy Bank**, **Mag-Grab** |
-| Rare | round 4 | 0.2, +0.08 a round, up to 0.8 | $7–9 | Ball Printer, **Thunder Bumper**, **Jackpot Scoop**, **X Lane** |
-| Legendary | round 7 | 0.1, +0.05 a round, up to 0.45 | $11–12 | **Golden Bumper**, **Disco Ball** |
+| Common | round 1 | 1 | $1–4 | Pop Bumper, Cha-Ching Bumper, Slingshot, Spinner, Lane Rollover (pack of 3), Lamp, Vari-Target, Deflector, Kickback |
+| Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $5–6 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, **Glow Strip**, **Roller Pop** |
+| Rare | round 4 | 0.2, +0.08 a round, up to 0.8 | $7–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, X Lane, **Duck Gallery** |
+| Legendary | round 7 | 0.1, +0.05 a round, up to 0.45 | $11–12 | Golden Bumper, Disco Ball, **Goal!** |
 
-Rarer parts are physically bigger (Thunder r 1.55, Golden 1.5, Jackpot 1.35, Disco 1.25 against a Pop's 1.2) and
-do more. Every part now does at least two things, and many feed or starve each other:
+Rarer parts are physically bigger and do more. Every part does at least two things, and many feed or starve each other.
+Cards say what a part does; they carry no strategy tips.
 
-| Part | What it does (points · second thing · third thing) |
+| Part | What it does |
 |---|---|
-| Pop Bumper | 100 · grows +5 per Pop hit this ball · kicks |
+| Pop Bumper | 100 · grows +5 per Pop hit this ball (up to +100) · kicks |
 | Cha-Ching | 40 · $1 a hit (up to $5 a round) · kicks |
-| Slingshot | 30 · **Hot Shot**: the ball's next hit within 1.2 s pays +50% · snaps the ball fast (feeds Vari-Targets, Spinners) |
-| Spinner | 10 a spin · **+0.01 Mult a spin** (up to +0.75 a ball) · slows the ball |
-| Lane Rollover | 50 · set: +200 and +0.5 Mult · lane change |
-| Lamp | +25% to every part in its glow · lighting it pays 50 and +0.1 Mult |
-| Vari-Target | 40 × tier by impact speed · a smash makes the ball hot |
-| Deflector | steers · **bank shot**: the next hit pays +25% |
-| Kickback | 150 · rescues or boosts · the kicked ball is hot |
-| Drop-Target Bank | 60 a target · set: +300 and +0.3 Mult · **a set lights every Lamp** |
-| Ball Saver | saves a drain · **tips $1** when it does |
-| Ding-Dong Bell | 60 · **+40 for every different part type the ball has hit this ball** (up to +400): wants a varied table |
-| Piggy Bank | 25 · stores $1 a hit (holds 6) · a smash breaks it for 2× the money |
-| Mag-Grab | 120 · +0.2 Mult a grab (up to +1) · holds the ball out of play, then throws it where it is aimed |
-| Ball Printer | 200 · prints a ball (multiball) |
-| Thunder Bumper | 300 · **every hit counts as 3 Pop hits for Pop growth** · +0.05 Mult · kicks very hard |
-| Jackpot Scoop | 500 · **the pot**: +40 for every scoring hit this ball (up to +6,000), cashed when the ball sinks in |
-| X Lane | **×1.25 Mult** (up to ×2 a ball) · lights the next dark lane · dark for 3 s after |
-| Golden Bumper | 600 · **×1.05 Mult a hit** (up to ×2 a ball) · $1 every 5 hits |
-| Disco Ball | 1,000 · **doubles the Mult** once a ball · lights every Lamp |
+| Slingshot | 30 · **Hot Shot**: the ball's next hit within 1.2 s pays +50% |
+| Spinner | 10 a spin and +0.01 Mult a spin (up to 10 spins a pass, +0.75 Mult a ball) · slows the ball |
+| Lane Rollover | **sold as a pack of 3** ($4), spelling the machine's word · 50 · light all 3 of a pack: +200 and +0.5 Mult (5 sets a ball) |
+| Lamp | every hit brightens it a step (up to 5) and pays 50 · each step +10% to parts in its glow (a wider glow gives a smaller step) |
+| Vari-Target | 40 × a tier by impact speed (×2 at 12, ×4 at 28, ×8 at 50) · a smash makes the ball hot |
+| Deflector | steers · the next hit pays +25% |
+| Kickback | 150 · fires the ball out the way it faces, then needs 4 s to recharge · the kicked ball is hot |
+| Drop-Target Bank | 60 a target · set: +300 and +0.3 Mult (no limit) · a set lights every Lamp for 5 s |
+| Level Light | **sold as a pair** ($5) · switches on and off · when it and every Level Light within 5.5 of it are on (it needs at least one), the bumpers within 5.5 of them level up |
+| Ball Saver | saves a drain · pays $1 at the end of a round in which it never had to |
+| Left / Right Flipper | a small extra flipper on that button |
+| Ding-Dong Bell | 60 · +40 for every different part type the ball has hit this ball |
+| Piggy Bank | 25 · stores $1 a hit (holds $5) · a smash breaks it for what it holds +$1 |
+| Mag-Grab | 120 · +0.2 Mult a grab (up to +1) · holds the ball, then throws it the way it faces |
+| Glow Strip | a long strip under the floor that other parts stand on · lights for 5 s whenever anything pays a bonus; parts on it pay +50% |
+| Roller Pop | a bumper rolling along a rail · 150 · hit it near either end of the rail: ×3 |
+| Ball Printer | 200 · prints a ball (multiball) · fires out in a random direction |
+| Thunder Bumper | a wedge: 300 · every hit counts as 3 Pop hits · +0.05 Mult · throws the ball up the table |
+| Jackpot Scoop | 200 + **the pot** (+40 for every scoring hit this ball, up to +6,000), cashed when the ball sinks in |
+| X Lane | ×1.25 Mult (up to ×2 a ball) · lights a lane · dark for 3 s after |
+| Duck Gallery | a duck paddling along a rail · 300, +100 every hit (up to +1,000) · every hit makes it 15% faster |
+| Golden Bumper | 600 · ×1.05 Mult a hit (up to ×2 a ball) · $1 every 5 hits |
+| Disco Ball | 1,000 · doubles the Mult once a ball · lights every Lamp for 8 s |
+| Goal! | score past the sliding goalie: 1,500 and Mult ×1.5 (up to ×3 a ball) |
 
 Multiplicative Mult (X Lane, Golden Bumper, Disco Ball, the Dragon, Glass Cannon-style decals) is what lets a late
 machine reach millions; each is capped per ball, like everything else that compounds.
@@ -86,14 +92,9 @@ With Bumper Car stuck, a Vari-Target is worth peeling off; with Target Practice 
 Purist rewards selling half the table; Crowd Pleaser rewards filling it. That is the "a part great in one build,
 removed in another" tension.
 
-### Ideas for later parts (not built)
-Bigger set pieces and parts that need hitting in motion, from the design discussion:
-- **Moving targets**: a target or bumper sliding on a rail; timing the shot matters.
-- **The goal and the goalie**: a goal mouth at the top of the table with a goalie that slides across it and
-  blocks the ball; score past him for a big payout (a legendary set piece).
-- **Under-lights**: parts that are never touched, lights set into the floor *below* the other parts that light
-  up whenever something else happens (a set completes, a jackpot, a Mult step) and pay or boost when they do:
-  wiring parts together without the ball.
+### The set pieces (built from the design discussion)
+Moving targets (the Duck Gallery and the Roller Pop), the goal and its goalie, and an under-light (the Glow Strip) are
+now parts; see the table in §2.
 
 ## 5. Bosses
 

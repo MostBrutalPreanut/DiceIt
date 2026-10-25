@@ -28,13 +28,12 @@ describe('part data', () => {
     p.dials.kick = 4;
     expect(dialFactor(p)).toBeCloseTo(0.5);
     expect(describePart(PARTS.pop, p).map((l) => l.text).join(' ')).toContain('Scores 50 per hit');
-    const f = makePart('flipper', 2);
-    f.dials.side = 1;
-    expect(describePart(PARTS.flipper, f)[0].text).toContain('Right');
+    expect(describePart(PARTS.flipperR, makePart('flipperR', 2))[0].text).toContain('Right');
+    expect(describePart(PARTS.flipper, makePart('flipper', 3))[0].text).toContain('Left');
   });
 
   it('lamp bonus shrinks as the glow widens; selling refunds half', () => {
-    expect(lampBonus(5)).toBe(0.25);
+    expect(lampBonus(5)).toBe(0.1);
     expect(lampBonus(3)).toBeGreaterThan(lampBonus(8));
     expect(sellPrice(PARTS.pop)).toBe(1);
     expect(sellPrice(PARTS.printer)).toBe(3);

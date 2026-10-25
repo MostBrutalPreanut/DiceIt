@@ -1,5 +1,5 @@
 import { Rng } from '../sim/rng';
-import { MAX_LEVEL, PARTS, type PartId, type PartInstance, type Rarity } from './parts';
+import { PARTS, type PartId, type PartInstance, type Rarity } from './parts';
 import { neutralMods, type Mods } from './mods';
 
 /**
@@ -56,7 +56,6 @@ export type DecalOffer = DecalPick;
 export interface RunView {
   /** Every part the run owns, placed or in the inventory. */
   owned: PartInstance[];
-  levels: Partial<Record<PartId, number>>;
   decals: DecalPick[];
   round: number;
 }
@@ -88,7 +87,7 @@ export const BOSS_EVERY = 3;
 // the numbers behind the effects and their sentences
 const N = {
   sponsor: 2, interestPer: 5, interestCap: 5, coupon: 1, ballHog: 5, toolbox: 2, overshoot: 2, ticket: 8, collector: 1, bond: 1,
-  head: 0.5, lucky: 7, luckyX: 3, overclock: 0.5, lampRadius: 2, lampBonus: 0.15, glass: 1.5, combo: 2, spin: 2, spinBoost: 1.5,
+  head: 0.5, lucky: 7, luckyX: 3, overclock: 0.5, lampRadius: 2, lampBonus: 0.04, glass: 1.5, combo: 2, spin: 2, spinBoost: 1.5,
   multiball: 2, lastCall: 2, thriftyPer: 0.01, thriftyCap: 0.5, fanClub: 3,
   bounce: 0.3, heavyPoints: 0.25, heavyNudge: 0.6, glassGravity: 0.8, glassSpin: 1.5, goldEvery: 10, goldCap: 5, fuse: 20,
   bumper: 1.5, catch: 0.75, target: 2, targetEase: 0.8, lightShow: 1.5, purist: 2, puristTypes: 4, crowd: 0.04, empty: 0.25,
@@ -97,7 +96,7 @@ const N = {
 const owns = (v: RunView, id: PartId) => v.owned.some((p) => p.def === id);
 const ownsAny = (v: RunView, ids: PartId[]) => ids.some((id) => owns(v, id));
 const ownedTypes = (v: RunView) => [...new Set(v.owned.map((p) => p.def))];
-const levelableTypes = (v: RunView) => ownedTypes(v).filter((id) => PARTS[id].recipe.perLevel && (v.levels[id] ?? 0) < MAX_LEVEL);
+const levelableTypes = (v: RunView) => ownedTypes(v).filter((id) => PARTS[id].recipe.perLevel);
 const scoringTypes = (v: RunView) => ownedTypes(v).filter((id) => PARTS[id].recipe.points || id === 'mega');
 const pct = (f: number) => `${Math.round(f * 100)}%`;
 const nm = (id?: PartId) => (id ? PARTS[id].name + 's' : 'a part type');
@@ -146,7 +145,7 @@ export const DECALS: Record<DecalId, DecalDef> = {
     text: (t) => `${nm(t)} count as two levels higher.`,
     mods: (m, t) => { if (t) m.levelBonus[t] = (m.levelBonus[t] ?? 0) + 2; }, look: { shape: 'shield', color: C.gold, glyph: '+2' } },
   lamps: { id: 'lamps', name: 'Bright Lamps', kind: 'score', rarity: 'common', worth: (v) => owns(v, 'lamp'),
-    text: () => `Lamps glow ${N.lampRadius} units wider and give ${pct(N.lampBonus)} more.`,
+    text: () => `Lamps glow ${N.lampRadius} units wider, and every step of their glow gives ${pct(N.lampBonus)} more.`,
     mods: (m) => { m.lampRadius += N.lampRadius; m.lampBonus += N.lampBonus; }, look: { shape: 'circle', color: '#ffe45c', glyph: '+%' } },
   sets: { id: 'sets', name: 'Jackpot Sets', kind: 'score', rarity: 'uncommon', worth: (v) => ownsAny(v, ['lane', 'bank']),
     text: () => 'A complete lane or drop-target set pays double points and double Mult.', mods: (m) => { m.setFactor *= 2; }, look: { shape: 'star', color: C.blue, glyph: '2×' } },
@@ -185,7 +184,7 @@ export const DECALS: Record<DecalId, DecalDef> = {
   longFuse: { id: 'longFuse', name: 'Long Fuse', kind: 'ball', rarity: 'common', text: () => `Every ball's clock runs ${N.fuse} s longer.`,
     mods: (m) => { m.ballClock += N.fuse; }, look: { shape: 'ticket', color: C.teal, icon: 'clock' } },
   freeKick: { id: 'freeKick', name: 'Free Kick', kind: 'ball', rarity: 'common', worth: (v) => owns(v, 'kickback'),
-    text: () => 'Every Kickback fires twice a ball.', mods: (m) => { m.kickbackCharges += 1; }, look: { shape: 'banner', color: '#3050ff', glyph: '2×' } },
+    text: () => 'Kickbacks recharge twice as fast.', mods: (m) => { m.kickbackCooldown *= 0.5; }, look: { shape: 'banner', color: '#3050ff', glyph: '2×' } },
   printerPlus: { id: 'printerPlus', name: 'Printer Plus', kind: 'ball', rarity: 'rare', worth: (v) => owns(v, 'printer'),
     text: () => 'Ball Printers print one more ball per catch.', mods: (m) => { m.printerExtra += 1; }, look: { shape: 'hex', color: '#ff8fc8', glyph: '+B' } },
 

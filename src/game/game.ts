@@ -71,7 +71,7 @@ export interface RunSave {
   shop: ShopState;
   sandbox: boolean;
   runSeed: number;
-  /** Per-run level of each part type (added after v2 shipped; absent in old saves). */
+  /** Old saves: a level per part type (levels now live on each part, as `level`). */
   levels?: Partial<Record<PartId, number>>;
   /** Decals on the apron (old saves called them picks), and the boss's prize still waiting to be picked. */
   picks?: DecalPick[];
@@ -146,8 +146,6 @@ export class Game {
   sim: Sim;
   scorer: Scorer;
   shop: ShopState;
-  /** Part types levelled up this run (Level Lights). Persistent across rounds. */
-  levels: Partial<Record<PartId, number>> = {};
   /** The machine picked for the run: its look, and what its Big Boi does. Fixed for the run. */
   machine: MachineId = 'factory';
   /** Decals stuck on the apron, in slot order (at most DECAL_SLOTS). */
@@ -197,14 +195,9 @@ export class Game {
     if (persistent) {
       const boss = this.boss;
       const later = boss?.decalsOffUntilHalf && !this.fixedMods ? (() => { const m = this.roundMods(true); return { mods: m, at: goal / 2, baseMult: this.startMult(m) }; })() : undefined;
-      return new Scorer(goal, () => this.layout.parts, { ...base, levels: this.levels, onLevelUp: (id) => this.levelUp(id), jam: boss?.jam, later });
+      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), jam: boss?.jam, later });
     }
-    const copy = { ...this.levels };
-    return new Scorer(goal, () => this.layout.parts, {
-      ...base,
-      levels: copy,
-      onLevelUp: (id) => ((copy[id] ?? 0) >= MAX_LEVEL ? null : (copy[id] = (copy[id] ?? 0) + 1)),
-    });
+    return new Scorer(goal, () => this.layout.parts, base); // a test ball's level-ups stay in its own scorer
   }
 
   /** The Mult every ball starts at with these mods: Head Start, plus Crowd Pleaser and Minimalist counting your table and toolbox. */
@@ -214,12 +207,10 @@ export class Game {
     return Math.round((m.startMult + m.startMultPerPart * onTable + m.startMultPerEmpty * empty) * 100) / 100;
   }
 
-  /** Level a part type up for the rest of the run. Returns the new level, or null at the cap. */
-  levelUp(id: PartId): number | null {
-    const cur = this.levels[id] ?? 0;
-    if (cur >= MAX_LEVEL) return null;
-    this.levels[id] = cur + 1;
-    return cur + 1;
+  /** Level a part up for the rest of the run (at most MAX_LEVEL). Returns its new level. */
+  levelUp(inst: PartInstance, n = 1): number {
+    inst.level = Math.min(MAX_LEVEL, (inst.level ?? 0) + n);
+    return inst.level;
   }
 
   get goal() {
@@ -241,6 +232,11 @@ export class Game {
   /** The toolbox is full (the Test Lab has no limit). */
   get toolboxFull(): boolean {
     return !this.sandbox && this.inventory.length >= this.toolboxSlots;
+  }
+
+  /** The toolbox has room for a whole pack of this part (three Lane Rollovers need three free slots). */
+  hasRoomFor(id: PartId): boolean {
+    return this.sandbox || this.inventory.length + (PARTS[id].pack ?? 1) <= this.toolboxSlots;
   }
 
   /** Sells a part the toolbox has no room for, at its sell price, and remembers it for the UI. */
@@ -382,7 +378,7 @@ export class Game {
   // ---- decals: stuck on the apron ----------------------------------------------
 
   private view(): RunView {
-    return { owned: this.layout.parts, levels: this.levels, decals: this.decals, round: this.round };
+    return { owned: this.layout.parts, decals: this.decals, round: this.round };
   }
 
   private rollPick(): DecalOffer[] {
@@ -480,7 +476,6 @@ export class Game {
     this.layout = starterLayout();
     this.round = 1;
     this.money = START_MONEY;
-    this.levels = {};
     this.decals = [];
     this.mods = this.workshopMods();
     this.pending = null;
@@ -499,7 +494,7 @@ export class Game {
   // ---- history (undo / redo) ------------------------------------------------------------
 
   private snapshot(): string {
-    return JSON.stringify({ layout: this.layout, money: this.money, shop: this.shop, levels: this.levels, decals: this.decals, pending: this.pending, resolved: this.resolved });
+    return JSON.stringify({ layout: this.layout, money: this.money, shop: this.shop, decals: this.decals, pending: this.pending, resolved: this.resolved });
   }
 
   /** Remember the workshop as it is now, so the next change can be undone. */
@@ -522,7 +517,6 @@ export class Game {
     this.layout = s.layout;
     this.money = s.money;
     this.shop = s.shop;
-    this.levels = s.levels;
     this.decals = s.decals;
     this.pending = s.pending;
     this.resolved = s.resolved;
@@ -634,14 +628,11 @@ export class Game {
     this.toWorkshop();
   }
 
-  /** Test Lab: raise (or lower) the level of every levelable part type. */
+  /** Test Lab: raise (or lower) the level of every part that has levels. */
   levelAll(delta: number) {
     if (!this.editable || !this.sandbox) return;
     this.checkpoint();
-    for (const id of PART_IDS) {
-      if (!PARTS[id].recipe.perLevel) continue;
-      this.levels[id] = Math.max(0, Math.min(MAX_LEVEL, (this.levels[id] ?? 0) + delta));
-    }
+    for (const p of this.layout.parts) if (PARTS[p.def].recipe.perLevel) p.level = Math.max(0, Math.min(MAX_LEVEL, (p.level ?? 0) + delta));
     this.toWorkshop();
   }
 
@@ -649,7 +640,7 @@ export class Game {
 
   save(): RunSave {
     return {
-      v: 2, layout: this.layout, money: this.money, round: this.round, shop: this.shop, sandbox: this.sandbox, runSeed: this.runSeed, levels: this.levels,
+      v: 2, layout: this.layout, money: this.money, round: this.round, shop: this.shop, sandbox: this.sandbox, runSeed: this.runSeed,
       picks: this.decals, pending: this.pending, runScore: this.runScore, machine: this.machine, bosses: this.bossPlan, won: this.won,
     };
   }
@@ -662,7 +653,6 @@ export class Game {
     delete (this.shop as { decal?: unknown }).decal; // saves from when the shop sold decals
     this.sandbox = s.sandbox;
     this.runSeed = s.runSeed;
-    this.levels = { ...(s.levels ?? {}) };
     this.machine = s.machine ?? machine ?? 'factory';
     this.decals = (s.picks ?? []).filter((p) => p.id in DECALS).slice(0, DECAL_SLOTS);
     this.pending = s.pending && s.pending.every((o) => o.id in DECALS) ? s.pending : null;
@@ -673,6 +663,7 @@ export class Game {
     this.history = [];
     this.future = [];
     this.layout.parts = this.layout.parts.filter((p) => p.def in PARTS);
+    migrateParts(this.layout, s.levels);
     ensureBigBoi(this.layout);
     this.mods = this.workshopMods();
     this.enforceToolbox();
@@ -698,16 +689,45 @@ export class Game {
   /** Buy an offer into the inventory. Returns the new part, or null if you cannot. */
   buy(slot: number): PartInstance | null {
     const id = this.shop.offers[slot];
-    if (!this.editable || !id || this.toolboxFull) return null;
+    if (!this.editable || !id || !this.hasRoomFor(id)) return null;
     const cost = this.priceAt(slot);
     if (!this.canAfford(cost)) return null;
     this.checkpoint();
     if (!this.sandbox) this.money -= cost;
     this.sold(slot);
-    const inst = makePart(id, this.layout.nextUid++);
-    inst.fresh = true;
-    this.layout.parts.push(inst);
-    return inst;
+    const pack = this.makePack(id);
+    for (const inst of pack) { inst.fresh = true; this.layout.parts.push(inst); }
+    return pack[0];
+  }
+
+  /** One shop offer's worth of parts: a pack's pieces know they belong together. */
+  private makePack(id: PartId): PartInstance[] {
+    const n = PARTS[id].pack ?? 1, first = this.layout.nextUid;
+    return Array.from({ length: n }, () => {
+      const inst = makePart(id, this.layout.nextUid++);
+      if (n > 1) inst.group = first;
+      return inst;
+    });
+  }
+
+  /**
+   * Where the rest of a pack goes when its first piece is dropped on the table at (x, y): the nearest free spots
+   * beside it, in a row first (lanes side by side), or the toolbox. null if some piece fits nowhere.
+   */
+  private packSpots(id: PartId, x: number, y: number): ({ x: number; y: number } | null)[] | null {
+    const n = PARTS[id].pack ?? 1;
+    const probe: Layout = { ...this.layout, parts: [...this.layout.parts, makePart(id, -1, x, y, true)] };
+    const spots: ({ x: number; y: number } | null)[] = [{ x, y }];
+    const step = 2.4;
+    const offsets = [[1, 0], [-1, 0], [2, 0], [-2, 0], [0, -1], [0, 1], [1, -1], [-1, -1], [1, 1], [-1, 1], [0, -2], [0, 2]];
+    let toolbox = this.sandbox ? Infinity : this.toolboxSlots - this.inventory.length;
+    for (let k = 1; k < n; k++) {
+      const at = offsets.map(([dx, dy]) => ({ x: x + dx * step, y: y + dy * step })).find((p) => canPlace(probe, id, p.x, p.y));
+      if (at) { probe.parts.push(makePart(id, -1 - k, at.x, at.y, true)); spots.push(at); }
+      else if (toolbox-- > 0) spots.push(null);
+      else return null;
+    }
+    return spots;
   }
 
   /** Buy an offer straight onto the board at (x, y), dragged from the shop: it needs room on the table, not in the toolbox. */
@@ -716,10 +736,21 @@ export class Game {
     if (!this.editable || !id) return null;
     const cost = this.priceAt(slot);
     if (!this.canAfford(cost) || !canPlace(this.layout, id, x, y)) return null;
+    const spots = this.packSpots(id, x, y);
+    if (!spots) return null;
     this.checkpoint();
     if (!this.sandbox) this.money -= cost;
     this.sold(slot);
-    return this.addPlaced(id, x, y);
+    const pack = this.makePack(id);
+    pack.forEach((inst, i) => {
+      const at = spots[i];
+      if (at) Object.assign(inst, { x: at.x, y: at.y, placed: true });
+      else inst.fresh = true;
+      this.layout.parts.push(inst);
+      if (at) this.sim.updatePart(inst);
+    });
+    this.clearHeat();
+    return pack[0];
   }
 
   private sold(slot: number) {
@@ -912,6 +943,7 @@ export class Game {
     return payoutFor({
       round: this.round, ballsLeft: this.ballsLeft, score: this.scorer.score, goal: this.scorer.goal, coins: this.scorer.money, money: this.money,
       mods: this.scorer.mods, boss: this.boss !== null, types: new Set(this.placed.filter((p) => !p.fixed).map((p) => p.def)).size, decals: this.decals.length,
+      unusedSavers: this.placed.filter((p) => PARTS[p.def].recipe.unusedPay && !this.scorer.saversUsed.has(p.uid)).length,
     });
   }
 }
@@ -925,8 +957,21 @@ export function randomLedge(rng: Rng, layout: Layout): number {
   return LEDGE.default;
 }
 
+/**
+ * Saves from before a change of the parts: a level per part type becomes a level on each part of that type, and an
+ * Extra Flipper set to the Right button becomes a Right Flipper.
+ */
+export function migrateParts(l: Layout, typeLevels?: Partial<Record<PartId, number>>) {
+  for (const p of l.parts) {
+    if (typeLevels?.[p.def] && p.level === undefined && PARTS[p.def].recipe.perLevel) p.level = Math.min(MAX_LEVEL, typeLevels[p.def]!);
+    if (p.def === 'flipper' && (p.dials.side ?? 0) >= 0.5) p.def = 'flipperR';
+    delete p.dials.side;
+    if (p.def === 'uplight') delete p.dials.target;
+  }
+}
+
 /** What a cleared round pays. One formula, used by the game and by the balance tool's economy check. */
-export function payoutFor(i: { round: number; ballsLeft: number; score: number; goal: number; coins: number; money: number; mods: Mods; boss?: boolean; types?: number; decals?: number }): Payout {
+export function payoutFor(i: { round: number; ballsLeft: number; score: number; goal: number; coins: number; money: number; mods: Mods; boss?: boolean; types?: number; decals?: number; unusedSavers?: number }): Payout {
   const lines: Payout['lines'] = [];
   const m = i.mods;
   lines.push({ label: `Round ${i.round} cleared`, amount: Math.max(0, 3 + i.round - m.payCut) });
@@ -940,6 +985,7 @@ export function payoutFor(i: { round: number; ballsLeft: number; score: number; 
   if (doublings > 0) lines.push({ label: `Overshoot (${over.toFixed(1)}x goal)`, amount: Math.round(2 * doublings * m.overshootFactor) });
   if (m.perTypePay > 0 && i.types) lines.push({ label: `Collector: ${i.types} part types`, amount: m.perTypePay * i.types });
   if (m.perDecalPay > 0 && i.decals) lines.push({ label: `Savings Bond: ${i.decals} decals`, amount: m.perDecalPay * i.decals });
+  if (i.unusedSavers && !m.noCoins) lines.push({ label: `${i.unusedSavers} Ball Saver${i.unusedSavers > 1 ? 's' : ''} never used`, amount: i.unusedSavers * (PARTS.saver.recipe.unusedPay ?? 0) });
   if (i.coins > 0) lines.push({ label: 'Coins from play', amount: i.coins });
   return { lines, total: lines.reduce((a, l) => a + l.amount, 0) };
 }

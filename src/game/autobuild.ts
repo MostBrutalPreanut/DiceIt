@@ -5,7 +5,7 @@ import { Bot } from '../sim/bot';
 import { BUILD_AREA } from '../sim/constants';
 import { canPlace, cloneLayout, type Layout } from '../sim/layout';
 import { Rng } from '../sim/rng';
-import { Game } from './game';
+import { Game, migrateParts } from './game';
 
 /**
  * The auto-builder and the machine meter. Given the parts a run owns, find a good layout by simulated
@@ -19,9 +19,10 @@ export type Levels = Partial<Record<PartId, number>>;
 export interface Machine {
   layout: Layout;
   mods: Mods;
+  /** Old reports: a level per part type (levels now live on each part). */
+  levels?: Levels;
   /** The machine (what its Big Boi does); the Factory if absent. */
   machine?: MachineId;
-  levels: Levels;
 }
 
 /** One simulated round with every ball played out (no goal), as the bot plays it. */
@@ -53,7 +54,7 @@ export function playRounds(m: Machine, o: PlayOptions): RoundSample[] {
     g.layout = cloneLayout(m.layout);
     g.fixedMods = { ...neutralMods(), ...m.mods };
     if (m.machine) g.machine = m.machine;
-    g.levels = { ...m.levels };
+    migrateParts(g.layout, m.levels);
     g.goalOverride = Infinity;
     g.seed = o.seed * 1000 + i * 7 + 1;
     g.startRound();

@@ -45,28 +45,25 @@ describe('scoring limits', () => {
   });
 
   it('a lane set pays at most 5 times a ball, then says MAXED; the next ball pays again', () => {
-    const lanes = [makePart('lane', 1, 6, 30, true), makePart('lane', 2, 12, 30, true)];
+    const lanes = [makePart('lane', 1, 6, 30, true), makePart('lane', 2, 12, 30, true), makePart('lane', 3, 18, 30, true)];
     const s = new Scorer(1e9, () => lanes);
     s.startBall();
     const labels: string[] = [];
-    for (let i = 0; i < 7; i++) for (const uid of [1, 2]) for (const e of s.consume(hit(uid))) if (e.kind === 'bonus') labels.push(e.label!);
+    for (let i = 0; i < 7; i++) for (const uid of [1, 2, 3]) for (const e of s.consume(hit(uid))) if (e.kind === 'bonus') labels.push(e.label!);
     expect(labels).toEqual(['LANES COMPLETE', 'LANES COMPLETE', 'LANES COMPLETE', 'LANES COMPLETE', 'LANES COMPLETE', 'LANE SETS MAXED', 'LANE SETS MAXED']);
     expect(s.mult).toBeCloseTo(3.5); // 1 + 5 x 0.5
     s.startBall();
-    for (const uid of [1, 2]) s.consume(hit(uid));
+    for (const uid of [1, 2, 3]) s.consume(hit(uid));
     expect(s.mult).toBeCloseTo(1.5);
   });
 
-  it('a bank set pays at most 5 times a ball, and Jackpot Sets doubles what each pays, not how many', () => {
+  it('a bank set has no limit a ball, and Jackpot Sets doubles what each pays', () => {
     const bank = [makePart('bank', 1, 12, 30, true)];
     const s = new Scorer(1e9, () => bank, { mods: computeMods([{ id: 'sets' }]) });
     s.startBall();
     const paid = Array.from({ length: 8 }, () => s.consume(hit(1, { bankComplete: true }))[0]);
-    expect(paid.filter((e) => e.label === 'BANK COMPLETE')).toHaveLength(5);
-    expect(paid.filter((e) => e.label === 'BANK SETS MAXED')).toHaveLength(3);
+    expect(paid.filter((e) => e.label === 'BANK COMPLETE')).toHaveLength(8);
     expect(paid[0].base).toBe(600);
-    expect(paid[7].base).toBe(0);
-    expect(s.mult).toBeCloseTo(1 + 5 * 0.6);
   });
 
   it('Cha-Ching pays at most $5 a round, however many balls: a new ball does not refill it, a new round does', () => {
@@ -97,8 +94,7 @@ describe('the limits are written on the parts', () => {
     expect(text('pop')).toContain('up to +100');
     expect(text('mega')).toContain('up to +3 a ball');
     expect(text('coin')).toContain('up to $5 a round');
-    expect(text('lane')).toContain('at most 5 times a ball');
-    expect(text('bank')).toContain('at most 5 times a ball');
+    expect(text('lane')).toContain('At most 5 sets a ball');
     expect(text('printer')).toContain('at most 4 printed in one ball');
   });
 
@@ -160,7 +156,9 @@ describe('the printer limit', () => {
     for (let i = 0; i < 260; i++) sim.step({ ...NO_INPUT, plunge: i < 230 }); // fire the ball, so the table plays as it does in a round
     const drop = (n: number) => {
       for (let k = 0; k < n; k++) {
-        // let everything from the last drop drain first, so the 4-balls-on-the-table limit is not what stops the printer
+        // let everything from the last drop drain first (firing any ball the printer threw into the plunger lane), so
+        // the 4-balls-on-the-table limit is not what stops the printer
+        for (let i = 0; i < 260; i++) for (const e of sim.step({ ...NO_INPUT, plunge: i < 230 })) if (e.type === 'extraBall') extras++;
         for (let i = 0; i < 240 * 30 && sim.ballStates().some((b) => !b.inLane); i++) for (const e of sim.step(NO_INPUT)) if (e.type === 'extraBall') extras++;
         sim.addBall(12, 33.5, 0, -20);
         for (let i = 0; i < 240 * 1.2; i++) for (const e of sim.step(NO_INPUT)) if (e.type === 'extraBall') extras++;

@@ -89,7 +89,7 @@ async function main() {
   say('INSERT COIN');
 
   /** What the recipe sentences need to know: this part type's level and the run's upgrades. */
-  const ctxFor = (def: PartDef) => ({ level: game.levels[def.id] ?? 0, mods: game.mods, machine: game.machine });
+  const ctxFor = (def: PartDef, inst?: PartInstance) => ({ level: inst ? game.scorer.levelOf(inst) : 0, mods: game.mods, machine: game.machine });
   /** A part's definition on this run's machine (Big Boi's recipe depends on it). */
   const defFor = (id: PartId) => defOn(id, game.machine);
 
@@ -173,7 +173,7 @@ async function main() {
     tip.className = 'card tipcard';
     tip.style.setProperty('--head', roleVar(def.id));
     const row = inst ? game.scorer.ledger.get(inst.uid) : undefined;
-    tip.innerHTML = partCard(def, inst, { ...ctxFor(def), scorer: live ? game.scorer : undefined, mult: game.scorer.mult }, {
+    tip.innerHTML = partCard(def, inst, { ...ctxFor(def, inst), scorer: live ? game.scorer : undefined, mult: game.scorer.mult }, {
       stats: live ? statsLine(row) : undefined,
       keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? 'drag to move · R rotate · Del to toolbox' : 'in the workshop: drag, R rotate, Del to toolbox') : inst ? 'click it, then the table' : 'drag it onto the table, or Buy to put it in the toolbox',
     });
@@ -186,9 +186,9 @@ async function main() {
     const locked = index !== null && game.isLocked(index);
     const btn = index === null
       ? `<button class="buy" data-add="${id}">Add</button>`
-      : `${price! < def.cost ? `<s>$${def.cost}</s>` : ''}<button class="buy" data-buy="${index}" ${game.canAfford(price!) && game.editable && !game.toolboxFull ? '' : 'disabled'}>$${price}</button>`;
+      : `${price! < def.cost ? `<s>$${def.cost}</s>` : ''}<button class="buy" data-buy="${index}" ${game.canAfford(price!) && game.editable && game.hasRoomFor(id) ? '' : 'disabled'}>$${price}</button>`;
     const lock = index === null ? '' : `<button class="lock ${locked ? 'on' : ''}" data-lock="${index}" title="${locked ? 'Locked: it stays for the next round. Click to unlock' : 'Lock it: it stays for the next round (and through rerolls)'}">${locked ? 'LOCKED' : 'LOCK'}</button>`;
-    return `<div class="offer r-${def.rarity} ${locked ? 'locked' : ''}" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}</div>
+    return `<div class="offer r-${def.rarity} ${locked ? 'locked' : ''}" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}${def.pack && def.pack > 1 ? `<span class="pack" title="One offer: a pack of ${def.pack}">×${def.pack}</span>` : ''}</div>
       <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}</div></div>`;
   }
 
@@ -325,7 +325,7 @@ async function main() {
     const def = defFor(inst.def);
     card.className = 'card tipcard';
     card.style.setProperty('--head', roleVar(def.id));
-    card.innerHTML = `${partCard(def, inst, { ...ctxFor(def), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false })}
+    card.innerHTML = `${partCard(def, inst, { ...ctxFor(def, inst), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false })}
       ${def.dials.map((d) => `<div class="dial"><div class="row2"><span>${d.label}</span><b id="dv-${d.id}">${d.fmt ? d.fmt(dialValue(inst, d.id)) : dialValue(inst, d.id)}</b></div>
         <input data-dial="${d.id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${dialValue(inst, d.id)}" /><div class="hint">${d.tradeoff}</div></div>`).join('')}
       <div class="live" id="selLive">${liveText(inst)}</div>
@@ -342,7 +342,7 @@ async function main() {
         $(`dv-${d.id}`).textContent = d.fmt ? d.fmt(Number(input.value)) : input.value;
         // what it pays follows the dial
         const now = card.querySelector('.now');
-        const fresh = partCard(def, inst, { ...ctxFor(def), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false }).match(/<div class="now">([\s\S]*?)<\/div>/);
+        const fresh = partCard(def, inst, { ...ctxFor(def, inst), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false }).match(/<div class="now">([\s\S]*?)<\/div>/);
         if (now && fresh) now.innerHTML = fresh[1];
         persist();
       };
@@ -479,7 +479,7 @@ async function main() {
       if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); } else { say('NO ROOM THERE'); return false; }
     } else if (over?.closest('#inventoryBox')) {
       part = d.slot === null ? game.grant(d.id) : game.buy(d.slot);
-      if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(game.toolboxFull ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
+      if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(d.slot !== null && !game.hasRoomFor(d.id) ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
     } else return false;
     persist();
     return true;

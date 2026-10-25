@@ -30,13 +30,17 @@ export interface PartState {
   follow?: boolean;
   /** Big Boi's mood: happy, oof (just hit), sad (a bad shot), shocked (a nice combo), cool (a seriously high Mult). */
   mood?: Mood;
-  /** The part type's level (0 to 5): its colour steps towards gold with each level, like Space Cadet's bumpers. */
+  /** The part's level (0 to 5): its colour steps towards gold with each level, like Space Cadet's bumpers. */
   level?: number;
+  /** A part with a sliding piece: draw only its rail ('base'), only the piece ('mover'), or both (an icon). */
+  part?: 'base' | 'mover';
+  /** A Lamp's brightness (0 to 5 steps). */
+  bright?: number;
 }
 export type Mood = 'happy' | 'oof' | 'sad' | 'shocked' | 'cool';
 
 export const stateKey = (st: PartState) =>
-  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0].join('.');
+  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0, st.part ?? '', st.bright ?? ''].join('.');
 
 const ringS = (cx: number, cy: number, r: number, n = 20, ry = r): Pt[] => ring(cx, cy, r, n, ry);
 
@@ -262,8 +266,20 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.cyl(x, y, 0.14, 1.46, 0.22, metal);
       break;
     }
-    case 'thunder': case 'golden': {
-      // the big bumpers: a thunder cloud with a bolt, or solid gold with a star
+    case 'thunder': {
+      // a big wedge pointing up the table, with a bolt on its face: it throws the ball upwards
+      const sh = def.shape.type === 'tri' ? def.shape : { hw: 1.7, hh: 1.4 };
+      const tri = (k: number, dz = 0): Pt[] => [[x - sh.hw * k, y - sh.hh * k + dz], [x + sh.hw * k, y - sh.hh * k + dz], [x, y + sh.hh * k + dz]];
+      shadowPoly(under, v, t, tri(1.05), 0.24);
+      const body = st.hit ? mat(t, mix(t.role.thunder, WHITE, 0.45)) : role;
+      p.prism(tri(1), 0, 0.3, mat(t, t.paper));
+      p.prism(tri(0.84), 0.3, 0.6, body);
+      const bolt: Pt[] = [[-0.25, 0.75], [0.3, 0.75], [0.02, 0.12], [0.4, 0.12], [-0.3, -0.85], [-0.05, -0.12], [-0.42, -0.12]];
+      p.face(bolt.map(([a, b]) => P(v, x + a * sh.hh * 0.55, y - sh.hh * 0.15 + b * sh.hh * 0.55, 0.91)), t.role.coin, { sil: false, line: 0.5 });
+      break;
+    }
+    case 'golden': {
+      // solid gold with a star
       shadow(under, v, t, x, y, r * 1.05, r * 1.05, 0.24);
       const c = t.role[id];
       const cap = st.hit ? mat(t, mix(c, WHITE, 0.45)) : role;
@@ -271,12 +287,7 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.cyl(x, y, r * 0.66, 0.2, 0.55, id === 'golden' ? mat(t, mix(c, WHITE, 0.2)) : metal);
       const top = p.cyl(x, y, r * 0.9, 0.75, 0.3, cap);
       void top;
-      if (id === 'thunder') {
-        const bolt: Pt[] = [[-0.25, 0.75], [0.3, 0.75], [0.02, 0.12], [0.4, 0.12], [-0.3, -0.85], [-0.05, -0.12], [-0.42, -0.12]];
-        p.face(bolt.map(([a, b]) => P(v, x + a * r * 0.7, y + b * r * 0.7, 1.06)), t.role.coin, { sil: false, line: 0.5 });
-      } else {
-        p.face(star(x, y, r * 0.62, r * 0.28, 5, Math.PI / 2).map(([a, b]) => P(v, a, b, 1.06)), WHITE, { sil: false, line: 0.5 });
-      }
+      p.face(star(x, y, r * 0.62, r * 0.28, 5, Math.PI / 2).map(([a, b]) => P(v, a, b, 1.06)), WHITE, { sil: false, line: 0.5 });
       break;
     }
     case 'piggy': {
@@ -359,9 +370,84 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       });
       break;
     }
-    case 'flipper': {
+    case 'flipper': case 'flipperR': {
       // the extra flipper itself is drawn live from the sim; the part shows its mounting plate
       p.cyl(x, y, 0.55, 0, 0.08, metal);
+      break;
+    }
+    case 'duck': case 'roller': case 'goal': {
+      const m = def.mover!, sh = def.shape.type === 'box' ? def.shape : { hw: 3, hh: 0.6 };
+      const base = st.part !== 'mover', piece = st.part !== 'base';
+      if (base) {
+        if (id === 'goal') {
+          // a little football goal: posts, a crossbar at the back, the net between
+          shadowPoly(under, v, t, box(x, y + 0.45, 2.8, 0.65, 0), 0.2);
+          p.face(box(x, y + 0.5, 2.45, 0.42, 0).map(([a, b]) => P(v, a, b, 0.02)), mix(t.paper, t.shadeTint, 0.12), { line: 0.3 });
+          p.op((net) => {
+            for (let k = -2.2; k <= 2.21; k += 0.55) { const [a, b] = P(v, x + k, y + 0.1, 0.03), [c, d] = P(v, x + k, y + 0.9, 0.03); net.moveTo(a, b).lineTo(c, d); }
+            for (let k = 0.2; k <= 0.86; k += 0.22) { const [a, b] = P(v, x - 2.4, y + k, 0.03), [c, d] = P(v, x + 2.4, y + k, 0.03); net.moveTo(a, b).lineTo(c, d); }
+            net.stroke({ width: v.lw * 0.35, color: t.ink, alpha: 0.4 });
+          });
+          p.prism(box(x, y + 0.95, 2.65, 0.14, 0), 0, 0.9, mat(t, WHITE));
+          for (const sx of [-1, 1]) p.prism(box(x + sx * 2.55, y + 0.5, 0.14, 0.5, 0), 0, 0.9, mat(t, WHITE));
+          p.face(box(x, y - 0.45, m.travel + 0.8, 0.12, 0).map(([a, b]) => P(v, a, b, 0.02)), mix(t.role.goal, t.shadeTint, 0.3), { line: 0.25, sil: false });
+        } else {
+          // the rail the piece travels: a sunken slot with a bumper stop at each end
+          shadowPoly(under, v, t, box(x, y, sh.hw, sh.hh * 0.5, 0, sh.hh * 0.5), 0.15);
+          p.face(box(x, y + m.y, sh.hw, sh.hh * 0.55, 0, sh.hh * 0.5).map(([a, b]) => P(v, a, b, 0.01)), metal.mid, { line: 0.4 });
+          p.face(box(x, y + m.y, sh.hw - 0.2, sh.hh * 0.32, 0, sh.hh * 0.3).map(([a, b]) => P(v, a, b, 0.02)), mix(t.role[id], t.shadeTint, 0.55), { line: 0.3, sil: false });
+          for (const sx of [-1, 1]) p.cyl(x + sx * (sh.hw - 0.1), y + m.y, 0.22, 0, 0.45, mat(t, t.rubber));
+          if (id === 'duck') for (let k = -2; k <= 2; k++) p.face(ring(x + k * 1.3, y + m.y - sh.hh * 0.75, 0.18, 10).map(([a, b]) => P(v, a, b, 0.02)), t.role.lane, { line: 0.2, sil: false });
+        }
+      }
+      if (piece) {
+        const px = x, py = y + m.y;
+        if (id === 'duck') {
+          // a tin duck: body, head, beak, an eye
+          const yel = st.hit ? mat(t, mix(t.role.duck, WHITE, 0.45)) : mat(t, t.role.duck);
+          shadow(under, v, t, px, py, 0.65, 0.5);
+          p.cyl(px, py, 0.6, 0, 0.55, yel);
+          p.cyl(px - 0.12, py + 0.05, 0.34, 0.55, 0.55, yel);
+          const [bx, by] = P(v, px - 0.5, py, 0.85);
+          const [ex, ey] = P(v, px - 0.2, py, 1.0);
+          p.op((g) => {
+            g.poly([bx, by - v.S * 0.08, bx - v.S * 0.32, by, bx, by + v.S * 0.1]).fill(t.accent).stroke({ width: v.lw * 0.5, color: t.ink, join: 'round' });
+            g.circle(ex, ey, v.S * 0.07).fill(t.ink);
+          });
+        } else if (id === 'roller') {
+          // a pop bumper on wheels
+          shadow(under, v, t, px, py, 0.9, 0.9);
+          const cap = st.hit ? mat(t, mix(t.role.roller, WHITE, 0.4)) : mat(t, t.role.roller);
+          for (const sx of [-1, 1]) p.cyl(px + sx * 0.55, py - 0.45, 0.2, 0, 0.3, mat(t, t.rubber));
+          p.cyl(px, py, 0.85, 0.1, 0.16, mat(t, t.paper));
+          p.cyl(px, py, 0.5, 0.26, 0.4, metal);
+          p.cyl(px, py, 0.75, 0.66, 0.24, cap);
+        } else {
+          // the goalie: a little keeper in a jersey with big gloves
+          const kit = mat(t, t.role.goal);
+          shadow(under, v, t, px, py, 0.8, 0.3);
+          p.prism(box(px, py, 0.55, 0.2, 0, 0.15), 0, 0.9, kit);
+          p.cyl(px, py, 0.26, 0.9, 0.36, mat(t, t.paper));
+          for (const sx of [-1, 1]) p.cyl(px + sx * 0.68, py, 0.17, 0.55, 0.3, mat(t, t.accent));
+          const [ex, ey] = P(v, px, py - 0.1, 1.1);
+          p.op((g) => { for (const k of [-1, 1]) g.circle(ex + k * v.S * 0.09, ey, v.S * 0.045).fill(t.ink); });
+        }
+      }
+      break;
+    }
+    case 'strip': {
+      // an LED strip set into the floor: a row of little bulbs, all lit while it parties
+      const sh = def.shape.type === 'box' ? def.shape : { hw: 4, hh: 0.45 };
+      const lit = !!st.lit;
+      p.face(box(x, y, sh.hw, sh.hh, 0, sh.hh).map(([a, b]) => P(v, a, b, 0.005)), metal.mid, { line: 0.4 });
+      p.face(box(x, y, sh.hw - 0.15, sh.hh - 0.12, 0, sh.hh - 0.1).map(([a, b]) => P(v, a, b, 0.01)), lit ? mix(t.role.strip, WHITE, 0.25) : mix(t.role.strip, t.shadeTint, 0.65), { line: 0.3, sil: false });
+      const hues = [t.role.strip, t.role.coin, t.role.lane, t.role.saver, t.role.printer];
+      p.op((g) => {
+        for (let i = 0; i < 12; i++) {
+          const [X, Y] = P(v, x - sh.hw + 0.45 + i * ((sh.hw * 2 - 0.9) / 11), y, 0.02);
+          g.circle(X, Y, v.S * 0.13).fill(lit ? hues[i % hues.length] : mix(hues[i % hues.length], t.shadeTint, 0.7)).stroke({ width: v.lw * 0.3, color: t.ink });
+        }
+      });
       break;
     }
   }
@@ -478,11 +564,12 @@ function face(p: Prop, v: View, t: Theme, x: number, y: number, z: number, r: nu
 }
 
 /** A flipper at any angle (the sim's), drawn live: rubber band, coloured bat, metal pivot cap. */
-export function drawFlipper(g: Graphics, v: View, t: Theme, px: number, py: number, angle: number, sign: 1 | -1) {
+export function drawFlipper(g: Graphics, v: View, t: Theme, px: number, py: number, angle: number, sign: 1 | -1, length = FLIPPER_LENGTH) {
   const p = new Prop(v, t);
-  const tip: Pt = [px + Math.cos(angle) * FLIPPER_LENGTH * sign, py + Math.sin(angle) * FLIPPER_LENGTH * sign];
-  const outline = hull([...ring(px, py, 0.58, 16), ...ring(tip[0], tip[1], 0.28, 12)]);
-  const rubber = hull([...ring(px, py, 0.66, 16), ...ring(tip[0], tip[1], 0.36, 12)]);
+  const k = length < FLIPPER_LENGTH ? 0.8 : 1;
+  const tip: Pt = [px + Math.cos(angle) * length * sign, py + Math.sin(angle) * length * sign];
+  const outline = hull([...ring(px, py, 0.58 * k, 16), ...ring(tip[0], tip[1], 0.28 * k, 12)]);
+  const rubber = hull([...ring(px, py, 0.66 * k, 16), ...ring(tip[0], tip[1], 0.36 * k, 12)]);
   shadowPoly(g, v, t, rubber, 0.22);
   p.prism(rubber, 0, 0.28, mat(t, t.role.flipper === t.paper ? t.accent : t.rubber));
   p.prism(outline, 0.28, 0.24, mat(t, t.role.flipper));

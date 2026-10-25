@@ -10,8 +10,10 @@ import { bigBoiOf, DRAGON, ORDER, type MachineId } from './bigboi';
 
 export type PartId =
   | 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver' | 'vari'
-  | 'ding' | 'piggy' | 'magnet' | 'thunder' | 'jackpot' | 'xlane' | 'golden' | 'disco';
-export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target';
+  | 'ding' | 'piggy' | 'magnet' | 'thunder' | 'jackpot' | 'xlane' | 'golden' | 'disco'
+  | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller';
+export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
+  | 'mover' | 'goal' | 'strip';
 
 /**
  * Rarity decides when a part turns up in the shop and how much it does. Commons are there from round 1;
@@ -30,8 +32,12 @@ export const TAG_NAMES: Record<PartTag, string> = { bigboi: 'Big Boi', bumper: '
 
 /** Part levels (Space Cadet's bumper upgrades): Level Lights and decals raise them, for the rest of the run. */
 export const MAX_LEVEL = 5;
-/** The part types a Level Light can be aimed at. */
-export const LEVEL_TARGETS: PartId[] = ['pop', 'coin', 'mega'];
+/** A Level Light's reach: lights this close to each other work as one group, and level up the bumpers this close to them. */
+export const LEVEL_RADIUS = 5.5;
+/** How long a Lamp's +% lasts after a full-table light-up (a drop-target set lights every Lamp for this long; the Disco Ball longer). */
+export const LAMP_FLASH = 5;
+/** Extra flippers are this much shorter than the two at the bottom. */
+export const SMALL_FLIPPER = 0.7;
 /** A Hot Shot lasts this long: the ball's next scoring hit within it pays the bonus. */
 export const HOT_WINDOW = 1.2;
 
@@ -90,8 +96,10 @@ export interface Recipe {
   spawn?: number;
   /** Extra base points per level of this part type (see MAX_LEVEL). */
   perLevel?: number;
-  /** A Level Light: toggles on each pass; lighting every light aimed at one type levels that type up. */
+  /** A Level Light: toggles on each pass; a lit group of them levels up the bumpers around it. */
   levelUp?: boolean;
+  /** Lane Rollover: this many lit lanes complete a set. */
+  setSize?: number;
   /** Harder hits pay more: the points are multiplied by the highest tier the ball's speed reaches. */
   tiers?: HitTier[];
   /** Hot Shot: the ball's next scoring hit (within HOT_WINDOW) pays this much more (0.5 = +50%). */
@@ -103,20 +111,28 @@ export interface Recipe {
   varietyCap?: number;
   /** Jackpot: pays `per` more for every scoring hit this ball (up to `cap`), then starts again. */
   jackpot?: { per: number; cap: number };
-  /** Piggy Bank: each hit stores $1 (up to `cap`); a hit of tier `breakTier` or more breaks it and pays `x` times what it holds. */
-  piggy?: { cap: number; breakTier: number; x: number };
-  /** Lights every Lamp on the table (a completed bank set, the Disco Ball). */
-  lightsLamps?: boolean;
+  /** Piggy Bank: each hit stores $1 (up to `cap`); a hit of tier `breakTier` or more breaks it and pays what it holds plus `bonus`. */
+  piggy?: { cap: number; breakTier: number; bonus: number };
+  /** Lights every Lamp on the table at full glow for this many seconds (a completed bank set, the Disco Ball). */
+  lightsLamps?: number;
   /** X Lane: also lights the next dark Lane Rollover. */
   lightsLane?: boolean;
   /** Seconds this part is dark after it fires (no repeats from a ball rattling over it). */
   cooldown?: number;
   /** Fires at most this many times a ball. */
   perBall?: number;
-  /** Ball Saver: $ paid when it saves a ball. */
-  saveMoney?: number;
-  /** Lamp: what lighting it pays, once a ball. */
-  onLight?: { points: number; mult: number };
+  /** Ball Saver: $ paid at the end of a round it never had to save a ball in. */
+  unusedPay?: number;
+  /** Lamp: each hit brightens it one step (up to `steps`), paying `points`. */
+  brighten?: { points: number; steps: number };
+  /** Duck Gallery: each hit on the duck makes it this much faster for the rest of the ball (up to `max` times its speed). */
+  speedUp?: { by: number; max: number };
+  /** Goal: what a goal pays on top of its points (×Mult, capped a ball). */
+  goal?: { xmult: number; xmultCap: number };
+  /** Roller Pop: a hit near either end of its rail (the outer `edge` of its travel) pays `x` times. */
+  edgeShot?: { edge: number; x: number };
+  /** Glow Strip: lights for `seconds` after any bonus anywhere, and while lit every part standing on it pays +`bonus`. */
+  strip?: { seconds: number; bonus: number; reach: number };
 }
 
 /** One step of a vari-target: balls at least `from` fast (scaled by the part's Stiffness) pay `x` times. */
@@ -147,7 +163,22 @@ export function tierOf(inst: PartInstance, speed: number, ease = 1): HitTier | n
   return best;
 }
 
-export type Shape = { type: 'circle'; r: number } | { type: 'box'; hw: number; hh: number };
+/** A tri is a triangle pointing up the table (base at -hh, apex at +hh): it kicks the ball upwards. */
+export type Shape = { type: 'circle'; r: number } | { type: 'box'; hw: number; hh: number } | { type: 'tri'; hw: number; hh: number };
+
+/** A part with a piece that slides back and forth along its own long axis (the duck, the goalie, the roller). */
+export interface Mover {
+  /** How far the piece travels each side of the centre. */
+  travel: number;
+  /** Units a second. */
+  speed: number;
+  shape: Shape;
+  /** Where the piece slides, relative to the part's centre (along y). */
+  y: number;
+  restitution: number;
+  /** Ball speed a hit on it adds, away from it (a moving bumper). */
+  kick?: number;
+}
 
 export interface PartDef {
   id: PartId;
@@ -156,7 +187,10 @@ export interface PartDef {
   kind: PartKind;
   rarity: Rarity;
   tags: PartTag[];
+  /** What one shop offer costs (for the whole pack). */
   cost: number;
+  /** Sold in packs: one offer gives this many (three Lane Rollovers, two Level Lights). */
+  pack?: number;
   /** Relative chance of appearing in the shop, within its rarity. 0 = never sold (Big Boi comes with the machine). */
   weight: number;
   shape: Shape;
@@ -165,6 +199,8 @@ export interface PartDef {
   kickUnit: number;
   recipe: Recipe;
   dials: DialDef[];
+  /** The sliding piece, for the parts that have one. */
+  mover?: Mover;
 }
 
 const kickDial = (def: number, tradeoff = 'How hard it bounces the ball back. Softer pays more per hit; harder sends the ball farther.', ends: [string, string] = ['soft, pays more', 'hard, pays less']): DialDef => ({
@@ -206,14 +242,14 @@ export const PARTS: Record<PartId, PartDef> = {
     }],
   },
   lane: {
-    id: 'lane', name: 'Lane Rollover', blurb: 'Roll over it. It lights up. Cheap thrills.', kind: 'rollover', rarity: 'common', tags: ['light'], cost: 3, weight: 3,
+    id: 'lane', name: 'Lane Rollover', blurb: 'Roll over it. It lights up. Cheap thrills.', kind: 'rollover', rarity: 'common', tags: ['light'], cost: 4, pack: 3, weight: 3,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 50, per: 'roll-over', lights: true, setBonus: { points: 200, mult: 0.5 }, setCap: 5, perLevel: 10 }, dials: [],
+    recipe: { points: 50, per: 'roll-over', lights: true, setSize: 3, setBonus: { points: 200, mult: 0.5 }, setCap: 5, perLevel: 10 }, dials: [],
   },
   lamp: {
-    id: 'lamp', name: 'Lamp', blurb: 'Light it up and the neighbours score more.', kind: 'lamp', rarity: 'common', tags: ['light'], cost: 4, weight: 2,
+    id: 'lamp', name: 'Lamp', blurb: 'Hit it again and again. The neighbours love it.', kind: 'lamp', rarity: 'common', tags: ['light'], cost: 4, weight: 2,
     shape: { type: 'circle', r: 0.8 }, rotatable: false, kickUnit: 0,
-    recipe: { lights: true, onLight: { points: 50, mult: 0.1 } },
+    recipe: { lights: true, brighten: { points: 50, steps: 5 } },
     dials: [{
       id: 'radius', label: 'Glow radius', min: 3, max: 8, step: 0.5, default: 5,
       tradeoff: 'A wider glow reaches more parts, but gives each a smaller bonus.', ends: ['tight, bigger bonus', 'wide, smaller bonus'], fmt: (v) => `${v.toFixed(1)}`,
@@ -225,7 +261,7 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { points: 40, per: 'hit', tiers: VARI_TIERS, hot: 0.5, hotTier: 3, perLevel: 8 },
     dials: [{
       id: 'stiff', label: 'Stiffness', min: 0.5, max: 2, step: 0.25, default: 1,
-      tradeoff: 'A stiffer target needs a harder hit for every tier, but pays more once you get there.', ends: ['soft, easy tiers', 'stiff, pays more'],
+      tradeoff: 'A stiffer target needs a faster ball for every step, but pays more once you get there.', ends: ['soft, easy steps', 'stiff, pays more'],
       payoff: (v) => 1 + 0.5 * (v - 1), fmt: (v) => v.toFixed(2),
     }],
   },
@@ -234,49 +270,43 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'box', hw: 2.2, hh: 0.28 }, rotatable: true, kickUnit: 0, recipe: { hot: 0.25 }, dials: [],
   },
   kickback: {
-    id: 'kickback', name: 'Kickback', blurb: 'Roll over it and it boots the ball right back. Once per ball.', kind: 'kickback', rarity: 'common', tags: ['kicker', 'guard'], cost: 4, weight: 2,
+    id: 'kickback', name: 'Kickback', blurb: 'Roll over it and it boots the ball right back.', kind: 'kickback', rarity: 'common', tags: ['kicker', 'guard'], cost: 4, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 150, per: 'kick', hot: 0.5, perLevel: 30 }, dials: [powerDial('kick')],
+    recipe: { points: 150, per: 'kick', hot: 0.5, cooldown: 4, perLevel: 30 }, dials: [powerDial('kick')],
   },
 
   // ---- uncommon: from round 2 ----
   bank: {
     id: 'bank', name: 'Drop-Target Bank', blurb: 'Three targets. They go down. They come back. The lamps cheer.', kind: 'bank', rarity: 'uncommon', tags: ['target'], cost: 5, weight: 2,
     shape: { type: 'box', hw: 2.6, hh: 0.45 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 60, per: 'target', setBonus: { points: 300, mult: 0.3 }, setCap: 5, lightsLamps: true, perLevel: 12 }, dials: [],
+    recipe: { points: 60, per: 'target', setBonus: { points: 300, mult: 0.3 }, lightsLamps: LAMP_FLASH, perLevel: 12 }, dials: [],
   },
   uplight: {
-    id: 'uplight', name: 'Level Light', blurb: 'Light them all and your bumpers level up.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 5, weight: 2,
+    id: 'uplight', name: 'Level Light', blurb: 'Light them both and the bumpers nearby level up.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 5, pack: 2, weight: 2,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 10, per: 'pass', levelUp: true },
-    dials: [{
-      id: 'target', label: 'Levels up', min: 0, max: LEVEL_TARGETS.length - 1, step: 1, default: 0,
-      tradeoff: 'Which part type this light upgrades. Lights aimed at different types complete separately.', ends: ['Pop Bumpers', 'Big Bois'],
-      fmt: (v) => PARTS[LEVEL_TARGETS[Math.round(v)] ?? 'pop'].name,
-    }],
+    recipe: { points: 10, per: 'pass', levelUp: true }, dials: [],
   },
   saver: {
-    id: 'saver', name: 'Ball Saver', blurb: 'Drain early? The machine pretends it never happened. And tips you.', kind: 'saver', rarity: 'uncommon', tags: ['guard', 'money'], cost: 5, weight: 1,
-    shape: { type: 'circle', r: 0.8 }, rotatable: false, kickUnit: 0, recipe: { saveMoney: 1 }, dials: [],
+    id: 'saver', name: 'Ball Saver', blurb: 'Drain early? The machine pretends it never happened.', kind: 'saver', rarity: 'uncommon', tags: ['guard', 'money'], cost: 5, weight: 1,
+    shape: { type: 'circle', r: 0.8 }, rotatable: false, kickUnit: 0, recipe: { unusedPay: 1 }, dials: [],
   },
   flipper: {
-    id: 'flipper', name: 'Extra Flipper', blurb: 'Because two hands were never enough.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 6, weight: 1,
-    shape: { type: 'circle', r: 2.6 }, rotatable: false, kickUnit: 0,
-    recipe: {},
-    dials: [{
-      id: 'side', label: 'Button', min: 0, max: 1, step: 1, default: 0,
-      tradeoff: 'Which flipper key works it: Left (←) or Right (→).', ends: ['Left (←)', 'Right (→)'], fmt: (v) => (v >= 0.5 ? 'Right' : 'Left'),
-    }],
+    id: 'flipper', name: 'Left Flipper', blurb: 'A little extra hand. Left button.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 6, weight: 1,
+    shape: { type: 'circle', r: 2.0 }, rotatable: false, kickUnit: 0, recipe: {}, dials: [],
+  },
+  flipperR: {
+    id: 'flipperR', name: 'Right Flipper', blurb: 'A little extra hand. Right button.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 6, weight: 1,
+    shape: { type: 'circle', r: 2.0 }, rotatable: false, kickUnit: 0, recipe: {}, dials: [],
   },
   ding: {
     id: 'ding', name: 'Ding-Dong Bell', blurb: 'Rings louder for a well-travelled ball.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
     shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 11,
-    recipe: { points: 60, per: 'hit', variety: 40, varietyCap: 400, perLevel: 12 }, dials: [kickDial(2)],
+    recipe: { points: 60, per: 'hit', variety: 40, perLevel: 12 }, dials: [kickDial(2)],
   },
   piggy: {
     id: 'piggy', name: 'Piggy Bank', blurb: 'Feed it coins. Then smash it.', kind: 'target', rarity: 'uncommon', tags: ['target', 'money'], cost: 5, weight: 2,
     shape: { type: 'box', hw: 1.1, hh: 0.55 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 25, per: 'hit', tiers: PIGGY_TIERS, piggy: { cap: 6, breakTier: 1, x: 2 }, perLevel: 5 }, dials: [],
+    recipe: { points: 25, per: 'hit', tiers: PIGGY_TIERS, piggy: { cap: 5, breakTier: 1, bonus: 1 }, perLevel: 5 }, dials: [],
   },
   magnet: {
     id: 'magnet', name: 'Mag-Grab', blurb: 'Grabs the ball, charges up, lets go. Very rude.', kind: 'saucer', rarity: 'uncommon', tags: ['ball', 'guard'], cost: 6, weight: 1,
@@ -284,14 +314,25 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { points: 120, per: 'grab', mult: 0.2, multCap: 1, perLevel: 25 },
     dials: [
       { id: 'hold', label: 'Hold', min: 0.2, max: 1.5, step: 0.1, default: 0.5, tradeoff: 'Holding longer pays more, but that ball sits out of play meanwhile.', ends: ['quick, back in play', 'long, pays more'], payoff: (v) => 1 + 0.6 * (v - 0.5), fmt: (v) => `${v.toFixed(1)} s` },
-      powerDial('throw'),
+      { ...powerDial('throw'), tradeoff: 'How hard it throws the ball, the way it faces (turn it when you place it).' },
     ],
+  },
+  strip: {
+    id: 'strip', name: 'Glow Strip', blurb: 'A light under the floor. It parties whenever anything good happens.', kind: 'strip', rarity: 'uncommon', tags: ['light'], cost: 5, weight: 2,
+    shape: { type: 'box', hw: 4, hh: 0.45 }, rotatable: false, kickUnit: 0,
+    recipe: { strip: { seconds: 5, bonus: 0.5, reach: 1.6 } }, dials: [],
+  },
+  roller: {
+    id: 'roller', name: 'Roller Pop', blurb: 'A pop bumper on a rail. It will not sit still.', kind: 'mover', rarity: 'uncommon', tags: ['bumper'], cost: 6, weight: 2,
+    shape: { type: 'box', hw: 3.6, hh: 0.9 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 150, per: 'hit', edgeShot: { edge: 0.75, x: 3 }, perLevel: 15 }, dials: [],
+    mover: { travel: 2.6, speed: 3.2, shape: { type: 'circle', r: 0.85 }, y: 0, restitution: 0.45, kick: 26 },
   },
 
   // ---- rare: from round 4 ----
   printer: {
     id: 'printer', name: 'Ball Printer', blurb: 'Eats one ball. Prints two. Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 7, weight: 2,
-    shape: { type: 'circle', r: 1.1 }, rotatable: true, kickUnit: 0,
+    shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
     recipe: { points: 200, per: 'ball caught', spawn: 1, printCap: 4, perLevel: 40 },
     dials: [
       {
@@ -299,24 +340,30 @@ export const PARTS: Record<PartId, PartDef> = {
         tradeoff: 'Holding longer pays more, but that ball sits out of play meanwhile.', ends: ['quick, back in play', 'long, pays more'],
         payoff: (v) => 1 + 0.5 * (v - 0.6), fmt: (v) => `${v.toFixed(1)} s`,
       },
-      { ...powerDial('eject'), label: 'Eject power' },
+      { ...powerDial('eject'), label: 'Eject power', tradeoff: 'How hard it fires the balls out.' },
     ],
   },
   thunder: {
-    id: 'thunder', name: 'Thunder Bumper', blurb: 'The big one. Every bonk shakes the Pops awake.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
-    shape: { type: 'circle', r: 1.55 }, rotatable: false, kickUnit: 19,
+    id: 'thunder', name: 'Thunder Bumper', blurb: 'A big wedge. Every bonk throws the ball up and shakes the Pops awake.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
+    shape: { type: 'tri', hw: 1.7, hh: 1.4 }, rotatable: false, kickUnit: 19,
     recipe: { points: 300, per: 'hit', feeds: { id: 'pop', n: 3 }, mult: 0.05, multCap: 1, perLevel: 50 }, dials: [kickDial(2)],
   },
   jackpot: {
     id: 'jackpot', name: 'Jackpot Scoop', blurb: 'Every hit fills the pot. Sink it to cash in.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 8, weight: 2,
-    shape: { type: 'circle', r: 1.35 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 500, per: 'scoop', jackpot: { per: 40, cap: 6000 }, perLevel: 100 },
-    dials: [{ id: 'hold', label: 'Hold', min: 0.4, max: 1.5, step: 0.1, default: 0.8, tradeoff: 'How long it keeps the ball before it fires it back out.', ends: ['quick', 'slow'], fmt: (v) => `${v.toFixed(1)} s` }, powerDial('eject')],
+    shape: { type: 'circle', r: 1.35 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 200, per: 'scoop', jackpot: { per: 40, cap: 6000 }, perLevel: 40 },
+    dials: [{ id: 'hold', label: 'Hold', min: 0.4, max: 1.5, step: 0.1, default: 0.8, tradeoff: 'How long it keeps the ball before it fires it back out.', ends: ['quick', 'slow'], fmt: (v) => `${v.toFixed(1)} s` }, { ...powerDial('eject'), tradeoff: 'How hard it fires the ball back out.' }],
   },
   xlane: {
     id: 'xlane', name: 'X Lane', blurb: 'Roll through it and your Mult multiplies.', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 9, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
     recipe: { xmult: 1.25, xmultCap: 2, cooldown: 3, lightsLane: true }, dials: [],
+  },
+  duck: {
+    id: 'duck', name: 'Duck Gallery', blurb: 'A tin duck paddles back and forth. Knock it over. It gets cross.', kind: 'mover', rarity: 'rare', tags: ['target'], cost: 8, weight: 2,
+    shape: { type: 'box', hw: 3.9, hh: 0.75 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 300, per: 'duck', grow: 100, growCap: 1000, speedUp: { by: 0.15, max: 2 }, perLevel: 50 }, dials: [],
+    mover: { travel: 3.1, speed: 3.5, shape: { type: 'circle', r: 0.6 }, y: 0, restitution: 0.6 },
   },
 
   // ---- legendary: from round 7 ----
@@ -326,9 +373,15 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { points: 600, per: 'hit', xmult: 1.05, xmultCap: 2, moneyEvery: { n: 5, cap: 5 }, perLevel: 100 }, dials: [kickDial(2)],
   },
   disco: {
-    id: 'disco', name: 'Disco Ball', blurb: 'Once a ball: everything lights up and the Mult doubles.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
+    id: 'disco', name: 'Disco Ball', blurb: 'Once a ball: the lamps go wild and the Mult doubles.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 1000, per: 'pass', xmult: 2, perBall: 1, lightsLamps: true, perLevel: 150 }, dials: [],
+    recipe: { points: 1000, per: 'pass', xmult: 2, perBall: 1, lightsLamps: 8, perLevel: 150 }, dials: [],
+  },
+  goal: {
+    id: 'goal', name: 'Goal!', blurb: 'A tiny football goal with a very serious goalie.', kind: 'goal', rarity: 'legendary', tags: ['target'], cost: 12, weight: 2,
+    shape: { type: 'box', hw: 3.4, hh: 1.1 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 1500, per: 'goal', goal: { xmult: 1.5, xmultCap: 3 }, cooldown: 1.5, perLevel: 250 }, dials: [],
+    mover: { travel: 1.7, speed: 3, shape: { type: 'box', hw: 0.75, hh: 0.22 }, y: -0.45, restitution: 0.55 },
   },
 
   // ---- not for sale: every machine has one Big Boi in the middle, and what he does depends on the machine ----
@@ -375,6 +428,10 @@ export interface PartInstance {
   fresh?: boolean;
   /** Part of every machine (the Big Boi in the middle): it cannot be moved, stored or sold. */
   fixed?: boolean;
+  /** Levels this part has earned this run (Level Lights level up the bumpers near them). */
+  level?: number;
+  /** Bought together in one pack (the uid of its first piece): the three Lane Rollovers of a pack make a set. */
+  group?: number;
 }
 
 export function defaultDials(def: PartDef): Record<string, number> {
@@ -390,6 +447,12 @@ export function footprint(def: PartDef): number {
   return def.shape.type === 'circle' ? def.shape.r : Math.hypot(def.shape.hw, def.shape.hh);
 }
 
+/** The triangle's corners (local, before the part's position): base at -hh, apex at +hh. */
+export const triPoints = (hw: number, hh: number): [number, number][] => [[-hw, -hh], [hw, -hh], [0, hh]];
+
+/** Floor inserts that other parts may stand on (a Glow Strip lies under the parts). */
+export const underFloor = (id: PartId) => PARTS[id].kind === 'strip';
+
 /** Product of the payoff multipliers of all of the part's dials. */
 export function dialFactor(inst: PartInstance): number {
   let f = 1;
@@ -397,13 +460,15 @@ export function dialFactor(inst: PartInstance): number {
   return f;
 }
 
+/** What one brightening step of a Lamp adds (a wider glow gives less): +10% at the default radius. */
 export function lampBonus(radius: number): number {
-  return Math.round((0.5 - 0.05 * radius) * 100) / 100;
+  return Math.round((0.2 - 0.02 * radius) * 100) / 100;
 }
 
-/** A lamp's reach and bonus for its Glow dial setting, with the run's Bright Lamps upgrades. */
-export function lampStats(dialRadius: number, mods: Pick<Mods, 'lampRadius' | 'lampBonus'> = neutralMods()): { radius: number; bonus: number } {
-  return { radius: dialRadius + mods.lampRadius, bonus: Math.round((lampBonus(dialRadius) + mods.lampBonus) * 100) / 100 };
+/** A lamp's reach, what each step adds, and its full glow, for its Glow dial setting and the run's Bright Lamps decals. */
+export function lampStats(dialRadius: number, mods: Pick<Mods, 'lampRadius' | 'lampBonus'> = neutralMods()): { radius: number; bonus: number; full: number } {
+  const bonus = Math.round((lampBonus(dialRadius) + mods.lampBonus) * 100) / 100;
+  return { radius: dialRadius + mods.lampRadius, bonus, full: Math.round(bonus * (PARTS.lamp.recipe.brighten?.steps ?? 5) * 100) / 100 };
 }
 
 /** The +points a part's `grow` has added after `hits` hits of its type this ball (never more than its `growCap`). */
@@ -434,7 +499,7 @@ export function effectiveLevel(id: PartId, own: number, mods: Pick<Mods, 'levelB
 }
 
 export function sellPrice(def: PartDef, rate = 0.5): number {
-  return Math.floor(def.cost * rate);
+  return Math.floor((def.cost / (def.pack ?? 1)) * rate); // one piece of a pack sells for its share
 }
 
 export const dialValue = (inst: PartInstance, id: string): number =>
@@ -472,69 +537,76 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   const f = (n: number) => num(Math.round(n * factor * 100) / 100);
   const mg = (n: number) => num(n * mods.multGain);
   const xg = (x: number) => num(1 + (x - 1) * mods.multGain);
+  const per = r.per ?? 'hit';
+  const one = def.id === 'mega' || def.kind === 'mover' || def.kind === 'goal'; // there is only one of him; moving parts count each one alone
 
   const lvlBonus = (r.perLevel ?? 0) * level;
-  if (r.points) lines.push({ tag: 'score', text: `Scores ${f(r.points + lvlBonus)} per ${r.per ?? 'hit'}.` });
+  // the Spinner says it all in one line
+  if (def.kind === 'spinner') {
+    lines.push({ tag: 'score', text: `Scores ${f((r.points ?? 0) + lvlBonus)} and raises your Mult by +${mg((r.spinMult ?? 0) * mods.spinMult)} per spin. Up to ${Math.round(10 * mods.spinBoost)} spins a pass, and +${mg((r.spinMultCap ?? 0) * mods.spinMult)} Mult a ball.` });
+  } else if (r.points && def.kind !== 'goal') lines.push({ tag: 'score', text: `Scores ${f(r.points + lvlBonus)} per ${per}.` });
   const upg = modFactor(def.id, mods);
   if (r.points && Math.abs(upg - 1) > 0.001) lines.push({ tag: 'level', text: `Your decals multiply its points by ${num(upg)}.` });
-  if (r.grow) lines.push({ tag: 'grow', text: `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it)${r.growCap ? `, up to +${num(r.growCap * factor)}` : ''}.` });
+  if (r.grow) lines.push({ tag: 'grow', text: one
+    ? `Every hit adds +${num(r.grow * factor)} to the next one this ball, up to +${num((r.growCap ?? 0) * factor)}.`
+    : `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it)${r.growCap ? `, up to +${num(r.growCap * factor)}` : ''}.` });
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
-  const fromAll = def.id === 'mega' ? '' : ` from all ${def.name}s`; // there is only ever one Big Boi
-  if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${r.per ?? 'hit'}${r.multCap ? `, up to +${mg(r.multCap)} a ball${fromAll}` : ''}.` });
-  if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${r.per ?? 'hit'}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
+  if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
+  if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
   if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Doubles your Mult (×${xg(r.xmult)}) the first time a ball rolls over it each ball.` });
-  if (r.spinMult) lines.push({ tag: 'mult', text: `Every spin raises your Mult by +${mg(r.spinMult * mods.spinMult)}, up to +${mg((r.spinMultCap ?? 0) * mods.spinMult)} a ball from all Spinners.` });
-  if (r.money && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.money} per ${r.per ?? 'hit'}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
+  if (r.money && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.money} per ${per}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
   if (r.moneyEvery && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $1 every ${r.moneyEvery.n} hits, up to $${r.moneyEvery.cap} a round.` });
-  if (r.variety) lines.push({ tag: 'grow', text: `+${f(r.variety)} for every different part type this ball has hit (up to +${f(r.varietyCap ?? 0)}).` });
+  if (r.variety) lines.push({ tag: 'grow', text: `+${f(r.variety)} for every different part type this ball has hit.` });
   if (r.jackpot) lines.push({ tag: 'set', text: `The pot: +${f(r.jackpot.per)} for every scoring hit this ball (up to +${f(r.jackpot.cap)}). Sink the ball in it to cash the pot, then it starts again.` });
-  if (r.piggy) lines.push({ tag: 'money', text: `Every hit drops $1 in the piggy (it holds $${r.piggy.cap}). Smash it (speed ${num(30 * mods.tierEase)}+) to break it: it pays ${r.piggy.x}× what it holds. Whatever is left in it at the end of a round is lost.` });
+  if (r.piggy) lines.push({ tag: 'money', text: `Every hit drops $1 in the piggy (it holds $${r.piggy.cap}). Smash it (speed ${num(30 * mods.tierEase)}+) to break it: it pays what it holds +$${r.piggy.bonus}. Whatever is left in it at the end of a round is lost.` });
   if (r.hot) {
     const when = r.hotTier !== undefined ? 'A smash hit makes' : r.points ? 'Every hit makes' : 'A ball that bounces off it is';
     lines.push({ tag: 'combo', text: `Hot Shot: ${when}${r.points || r.hotTier !== undefined ? ' the ball hot:' : ' hot:'} its next scoring hit within ${HOT_WINDOW} s pays +${Math.round(r.hot * mods.hotFactor * 100)}%.` });
   }
   if (def.kind === 'lamp') {
-    const lamp = lampStats(inst ? dialValue(inst, 'radius') : 5, mods);
-    lines.push({ tag: 'lamp', text: `Roll a ball over it to light it for this ball. While lit, every scoring part within ${num(lamp.radius)} units scores +${Math.round(lamp.bonus * 100)}%.` });
-    if (r.onLight) lines.push({ tag: 'mult', text: `Lighting it pays ${f(r.onLight.points)} points and +${mg(r.onLight.mult)} Mult.` });
+    const lamp = lampStats(inst ? dialValue(inst, 'radius') : 5, mods), b = r.brighten!;
+    lines.push({ tag: 'lamp', text: `Every hit brightens it a step (up to ${b.steps}) and pays ${f(b.points)}. Each step gives every scoring part within ${num(lamp.radius)} units +${Math.round(lamp.bonus * 100)}%, up to +${Math.round(lamp.full * 100)}%. It goes dark at the end of the ball.` });
   }
-  if (r.lights && def.kind === 'rollover') lines.push({ tag: 'note', text: 'Lights up for the rest of this ball.' });
-  if (def.id === 'lane') lines.push({ tag: 'note', text: 'Lane change: each flipper press shifts the lit lanes one lane (← left, → right).' });
+  if (def.pack && def.pack > 1) lines.push({ tag: 'note', text: `Comes as a pack of ${def.pack}.` });
+  if (r.lights && def.kind === 'rollover') lines.push({ tag: 'note', text: 'Lights up when the ball rolls over it. The lanes of a pack spell the machine\'s word.' });
   if (r.tiers && def.id === 'vari') {
     const stiff = (inst ? dialValue(inst, 'stiff') : 1) * mods.tierEase;
-    lines.push({ tag: 'note', text: `Pays more for a harder hit: ${r.tiers.map((t) => `x${t.x} ${t.name}${t.from ? ` (${num(t.from * stiff)}+ speed)` : ''}`).join(', ')}.` });
+    const [, firm, hard, smash] = r.tiers;
+    lines.push({ tag: 'note', text: `The faster the ball is moving when it hits, the more it pays: ×${firm.x} at speed ${num(firm.from * stiff)}, ×${hard.x} at ${num(hard.from * stiff)}, ×${smash.x} at ${num(smash.from * stiff)} (a smash).` });
   }
-  if (r.setBonus && def.kind === 'rollover') lines.push({ tag: 'set', text: `Light every Lane Rollover on the board (you need at least two): +${num(setPts)} points and +${mg(setMult)} Mult, then they reset. It pays at most ${r.setCap} times a ball.` });
-  if (def.kind === 'bank') lines.push({ tag: 'set', text: `Each target you hit drops. Drop all three: +${num(setPts)} points and +${mg(setMult)} Mult, then they pop back up (and every new ball). It pays at most ${r.setCap} times a ball.` });
-  if (r.lightsLamps) lines.push({ tag: 'lamp', text: def.kind === 'bank' ? 'A full set also lights every Lamp on the table.' : 'It also lights every Lamp on the table.' });
-  if (r.lightsLane) lines.push({ tag: 'note', text: 'It also lights the next dark Lane Rollover.' });
-  if (r.cooldown) lines.push({ tag: 'note', text: `Goes dark for ${r.cooldown} s after it fires.` });
-  if (r.levelUp) {
-    const t = PARTS[LEVEL_TARGETS[Math.round(inst ? dialValue(inst, 'target') : 0)] ?? 'pop'];
-    lines.push({ tag: 'level', text: `Roll over it to light it; roll over it again and it goes out. Light every Level Light aimed at ${t.name}s (you need at least two) to level them up for the rest of the run, then the lights reset.` });
-  }
+  if (r.setBonus && def.kind === 'rollover') lines.push({ tag: 'set', text: `Light all ${r.setSize} lanes of a pack to make a set: +${num(setPts)} points and +${mg(setMult)} Mult, and they go dark. At most ${r.setCap} sets a ball.` });
+  if (def.kind === 'bank') lines.push({ tag: 'set', text: `Each target you hit drops. Drop all three: +${num(setPts)} points and +${mg(setMult)} Mult, then they pop back up.` });
+  if (r.lightsLamps) lines.push({ tag: 'lamp', text: `${def.kind === 'bank' ? 'A full set also' : 'It also'} lights every Lamp at full glow for ${r.lightsLamps} s.` });
+  if (r.lightsLane) lines.push({ tag: 'note', text: 'It also lights a Lane Rollover.' });
+  if (r.cooldown && def.kind !== 'kickback' && def.kind !== 'goal') lines.push({ tag: 'note', text: `Goes dark for ${r.cooldown} s after it fires.` });
+  if (r.levelUp) lines.push({ tag: 'level', text: `Roll over to switch it on or off. It needs at least one more Level Light within ${LEVEL_RADIUS} of it. When it and every Level Light within ${LEVEL_RADIUS} are on, the bumpers within ${LEVEL_RADIUS} of those lights level up: +1 level for each light past the first.` });
   if (r.spawn) {
     const n = r.spawn + mods.printerExtra;
     lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (at most ${r.printCap} printed in one ball, and 4 on the table).` });
   }
   if (def.kind === 'saucer') {
-    const hold = inst ? dialValue(inst, 'hold') : PARTS[def.id].dials[0]?.default ?? 0.6, pw = inst ? dialValue(inst, 'power') : 70;
-    lines.push({ tag: 'note', text: `${def.id === 'magnet' ? 'Grabs a ball that comes close and holds it' : 'Holds the ball'} ${num(hold)} s, then fires it out with power ${pw}. Rotate to aim.` });
+    const hold = inst ? dialValue(inst, 'hold') : PARTS[def.id].dials[0]?.default ?? 0.6;
+    lines.push({ tag: 'note', text: def.id === 'magnet'
+      ? `Grabs a ball that comes close, holds it ${num(hold)} s, then throws it the way it faces.`
+      : `Holds the ball ${num(hold)} s, then fires it out in a random direction.` });
   }
-  if (def.kind === 'spinner') lines.push({ tag: 'note', text: `A faster ball spins it more (1 to ${Math.round(10 * mods.spinBoost)} spins), and it slows the ball down.` });
-  if (def.kind === 'flipper') {
-    const side = inst ? dialValue(inst, 'side') : 0;
-    lines.push({ tag: 'note', text: `A flipper worked by the ${side >= 0.5 ? 'Right (→)' : 'Left (←)'} key. Scores nothing itself.` });
-  }
+  if (def.kind === 'flipper') lines.push({ tag: 'note', text: `A small flipper worked by the ${def.id === 'flipperR' ? 'Right (→)' : 'Left (←)'} key. Scores nothing itself.` });
   if (def.kind === 'deflector') lines.push({ tag: 'note', text: 'Scores nothing itself. A bouncy bar that bends the ball\'s path.' });
   if (def.kind === 'kickback') {
-    const pw = inst ? dialValue(inst, 'power') : 70, n = mods.kickbackCharges;
-    lines.push({ tag: 'note', text: `Armed at the start of every ball. The first ${n === 1 ? 'time' : `${n} times`} a ball rolls over it, it fires the ball out with power ${pw}, then goes dark until the next ball. Rotate to aim.` });
+    const cd = Math.round((r.cooldown ?? 4) * mods.kickbackCooldown * 10) / 10;
+    lines.push({ tag: 'note', text: `When a ball rolls over it, it fires the ball out the way it faces, then needs ${cd} s to recharge.` });
   }
   if (def.kind === 'saver') {
     lines.push({ tag: 'note', text: `For ${SAVER_WINDOW} s after you launch a ball, a drain sends it back to the plunger instead, and the ball is not spent. Each Ball Saver on the board saves one drain per ball.` });
-    if (r.saveMoney && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.saveMoney} every time it saves a ball.` });
+    if (r.unusedPay && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.unusedPay} at the end of a round in which it never had to save a ball.` });
   }
+  if (r.speedUp) lines.push({ tag: 'combo', text: `The duck paddles along its rail. Every hit makes it ${Math.round(r.speedUp.by * 100)}% faster for the rest of the ball (up to ${r.speedUp.max}× its speed).` });
+  if (r.edgeShot) lines.push({ tag: 'combo', text: `It rolls along its rail. Catch it near either end of the rail: ×${r.edgeShot.x}.` });
+  if (r.goal) {
+    lines.push({ tag: 'score', text: `Score past the goalie: ${f((r.points ?? 0) + lvlBonus)} points and your Mult ×${xg(r.goal.xmult)} (up to ×${xg(r.goal.xmultCap)} a ball).` });
+    lines.push({ tag: 'note', text: 'The goalie slides across the mouth of the goal and blocks the ball.' });
+  }
+  if (r.strip) lines.push({ tag: 'lamp', text: `Lies under the floor: other parts can stand on it. Every time anything pays a bonus (a set, a jackpot, a level up...), it lights for ${r.strip.seconds} s, and every part standing on it pays +${Math.round(r.strip.bonus * 100)}%.` });
   if (def.id === 'mega') lines.push(...bigBoiLines(ctx.machine, factor, mods));
   return lines;
 }

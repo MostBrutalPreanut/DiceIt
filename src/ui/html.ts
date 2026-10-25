@@ -26,7 +26,7 @@ export function dot(def: PartDef) {
 
 const KIND: Record<PartKind, string> = {
   bumper: 'Bumper', kicker: 'Kicker', deflector: 'Rail', spinner: 'Spinner', rollover: 'Rollover', saucer: 'Saucer', flipper: 'Flipper',
-  lamp: 'Lamp', bank: 'Targets', kickback: 'Kickback', saver: 'Saver', target: 'Target',
+  lamp: 'Lamp', bank: 'Targets', kickback: 'Kickback', saver: 'Saver', target: 'Target', mover: 'Mover', goal: 'Goal', strip: 'Floor light',
 };
 
 /** The rarity as a small coloured chip (common, uncommon, rare, legendary). */

@@ -1,4 +1,3 @@
-import { FLIPPER_LENGTH } from './constants';
 import { Rng } from './rng';
 import type { Input, Sim } from './sim';
 
@@ -37,7 +36,7 @@ export class Bot {
         const sign = f.side === 'L' ? 1 : -1;
         const dx = (b.x - f.pivotX) * sign;
         const dy = b.y - f.pivotY;
-        const inReach = dx > 0.3 && dx < FLIPPER_LENGTH + 0.6 && dy > -1 && dy < 2.4 && b.vy < 8;
+        const inReach = dx > 0.3 && dx < f.length + 0.6 && dy > -1 && dy < 2.4 && b.vy < 8;
         if (inReach && this.rng.next() < this.skill) this.holdUntil[f.side] = t + 0.18;
       }
     }

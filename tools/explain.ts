@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { PARTS, type PartId } from '../src/data/parts';
-import { Game } from '../src/game/game';
+import { Game, migrateParts } from '../src/game/game';
 import { cloneLayout } from '../src/sim/layout';
 import { Bot } from '../src/sim/bot';
 import type { ParRun } from './par';
@@ -25,7 +25,7 @@ console.log('levels:', JSON.stringify(r.levels), ' upgrades:', run.upgrades.join
 const g = new Game();
 g.layout = cloneLayout(r.layout);
 g.mods = r.mods;
-g.levels = { ...r.levels };
+migrateParts(g.layout, r.levels);
 g.goalOverride = Infinity;
 // the same bot seeds playRounds used for this sample
 const seedBase = json.rounds ? run.seed * 10000 + n : 1; // playRounds' seed for this round

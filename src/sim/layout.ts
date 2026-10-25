@@ -1,4 +1,4 @@
-import { footprint, makePart, PARTS, type PartId, type PartInstance } from '../data/parts';
+import { footprint, makePart, PARTS, underFloor, type PartId, type PartInstance } from '../data/parts';
 import { BUILD_AREA, DEFAULT_GRAVITY } from './constants';
 import { clampLedge, LEDGE, ledgeSeg, tableSegments } from './table';
 
@@ -65,6 +65,7 @@ export function canPlace(layout: Layout, id: PartId, x: number, y: number, ignor
   for (const s of segsFor(layout.ledge)) if (distToSegment(x, y, s) < r + 0.3) return false;
   for (const p of layout.parts) {
     if (!p.placed || p.uid === ignoreUid) continue;
+    if (underFloor(id) !== underFloor(p.def)) continue; // a part may stand on a floor light (a Glow Strip)
     const min = r + footprint(PARTS[p.def]) + 0.9; // leave room for a ball between parts
     if (Math.hypot(p.x - x, p.y - y) < min) return false;
   }

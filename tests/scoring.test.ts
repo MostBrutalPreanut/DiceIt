@@ -78,37 +78,52 @@ describe('Mult, dials, money', () => {
 });
 
 describe('lamps, lanes and spinners', () => {
-  it('a lit lamp makes parts inside its glow score +25%, and nothing outside', () => {
+  it('a Lamp brightens a step a hit: +10% a step to parts inside its glow, nothing outside, up to five steps', () => {
     const lamp = makePart('lamp', 10, 17, 40, true); // pop 1 is at (17, 44.5): 4.5 away, inside radius 5
     const { s } = setup([lamp]);
     expect(s.consume(hit(1))[0].base).toBe(100); // lamp not lit yet
     s.startBall();
-    expect(s.consume(hit(10))[0].label).toBe('LAMP LIT');
-    const lit = s.consume(hit(1))[0];
-    expect(lit.base).toBe(125);
-    expect(lit.notes).toContain('+25% lamp');
-    expect(s.consume(hit(3))[0].base).toBe(Math.round(105)); // pop 3 at (6,42) is 11 away: no bonus
+    const first = s.consume(hit(10))[0];
+    expect(first.label).toBe('LAMP 1/5');
+    expect(first.base).toBe(50);
+    expect(s.consume(hit(1))[0].notes).toContain('+10% lamp');
+    s.consume(hit(10));
+    expect(s.consume(hit(1))[0].notes).toContain('+20% lamp');
+    for (let i = 0; i < 5; i++) s.consume(hit(10));
+    expect(s.lampLevel(10)).toBe(5); // as bright as it gets
+    expect(s.consume(hit(3))[0].notes.join()).not.toContain('lamp'); // pop 3 at (6,42) is 11 away
+    s.startBall();
+    expect(s.lampLevel(10)).toBe(0); // dark again on the next ball
   });
 
-  it('a wider glow gives a smaller bonus', () => {
+  it('a wider glow gives a smaller step', () => {
     const lamp = makePart('lamp', 10, 17, 40, true);
     lamp.dials.radius = 8;
     const { s } = setup([lamp]);
     s.consume(hit(10));
-    expect(s.consume(hit(1))[0].base).toBe(110); // 0.5 - 0.05 x 8 = +10%
+    expect(s.consume(hit(1))[0].base).toBe(104); // 0.2 - 0.02 x 8 = +4% a step
   });
 
-  it('lighting every lane pays a set bonus once, then resets', () => {
-    const { s } = setup([makePart('lane', 10, 8, 30, true), makePart('lane', 11, 12, 30, true)]);
-    const first = s.consume(hit(10));
-    expect(first).toHaveLength(1);
+  it('a full drop-target set lights every Lamp at full glow for a few seconds', () => {
+    const lamp = makePart('lamp', 10, 17, 40, true);
+    const { s } = setup([lamp, makePart('bank', 11, 12, 25, true)]);
+    s.consume(hit(11, { bankComplete: true, t: 1 }));
+    expect(s.consume(hit(1, { t: 2 }))[0].notes).toContain('+50% lamp');
+    expect(s.consume(hit(1, { t: 7 }))[0].notes.join()).not.toContain('lamp');
+  });
+
+  it('every three lit lanes make a set: it pays, and those lanes go dark', () => {
+    const { s } = setup([makePart('lane', 10, 8, 30, true), makePart('lane', 11, 12, 30, true), makePart('lane', 12, 16, 30, true), makePart('lane', 13, 20, 30, true)]);
+    expect(s.consume(hit(10))).toHaveLength(1);
     expect(s.isLit(10)).toBe(true);
-    const second = s.consume(hit(11));
-    expect(second).toHaveLength(2);
-    expect(second[1].label).toBe('LANES COMPLETE');
-    expect(second[1].base).toBe(200);
-    expect(second[1].multAfter).toBeCloseTo(1.5);
-    expect(s.isLit(10)).toBe(false);
+    s.consume(hit(10)); // an already lit lane adds nothing
+    s.consume(hit(11));
+    const third = s.consume(hit(13));
+    expect(third).toHaveLength(2);
+    expect(third[1].label).toBe('LANES COMPLETE');
+    expect(third[1].base).toBe(200);
+    expect(third[1].multAfter).toBeCloseTo(1.5);
+    expect([10, 11, 13].some((u) => s.isLit(u))).toBe(false);
   });
 
   it('spinner pays per spin', () => {
@@ -140,17 +155,13 @@ describe('attribution', () => {
 });
 
 describe('levels, Level Lights and drop-target banks', () => {
-  const lights = (target = 0) => {
-    const a = makePart('uplight', 20, 6, 30, true);
-    const b = makePart('uplight', 21, 10, 30, true);
-    const c = makePart('uplight', 22, 14, 30, true);
-    for (const l of [a, b, c]) l.dials.target = target;
-    return [a, b, c];
-  };
+  // two lights 5 apart, by the three starter Pops and the Big Boi
+  const lights = () => [makePart('uplight', 20, 9, 41, true), makePart('uplight', 21, 14, 41, true)];
 
-  it('a levelled part type scores more, and says why', () => {
+  it('a levelled part scores more, and says why', () => {
     const parts = [...starterLayout().parts];
-    const s = new Scorer(1e9, () => parts, { levels: { pop: 2 } });
+    parts[0] = { ...parts[0], level: 2 };
+    const s = new Scorer(1e9, () => parts);
     s.startBall();
     const e = s.consume(hit(1))[0];
     expect(e.base).toBe(120); // 100 + 2 levels x 10
@@ -159,8 +170,7 @@ describe('levels, Level Lights and drop-target banks', () => {
   });
 
   it('a Level Light toggles: lit on the first pass, out on the second', () => {
-    const [a, b] = lights();
-    const parts = [...starterLayout().parts, a, b];
+    const parts = [...starterLayout().parts, ...lights()];
     const s = new Scorer(1e9, () => parts);
     s.consume(hit(20));
     expect(s.isLit(20)).toBe(true);
@@ -168,23 +178,21 @@ describe('levels, Level Lights and drop-target banks', () => {
     expect(s.isLit(20)).toBe(false);
   });
 
-  it('lighting every light aimed at a type levels it up once, then the lights reset', () => {
-    const ls = lights();
-    const parts = [...starterLayout().parts, ...ls];
-    const calls: string[] = [];
-    const s = new Scorer(1e9, () => parts, { onLevelUp: (id) => { calls.push(id); return 1; } });
+  it('lighting a whole group levels up every bumper near it, then the lights go out', () => {
+    const parts = [...starterLayout().parts, ...lights()];
+    const calls: [number, number][] = [];
+    const s = new Scorer(1e9, () => parts, { onLevelUp: (p, n) => { calls.push([p.uid, n]); } });
     s.consume(hit(20));
-    s.consume(hit(21));
     expect(calls).toEqual([]);
-    const done = s.consume(hit(22));
-    expect(calls).toEqual(['pop']);
-    expect(done.find((e) => e.kind === 'bonus')!.label).toBe('POP BUMPERS LEVEL 1!');
-    expect([20, 21, 22].some((u) => s.isLit(u))).toBe(false);
+    const done = s.consume(hit(21));
+    expect(calls.map((c) => c[0]).sort()).toEqual([1, 2, 3, 4]); // three Pops and the Big Boi
+    expect(calls.every((c) => c[1] === 1)).toBe(true);
+    expect(done.find((e) => e.kind === 'bonus')!.label).toBe('4 BUMPERS +1 LEVEL!');
+    expect([20, 21].some((u) => s.isLit(u))).toBe(false);
   });
 
   it('lights stay lit across balls within a round, but go dark on a new round', () => {
-    const ls = lights();
-    const parts = [...starterLayout().parts, ...ls];
+    const parts = [...starterLayout().parts, ...lights()];
     const s = new Scorer(1e9, () => parts);
     s.consume(hit(20));
     s.startBall();
@@ -193,27 +201,22 @@ describe('levels, Level Lights and drop-target banks', () => {
     expect(s.isLit(20)).toBe(false);
   });
 
-  it('a single Level Light can never level anything up, and different targets complete separately', () => {
-    const [a, b, c] = lights();
-    const calls: string[] = [];
-    const solo = new Scorer(1e9, () => [...starterLayout().parts, a], { onLevelUp: (id) => { calls.push(id); return 1; } });
+  it('a lone Level Light, or two too far apart, never level anything up', () => {
+    const calls: number[] = [];
+    const solo = new Scorer(1e9, () => [...starterLayout().parts, lights()[0]], { onLevelUp: (p) => { calls.push(p.uid); } });
     solo.consume(hit(20));
+    const apart = [makePart('uplight', 20, 4, 41, true), makePart('uplight', 21, 20, 41, true)];
+    const far = new Scorer(1e9, () => [...starterLayout().parts, ...apart], { onLevelUp: (p) => { calls.push(p.uid); } });
+    far.consume(hit(20));
+    far.consume(hit(21));
     expect(calls).toEqual([]);
-    b.dials.target = 1; // aimed at Cha-Ching
-    c.dials.target = 1;
-    const mixed = new Scorer(1e9, () => [...starterLayout().parts, a, b, c], { onLevelUp: (id) => { calls.push(id); return 1; } });
-    mixed.consume(hit(20)); // the only light aimed at pop: still not a set
-    mixed.consume(hit(21));
-    mixed.consume(hit(22));
-    expect(calls).toEqual(['coin']);
   });
 
-  it('reports a maxed-out type instead of levelling past the cap', () => {
-    const ls = lights();
-    const s = new Scorer(1e9, () => [...starterLayout().parts, ...ls], { onLevelUp: () => null });
+  it('reports maxed-out bumpers instead of levelling past the cap', () => {
+    const parts = [...starterLayout().parts.map((p) => ({ ...p, level: 5 })), ...lights()];
+    const s = new Scorer(1e9, () => parts);
     s.consume(hit(20));
-    s.consume(hit(21));
-    expect(s.consume(hit(22)).find((e) => e.kind === 'bonus')!.label).toContain('MAXED');
+    expect(s.consume(hit(21)).find((e) => e.kind === 'bonus')!.label).toContain('MAXED');
   });
 
   it('a drop-target bank scores each target, then a bonus when all three are down', () => {
@@ -232,14 +235,14 @@ describe('levels, Level Lights and drop-target banks', () => {
 });
 
 describe('Kickback and Ball Saver', () => {
-  it('a kick pays 150 times Mult and explains itself; the saver scores nothing but tips $1 when it saves', () => {
+  it('a kick pays 150 times Mult and explains itself; the saver scores nothing and remembers it was used', () => {
     const { s, parts } = setup([makePart('kickback', 10, 10, 30, true), makePart('saver', 11, 14, 30, true)]);
     const kick = s.consume(hit(10, { kicked: true }))[0];
     expect(kick.base).toBe(150);
     expect(kick.notes).toEqual(['150 base']);
     expect(s.label(parts.find((p) => p.uid === 10)!)).toBe('150');
-    const saved = s.consume({ type: 'ballSaved', t: 0, uid: 11, ballId: 2 });
-    expect(saved.map((e) => [e.points, e.money])).toEqual([[0, 1]]);
+    expect(s.consume({ type: 'ballSaved', t: 0, uid: 11, ballId: 2 })).toEqual([]);
+    expect(s.saversUsed.has(11)).toBe(true);
     expect(s.label(parts.find((p) => p.uid === 11)!)).toBeNull();
   });
 });
@@ -276,52 +279,9 @@ describe('Vari-Target: harder hits pay more', () => {
     const part = vari();
     expect(s.label(part)).toBe('40-320');
     const text = describePart(PARTS.vari, part).map((l) => l.text).join(' ');
-    expect(text).toContain('x8 smash (50+ speed)');
+    expect(text).toContain('×8 at 50 (a smash)');
     part.dials.stiff = 2;
-    expect(describePart(PARTS.vari, part).map((l) => l.text).join(' ')).toContain('x8 smash (100+ speed)');
-  });
-});
-
-describe('Lane change: the flipper buttons shift the lit lanes', () => {
-  const lanes = () => [makePart('lane', 30, 6, 30, true), makePart('lane', 31, 12, 30, true), makePart('lane', 32, 18, 30, true)];
-  const flip = (side: 'L' | 'R', on = true): SimEvent => ({ type: 'flipper', t: 0, side, on });
-  const lit = (s: Scorer) => [30, 31, 32].map((u) => s.isLit(u));
-
-  it('moves the lit lane left or right, wrapping round, and never completes the set', () => {
-    const { s } = setup(lanes());
-    s.consume(hit(31)); // the middle lane lights
-    expect(lit(s)).toEqual([false, true, false]);
-    s.consume(flip('L'));
-    expect(lit(s)).toEqual([true, false, false]);
-    s.consume(flip('L'));
-    expect(lit(s)).toEqual([false, false, true]); // wrapped round
-    s.consume(flip('R'));
-    expect(lit(s)).toEqual([true, false, false]);
-    s.consume(hit(31));
-    expect(lit(s)).toEqual([true, true, false]);
-    s.consume(flip('R'));
-    expect(lit(s)).toEqual([false, true, true]); // two lit stay two lit
-    expect(s.ledger.get(30)).toBeUndefined(); // shifting scored nothing
-  });
-
-  it('lets you steer the dark lane: shift it under the ball to finish the set', () => {
-    const { s } = setup(lanes());
-    s.consume(hit(30));
-    s.consume(hit(31));
-    expect(lit(s)).toEqual([true, true, false]);
-    const done = s.consume(hit(32)).find((e) => e.kind === 'bonus');
-    expect(done?.label).toBe('LANES COMPLETE');
-  });
-
-  it('ignores a button release and other lit things', () => {
-    const { s } = setup(lanes());
-    s.consume(hit(31));
-    s.consume(flip('L', false));
-    expect(lit(s)).toEqual([false, true, false]);
-    const mix = setup([...lanes(), makePart('lamp', 41, 9, 36, true)]);
-    mix.s.consume(hit(41));
-    mix.s.consume(flip('L'));
-    expect(mix.s.isLit(41)).toBe(true); // a lamp is not a lane
+    expect(describePart(PARTS.vari, part).map((l) => l.text).join(' ')).toContain('×8 at 100 (a smash)');
   });
 });
 

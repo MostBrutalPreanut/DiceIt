@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, grownPoints, HOT_WINDOW, lampStats, LEVEL_TARGETS, modFactor, PARTS, tierOf, type PartId, type PartInstance, type Recipe } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, grownPoints, hasTag, HOT_WINDOW, lampStats, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, tierOf, type PartId, type PartInstance, type Recipe } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { Rng } from '../sim/rng';
@@ -46,10 +46,11 @@ export interface LedgerRow {
  * unit-tested and balanced headless. `getParts` returns every part the player owns.
  */
 export interface ScorerOpts {
-  /** Per-run level of each part type. Mutated by `onLevelUp`'s owner, read here. */
-  levels?: Partial<Record<PartId, number>>;
-  /** Called when a Level Light set completes. Returns the new level, or null if already at the cap. */
-  onLevelUp?: (id: PartId) => number | null;
+  /**
+   * Called when a lit group of Level Lights levels up a part, for real (the part's `level` is the owner's to
+   * change). Without it the scorer keeps the levels to itself, so a free test ball never levels up a machine.
+   */
+  onLevelUp?: (inst: PartInstance, levels: number) => void;
   /** The run's decals and the boss (neutral if absent). */
   mods?: Mods;
   /** Overrides the Mult every ball starts with (default: the mods' `startMult`). */
@@ -82,8 +83,18 @@ export class Scorer {
   private typesHit = new Set<PartId>();
   /** Level Lights stay lit for the whole round, not just one ball. */
   private roundLit = new Set<number>();
-  private levels: Partial<Record<PartId, number>>;
-  private onLevelUp?: (id: PartId) => number | null;
+  /** Levels this scorer gave out itself (a test ball's, which never reach the machine). */
+  private gained = new Map<number, number>();
+  private onLevelUp?: (inst: PartInstance, levels: number) => void;
+  /** Lamps: how bright each one is this ball, and until when every Lamp is at full glow (a bank set, the Disco Ball). */
+  private lampSteps = new Map<number, number>();
+  private lampFlashUntil = -1;
+  /** Glow Strips: until when each one is lit. */
+  private stripUntil = new Map<number, number>();
+  /** The time of the latest event (labels and the hover card read lamp and strip state at it). */
+  private now = 0;
+  /** Ball Savers that saved a ball this round (the ones that do not pay at the end of the round). */
+  readonly saversUsed = new Set<number>();
   mods: Mods;
   /** Scoring hits so far this round and this ball (Gold Ball, Lucky Seven and the jackpot count them). */
   private roundHits = 0;
@@ -126,20 +137,20 @@ export class Scorer {
     this.mods = { ...neutralMods(), ...opts.mods }; // a saved machine from before a mod existed still scores
     this.baseMult = opts.baseMult ?? this.mods.startMult;
     this.mult = this.baseMult;
-    this.levels = opts.levels ?? {};
     this.onLevelUp = opts.onLevelUp;
     this.machine = opts.machine ?? 'factory';
     this.bigBoi = bigBoiOf(this.machine).id;
     this.rng = new Rng(opts.seed ?? 1);
   }
 
-  levelOf(id: PartId) {
-    return this.levels[id] ?? 0;
+  /** The level a part has earned (Level Lights), this round's included. */
+  levelOf(inst: PartInstance) {
+    return Math.min(MAX_LEVEL, (inst.level ?? 0) + (this.gained.get(inst.uid) ?? 0));
   }
 
-  /** The level the part type scores at: its own plus what the decals add. */
-  effLevel(id: PartId) {
-    return effectiveLevel(id, this.levelOf(id), this.mods);
+  /** The level the part scores at: its own plus what the decals add. */
+  effLevel(inst: PartInstance) {
+    return effectiveLevel(inst.def, this.levelOf(inst), this.mods);
   }
 
   recipe(id: PartId): Recipe {
@@ -153,6 +164,7 @@ export class Scorer {
   /** Called when a round (not a ball) starts: the Level Lights go dark, the piggies are empty, a jam is decided. */
   resetRound() {
     this.roundLit.clear();
+    this.saversUsed.clear();
     this.roundHits = 0;
     this.roundTypeHits.clear();
     this.moneyPaid.clear();
@@ -194,6 +206,9 @@ export class Scorer {
     this.hitsByType.clear();
     this.typesHit.clear();
     this.lit.clear();
+    this.lampSteps.clear();
+    this.lampFlashUntil = -1;
+    this.stripUntil.clear();
     this.hot.clear();
     this.coolUntil.clear();
     this.firedThisBall.clear();
@@ -216,7 +231,29 @@ export class Scorer {
   }
 
   isLit(uid: number) {
-    return !this.mods.lightsOut && (this.lit.has(uid) || this.roundLit.has(uid));
+    if (this.mods.lightsOut) return false;
+    return this.lit.has(uid) || this.roundLit.has(uid) || this.lampLevel(uid) > 0 || (this.stripUntil.get(uid) ?? -1) > this.now;
+  }
+
+  /** How many steps bright a Lamp is right now (all of them while the lamps flash). */
+  lampLevel(uid: number) {
+    if (this.mods.lightsOut) return 0;
+    if (this.lampFlashUntil > this.now && this.getParts().some((p) => p.uid === uid && p.def === 'lamp')) return PARTS.lamp.recipe.brighten?.steps ?? 5;
+    return this.lampSteps.get(uid) ?? 0;
+  }
+
+  /** A lit Glow Strip under this part: what it adds (0 if none). */
+  stripBonusAt(inst: PartInstance): number {
+    if (this.mods.lightsOut) return 0;
+    let b = 0;
+    for (const st of this.placed()) {
+      const r = PARTS[st.def].recipe.strip;
+      if (!r || st.uid === inst.uid || (this.stripUntil.get(st.uid) ?? -1) <= this.now) continue;
+      const sh = PARTS[st.def].shape;
+      if (sh.type !== 'box') continue;
+      if (Math.abs(inst.x - st.x) <= sh.hw + 0.3 && Math.abs(inst.y - st.y) <= sh.hh + r.reach) b += r.bonus;
+    }
+    return b;
   }
 
   /** How often a part has fired this ball (Disco Ball). */
@@ -245,19 +282,21 @@ export class Scorer {
     return Math.min(j.cap, j.per * (this.ballHits - (this.potFrom.get(inst.uid) ?? 0)));
   }
 
-  /** Sum of the bonuses of every lit lamp whose glow reaches this part. */
+  /** Sum of the bonuses of every lit lamp whose glow reaches this part (each lamp's bonus grows with its brightness). */
   lampBonusAt(inst: PartInstance): { sum: number; count: number } {
     let sum = 0, count = 0;
     if (this.mods.lightsOut) return { sum, count };
     for (const l of this.placed()) {
-      if (PARTS[l.def].kind !== 'lamp' || !this.lit.has(l.uid)) continue;
+      if (PARTS[l.def].kind !== 'lamp') continue;
+      const steps = this.lampLevel(l.uid);
+      if (!steps) continue;
       const lamp = lampStats(dialValue(l, 'radius'), this.mods);
       if (Math.hypot(l.x - inst.x, l.y - inst.y) <= lamp.radius) {
-        sum += lamp.bonus;
+        sum += lamp.bonus * steps;
         count++;
       }
     }
-    return { sum, count };
+    return { sum: Math.round(sum * 100) / 100, count };
   }
 
   /** Multipliers that depend on the moment, not the part: Thrifty, Multiball Madness, Last Call, Purist. */
@@ -284,17 +323,18 @@ export class Scorer {
     const r = this.recipe(inst.def);
     if (!r.points) return null;
     const grown = grownPoints(r, this.hitsOf(inst.def));
-    const lvl = (r.perLevel ?? 0) * this.effLevel(inst.def);
-    const variety = r.variety ? Math.min(r.varietyCap ?? Infinity, r.variety * this.variety) : 0;
+    const lvl = (r.perLevel ?? 0) * this.effLevel(inst);
+    const variety = r.variety ? r.variety * this.variety : 0;
     const order = this.order === inst.uid ? ORDER.x : 1;
-    return Math.round((r.points + lvl + grown + variety + this.potOf(inst)) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * order);
+    return Math.round((r.points + lvl + grown + variety + this.potOf(inst)) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * (1 + this.stripBonusAt(inst)) * order);
   }
 
   /** The short number drawn on the part itself ("100", "10/spin", "+25%", "x1.25"). */
   label(inst: PartInstance): string | null {
     const def = PARTS[inst.def];
     if (this.jammed.has(inst.def)) return 'JAMMED';
-    if (def.kind === 'lamp') return this.mods.lightsOut ? 'OFF' : `+${Math.round(lampStats(dialValue(inst, 'radius'), this.mods).bonus * 100)}%`;
+    if (def.kind === 'lamp') return this.mods.lightsOut ? 'OFF' : `+${Math.round(lampStats(dialValue(inst, 'radius'), this.mods).bonus * this.lampLevel(inst.uid) * 100)}%`;
+    if (def.kind === 'strip') return this.mods.lightsOut ? 'OFF' : `+${Math.round((def.recipe.strip?.bonus ?? 0) * 100)}%`;
     const r = this.recipe(inst.def);
     if (r.xmult && !r.points) return this.mods.lightsOut ? 'OFF' : `x${(1 + (r.xmult - 1) * this.mods.multGain).toFixed(2)}`;
     const n = this.baseNow(inst);
@@ -321,9 +361,18 @@ export class Scorer {
     this.score += points;
     this.money += money;
     if (this.score >= this.goal) this.goalReached = true;
+    if (kind === 'bonus') this.flashStrips(t);
     this.addLedger(inst, points, money, this.mult - multBefore);
     this.checkLater();
     return { t, uid: inst.uid, def: inst.def, x, y, kind, base, points, multBefore, multAfter: this.mult, money, notes, label, spins };
+  }
+
+  /** Anything paid a bonus: every Glow Strip lights up for a while. */
+  private flashStrips(t: number) {
+    for (const p of this.placed()) {
+      const r = PARTS[p.def].recipe.strip;
+      if (r) this.stripUntil.set(p.uid, t + r.seconds);
+    }
   }
 
   /** The Auditor: the decals come back once the score reaches the mark. */
@@ -345,18 +394,12 @@ export class Scorer {
 
   /** Turn one physical event into zero or more attributed score events. */
   consume(ev: SimEvent): ScoreEvent[] {
-    // lane change: a flipper button shifts which lanes are lit
-    if (ev.type === 'flipper') {
-      if (ev.on && !this.mods.lightsOut) this.shiftLanes(ev.side === 'L' ? -1 : 1);
+    if (ev.type === 'ballSaved') {
+      this.saversUsed.add(ev.uid);
       return [];
     }
-    if (ev.type === 'ballSaved') {
-      const inst = this.getParts().find((p) => p.uid === ev.uid && p.placed);
-      const pay = inst ? this.recipe(inst.def).saveMoney ?? 0 : 0;
-      if (!inst || !pay || this.mods.noCoins) return [];
-      return [this.award(inst, ev.t, inst.x, inst.y, 'light', 0, 0, pay, [`+$${pay} save`], `SAVED +$${pay}`)];
-    }
     if (ev.type !== 'partHit') return [];
+    this.now = ev.t;
     const inst = this.getParts().find((p) => p.uid === ev.uid && p.placed);
     if (!inst) return [];
     const out = this.hit(inst, ev);
@@ -374,24 +417,35 @@ export class Scorer {
 
     // lamps only light up
     if (def.kind === 'lamp') {
-      if (!this.lit.has(inst.uid)) {
-        this.lit.add(inst.uid);
-        const on = r.onLight;
-        const pts = on ? Math.round(on.points * modFactor(inst.def, m)) : 0;
-        out.push(this.award(inst, ev.t, ev.x, ev.y, 'light', pts, on ? this.gain(on.mult) : 0, 0, pts ? [`${pts} lamp lit`] : [], 'LAMP LIT'));
-      }
+      const b = r.brighten!, steps = this.lampSteps.get(inst.uid) ?? 0;
+      if (steps >= b.steps) return out; // as bright as it gets
+      this.lampSteps.set(inst.uid, steps + 1);
+      const pts = Math.round(b.points * modFactor(inst.def, m));
+      out.push(this.award(inst, ev.t, ev.x, ev.y, 'light', pts, 0, 0, [`${pts} brighter`], steps + 1 >= b.steps ? 'LAMP FULL!' : `LAMP ${steps + 1}/${b.steps}`));
       return out;
     }
 
     // a drop-target bank with every target down pays its set bonus (the individual hits scored already)
     if (def.kind === 'bank' && ev.bankComplete) {
-      if (this.take(this.setsPaid, inst.def, 1, r.setCap) === 0) return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`${r.setCap} sets this ball`], 'BANK SETS MAXED')];
       const situ = this.situational();
       const pts = Math.round(r.setBonus!.points * m.setFactor * modFactor(inst.def, m) * situ.x);
-      if (r.lightsLamps) this.lightLamps();
+      if (r.lightsLamps) this.flashLamps(ev.t, r.lightsLamps);
       out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, this.gain(r.setBonus!.mult * m.setFactor), 0, [`${pts} bank bonus`, ...situ.notes], 'BANK COMPLETE'));
       return out;
     }
+
+    // the goal: a ball past the goalie (the goalie and the posts score nothing)
+    if (def.kind === 'goal') {
+      if (!ev.goal || this.coolingDown(inst.uid, ev.t)) return out;
+      this.coolUntil.set(inst.uid, ev.t + (r.cooldown ?? 1.5));
+      const situ = this.situational();
+      const pts = Math.round(((r.points ?? 0) + (r.perLevel ?? 0) * this.effLevel(inst)) * modFactor(inst.def, m) * (1 + this.lampBonusAt(inst).sum) * situ.x);
+      const x = this.takeX(inst.def, this.gainX(r.goal!.xmult), this.gainX(r.goal!.xmultCap));
+      out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, 0, 0, [`${pts} goal`, ...situ.notes], 'GOAL!', undefined, x));
+      return out;
+    }
+    // a moving part scores only when its moving piece is hit (the duck, the roller), not its rail
+    if (def.kind === 'mover' && !ev.mover) return out;
 
     // a part that scores nothing itself can still make the ball hot (a Deflector's bank shot)
     if (!r.points && r.hot && !r.xmult) {
@@ -404,9 +458,8 @@ export class Scorer {
       if (this.coolingDown(inst.uid, ev.t)) return out;
       if (r.cooldown) this.coolUntil.set(inst.uid, ev.t + r.cooldown);
       const x = this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined);
-      if (r.lightsLane) this.lightNextLane();
       out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [], x > 1.0001 ? `MULT x${x.toFixed(2)}` : 'X LANE MAXED', undefined, x));
-      if (r.lightsLane) out.push(...this.checkLaneSet(inst, ev));
+      if (r.lightsLane) { const lane = this.lightNextLane(); if (lane) out.push(...this.checkLaneSet(lane, ev, inst)); }
       return out;
     }
 
@@ -414,8 +467,8 @@ export class Scorer {
       if (r.perBall && (this.firedThisBall.get(inst.uid) ?? 0) >= r.perBall) return out;
       const spins = ev.spins ?? 1;
       const grown = grownPoints(r, this.hitsOf(inst.def));
-      const level = (r.perLevel ?? 0) * this.effLevel(inst.def);
-      const variety = r.variety ? Math.min(r.varietyCap ?? Infinity, r.variety * this.variety) : 0;
+      const level = (r.perLevel ?? 0) * this.effLevel(inst);
+      const variety = r.variety ? r.variety * this.variety : 0;
       const pot = r.jackpot ? this.potOf(inst) : 0;
       const factor = dialFactor(inst);
       const lamp = this.lampBonusAt(inst);
@@ -431,6 +484,10 @@ export class Scorer {
       const mf = modFactor(inst.def, m);
       if (Math.abs(mf - 1) > 0.001) notes.push(`x${Math.round(mf * 100) / 100} decals`);
       if (lamp.sum) notes.push(`+${Math.round(lamp.sum * 100)}% lamp`);
+      const strip = this.stripBonusAt(inst);
+      if (strip) notes.push(`+${Math.round(strip * 100)}% glow strip`);
+      const edge = r.edgeShot && ev.edge ? r.edgeShot.x : 1;
+      if (edge > 1) notes.push(`x${edge} edge shot`);
       this.roundHits++;
       this.ballHits++;
       this.roundTypeHits.set(inst.def, (this.roundTypeHits.get(inst.def) ?? 0) + 1);
@@ -458,7 +515,7 @@ export class Scorer {
         if (r.piggy) {
           const held = this.piggies.get(inst.uid) ?? 0;
           if (tier && r.tiers!.indexOf(tier) >= r.piggy.breakTier && held > 0) {
-            piggy = this.take(this.moneyPaid, 'piggy', held * r.piggy.x, r.piggy.cap * r.piggy.x);
+            piggy = held + r.piggy.bonus;
             this.piggies.set(inst.uid, 0);
             notes.push(`piggy smashed: $${piggy}`);
           } else this.piggies.set(inst.uid, Math.min(r.piggy.cap, held + 1));
@@ -470,14 +527,14 @@ export class Scorer {
       if (r.mult && multGain < this.gain(r.mult) - 1e-9) notes.push('Mult maxed for this ball');
       if (r.spinMult) multGain += this.gain(this.take(this.multPaid, 'spin', r.spinMult * m.spinMult * spins, (r.spinMultCap ?? 0) * m.spinMult));
       const xmult = r.xmult ? this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
-      const base = Math.round((r.points + level + grown + variety + pot) * spins * tierX * factor * mf * (1 + lamp.sum) * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
+      const base = Math.round((r.points + level + grown + variety + pot) * spins * tierX * factor * mf * (1 + lamp.sum) * (1 + strip) * edge * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
       if (r.feeds) this.hitsByType.set(r.feeds.id, this.hitsOf(r.feeds.id) + r.feeds.n);
       this.typesHit.add(inst.def);
       if (r.jackpot) this.potFrom.set(inst.uid, this.ballHits);
       if (r.perBall) this.firedThisBall.set(inst.uid, (this.firedThisBall.get(inst.uid) ?? 0) + 1);
-      if (r.lightsLamps) this.lightLamps();
-      const label = r.perBall && xmult > 1 ? `MULT x${xmult.toFixed(2)}` : r.jackpot && pot ? 'JACKPOT!' : undefined;
+      if (r.lightsLamps) this.flashLamps(ev.t, r.lightsLamps);
+      const label = r.perBall && xmult > 1 ? `MULT x${xmult.toFixed(2)}` : r.jackpot && pot ? 'JACKPOT!' : edge > 1 ? 'EDGE SHOT!' : undefined;
       const scored = this.award(inst, ev.t, ev.x, ev.y, r.perBall || (r.jackpot && pot) ? 'bonus' : 'hit', base, multGain, money, notes, label, ev.spins, xmult);
       if (tier && inst.def === 'vari') scored.tier = r.tiers!.indexOf(tier);
       if (hotBonus) scored.hot = true;
@@ -488,21 +545,28 @@ export class Scorer {
       if (inst.def === 'mega') out.push(...this.bigBoiHit(inst, ev));
     }
 
-    // Level Lights (Space Cadet's bumper upgrade lanes): each pass toggles the light; when every light
-    // aimed at one part type is lit, that type levels up for the rest of the run and the lights reset
+    // Level Lights (Space Cadet's bumper upgrade lanes): each pass switches the light on or off. When every light
+    // in a group (lights within reach of each other) is on, the bumpers within reach of them level up, by one
+    // level for each light past the first, and the group goes dark
     if (r.levelUp) {
-      const target = LEVEL_TARGETS[Math.round(dialValue(inst, 'target'))] ?? 'pop';
-      const wasLit = this.roundLit.has(inst.uid);
-      if (wasLit) this.roundLit.delete(inst.uid);
+      if (this.roundLit.has(inst.uid)) this.roundLit.delete(inst.uid);
       else {
         this.roundLit.add(inst.uid);
-        const group = this.placed().filter((p) => p.def === inst.def && (LEVEL_TARGETS[Math.round(dialValue(p, 'target'))] ?? 'pop') === target);
-        // a set needs at least two lights, as in Space Cadet (three): one light would level up every other pass
+        const group = this.lightGroup(inst);
         if (group.length >= 2 && group.every((l) => this.roundLit.has(l.uid))) {
           for (const l of group) this.roundLit.delete(l.uid);
-          const lvl = this.onLevelUp ? this.onLevelUp(target) : null;
-          const name = PARTS[target].name.toUpperCase();
-          out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [], lvl === null ? `${name}S ARE MAXED OUT` : `${name}S LEVEL ${lvl}!`));
+          const levels = group.length - 1;
+          const near = this.placed().filter((p) => hasTag(p.def, 'bumper') && this.recipe(p.def).perLevel && group.some((l) => Math.hypot(l.x - p.x, l.y - p.y) <= LEVEL_RADIUS));
+          let upped = 0;
+          for (const p of near) {
+            const room = MAX_LEVEL - this.levelOf(p);
+            if (room <= 0) continue;
+            const n = Math.min(room, levels);
+            if (this.onLevelUp) this.onLevelUp(p, n);
+            else this.gained.set(p.uid, (this.gained.get(p.uid) ?? 0) + n);
+            upped++;
+          }
+          out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [], upped ? `${upped} BUMPER${upped > 1 ? 'S' : ''} +${levels} LEVEL${levels > 1 ? 'S' : ''}!` : near.length ? 'BUMPERS MAXED OUT' : 'NO BUMPERS NEARBY'));
         }
       }
     }
@@ -515,28 +579,38 @@ export class Scorer {
     return out;
   }
 
-  /** A complete set of Lane Rollovers pays its bonus and resets. */
-  private checkLaneSet(inst: PartInstance, ev: { t: number; x: number; y: number }): ScoreEvent[] {
-    const r = PARTS.lane.recipe, m = this.mods;
-    const lanes = this.placed().filter((p) => p.def === 'lane');
-    // a set needs at least two lanes: a lone lane would "complete" itself on every roll (the auto-builder found that exploit)
-    if (!r.setBonus || lanes.length < 2 || !lanes.every((l) => this.lit.has(l.uid))) return [];
-    for (const l of lanes) this.lit.delete(l.uid);
+  /**
+   * The three Lane Rollovers of a pack make a set: when all three are lit it pays its bonus, and they go dark.
+   * (Lanes from no pack, from an old save or the Test Lab, make sets of any three.)
+   */
+  private checkLaneSet(lane: PartInstance, ev: { t: number; x: number; y: number }, inst = lane): ScoreEvent[] {
+    const r = PARTS.lane.recipe, m = this.mods, size = r.setSize ?? 3;
+    const lit = this.placed().filter((p) => p.def === 'lane' && p.group === lane.group && this.lit.has(p.uid));
+    if (!r.setBonus || lit.length < size) return [];
+    for (const l of lit) this.lit.delete(l.uid);
     if (this.take(this.setsPaid, 'lane', 1, r.setCap) === 0) return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`${r.setCap} sets this ball`], 'LANE SETS MAXED')];
     const situ = this.situational();
     const pts = Math.round(r.setBonus.points * m.setFactor * modFactor('lane', m) * situ.x);
     return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, this.gain(r.setBonus.mult * m.setFactor), 0, [`${pts} set bonus`, ...situ.notes], 'LANES COMPLETE')];
   }
 
-  private lightLamps() {
-    for (const l of this.placed()) if (PARTS[l.def].kind === 'lamp') this.lit.add(l.uid);
+  /** Every Lamp at full glow for a while (a drop-target set, the Disco Ball). */
+  private flashLamps(t: number, seconds: number) {
+    this.lampFlashUntil = Math.max(this.lampFlashUntil, t + seconds);
+  }
+
+  /** This Level Light and the ones within its reach: they work together. */
+  lightGroup(inst: PartInstance): PartInstance[] {
+    const near = this.placed().filter((p) => p.def === 'uplight' && p.uid !== inst.uid && Math.hypot(p.x - inst.x, p.y - inst.y) <= LEVEL_RADIUS);
+    return [inst, ...near];
   }
 
   /** X Lane: light the next dark Lane Rollover (left to right); it can complete a set. */
-  private lightNextLane() {
+  private lightNextLane(): PartInstance | undefined {
     const lanes = this.placed().filter((p) => p.def === 'lane').sort((a, b) => a.x - b.x || a.y - b.y);
     const dark = lanes.find((l) => !this.lit.has(l.uid));
     if (dark) this.lit.add(dark.uid);
+    return dark;
   }
 
   /** Big Boi's own ability on a hit: the Cook calls an order, the Dragon loses a plate. */
@@ -552,23 +626,8 @@ export class Scorer {
     this.armour = DRAGON.armour + DRAGON.regrow * this.slays;
     const r = this.recipe('mega'), m = this.mods;
     const situ = this.situational();
-    const pts = Math.round((r.points! + (r.perLevel ?? 0) * this.effLevel('mega')) * DRAGON.jackpotX * modFactor('mega', m) * situ.x);
+    const pts = Math.round((r.points! + (r.perLevel ?? 0) * this.effLevel(inst)) * DRAGON.jackpotX * modFactor('mega', m) * situ.x);
     return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, 0, 0, [`${pts} armour broken`, ...situ.notes], 'ARMOUR BROKEN!')];
-  }
-
-  /**
-   * Lane change: shift the lit Lane Rollovers one lane along (left to right by position, wrapping round).
-   * The number lit never changes, so shifting cannot complete a set; it only moves where the dark lane is.
-   */
-  private shiftLanes(dir: -1 | 1) {
-    const lanes = this.placed().filter((p) => p.def === 'lane').sort((a, b) => a.x - b.x || a.y - b.y);
-    const n = lanes.length;
-    if (n < 2) return;
-    const was = lanes.map((l) => this.lit.has(l.uid));
-    lanes.forEach((l, i) => {
-      if (was[(i - dir + n) % n]) this.lit.add(l.uid);
-      else this.lit.delete(l.uid);
-    });
   }
 
   ledgerRows(): LedgerRow[] {

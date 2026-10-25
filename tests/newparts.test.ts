@@ -52,7 +52,8 @@ describe('rarities', () => {
 
   it('every scoring part does at least two things (points plus a second effect, said on its card)', () => {
     for (const id of PART_IDS) {
-      if (id === 'mega' || id === 'flipper') continue;
+      // (the Spinner, the Lamp and the Glow Strip say both of their things in one sentence)
+      if (id === 'mega' || id === 'spinner' || id === 'lamp' || id === 'strip' || PARTS[id].kind === 'flipper') continue;
       const lines = describePart(PARTS[id], makePart(id, 1));
       expect(lines.length, id).toBeGreaterThanOrEqual(2);
     }
@@ -140,15 +141,15 @@ describe('the new parts', () => {
     expect(s.consume(hit(2))[0].base).toBe(115);
   });
 
-  it('a Piggy Bank stores $1 a hit and a smash breaks it for double', () => {
+  it('a Piggy Bank stores $1 a hit and a smash breaks it for what it holds +$1', () => {
     const s = scorer([makePart('piggy', 1, 6, 30, true)]);
     for (let i = 0; i < 4; i++) expect(s.consume(hit(1, { speed: 10 }))[0].money).toBe(0);
     expect(s.piggies.get(1)).toBe(4);
     const smash = s.consume(hit(1, { speed: 40 }))[0];
-    expect(smash.money).toBe(8);
+    expect(smash.money).toBe(5);
     expect(s.piggies.get(1)).toBe(0);
     for (let i = 0; i < 10; i++) s.consume(hit(1, { speed: 10 }));
-    expect(s.piggies.get(1)).toBe(6); // it holds six
+    expect(s.piggies.get(1)).toBe(5); // it holds five
   });
 
   it('a Jackpot Scoop pays the pot: +40 for every scoring hit this ball, then it starts again', () => {
@@ -156,9 +157,9 @@ describe('the new parts', () => {
     const s = scorer(parts);
     for (let i = 0; i < 10; i++) s.consume(hit(2));
     const jp = s.consume(hit(1, { caught: true }))[0];
-    expect(jp.base).toBe(500 + 400);
+    expect(jp.base).toBe(200 + 400);
     expect(jp.label).toBe('JACKPOT!');
-    expect(s.consume(hit(1, { caught: true }))[0].base).toBe(500);
+    expect(s.consume(hit(1, { caught: true }))[0].base).toBe(200);
   });
 
   it('an X Lane multiplies the Mult by 1.25, goes dark for 3 s, lights a lane, and stops at x2 a ball', () => {
