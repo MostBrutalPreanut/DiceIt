@@ -30,8 +30,7 @@ export const DECAL_PRIORITY: DecalId[] = [
   'printerPlus', 'heavy', 'lamps', 'thrifty', 'safetyNet', 'interest', 'sponsor', 'gold', 'comboKing', 'spinDoctor', 'longFuse', 'freeKick',
   'collector', 'savingsBond', 'goldenTicket', 'rubber', 'glass', 'coupon', 'bigShelf', 'freeReroll', 'bargain', 'overshoot', 'fullRefund', 'ballHog',
 ];
-/** Decals par buys from the shop when it can spare the money (late money otherwise piles up unspent). */
-const SHOP_DECALS = new Set<DecalId>(DECAL_PRIORITY.slice(0, 20));
+
 const MAX_REROLLS = 2;
 
 export interface ParOptions {
@@ -162,8 +161,6 @@ export function parShop(g: Game): { bought: { id: PartId; price: number }[]; rer
       continue;
     }
     if (g.toolboxFull) break;
-    const d = g.shop.decal;
-    if (d && SHOP_DECALS.has(d.id) && g.apronFree && g.money >= g.decalPrice + 4 && g.buyDecal()) continue;
     if (rerolls < MAX_REROLLS && g.money - g.rerollCost >= 3 && g.reroll()) { rerolls++; continue; }
     break;
   }

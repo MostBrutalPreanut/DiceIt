@@ -192,16 +192,6 @@ async function main() {
       <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}</div></div>`;
   }
 
-  /** The decal for sale this round: a sticker in a sleeve under the parts. */
-  function decalOfferHtml() {
-    const d = game.shop.decal;
-    if (!d) return '';
-    const def = DECALS[d.id], price = game.decalPrice;
-    const can = game.canAfford(price) && game.editable && game.apronFree;
-    return `<div class="decaloffer r-${def.rarity}" id="decalOffer"><img alt="" src="${decalURL(d.id)}"><div class="dtxt"><b>${decalTitle(d)}</b><span>${KIND_NAMES[def.kind]} decal ${rarityChip(def.rarity)}</span></div>
-      <button class="buy" id="btnBuyDecal" ${can ? '' : 'disabled'} title="${game.apronFree ? '' : 'The apron is full: peel a decal first'}">$${price}</button></div>`;
-  }
-
   /** Test Lab: every part in the game, free, instead of 4 rotating offers. */
   function renderCatalog() {
     $('shopMoney').textContent = '$∞';
@@ -252,25 +242,6 @@ async function main() {
     rb.textContent = game.rerollCost ? `REROLL $${game.rerollCost}` : 'REROLL';
     rb.disabled = !game.canAfford(game.rerollCost) || !game.editable;
     $('offers').innerHTML = game.shop.offers.map((id, i) => (id ? offerHtml(id, game.priceAt(i), i) : `<div class="offer sold">Sold</div>`)).join('');
-    $('decalShelf').innerHTML = decalOfferHtml();
-    $('decalShelf').hidden = !game.shop.decal;
-    const dOffer = document.getElementById('decalOffer');
-    if (dOffer && game.shop.decal) {
-      const pick = game.shop.decal;
-      dOffer.onmouseenter = (e) => { const tip = $('tip'); tip.className = 'card tipcard'; tip.innerHTML = decalCard(pick, null); tip.hidden = false; placeTip(e.clientX, e.clientY); };
-      dOffer.onmousemove = (e) => placeTip(e.clientX, e.clientY);
-      dOffer.onmouseleave = () => { $('tip').hidden = true; };
-      ($('btnBuyDecal') as HTMLButtonElement).onclick = () => {
-        audio.unlock();
-        const name = DECALS[pick.id].name.toUpperCase();
-        if (!game.buyDecal()) { say(game.apronFree ? 'CANNOT AFFORD IT' : 'NO ROOM ON THE APRON. PEEL ONE FIRST'); return; }
-        $('tip').hidden = true;
-        audio.goal();
-        say(`${name} STUCK ON THE APRON`);
-        persist();
-        refreshWorkshop();
-      };
-    }
     for (const b of $('offers').querySelectorAll<HTMLButtonElement>('button[data-lock]')) {
       b.onclick = (e) => {
         e.stopPropagation();
@@ -743,7 +714,7 @@ async function main() {
       return;
     }
     if (hoverDecal !== null && !dragging && game.decals.length < DECAL_SLOTS) {
-      tipPlain('<b>Empty decal slot</b>: beat a boss and pick a decal, or buy one in the shop, and it sticks here.', cx, cy);
+      tipPlain('<b>Empty decal slot</b>: beat a boss and pick one of three decals, and it sticks here. One per boss: four by the final boss.', cx, cy);
       return;
     }
     $('tip').hidden = true;

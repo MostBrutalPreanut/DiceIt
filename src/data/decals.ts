@@ -14,7 +14,8 @@ import { neutralMods, type Mods } from './mods';
  *  - Ball: the ball and the table's physics
  *  - Build: rules that care about what is on your table, and pull a build one way (Bumper Car, Purist...)
  *
- * You win one after every boss (pick one of three, or skip for cash), and the shop sells one each round.
+ * Decals are never for sale: you win one after every boss (pick one of three, or skip for cash), so a run
+ * has four by its final boss.
  */
 export type DecalId =
   // cash
@@ -77,14 +78,12 @@ export interface DecalDef {
   look: DecalLook;
 }
 
-/** Slots on the apron: two each side and two in the middle, where real machines put their rule and price cards. */
-export const DECAL_SLOTS = 6;
+/** Slots on the apron, two each side, where real machines put their rule and price cards: one per boss before the final. */
+export const DECAL_SLOTS = 4;
 /** Skipping the boss's decal pays this much. */
 export const SKIP_PAY = 4;
 /** A boss every third round: rounds 3, 6, 9, 12 and the final boss in 15. A decal pick is owed after each. */
 export const BOSS_EVERY = 3;
-/** What the shop asks for a decal of each rarity. */
-export const DECAL_PRICE: Record<Rarity, number> = { common: 5, uncommon: 7, rare: 9, legendary: 12 };
 
 // the numbers behind the effects and their sentences
 const N = {
@@ -228,16 +227,8 @@ export function candidateTargets(def: DecalDef, v: RunView): (PartId | undefined
   return [...new Set(def.targets(v))].filter((t) => !stuck(t));
 }
 
-/** How the boss's pick weighs each rarity (legendaries only from the second boss), and how the shop does. */
+/** How the boss's pick weighs each rarity (legendaries only from the second boss). */
 const PICK_WEIGHT: Record<Rarity, number> = { common: 5, uncommon: 4, rare: 2.5, legendary: 1 };
-export function shopDecalWeight(r: Rarity, round: number): number {
-  switch (r) {
-    case 'common': return 6;
-    case 'uncommon': return 3;
-    case 'rare': return round >= 4 ? 1.2 : 0;
-    case 'legendary': return round >= 7 ? 0.3 : 0;
-  }
-}
 
 function weighted(rng: Rng, defs: DecalDef[], weight: (d: DecalDef) => number): DecalDef | null {
   const total = defs.reduce((a, d) => a + weight(d), 0);
@@ -264,17 +255,6 @@ export function rollDecalPick(seed: number, v: RunView, bossNo: number, count = 
     offers.push({ id: def.id, target: targets[Math.floor(rng.next() * targets.length)] });
   }
   return offers.sort((a, b) => DECAL_KINDS.indexOf(DECALS[a.id].kind) - DECAL_KINDS.indexOf(DECALS[b.id].kind));
-}
-
-/** The decal the shop sells this round (none in round 1). */
-export function rollShopDecal(seed: number, v: RunView, exclude: DecalId[] = []): DecalOffer | null {
-  if (v.round < 2) return null;
-  const rng = new Rng(seed);
-  const options = DECAL_IDS.map((id) => DECALS[id]).filter((d) => !exclude.includes(d.id) && candidateTargets(d, v).length > 0);
-  const def = weighted(rng, options, (d) => shopDecalWeight(d.rarity, v.round));
-  if (!def) return null;
-  const targets = candidateTargets(def, v);
-  return { id: def.id, target: targets[Math.floor(rng.next() * targets.length)] };
 }
 
 export const decalTitle = (o: DecalPick) => DECALS[o.id].name + (o.target ? ` · ${PARTS[o.target].name}s` : '');

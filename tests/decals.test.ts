@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { neutralMods, type Mods } from '../src/data/mods';
 import { describe as describePart, makePart, MAX_LEVEL, PARTS, type PartId } from '../src/data/parts';
 import {
-  candidateTargets, computeMods, DECAL_IDS, DECAL_KINDS, DECAL_SLOTS, DECALS, rollDecalPick, rollShopDecal, SKIP_PAY,
+  candidateTargets, computeMods, DECAL_IDS, DECAL_KINDS, DECAL_SLOTS, DECALS, rollDecalPick, SKIP_PAY,
   type DecalId, type DecalPick, type RunView,
 } from '../src/data/decals';
 import { Game, parseRun, type Payout } from '../src/game/game';
@@ -90,16 +90,6 @@ describe('offering decals', () => {
     expect(candidateTargets(DECALS.levelUp, view(['pop', 'coin'], { levels: { pop: MAX_LEVEL } }))).toEqual(['coin']);
   });
 
-  it('the shop sells no decal in round 1, and one from round 2, never one already stuck', () => {
-    expect(rollShopDecal(5, view(['pop'], { round: 1 }))).toBeNull();
-    for (const s of seeds) {
-      const d = rollShopDecal(s, view(['pop'], { round: 2 }), ['sponsor']);
-      expect(d).not.toBeNull();
-      expect(d!.id).not.toBe('sponsor');
-      expect(['rare', 'legendary']).not.toContain(DECALS[d!.id].rarity); // rares from round 4, legendaries from 7
-    }
-  });
-
   it('is deterministic for a seed', () => {
     const v = view(['pop', 'coin', 'lamp']);
     expect(rollDecalPick(77, v, 2)).toEqual(rollDecalPick(77, v, 2));
@@ -154,7 +144,7 @@ describe('the decal pick after a boss', () => {
 
   it(`the apron holds ${DECAL_SLOTS}; another waits until you peel one`, () => {
     const g = new Game();
-    const ids: DecalId[] = ['sponsor', 'headStart', 'rubber', 'gold', 'lastCall', 'coupon'];
+    const ids: DecalId[] = ['sponsor', 'headStart', 'rubber', 'gold'];
     for (const id of ids) take(g, id);
     expect(g.decals.length).toBe(DECAL_SLOTS);
     g.pending = [{ id: 'lucky' }];
@@ -202,18 +192,17 @@ describe('the decal pick after a boss', () => {
     expect(loaded.mods).toEqual(neutralMods());
   });
 
-  it('the shop sells a decal: it costs its price and needs a free slot', () => {
+  it('decals are never for sale: the shop only sells parts, and a run picks four by its final boss', () => {
     const g = new Game();
-    g.round = 1;
-    g.continueAfterRound();
-    const d = g.shop.decal!;
-    expect(d).toBeTruthy();
-    g.money = 50;
-    expect(g.buyDecal()).toBe(true);
-    expect(g.money).toBe(50 - { common: 5, uncommon: 7, rare: 9, legendary: 12 }[DECALS[d.id].rarity]);
-    expect(g.decals.map((x) => x.id)).toEqual([d.id]);
-    expect(g.shop.decal).toBeNull();
-    expect(g.buyDecal()).toBe(false);
+    for (let r = 1; r < 15; r++) {
+      g.round = r;
+      g.continueAfterRound();
+      expect(Object.keys(g.shop)).not.toContain('decal');
+      if (g.pending) expect(g.chooseDecal(0)).toBe(true);
+    }
+    expect(g.round).toBe(15);
+    expect(g.decals).toHaveLength(4);
+    expect(DECAL_SLOTS).toBe(4);
   });
 
   it('the Test Lab sticks any decal for free, and only in the lab', () => {
@@ -242,14 +231,15 @@ describe('what the decals do: cash', () => {
     expect(base.lines.map((l) => l.label.split(' ')[0])).not.toContain('Sponsor');
     const g = new Game();
     g.money = 26;
-    for (const id of ['sponsor', 'interest', 'ballHog', 'collector', 'savingsBond'] as const) take(g, id);
+    for (const id of ['sponsor', 'interest', 'ballHog', 'collector'] as const) take(g, id);
     const p = payoutOf(g, 2);
     const line = (start: string) => p.lines.find((l) => l.label.startsWith(start))!;
     expect(line('Sponsor').amount).toBe(2);
     expect(line('Interest').amount).toBe(5); // $26 held = $5, which is also the cap
     expect(line('2 unused').amount).toBe(10); // $5 each
     expect(line('Collector').amount).toBe(1); // one part type (Pops; Big Boi does not count)
-    expect(line('Savings Bond').amount).toBe(5);
+    const bond = take(new Game(), 'savingsBond');
+    expect(payoutOf(bond).lines.find((l) => l.label.startsWith('Savings Bond'))!.amount).toBe(1);
     expect(p.total).toBe(p.lines.reduce((a, l) => a + l.amount, 0));
   });
 
@@ -501,7 +491,7 @@ describe('what the decals do: scoring and builds', () => {
       ['saver', 12, 18], ['vari', 18, 26], ['spinner', 7, 34], ['xlane', 18, 40],
     ];
     for (const [id, x, y] of spots) expect(g.place(g.grant(id)!.uid, x, y), id).toBe(true);
-    for (const id of ['twin', 'multiball', 'printerPlus', 'goldenAge', 'lucky', 'comboKing'] as const) expect(g.labDecal(id), id).toBe(true);
+    for (const id of ['twin', 'multiball', 'printerPlus', 'goldenAge'] as const) expect(g.labDecal(id), id).toBe(true);
     g.sandbox = false;
     g.startRound();
     const bot = new Bot(3, 0.85);

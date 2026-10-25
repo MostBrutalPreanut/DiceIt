@@ -16,10 +16,10 @@ export const apronPoly = (): Pt[] => [
 ];
 /** The cabinet rim around the field, in sim units. */
 export const RIM = { cx: 13, cy: 26.1, hw: 14.6, hh: 27.5 };
-/** The six decal slots on the apron (sim x, y; they sit on the apron top, z = APRON_Z): two each side, two under the drain. */
-export const DECAL_SLOT_POS: Pt[] = [[2.6, 6.6], [5.6, 4.4], [9.4, 1.6], [14.6, 1.6], [18.4, 4.4], [21.4, 6.6]];
+/** The four decal slots on the apron (sim x, y; they sit on the apron top, z = APRON_Z). */
+export const DECAL_SLOT_POS: Pt[] = [[2.6, 6.6], [5.6, 4.4], [18.4, 4.4], [21.4, 6.6]];
 export const APRON_Z = 0.5;
-export const DECAL_TILT = [-8, 5, -3, 4, -4, 7];
+export const DECAL_TILT = [-8, 5, -4, 7];
 
 function rng(seed: number) { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); }
 

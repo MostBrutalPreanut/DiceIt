@@ -61,14 +61,14 @@ until you buy or unlock it. One lock by default; the Layaway decal gives two mor
 
 ## 4. Decals
 
-The old three-column "major upgrades" are gone: every run-long rule is now a **decal** stuck on the apron
-(six slots). After each boss you pick one of three (of three different kinds) or skip for $4; the shop also
-sells one decal a round from round 2 (C $5, U $7, R $9, L $12), which is also a late-game money sink. A decal
-works while it is stuck; peel it off to make room.
+The old three-column "major upgrades" are gone: every run-long rule is now a **decal** stuck on the apron.
+Decals are **never for sale**: after each boss you pick one of three (of three different kinds) or skip for $4,
+so a run has **four by its final boss** (rounds 3, 6, 9, 12), one per apron slot. A decal works while it is
+stuck; peel it off to make room (that only matters in endless play after round 15).
 
 46 decals in four kinds:
 
-- **Cash** (outside the ball): Sponsor (+$2 a round), Wide Shelf (+1 shop offer), Interest, Coupon Book, Full
+- **Cash** (outside the ball, in the shop and the payout): Sponsor (+$2 a round), Wide Shelf (+1 shop offer), Interest, Coupon Book, Full
   Refund, Ball Hog, Free Reroll, Layaway (+2 locks), Big Toolbox (+2 slots), Bargain Bin (one offer half price),
   Show-Off (2× overshoot money), Golden Ticket (+$8 a boss), Collector ($1 per part type), Savings Bond ($1 per decal).
 - **Score**: Head Start, Lucky Seven (every 7th hit ×3), Overclock (one type +50%), Level Up (one type +2 levels),
@@ -83,6 +83,15 @@ works while it is stuck; peel it off to make room.
 With Bumper Car stuck, a Vari-Target is worth peeling off; with Target Practice it is the best part on the table.
 Purist rewards selling half the table; Crowd Pleaser rewards filling it. That is the "a part great in one build,
 removed in another" tension.
+
+### Ideas for later parts (not built)
+Bigger set pieces and parts that need hitting in motion, from the design discussion:
+- **Moving targets**: a target or bumper sliding on a rail; timing the shot matters.
+- **The goal and the goalie**: a goal mouth at the top of the table with a goalie that slides across it and
+  blocks the ball; score past him for a big payout (a legendary set piece).
+- **Under-lights**: parts that are never touched, lights set into the floor *below* the other parts that light
+  up whenever something else happens (a set completes, a jackpot, a Mult step) and pay or boost when they do:
+  wiring parts together without the ball.
 
 ## 5. Bosses
 
@@ -136,7 +145,7 @@ Measured with the par player (`npm run balance -- --verify`): a sensible bot bui
 2. **Fail rate rises with the run**: par fails about 5–10% of rounds 1–5, 15–25% of rounds 6–10, 30–45% of 11–15.
    Boss rounds may run 10 points above their neighbours.
 3. **No single part or decal is most of the score** across runs (each under ~40% of points late).
-4. **Money**: two or three purchases a round early, and nothing piling up late (decals in the shop are the sink).
+4. **Money**: two or three purchases a round early, and nothing piling up late (rares and legendaries are the sink; a late-game sink is still an open question).
 5. **Pacing**: rounds 1.5–3 minutes.
 
 ### The loop

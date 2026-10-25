@@ -1,7 +1,7 @@
 import { makePart, MAX_LEVEL, PARTS, PART_IDS, rarityWeight, sellPrice, SHOP_IDS, type PartDef, type PartId, type PartInstance, type Rarity } from '../data/parts';
 import { neutralMods, simModsOf, type Mods } from '../data/mods';
 import {
-  BOSS_EVERY, computeMods, DECAL_PRICE, DECAL_SLOTS, DECALS, rollDecalPick, rollShopDecal, SKIP_PAY,
+  BOSS_EVERY, computeMods, DECAL_SLOTS, DECALS, rollDecalPick, SKIP_PAY,
   type DecalId, type DecalLook, type DecalOffer, type DecalPick, type RunView,
 } from '../data/decals';
 import { BOSSES, bossOf, FINAL_ROUND, planBosses, type BossDef, type BossId } from '../data/bosses';
@@ -58,8 +58,6 @@ export interface ShopState {
   rerolls: number;
   /** Slots locked by the player: they keep their offer into the next shop (and through rerolls). */
   locked?: number[];
-  /** The decal for sale this round (null = none, or bought). */
-  decal?: DecalOffer | null;
   /** Bargain Bin: the slot that is half price. */
   bargain?: number | null;
 }
@@ -351,7 +349,7 @@ export class Game {
 
   // ---- the shop -------------------------------------------------------------------------
 
-  /** A new shop: locked offers stay where they are, the rest are rolled for this round, and a decal is for sale. */
+  /** A new shop: locked offers stay where they are, the rest are rolled for this round. */
   private freshShop(rng: Rng, prev?: ShopState): ShopState {
     const n = this.mods.shopSlots;
     const keep = (prev?.locked ?? []).filter((i) => i < n && prev!.offers[i]);
@@ -359,9 +357,8 @@ export class Game {
     const fresh = rollOffers(rng, n - keep.length, this.round, kept);
     const offers: (PartId | null)[] = [];
     for (let i = 0; i < n; i++) offers.push(keep.includes(i) ? prev!.offers[i] : fresh.shift() ?? null);
-    const decal = rollShopDecal(Math.floor(rng.next() * 1e9), this.view(), this.decals.map((d) => d.id));
     const bargain = this.mods.bargain ? Math.floor(rng.next() * n) : null;
-    return { offers, rerolls: 0, locked: keep, decal, bargain };
+    return { offers, rerolls: 0, locked: keep, bargain };
   }
 
   get lockSlots() {
@@ -455,22 +452,6 @@ export class Game {
     this.pending = null;
     this.resolved = 'skipped';
     this.money += SKIP_PAY;
-    return true;
-  }
-
-  /** What the shop asks for its decal. */
-  get decalPrice(): number {
-    return this.shop.decal ? DECAL_PRICE[DECALS[this.shop.decal.id].rarity] : 0;
-  }
-
-  /** Buy the decal on sale and stick it on the apron (it needs a free slot). */
-  buyDecal(): boolean {
-    const d = this.shop.decal;
-    if (!this.editable || !d || !this.apronFree || !this.canAfford(this.decalPrice)) return false;
-    this.checkpoint();
-    if (!this.sandbox) this.money -= this.decalPrice;
-    this.shop.decal = null;
-    this.stick(d);
     return true;
   }
 
@@ -678,6 +659,7 @@ export class Game {
     this.money = s.money;
     this.round = s.round;
     this.shop = { ...s.shop, offers: s.shop.offers.map((id) => (id && id in PARTS && PARTS[id].weight > 0 ? id : null)) };
+    delete (this.shop as { decal?: unknown }).decal; // saves from when the shop sold decals
     this.sandbox = s.sandbox;
     this.runSeed = s.runSeed;
     this.levels = { ...(s.levels ?? {}) };
@@ -783,8 +765,7 @@ export class Game {
     this.checkpoint();
     if (!this.sandbox) this.money -= this.rerollCost;
     const rerolls = this.shop.rerolls + 1;
-    const decal = this.shop.decal;
-    this.shop = { ...this.freshShop(new Rng(this.runSeed * 7919 + this.round * 131 + rerolls), this.shop), rerolls, decal };
+    this.shop = { ...this.freshShop(new Rng(this.runSeed * 7919 + this.round * 131 + rerolls), this.shop), rerolls };
     return true;
   }
 
