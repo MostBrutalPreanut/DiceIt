@@ -8,7 +8,7 @@
 <body>
   <div id="app">
     <aside id="left" class="panel">
-      <h1>FREE PLAY <small>working title · M0 feel spike</small></h1>
+      <h1>FREE PLAY <small>working title · M1 workshop</small></h1>
       <div id="modeBadge" class="badge">WORKSHOP</div>
 
       <div class="scorebox">
@@ -23,6 +23,7 @@
         <div><div class="label">BALLS</div><div id="balls" class="stat">●●●</div></div>
         <div><div class="label">MONEY</div><div id="money" class="stat">$0</div></div>
       </div>
+      <div class="formula">Every hit scores <b>points × Mult</b>. Hover any part to see its recipe; the number on it is what it pays right now.</div>
 
       <div class="label">TILT</div>
       <div class="tiltbar"><div id="tiltFill"></div></div>
@@ -40,7 +41,7 @@
           <li>Hold <kbd>Space</kbd> to charge the plunger, release to fire</li>
           <li><kbd>←</kbd> <kbd>→</kbd> nudge (too much = TILT)</li>
           <li><kbd>Tab</kbd> cash out once the goal is hit</li>
-          <li>Workshop: pick a part, click the table. Drag to move, <kbd>Del</kbd> removes. Space fires a test ball.</li>
+          <li>Workshop: buy parts, click one in your inventory, click the table. Drag parts to move them, or drag them onto the inventory to take them off the board. <kbd>R</kbd> rotates, <kbd>Del</kbd> stores. <kbd>Space</kbd> fires a test ball.</li>
           <li><kbd>M</kbd> mute</li>
         </ul>
       </details>
@@ -59,9 +60,23 @@
 
     <aside id="right" class="panel">
       <section id="workshop">
-        <h2>Workshop <small>build · tune · test</small></h2>
-        <div id="palette"></div>
+        <h2>Inventory <small>owned, off the board</small></h2>
+        <div id="inventoryBox">
+          <div id="inventory"></div>
+          <div id="inventoryHint" class="hint">Empty. Drag a part from the table to here to store it.</div>
+        </div>
+
         <div id="selected" class="card" hidden></div>
+
+        <h2>Shop <small>buy parts, then place them</small></h2>
+        <div class="shophead">
+          <span>Cash <b id="shopMoney">$0</b></span>
+          <button id="btnReroll">Reroll</button>
+        </div>
+        <div id="offers"></div>
+        <label class="check"><input id="sandbox" type="checkbox" /> Sandbox: shop is free, nothing is lost</label>
+
+        <h2>Machine</h2>
         <div class="card">
           <label>Table tilt (gravity) <b id="gravVal">50</b>
             <input id="gravity" type="range" min="30" max="80" step="1" value="50" />
@@ -70,7 +85,7 @@
         </div>
         <div class="row">
           <button id="btnTest">Test ball (Space)</button>
-          <button id="btnReset">Reset layout</button>
+          <button id="btnReset">New run</button>
         </div>
       </section>
 
@@ -81,6 +96,7 @@
       </section>
     </aside>
   </div>
+  <div id="tip" hidden></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

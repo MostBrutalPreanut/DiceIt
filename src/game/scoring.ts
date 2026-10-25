@@ -1,19 +1,28 @@
-import { PARTS, payoutFactor, type PartId } from '../data/parts';
-import type { PartInstance } from '../sim/layout';
+import { dialFactor, dialValue, lampBonus, PARTS, type PartId, type PartInstance } from '../data/parts';
 import type { SimEvent } from '../sim/sim';
 
-/** One attributed scoring event: this is what the HUD, ledger and juice all read. */
+/**
+ * One attributed scoring event. The HUD, ledger, popups and sounds all read this and nothing else,
+ * so what the player sees is exactly what happened.
+ */
 export interface ScoreEvent {
   t: number;
   uid: number;
   def: PartId;
   x: number;
   y: number;
-  basePoints: number;
+  kind: 'hit' | 'bonus' | 'light';
+  /** Points before Mult (already includes growth, dials and lamps). */
+  base: number;
+  /** Points added to the score: base x Mult. */
   points: number;
   multBefore: number;
   multAfter: number;
   money: number;
+  /** The pieces of `base`, in plain words, e.g. "100 base", "+15 grown", "+25% lamp". */
+  notes: string[];
+  label?: string;
+  spins?: number;
 }
 
 export interface LedgerRow {
@@ -26,8 +35,8 @@ export interface LedgerRow {
 }
 
 /**
- * Points x Mult with full attribution. Pure logic: no physics, no rendering,
- * so the rules can be unit-tested and balanced headless.
+ * Points x Mult with full attribution. Pure logic: no physics, no rendering, so the rules can be
+ * unit-tested and balanced headless. `getParts` returns every part the player owns.
  */
 export class Scorer {
   score = 0;
@@ -35,38 +44,126 @@ export class Scorer {
   money = 0;
   goalReached = false;
   readonly ledger = new Map<number, LedgerRow>();
+  /** Per-ball state: hits of each part type, and which lights are lit. */
+  private hitsByType = new Map<PartId, number>();
+  private lit = new Set<number>();
 
-  constructor(public goal: number, public baseMult = 1) {
+  constructor(public goal: number, private getParts: () => PartInstance[] = () => [], public baseMult = 1) {
     this.mult = baseMult;
+  }
+
+  private placed() {
+    return this.getParts().filter((p) => p.placed);
   }
 
   startBall() {
     this.mult = this.baseMult;
+    this.hitsByType.clear();
+    this.lit.clear();
   }
 
-  /** Returns a ScoreEvent for a partHit, or null for events that do not score. */
-  consume(ev: SimEvent, lookup: (uid: number) => PartInstance | undefined): ScoreEvent | null {
-    if (ev.type !== 'partHit') return null;
-    const inst = lookup(ev.uid);
-    if (!inst) return null;
+  isLit(uid: number) {
+    return this.lit.has(uid);
+  }
+
+  hitsOf(id: PartId) {
+    return this.hitsByType.get(id) ?? 0;
+  }
+
+  /** Sum of the bonuses of every lit lamp whose glow reaches this part. */
+  private lampBonusAt(inst: PartInstance): { sum: number; count: number } {
+    let sum = 0, count = 0;
+    for (const l of this.placed()) {
+      if (PARTS[l.def].kind !== 'lamp' || !this.lit.has(l.uid)) continue;
+      const r = dialValue(l, 'radius');
+      if (Math.hypot(l.x - inst.x, l.y - inst.y) <= r) {
+        sum += lampBonus(r);
+        count++;
+      }
+    }
+    return { sum, count };
+  }
+
+  /** What this part would score per event right now, before Mult. Null for parts that do not score. */
+  baseNow(inst: PartInstance, spins = 1): number | null {
+    const r = PARTS[inst.def].recipe;
+    if (!r.points) return null;
+    const grown = (r.grow ?? 0) * this.hitsOf(inst.def);
+    return Math.round((r.points + grown) * spins * dialFactor(inst) * (1 + this.lampBonusAt(inst).sum));
+  }
+
+  /** The short number drawn on the part itself ("100", "10/spin", "+25%"). */
+  label(inst: PartInstance): string | null {
     const def = PARTS[inst.def];
+    if (def.kind === 'lamp') return `+${Math.round(lampBonus(dialValue(inst, 'radius')) * 100)}%`;
+    const n = this.baseNow(inst);
+    if (n === null) return null;
+    return def.recipe.per === 'spin' ? `${n}/spin` : String(n);
+  }
 
-    const basePoints = def.basePoints * payoutFactor(inst.kick);
-    const points = Math.round(basePoints * this.mult);
-    const multBefore = this.mult;
-    this.mult = Math.round((this.mult + def.multGain) * 1000) / 1000;
-    this.score += points;
-    this.money += def.money;
-    if (this.score >= this.goal) this.goalReached = true;
-
+  private addLedger(inst: PartInstance, points: number, money: number, multAdded: number) {
     const row = this.ledger.get(inst.uid) ?? { uid: inst.uid, def: inst.def, hits: 0, points: 0, money: 0, multAdded: 0 };
     row.hits++;
     row.points += points;
-    row.money += def.money;
-    row.multAdded += def.multGain;
+    row.money += money;
+    row.multAdded += multAdded;
     this.ledger.set(inst.uid, row);
+  }
 
-    return { t: ev.t, uid: inst.uid, def: inst.def, x: ev.x, y: ev.y, basePoints, points, multBefore, multAfter: this.mult, money: def.money };
+  private award(inst: PartInstance, t: number, x: number, y: number, kind: ScoreEvent['kind'], base: number, multGain: number, money: number, notes: string[], label?: string, spins?: number): ScoreEvent {
+    const multBefore = this.mult;
+    const points = Math.round(base * multBefore);
+    this.mult = Math.round((this.mult + multGain) * 1000) / 1000;
+    this.score += points;
+    this.money += money;
+    if (this.score >= this.goal) this.goalReached = true;
+    this.addLedger(inst, points, money, multGain);
+    return { t, uid: inst.uid, def: inst.def, x, y, kind, base, points, multBefore, multAfter: this.mult, money, notes, label, spins };
+  }
+
+  /** Turn one physical event into zero or more attributed score events. */
+  consume(ev: SimEvent): ScoreEvent[] {
+    if (ev.type !== 'partHit') return [];
+    const inst = this.getParts().find((p) => p.uid === ev.uid && p.placed);
+    if (!inst) return [];
+    const def = PARTS[inst.def];
+    const r = def.recipe;
+    const out: ScoreEvent[] = [];
+
+    // lamps only light up
+    if (def.kind === 'lamp') {
+      if (!this.lit.has(inst.uid)) {
+        this.lit.add(inst.uid);
+        const e = this.award(inst, ev.t, ev.x, ev.y, 'light', 0, 0, 0, [], 'LAMP LIT');
+        out.push(e);
+      }
+      return out;
+    }
+
+    if (r.points) {
+      const spins = ev.spins ?? 1;
+      const grown = (r.grow ?? 0) * this.hitsOf(inst.def);
+      const factor = dialFactor(inst);
+      const lamp = this.lampBonusAt(inst);
+      const notes = [`${r.points}${spins > 1 ? ` x${spins} spins` : ''} base`];
+      if (grown) notes.push(`+${grown} grown`);
+      if (Math.abs(factor - 1) > 0.001) notes.push(`x${Math.round(factor * 100) / 100} dial`);
+      if (lamp.sum) notes.push(`+${Math.round(lamp.sum * 100)}% lamp`);
+      const base = Math.round((r.points + grown) * spins * factor * (1 + lamp.sum));
+      this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
+      out.push(this.award(inst, ev.t, ev.x, ev.y, 'hit', base, r.mult ?? 0, r.money ?? 0, notes, undefined, ev.spins));
+    }
+
+    // lane rollovers: light up, and a complete set pays a bonus and resets
+    if (r.lights && def.kind === 'rollover') {
+      this.lit.add(inst.uid);
+      const lanes = this.placed().filter((p) => p.def === inst.def);
+      if (r.setBonus && lanes.every((l) => this.lit.has(l.uid))) {
+        for (const l of lanes) this.lit.delete(l.uid);
+        out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', r.setBonus.points, r.setBonus.mult, 0, [`${r.setBonus.points} set bonus`], 'LANES COMPLETE'));
+      }
+    }
+    return out;
   }
 
   ledgerRows(): LedgerRow[] {

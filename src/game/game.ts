@@ -1,5 +1,6 @@
-import { PARTS, type PartId } from '../data/parts';
-import { canPlace, cloneLayout, starterLayout, type Layout, type PartInstance } from '../sim/layout';
+import { makePart, PARTS, PART_IDS, sellPrice, type PartId, type PartInstance } from '../data/parts';
+import { canPlace, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
+import { Rng } from '../sim/rng';
 import { createSim, NO_INPUT, type Input, type Sim, type SimEvent } from '../sim/sim';
 import { Scorer, type ScoreEvent } from './scoring';
 
@@ -18,6 +19,8 @@ export interface Payout {
 }
 
 export const BALLS_PER_ROUND = 3;
+export const START_MONEY = 6;
+export const SHOP_SLOTS = 4;
 
 /** Placeholder goal curve. The real one gets set against the balance bot (see docs/game-plan.md). */
 export function goalFor(round: number): number {
@@ -30,28 +33,90 @@ export interface StepResult {
   game: GameEvent[];
 }
 
+export interface ShopState {
+  /** null = already bought. */
+  offers: (PartId | null)[];
+  rerolls: number;
+}
+
+/** Everything that survives a page reload. */
+export interface RunSave {
+  v: 2;
+  layout: Layout;
+  money: number;
+  round: number;
+  shop: ShopState;
+  sandbox: boolean;
+  runSeed: number;
+}
+
+/** Validate a saved run from storage. Returns null for anything that is not a v2 save. */
+export function parseRun(json: string): RunSave | null {
+  try {
+    const s = JSON.parse(json) as RunSave;
+    if (s.v !== 2 || typeof s.money !== 'number' || typeof s.round !== 'number' || !Array.isArray(s.shop?.offers) || !loadLayout(JSON.stringify(s.layout))) return null;
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+/** Pick `n` distinct parts, weighted by each part's shop weight. */
+export function rollOffers(rng: Rng, n = SHOP_SLOTS): PartId[] {
+  const pool = [...PART_IDS];
+  const out: PartId[] = [];
+  while (out.length < n && pool.length) {
+    const total = pool.reduce((a, id) => a + PARTS[id].weight, 0);
+    let r = rng.next() * total;
+    const i = pool.findIndex((id) => (r -= PARTS[id].weight) < 0);
+    out.push(pool.splice(i < 0 ? pool.length - 1 : i, 1)[0]);
+  }
+  return out;
+}
+
 /**
- * Orchestrates the run: workshop (build, tune, test-ball) <-> round (3 balls vs a goal).
+ * Orchestrates the run: workshop (shop, inventory, build, tune, test-ball) <-> round (3 balls vs a goal).
  * The sim keeps running in the workshop so a test ball can bounce around while you edit.
  */
 export class Game {
   layout: Layout = starterLayout();
   mode: Mode = 'workshop';
   round = 1;
-  money = 0;
+  money = START_MONEY;
+  /** Sandbox: the shop is free and nothing is lost by experimenting. Off for a real run. */
+  sandbox = false;
   ballsLeft = BALLS_PER_ROUND;
   payout: Payout | null = null;
   sim: Sim;
   scorer: Scorer;
+  shop: ShopState;
+  private runSeed = 1;
   private seed = 1;
 
   constructor() {
     this.sim = createSim(this.layout, { seed: this.seed });
-    this.scorer = new Scorer(Infinity);
+    this.scorer = this.newScorer(Infinity);
+    this.shop = { offers: rollOffers(new Rng(this.runSeed)), rerolls: 0 };
+  }
+
+  private newScorer(goal: number) {
+    return new Scorer(goal, () => this.layout.parts);
   }
 
   get goal() {
     return this.scorer.goal;
+  }
+
+  get inventory(): PartInstance[] {
+    return inventoryParts(this.layout);
+  }
+
+  get placed(): PartInstance[] {
+    return placedParts(this.layout);
+  }
+
+  part(uid: number): PartInstance | undefined {
+    return this.layout.parts.find((p) => p.uid === uid);
   }
 
   // ---- mode changes -----------------------------------------------------------
@@ -65,7 +130,7 @@ export class Game {
     this.mode = 'round';
     this.ballsLeft = BALLS_PER_ROUND;
     this.payout = null;
-    this.scorer = new Scorer(goalFor(this.round));
+    this.scorer = this.newScorer(goalFor(this.round));
     this.scorer.startBall();
     this.sim.spawnBall();
   }
@@ -73,55 +138,121 @@ export class Game {
   toWorkshop() {
     this.resetSim();
     this.mode = 'workshop';
-    this.scorer = new Scorer(Infinity);
+    this.scorer = this.newScorer(Infinity);
   }
 
   continueAfterRound() {
     this.round++;
+    this.shop = { offers: rollOffers(new Rng(this.runSeed * 1000 + this.round)), rerolls: 0 };
     this.toWorkshop();
   }
 
   newRun() {
     this.layout = starterLayout();
     this.round = 1;
-    this.money = 0;
+    this.money = START_MONEY;
+    this.runSeed++;
+    this.shop = { offers: rollOffers(new Rng(this.runSeed)), rerolls: 0 };
     this.toWorkshop();
   }
 
-  // ---- workshop edits (applied live to the running sim) -------------------------
+  // ---- save / load ----------------------------------------------------------------
+
+  save(): RunSave {
+    return { v: 2, layout: this.layout, money: this.money, round: this.round, shop: this.shop, sandbox: this.sandbox, runSeed: this.runSeed };
+  }
+
+  load(s: RunSave) {
+    this.layout = s.layout;
+    this.money = s.money;
+    this.round = s.round;
+    this.shop = s.shop;
+    this.sandbox = s.sandbox;
+    this.runSeed = s.runSeed;
+    this.toWorkshop();
+  }
+
+  // ---- economy: shop, inventory, buy, sell ---------------------------------------------
 
   get editable() {
     return this.mode === 'workshop';
   }
 
-  placePart(def: PartId, x: number, y: number): PartInstance | null {
-    if (!this.editable || !canPlace(this.layout, def, x, y)) return null;
-    const inst: PartInstance = { uid: this.layout.nextUid++, def, x, y, kick: PARTS[def].kick.default };
+  get rerollCost() {
+    return this.sandbox ? 0 : 1 + this.shop.rerolls;
+  }
+
+  canAfford(cost: number) {
+    return this.sandbox || this.money >= cost;
+  }
+
+  /** Buy an offer into the inventory. Returns the new part, or null if you cannot. */
+  buy(slot: number): PartInstance | null {
+    const id = this.shop.offers[slot];
+    if (!this.editable || !id) return null;
+    const cost = PARTS[id].cost;
+    if (!this.canAfford(cost)) return null;
+    if (!this.sandbox) this.money -= cost;
+    this.shop.offers[slot] = null;
+    const inst = makePart(id, this.layout.nextUid++);
     this.layout.parts.push(inst);
-    this.sim.addPart(inst);
     return inst;
   }
 
-  movePart(uid: number, x: number, y: number): boolean {
-    const p = this.layout.parts.find((q) => q.uid === uid);
-    if (!this.editable || !p || !canPlace(this.layout, p.def, x, y, uid)) return false;
-    p.x = x;
-    p.y = y;
-    this.sim.movePart(uid, x, y);
+  reroll(): boolean {
+    if (!this.editable || !this.canAfford(this.rerollCost)) return false;
+    if (!this.sandbox) this.money -= this.rerollCost;
+    this.shop.rerolls++;
+    this.shop.offers = rollOffers(new Rng(this.runSeed * 7919 + this.round * 131 + this.shop.rerolls));
     return true;
   }
 
-  removePart(uid: number) {
-    if (!this.editable) return;
-    this.layout.parts = this.layout.parts.filter((p) => p.uid !== uid);
+  sell(uid: number): number {
+    const p = this.part(uid);
+    if (!this.editable || !p) return 0;
+    const refund = this.sandbox ? 0 : sellPrice(PARTS[p.def]);
+    this.money += refund;
+    this.layout.parts = this.layout.parts.filter((q) => q.uid !== uid);
     this.sim.removePart(uid);
+    return refund;
   }
 
-  setKick(uid: number, kick: number) {
-    const p = this.layout.parts.find((q) => q.uid === uid);
+  // ---- workshop edits (applied live to the running sim) -----------------------------------
+
+  /** Put an inventory part on the board (or move a placed one). */
+  place(uid: number, x: number, y: number): boolean {
+    const p = this.part(uid);
+    if (!this.editable || !p || !canPlace(this.layout, p.def, x, y, uid)) return false;
+    p.x = x;
+    p.y = y;
+    p.placed = true;
+    this.sim.updatePart(p);
+    return true;
+  }
+
+  /** Take a part off the board and back into the inventory. */
+  store(uid: number) {
+    const p = this.part(uid);
+    if (!this.editable || !p || !p.placed) return;
+    p.placed = false;
+    this.sim.updatePart(p);
+  }
+
+  rotate(uid: number, delta: number) {
+    const p = this.part(uid);
+    if (!this.editable || !p || !PARTS[p.def].rotatable) return;
+    const TAU = Math.PI * 2;
+    let a = (p.angle + delta) % TAU;
+    if (a < 0) a += TAU;
+    p.angle = Math.round(a * 1000) / 1000;
+    if (p.placed) this.sim.updatePart(p);
+  }
+
+  setDial(uid: number, id: string, value: number) {
+    const p = this.part(uid);
     if (!this.editable || !p) return;
-    p.kick = kick;
-    this.sim.setKick(uid, kick);
+    p.dials[id] = value;
+    if (p.placed) this.sim.updatePart(p);
   }
 
   setGravity(g: number) {
@@ -133,7 +264,7 @@ export class Game {
   /** Free practice ball in the workshop; scored into a throwaway ledger. */
   testBall() {
     if (this.mode !== 'workshop' || this.sim.ballCount > 0) return;
-    this.scorer = new Scorer(Infinity);
+    this.scorer = this.newScorer(Infinity);
     this.scorer.startBall();
     this.sim.spawnBall();
   }
@@ -151,28 +282,19 @@ export class Game {
     const wasGoal = this.scorer.goalReached;
     const events = this.sim.step(input);
     result.sim = events;
-    const lookup = (uid: number) => this.layout.parts.find((p) => p.uid === uid);
     for (const ev of events) {
-      const s = this.scorer.consume(ev, lookup);
-      if (s) result.score.push(s);
+      for (const s of this.scorer.consume(ev)) result.score.push(s);
       if (ev.type === 'tilt') result.game.push({ type: 'tilt' });
-      if (ev.type === 'drain') this.handleDrain(result);
     }
     if (!wasGoal && this.scorer.goalReached) result.game.push({ type: 'goal' });
+    // a ball ends when the LAST ball on the table is gone (the Ball Printer makes multiball)
+    if (this.mode === 'round' && this.sim.ballCount === 0 && !this.sim.awaitingPlunge) this.endBall(false, result);
     return result;
-  }
-
-  private handleDrain(result: StepResult) {
-    if (this.mode === 'workshop') return;
-    this.endBall(false, result);
   }
 
   private endBall(forced: boolean, result?: StepResult) {
     const out: GameEvent[] = result ? result.game : [];
-    if (forced) {
-      // Cash Out: remove the live ball without waiting for it to drain
-      this.resetSimKeepLedger();
-    }
+    if (forced) this.sim.reset(this.layout, { seed: this.seed++ }); // Cash Out: clear the table at once
     this.ballsLeft--;
     out.push({ type: 'ballEnd', ballsLeft: this.ballsLeft });
     if (this.scorer.goalReached) {
@@ -187,10 +309,6 @@ export class Game {
       this.scorer.startBall();
       this.sim.spawnBall();
     }
-  }
-
-  private resetSimKeepLedger() {
-    this.sim.reset(this.layout, { seed: this.seed++ });
   }
 
   private computePayout(): Payout {

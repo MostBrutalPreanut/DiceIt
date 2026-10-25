@@ -1,4 +1,4 @@
-import { DT, FLIPPER_LENGTH, SUBSTEPS } from '../src/sim/constants';
+import { DT, FLIPPER_LENGTH, SUBSTEPS, TABLE_H, TABLE_W } from '../src/sim/constants';
 import { Bot } from '../src/sim/bot';
 import type { Layout } from '../src/sim/layout';
 import { Rng } from '../src/sim/rng';
@@ -118,7 +118,7 @@ export function escapeFuzz(layout: Layout, balls: number, dt = DT, substeps = SU
       }
       for (const b of sim.ballStates()) {
         // outside the table's hull above the flippers (below them it is already a drain): an escape
-        if (((b.x < -0.6 || b.x > 22.6) && b.y > 8) || b.y > 45) escapes++;
+        if (((b.x < -0.6 || b.x > TABLE_W + 0.6) && b.y > 8) || b.y > TABLE_H + 1) escapes++;
       }
     }
     seconds += sim.time;

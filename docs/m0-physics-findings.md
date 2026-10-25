@@ -36,6 +36,26 @@ Result at 240 Hz: 0 escapes and 0 stuck balls (no ball-search events) in 150 bot
 
 **Long balls are a pacing problem, not a physics one.** In the same run 41 of 150 balls (27%) survived to the 90 s ball clock, averaging 24 scoring hits each: a skilled bot can juggle a ball on the sparse starter table indefinitely. The clock catches it, but real balls should end sooner. Expect slingshots, outlanes and more parts to add drain pressure; consider a 60 s clock.
 
+## Launch variety: why every ball took the same path, and the fix
+
+Feedback after the first playable: every ball goes up the lane, over the top and down the left wall. `tools/launch-spread.ts` measures it: fire hundreds of balls at random plunger strengths with no flipper input, record where each first crosses mid-table, how many parts it touches and how long it lives.
+
+| | First table (22 × 44) | Now (26 × 52) |
+|---|---|---|
+| Busiest landing bin (of 8) | **89%** (the left wall) | **23%** |
+| Balls that touched any part | 6% | 74% |
+| Average part hits per launch | 0.23 | 1.39 |
+| Average life of a launched ball | 7.2 s | 9.1 s |
+
+What the traces showed, and what fixed each thing:
+1. **A smooth dome is a perfect guide.** Any strong plunge hugged the dome at the apex and was carried to the left wall, over the top of everything. A 45° chamfer over the lane throws the ball out as a free projectile, so plunger strength decides where it lands. (Alone it was not enough: 80% still hugged the left wall.)
+2. **Low wall restitution (0.25)** let a ball arriving almost horizontally just slide down the wall. Raised to 0.5.
+3. **The starter bumpers were nowhere near the ball's path.** They now sit where the ball arrives (about y = 42 to 46).
+4. **Space Cadet's trick:** randomness only where the ball enters play. The plunger now boosts every launch by a random 0–10% and drifts the ball sideways a little (the original does `boost + rand * 0.1 * boost`). Saucers fire balls out with a random angle (±0.12 rad) and speed (±8%), like the original's `throw_ball`.
+5. **A short ledge on the left wall** rolls a ball sliding down it back into the field. The tool is sensitive (a 1-unit change to the ledge shifted most balls from the left to the right), so the final geometry was chosen by running it.
+
+`tests/launch.test.ts` now fails if the busiest bin reaches 40%, fewer than 5 of 8 bins have 5% of the balls, fewer than half the launches touch a part, or any launch of at least 30% charge falls back.
+
 ## Library notes (phaser-box2d 1.1.0)
 
 - `main` points to a missing `index.js`; import `phaser-box2d/dist/PhaserBox2D.js`.
@@ -52,12 +72,13 @@ In headless Chromium (CPU physics only, no drawing), ms per 240 Hz step: ~0.12 w
 
 Same seed and inputs give the same fingerprint (ball and flipper state) tick for tick, including on a reset world. JS floating point is deterministic within one engine build, so golden replays are valid per browser/Node version, not across them; daily-seed leaderboards must not rely on replay verification.
 
-## Bot balance probe (starter table, round-1 goal 2,500, bot skill 0.9)
+## Bot balance probe (starter machine, round-1 goal 2,500, bot skill 0.9)
 
-Over 40 rounds: cleared on ball 1 in 32, ball 2 in 5, ball 3 in 2, failed 1; median 3-ball score ~5,900. A real player will do worse than the bot, so the placeholder curve is plausible for round 1, but **balls last ~60 s on average on the sparse starter table**, double the 30 s target. Expect shorter balls once the table has more parts, flow shots and drain pressure; tune against this number.
+On the new table, over 30 rounds: cleared on ball 1 in 12, ball 2 in 8, ball 3 in 7, failed 3; median 3-ball score about 3,700; average ball 49.5 s (it was 80% first-ball clears and 60 s per ball on the old, emptier table). Real players will do worse than the bot, so round 1 may be too hard once someone plays it; the goal curve is still a placeholder. Run `npm run balance`.
 
 ## Open physics items
 
-- The plunger lane has no one-way gate. A ball rolling down the right arc can fall back into the lane (the sloped lane top makes this rare).
-- No slingshots, outlanes or inlane guides yet; the drain gap is wide.
-- Ball-vs-ball collisions are untested at high counts beyond the cost benchmark.
+- The plunger lane has no one-way gate. A ball rolling down the right side can fall back into the lane (the sloped lane top makes this rare).
+- No outlanes or inlane guides yet; the drain gap is wide. Slingshots exist as a buyable part, not as fixed cabinet furniture.
+- Ball-vs-ball collisions are tested only up to 4 balls (the Ball Printer's cap) and in the cost benchmark.
+- The flipper tunnelling table above was re-run on the new table: 173 / 56 / 46 / 1 / 0 raw failures per config, identical to the old table within one trial (the flipper geometry did not change). Escape fuzz on the new table: 0 escapes and 0 stuck balls in 200 bot balls; 45 of the 200 ran to the 90 s ball clock.

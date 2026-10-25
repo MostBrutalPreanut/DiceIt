@@ -13,25 +13,29 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-Controls: `Z`/`Shift` left flipper, `/`/`Shift` right flipper, hold `Space` to charge the plunger and release to fire, `←` `→` nudge (too much tilts), `Tab` cash out once the goal is hit, `M` mute. In the workshop, pick a part and click the table; drag to move, `Del` removes, `Space` fires a test ball.
+Controls: `Z`/`Shift` left flipper, `/`/`Shift` right flipper, hold `Space` to charge the plunger and release to fire, `←` `→` nudge (too much tilts), `Tab` cash out once the goal is hit, `M` mute.
+
+Workshop (between rounds): buy parts in the shop, click one in your inventory and click the table to place it. Drag a part to move it, drag it onto the inventory panel to take it off the board, `R` (or the mouse wheel) rotates, `Del` stores it, `Space` fires a test ball. Hover any part to see exactly how it scores. Tick **Sandbox** to make the shop free.
 
 ## Check it
 
 ```bash
-npm test                  # sim, scoring, determinism, physics stress + fuzz (headless)
+npm test                  # sim, scoring, economy, every part's physics, launch spread, stress + fuzz (headless)
 npm run typecheck
 npm run build && npx vite preview --port 4173 &
 npm run smoke -- ./shots  # drives the built game in headless Chromium
 npm run physics-report    # tunnelling rate per timestep, escape fuzz
 npm run balance           # bot plays rounds; goal clear rates
+npx vite-node tools/launch-spread.ts   # where do launched balls land?
 ```
 
 ## Layout
 
 ```
 src/sim/      deterministic Box2D simulation (runs headless in Node); nothing about scoring or drawing
-src/game/     scoring (points × Mult + ledger) and the run/round state machine
-src/data/     content as data: parts, announcer lines
+src/game/     scoring (points × Mult, recipes, ledger) and the run state: shop, inventory, rounds
+src/data/     content as data: parts (recipes, dials, descriptions), announcer lines
+src/ui/       small HTML builders for the cards and tooltips
 src/render/   PixiJS renderer (reads the sim, never writes it)
 tools/        stress/fuzz runners, balance bot, browser smoke test
 tests/        vitest

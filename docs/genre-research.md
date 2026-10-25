@@ -77,6 +77,17 @@ Sources for table design were thin (a Giant Bomb design essay, a university slid
 - **Box2D v3** (Aug 2024): soft-step solver, reworked continuous collision (hybrid speculative + time-of-impact) that Catto says prevents nearly all dynamic-vs-static tunnelling, a sensor system, and in v3.2 continuous sensor events. Bullet-vs-dynamic tunnelling prevention exists but is less robust. That matters for a fast ball against a swinging flipper, so it needs to be tested rather than assumed.
 - **Phaser Box2D** is an MIT-licensed JavaScript conversion of Box2D v3 (~70 KB, ESM), with revolute joints (limits and motors, i.e. flippers), sensors, continuous collision, shape casts. It is not tied to Phaser and can be used with PixiJS. Support is community-only. In this sandbox, `npm view` showed `phaser-box2d` 1.1.0, `planck` 1.5.1, `@dimforge/rapier2d-compat` 0.21.0 and `pixi.js` 8.22.0 on the registry, and headless Chromium with WebGL2 launches, so a web stack can be built *and* verified here.
 
+## 6b. How 3D Pinball Space Cadet gets its variety (read from the decompiled source)
+
+Prompted by the feedback that every launch took the same path. Source: the [k4zmu2a/SpaceCadetPinball](https://github.com/k4zmu2a/SpaceCadetPinball) decompilation, which the [web port](http://pinball.alula.me/) is built from. I read `TPlunger.cpp`, `TBall.cpp`, `TPinballTable.cpp` and `maths.cpp` through a page fetcher rather than cloning the repo, so treat the details as a close summary.
+
+- **No physics engine.** Hand-written collision against line and circle "edges" loaded from the original data file, with a spatial grid (`TEdgeManager`) to find candidates. `maths::basic_collision` takes `elasticity`, `smoothness`, `threshold` and `boost` per surface and has no randomness in it.
+- **The table is a set of component types** (instantiated from the data file): walls, plunger, lights, flippers, pop bumpers, pop-up targets, drain, blocker, kickouts, gates, kickbacks, rollovers, one-way gates, sinks, the flag spinner, solo targets, light rollovers, ramps, holes, tripwires, light groups, sounds, timers and text boxes. A separate `control::handler` script holds the rules (missions, bonuses). That is the same split as our parts versus rule cards.
+- **Randomness lives only at the points that put the ball into play.** The plunger launches with `boost = RandFloat() * Boost * 0.1 + Boost` (always up to 10% stronger than the charge says, via a normal collision), and `TBall::throw_ball` rotates a ball's direction by a random angle and randomizes its speed, used by kickouts and launchers. Everything after that is deterministic: variety comes from the ball's path crossing bumpers and gates, not from noisy collisions.
+- Other details: the plunger pulls back in steps every 25 ms up to a boost of 100; at most 20 balls exist at once and 3 per game; a ball already sitting in the lane delays the next feed by 1 s; tilt locks the flippers; score multipliers are {1, 2, 3, 5, 10}.
+
+**What we took from it:** our launch was deterministic by geometry, which is why 89% of balls went down the left wall. We now (1) boost the launch by a random 0–10%, (2) eject saucer balls with a random angle and speed, and (3) put the first bumpers where the ball arrives. Details and numbers are in [m0-physics-findings.md](m0-physics-findings.md).
+
 ## 7. Sources
 
 **Reference games**
@@ -93,4 +104,5 @@ Sources for table design were thin (a Giant Bomb design essay, a university slid
 
 **Pinball design and physics**
 - [Giant Bomb, "Rebound: the design of pinball"](https://giantbomb.com/users/3929/articles/rebound-the-design-of-pinball) · [UBC "Pinball Wizardry" slides](https://www.cs.ubc.ca/~udls/slides/2018-clement-pinball.pdf)
+- Space Cadet source: [repository](https://github.com/k4zmu2a/SpaceCadetPinball) · [TPlunger.cpp](https://raw.githubusercontent.com/k4zmu2a/SpaceCadetPinball/master/SpaceCadetPinball/TPlunger.cpp) · [TBall.cpp](https://raw.githubusercontent.com/k4zmu2a/SpaceCadetPinball/master/SpaceCadetPinball/TBall.cpp) · [TPinballTable.cpp](https://raw.githubusercontent.com/k4zmu2a/SpaceCadetPinball/master/SpaceCadetPinball/TPinballTable.cpp) · [maths.cpp](https://raw.githubusercontent.com/k4zmu2a/SpaceCadetPinball/master/SpaceCadetPinball/maths.cpp) · [web port](http://pinball.alula.me/)
 - [Box2D 3.0 release post](https://box2d.org/posts/2024/08/releasing-box2d-3.0) · [Phaser Box2D](https://phaser.io/box2d) · [Unity CCD docs](https://docs.unity.cn/2020.3/Documentation/Manual/ContinuousCollisionDetection.html) · Godot forum: [flipper approaches](https://forum.godotengine.org/t/best-approach-to-a-pinball-flipper/22161), [4.4 table build](https://forum.godotengine.org/t/godot-4-4-pinball-table-build/107655)

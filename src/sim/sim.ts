@@ -1,14 +1,14 @@
 import * as B from 'phaser-box2d/dist/PhaserBox2D.js';
-import { PARTS } from '../data/parts';
+import { dialValue, PARTS, type PartInstance } from '../data/parts';
 import {
   BALL_R, BALL_SEARCH_AFTER, BALL_SPAWN, BALL_TIMEOUT, DT, FLIPPER_LENGTH, FLIPPER_REST,
-  FLIPPER_SPEED_DOWN, FLIPPER_SPEED_UP, FLIPPER_TORQUE, FLIPPER_UP, LANE_FLOOR_Y,
-  MAX_BALL_SPEED, NUDGE_SPEED, NUDGE_TILT, PLUNGE_CHARGE_TIME, PLUNGE_MAX, PLUNGE_MIN,
-  SUBSTEPS, TILT_DECAY,
+  FLIPPER_SPEED_DOWN, FLIPPER_SPEED_UP, FLIPPER_TORQUE, FLIPPER_UP, LANE_FLOOR_Y, LANE_TOP_Y,
+  LANE_WALL_X, MAX_BALL_SPEED, MAX_BALLS, NUDGE_SPEED, NUDGE_TILT, PLUNGE_CHARGE_TIME, PLUNGE_DRIFT,
+  PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, SUBSTEPS, TABLE_H, TABLE_W, TILT_DECAY, WALL_RESTITUTION,
 } from './constants';
-import { cloneLayout, type Layout, type PartInstance } from './layout';
+import { cloneLayout, type Layout } from './layout';
 import { Rng } from './rng';
-import { FLIPPER_PIVOTS, tableSegments } from './table';
+import { FLIPPER_PIVOTS, TABLE_POSTS, tableSegments } from './table';
 
 /** What the player is doing this tick. `nudge` is a one-tick pulse: -1 left, 1 right, 0 none. */
 export interface Input {
@@ -21,7 +21,9 @@ export const NO_INPUT: Input = { left: false, right: false, plunge: false, nudge
 
 /** Physical things that happened. Scoring and presentation both consume this stream; neither feeds back. */
 export type SimEvent =
-  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number }
+  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean }
+  | { type: 'partRelease'; t: number; uid: number; ballId: number }
+  | { type: 'extraBall'; t: number; uid: number; ballId: number }
   | { type: 'launch'; t: number; ballId: number; power: number }
   | { type: 'drain'; t: number; ballId: number; reason: 'drain' | 'timeout' }
   | { type: 'ballSpawn'; t: number; ballId: number }
@@ -38,6 +40,7 @@ export interface BallState {
   vx: number;
   vy: number;
   inLane: boolean;
+  held: boolean;
 }
 
 export interface FlipperState {
@@ -47,20 +50,20 @@ export interface FlipperState {
   side: 'L' | 'R';
   pivotX: number;
   pivotY: number;
+  uid?: number;
 }
 
+type Local = { lx: number; ly: number };
 interface BallRef {
   id: number;
   body: any;
   age: number;
   slowTime: number;
-  prevLocal: { L?: { lx: number; ly: number }; R?: { lx: number; ly: number } };
-}
-interface PartRef {
-  inst: PartInstance;
-  body: any;
+  prevLocal: Map<number, Local>;
+  held: { uid: number; until: number } | null;
 }
 interface FlipperRef {
+  fid: number;
   side: 'L' | 'R';
   sign: 1 | -1;
   body: any;
@@ -68,6 +71,12 @@ interface FlipperRef {
   pivotX: number;
   pivotY: number;
   on: boolean;
+  uid?: number;
+}
+interface PartRef {
+  inst: PartInstance;
+  body: any;
+  flipper?: FlipperRef;
 }
 
 export interface SimOptions {
@@ -93,6 +102,7 @@ export class Sim {
   tilted = false;
   plungeCharge = 0;
   awaitingPlunge = false;
+  rescues = 0;
 
   private worldId: any;
   private ground: any;
@@ -100,18 +110,17 @@ export class Sim {
   private parts = new Map<number, PartRef>();
   private flippers: FlipperRef[] = [];
   private nextBallId = 1;
+  private nextFlipperId = 1;
   private rng: Rng;
   private plungeWasHeld = false;
   private nudgeCooldown = 0;
-  private gravity: number;
   private rescueOn = true;
-  rescues = 0;
+  private sideOn = { L: false, R: false };
 
   constructor(layout: Layout, opts: SimOptions = {}) {
     this.dt = opts.dt ?? DT;
     this.substeps = opts.substeps ?? SUBSTEPS;
     this.rng = new Rng(opts.seed ?? 1);
-    this.gravity = layout.gravity;
     this.rescueOn = opts.rescue ?? true;
 
     const wd = B.b2DefaultWorldDef();
@@ -133,7 +142,6 @@ export class Sim {
     this.dt = opts.dt ?? DT;
     this.substeps = opts.substeps ?? SUBSTEPS;
     this.rng = new Rng(opts.seed ?? 1);
-    this.gravity = layout.gravity;
     this.rescueOn = opts.rescue ?? true;
     B.b2World_SetGravity(this.worldId, V(0, -layout.gravity));
     this.build(layout);
@@ -149,7 +157,9 @@ export class Sim {
     this.plungeWasHeld = false;
     this.nudgeCooldown = 0;
     this.nextBallId = 1;
+    this.nextFlipperId = 1;
     this.rescues = 0;
+    this.sideOn = { L: false, R: false };
     this.buildTable();
     this.flippers.push(
       this.buildFlipper('L', FLIPPER_PIVOTS.L.x, FLIPPER_PIVOTS.L.y),
@@ -160,7 +170,7 @@ export class Sim {
 
   private teardown() {
     for (const b of this.balls) B.b2DestroyBody(b.body);
-    for (const p of this.parts.values()) B.b2DestroyBody(p.body);
+    for (const p of this.parts.values()) if (!p.flipper) B.b2DestroyBody(p.body);
     for (const f of this.flippers) B.b2DestroyBody(f.body); // also destroys its joint
     B.b2DestroyBody(this.ground);
     this.balls = [];
@@ -182,14 +192,19 @@ export class Sim {
 
     const sd = B.b2DefaultShapeDef();
     sd.friction = 0.05;
-    sd.restitution = 0.25;
+    sd.restitution = WALL_RESTITUTION;
     sd.userData = { kind: 'wall' };
     for (const g of tableSegments()) {
       B.b2CreateSegmentShape(this.ground, sd, new B.b2Segment(V(g.x1, g.y1), V(g.x2, g.y2)));
     }
+    const post = B.b2DefaultShapeDef();
+    post.friction = 0.05;
+    post.restitution = 0.55;
+    post.userData = { kind: 'wall' };
+    for (const q of TABLE_POSTS) B.b2CreateCircleShape(this.ground, post, new B.b2Circle(V(q.x, q.y), q.r));
   }
 
-  private buildFlipper(side: 'L' | 'R', pivotX: number, pivotY: number): FlipperRef {
+  private buildFlipper(side: 'L' | 'R', pivotX: number, pivotY: number, uid?: number): FlipperRef {
     const sign: 1 | -1 = side === 'L' ? 1 : -1;
     const rest = -sign * FLIPPER_REST;
     const up = sign * FLIPPER_UP;
@@ -203,7 +218,6 @@ export class Sim {
 
     const L = FLIPPER_LENGTH;
     const pts = [V(0, -0.5), V(sign * L, -0.28), V(sign * L, 0.28), V(0, 0.5)];
-    // hull winding must be counter-clockwise; ComputeHull sorts it for us
     const hull = B.b2ComputeHull(pts, pts.length);
     const poly = B.b2MakePolygon(hull, 0.12);
     const sd = B.b2DefaultShapeDef();
@@ -226,47 +240,54 @@ export class Sim {
     jd.motorSpeed = -sign * FLIPPER_SPEED_DOWN;
     jd.collideConnected = false;
     const joint = B.b2CreateRevoluteJoint(this.worldId, jd);
-    return { side, sign, body, joint, pivotX, pivotY, on: false };
+    return { fid: this.nextFlipperId++, side, sign, body, joint, pivotX, pivotY, on: false, uid };
   }
 
-  // ---- live edits (the workshop changes the machine while a test ball is rolling) ----
+  // ---- parts: live edits (the workshop changes the machine while a test ball is rolling) ----
 
+  /** Add a part to the world. Parts in the inventory (placed: false) have no body. */
   addPart(inst: PartInstance) {
+    if (!inst.placed || this.parts.has(inst.uid)) return;
     const def = PARTS[inst.def];
+
+    if (def.kind === 'flipper') {
+      const f = this.buildFlipper(dialValue(inst, 'side') >= 0.5 ? 'R' : 'L', inst.x, inst.y, inst.uid);
+      this.flippers.push(f);
+      this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body: f.body, flipper: f });
+      return;
+    }
+
     const bd = B.b2DefaultBodyDef();
     bd.type = B.b2BodyType.b2_staticBody;
     bd.position = V(inst.x, inst.y);
+    bd.rotation = B.b2MakeRot(inst.angle);
     const body = B.b2CreateBody(this.worldId, bd);
     const sd = B.b2DefaultShapeDef();
     sd.friction = 0.1;
-    sd.restitution = 0.45;
+    sd.restitution = def.kind === 'deflector' ? 0.6 : def.kind === 'kicker' ? 0.3 : 0.45;
+    sd.isSensor = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'saucer' || def.kind === 'lamp';
     sd.userData = { kind: 'part', uid: inst.uid };
-    B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), def.radius));
-    this.parts.set(inst.uid, { inst: { ...inst }, body });
+    if (def.shape.type === 'circle') B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), def.shape.r));
+    else B.b2CreatePolygonShape(body, sd, B.b2MakeBox(def.shape.hw, def.shape.hh));
+    this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body });
   }
 
   removePart(uid: number) {
     const p = this.parts.get(uid);
     if (!p) return;
+    for (const b of this.balls) if (b.held?.uid === uid) this.release(b);
+    if (p.flipper) this.flippers = this.flippers.filter((f) => f !== p.flipper);
     B.b2DestroyBody(p.body);
     this.parts.delete(uid);
   }
 
-  movePart(uid: number, x: number, y: number) {
-    const p = this.parts.get(uid);
-    if (!p) return;
-    p.inst.x = x;
-    p.inst.y = y;
-    B.b2Body_SetTransform(p.body, V(x, y), B.b2MakeRot(0));
-  }
-
-  setKick(uid: number, kick: number) {
-    const p = this.parts.get(uid);
-    if (p) p.inst.kick = kick;
+  /** Re-sync one part with its instance (moved, rotated, a dial turned, stored, placed). */
+  updatePart(inst: PartInstance) {
+    this.removePart(inst.uid);
+    this.addPart(inst);
   }
 
   setGravity(g: number) {
-    this.gravity = g;
     B.b2World_SetGravity(this.worldId, V(0, -g));
   }
 
@@ -299,7 +320,7 @@ export class Sim {
     sd.restitution = 0.3;
     sd.userData = { kind: 'ball', id };
     B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), BALL_R));
-    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: {} });
+    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null });
     return id;
   }
 
@@ -315,26 +336,22 @@ export class Sim {
     return this.balls.map((b) => {
       const p = B.b2Body_GetPosition(b.body);
       const v = B.b2Body_GetLinearVelocity(b.body);
-      return { id: b.id, x: p.x, y: p.y, vx: v.x, vy: v.y, inLane: p.x > 19.9 && p.y < 34 };
+      return { id: b.id, x: p.x, y: p.y, vx: v.x, vy: v.y, inLane: p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y, held: b.held !== null };
     });
   }
 
   flipperStates(): FlipperState[] {
     return this.flippers.map((f) => {
       const p = B.b2Body_GetPosition(f.body);
-      return {
-        x: p.x,
-        y: p.y,
-        angle: B.b2RevoluteJoint_GetAngle(f.joint),
-        side: f.side,
-        pivotX: f.pivotX,
-        pivotY: f.pivotY,
-      };
+      return { x: p.x, y: p.y, angle: B.b2RevoluteJoint_GetAngle(f.joint), side: f.side, pivotX: f.pivotX, pivotY: f.pivotY, uid: f.uid };
     });
   }
 
-  partStates(): PartInstance[] {
-    return [...this.parts.values()].map((p) => ({ ...p.inst }));
+  /** The balls currently held by saucers, keyed by part uid (for drawing). */
+  heldBalls(): Map<number, number> {
+    const m = new Map<number, number>();
+    for (const b of this.balls) if (b.held) m.set(b.held.uid, b.id);
+    return m;
   }
 
   // ---- stepping ---------------------------------------------------------------
@@ -345,13 +362,16 @@ export class Sim {
     this.events = [];
     const t = this.time;
 
-    // flippers
-    for (const f of this.flippers) {
-      const want = (f.side === 'L' ? input.left : input.right) && !this.tilted;
-      if (want !== f.on) {
-        f.on = want;
-        this.events.push({ type: 'flipper', t, side: f.side, on: want });
+    // flippers: every flipper follows the button of its side
+    for (const side of ['L', 'R'] as const) {
+      const want = (side === 'L' ? input.left : input.right) && !this.tilted;
+      if (want !== this.sideOn[side]) {
+        this.sideOn[side] = want;
+        this.events.push({ type: 'flipper', t, side, on: want });
       }
+    }
+    for (const f of this.flippers) {
+      f.on = this.sideOn[f.side];
       B.b2RevoluteJoint_SetMotorSpeed(f.joint, f.sign * (f.on ? FLIPPER_SPEED_UP : -FLIPPER_SPEED_DOWN));
     }
 
@@ -360,10 +380,16 @@ export class Sim {
       if (input.plunge) {
         this.plungeCharge = Math.min(1, this.plungeCharge + this.dt / PLUNGE_CHARGE_TIME);
       } else if (this.plungeWasHeld && this.plungeCharge > 0.02) {
-        const ball = this.balls[0];
+        // with several balls in the lane, fire the top one: it has a clear way out
+        const laneBalls = this.balls.filter((b) => !b.held && this.inLane(b));
+        const top = (b: BallRef) => B.b2Body_GetPosition(b.body).y;
+        laneBalls.sort((a, b) => top(b) - top(a));
+        const ball = laneBalls[0] ?? this.balls[0];
         if (ball) {
           const power = PLUNGE_MIN + (PLUNGE_MAX - PLUNGE_MIN) * this.plungeCharge;
-          B.b2Body_SetLinearVelocity(ball.body, V(0, power));
+          // like Space Cadet's plunger: the shot is never exactly the charge you gave it
+          const boosted = power * (1 + this.rng.range(0, PLUNGE_NOISE));
+          B.b2Body_SetLinearVelocity(ball.body, V(this.rng.range(-PLUNGE_DRIFT, PLUNGE_DRIFT), boosted));
           this.events.push({ type: 'launch', t, ballId: ball.id, power });
           this.awaitingPlunge = false;
         }
@@ -379,6 +405,7 @@ export class Sim {
       this.nudgeCooldown = 0.15;
       this.tiltMeter += NUDGE_TILT;
       for (const b of this.balls) {
+        if (b.held) continue;
         const v = B.b2Body_GetLinearVelocity(b.body);
         B.b2Body_SetLinearVelocity(b.body, V(v.x + input.nudge * NUDGE_SPEED, v.y + 2));
       }
@@ -389,11 +416,49 @@ export class Sim {
       }
     }
 
+    // saucers keep their caught balls dead still, then fire them out
+    for (const b of [...this.balls]) {
+      if (!b.held) continue;
+      const pr = this.parts.get(b.held.uid);
+      if (!pr) { this.release(b); continue; }
+      B.b2Body_SetTransform(b.body, V(pr.inst.x, pr.inst.y), B.b2MakeRot(0));
+      B.b2Body_SetLinearVelocity(b.body, V(0, 0));
+      if (this.tick >= b.held.until) this.eject(b, pr);
+    }
+
     B.b2World_Step(this.worldId, this.dt, this.substeps);
 
     this.processContacts();
+    this.processSensors();
     this.checkBalls();
     return this.events;
+  }
+
+  private inLane(b: BallRef) {
+    const p = B.b2Body_GetPosition(b.body);
+    return p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y;
+  }
+
+  private release(b: BallRef) {
+    b.held = null;
+    B.b2Body_SetGravityScale(b.body, 1);
+  }
+
+  /** Fire a caught ball out of its saucer. Like Space Cadet's throw_ball: random angle and speed around the aim. */
+  private eject(b: BallRef, pr: PartRef) {
+    const speed = dialValue(pr.inst, 'power');
+    const a = pr.inst.angle + this.rng.range(-0.12, 0.12);
+    const s = speed * (1 + this.rng.range(-0.08, 0.08));
+    this.release(b);
+    B.b2Body_SetLinearVelocity(b.body, V(-Math.sin(a) * s, Math.cos(a) * s));
+    this.events.push({ type: 'partRelease', t: this.time, uid: pr.inst.uid, ballId: b.id });
+
+    const def = PARTS[pr.inst.def];
+    if (def.recipe.spawn && this.balls.length < MAX_BALLS) {
+      const a2 = pr.inst.angle + this.rng.range(0.3, 0.6) * (this.rng.next() < 0.5 ? -1 : 1);
+      const id = this.addBall(pr.inst.x, pr.inst.y, -Math.sin(a2) * s * 0.9, Math.cos(a2) * s * 0.9);
+      this.events.push({ type: 'extraBall', t: this.time, uid: pr.inst.uid, ballId: id });
+    }
   }
 
   private processContacts() {
@@ -408,22 +473,67 @@ export class Sim {
       const pr = this.parts.get(part.uid);
       const br = this.balls.find((x) => x.id === ball.id);
       if (!pr || !br) continue;
+      const def = PARTS[pr.inst.def];
+      if (def.kind !== 'bumper' && def.kind !== 'kicker') continue;
 
       const bp = B.b2Body_GetPosition(br.body);
       const v = B.b2Body_GetLinearVelocity(br.body);
-      const dx = bp.x - pr.inst.x, dy = bp.y - pr.inst.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const kickSpeed = pr.inst.kick * PARTS[pr.inst.def].kickUnit;
-      B.b2Body_SetLinearVelocity(br.body, V(v.x + (dx / len) * kickSpeed, v.y + (dy / len) * kickSpeed));
+      const kickSpeed = dialValue(pr.inst, 'kick') * def.kickUnit;
+      let nx: number, ny: number;
+      if (def.shape.type === 'circle') {
+        const dx = bp.x - pr.inst.x, dy = bp.y - pr.inst.y;
+        const len = Math.hypot(dx, dy) || 1;
+        nx = dx / len;
+        ny = dy / len;
+      } else {
+        // kick along the face of the box that was hit
+        const c = Math.cos(pr.inst.angle), s = Math.sin(pr.inst.angle);
+        const dx = bp.x - pr.inst.x, dy = bp.y - pr.inst.y;
+        const lx = dx * c + dy * s, ly = -dx * s + dy * c;
+        const alongX = Math.abs(lx) / def.shape.hw > Math.abs(ly) / def.shape.hh;
+        const nlx = alongX ? Math.sign(lx) || 1 : 0, nly = alongX ? 0 : Math.sign(ly) || 1;
+        nx = nlx * c - nly * s;
+        ny = nlx * s + nly * c;
+      }
+      B.b2Body_SetLinearVelocity(br.body, V(v.x + nx * kickSpeed, v.y + ny * kickSpeed));
+      const r = def.shape.type === 'circle' ? def.shape.r : 0.4;
       this.events.push({
-        type: 'partHit',
-        t: this.time,
-        uid: pr.inst.uid,
-        ballId: br.id,
-        x: pr.inst.x + (dx / len) * PARTS[pr.inst.def].radius,
-        y: pr.inst.y + (dy / len) * PARTS[pr.inst.def].radius,
-        speed: Math.hypot(v.x, v.y),
+        type: 'partHit', t: this.time, uid: pr.inst.uid, ballId: br.id,
+        x: pr.inst.x + nx * r, y: pr.inst.y + ny * r, speed: Math.hypot(v.x, v.y),
       });
+    }
+  }
+
+  private processSensors() {
+    const ev = B.b2World_GetSensorEvents(this.worldId);
+    for (let i = 0; i < ev.beginCount; i++) {
+      const e = ev.beginEvents[i];
+      const s = B.b2Shape_GetUserData(e.sensorShapeId);
+      const v = B.b2Shape_GetUserData(e.visitorShapeId);
+      if (s?.kind !== 'part' || v?.kind !== 'ball') continue;
+      const pr = this.parts.get(s.uid);
+      const br = this.balls.find((x) => x.id === v.id);
+      if (!pr || !br || br.held) continue;
+      const def = PARTS[pr.inst.def];
+      const vel = B.b2Body_GetLinearVelocity(br.body);
+      const speed = Math.hypot(vel.x, vel.y);
+      const hit = { type: 'partHit' as const, t: this.time, uid: pr.inst.uid, ballId: br.id, x: pr.inst.x, y: pr.inst.y, speed };
+
+      if (def.kind === 'spinner') {
+        const spins = Math.max(1, Math.min(10, Math.round(speed / 10)));
+        const drag = 1 - 0.08 * dialValue(pr.inst, 'drag');
+        B.b2Body_SetLinearVelocity(br.body, V(vel.x * drag, vel.y * drag));
+        this.events.push({ ...hit, spins });
+      } else if (def.kind === 'saucer') {
+        if ([...this.balls].some((o) => o.held?.uid === pr.inst.uid)) continue; // one at a time
+        br.held = { uid: pr.inst.uid, until: this.tick + Math.round(dialValue(pr.inst, 'hold') / this.dt) };
+        B.b2Body_SetTransform(br.body, V(pr.inst.x, pr.inst.y), B.b2MakeRot(0));
+        B.b2Body_SetLinearVelocity(br.body, V(0, 0));
+        B.b2Body_SetGravityScale(br.body, 0);
+        this.events.push({ ...hit, caught: true });
+      } else if (def.kind === 'rollover' || def.kind === 'lamp') {
+        this.events.push(hit);
+      }
     }
   }
 
@@ -431,15 +541,16 @@ export class Sim {
     const t = this.time;
     for (const b of [...this.balls]) {
       b.age += this.dt;
+      if (b.held) continue;
       const p = B.b2Body_GetPosition(b.body);
       const v = B.b2Body_GetLinearVelocity(b.body);
-      const inLane = p.x > 19.9 && p.y < 34;
+      const inLane = p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y;
 
       let reason: 'drain' | 'timeout' | null = null;
       if (p.y < 2.2 && !inLane) reason = 'drain';
       else if (b.age > BALL_TIMEOUT && !this.awaitingPlunge) reason = 'timeout';
       // a ball that leaves the table any other way is a bug; treat it as a drain so a run can't soft-lock
-      else if (p.x < -1 || p.x > 23 || p.y > 46) reason = 'drain';
+      else if (p.x < -1 || p.x > TABLE_W + 1 || p.y > TABLE_H + 2) reason = 'drain';
 
       if (reason) {
         B.b2DestroyBody(b.body);
@@ -480,9 +591,9 @@ export class Sim {
   private rescueFromFlippers(b: BallRef) {
     const p = B.b2Body_GetPosition(b.body);
     for (const f of this.flippers) {
-      const loc = this.flipperLocal(f.side, p.x, p.y);
-      const prev = b.prevLocal[f.side];
-      const inSpan = (q: { lx: number }) => q.lx > 0.3 && q.lx < FLIPPER_LENGTH - 0.3;
+      const loc = this.localTo(f, p.x, p.y);
+      const prev = b.prevLocal.get(f.fid);
+      const inSpan = (q: Local) => q.lx > 0.3 && q.lx < FLIPPER_LENGTH - 0.3;
       if (prev && inSpan(prev) && inSpan(loc) && prev.ly >= 0 && loc.ly < -0.3) {
         const fp = B.b2Body_GetPosition(f.body);
         const a = B.b2RevoluteJoint_GetAngle(f.joint);
@@ -500,10 +611,10 @@ export class Sim {
         B.b2Body_SetLinearVelocity(b.body, V(wx, wy));
         this.rescues++;
         this.events.push({ type: 'rescue', t: this.time, ballId: b.id });
-        b.prevLocal[f.side] = this.flipperLocal(f.side, nx, ny);
+        b.prevLocal.set(f.fid, this.localTo(f, nx, ny));
         continue;
       }
-      b.prevLocal[f.side] = loc;
+      b.prevLocal.set(f.fid, loc);
     }
   }
 
@@ -519,19 +630,20 @@ export class Sim {
     return parts.join('|');
   }
 
-  /** Test hook: lateral flipper geometry so tests can detect tunnelling. */
-  flipperLocal(side: 'L' | 'R', x: number, y: number) {
-    const f = this.flippers.find((q) => q.side === side)!;
+  /** Coordinates of a world point in a flipper's frame: long axis +x for both sides, top surface +y. */
+  private localTo(f: FlipperRef, x: number, y: number): Local {
     const p = B.b2Body_GetPosition(f.body);
     const angle = B.b2RevoluteJoint_GetAngle(f.joint);
     const dx = x - p.x, dy = y - p.y;
     const c = Math.cos(angle), s = Math.sin(angle);
-    // rotate into the flipper's frame; mirror so the long axis is +x for both sides
-    const lx = (dx * c + dy * s) * f.sign;
-    const ly = -dx * s + dy * c;
-    return { lx, ly: ly, length: FLIPPER_LENGTH };
+    return { lx: (dx * c + dy * s) * f.sign, ly: -dx * s + dy * c };
   }
 
+  /** Test hook: flipper-local coordinates for one of the two fixed flippers. */
+  flipperLocal(side: 'L' | 'R', x: number, y: number) {
+    const f = this.flippers.find((q) => q.side === side && q.uid === undefined)!;
+    return { ...this.localTo(f, x, y), length: FLIPPER_LENGTH };
+  }
 }
 
 let shared: Sim | null = null;
