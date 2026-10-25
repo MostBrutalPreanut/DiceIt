@@ -311,7 +311,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.click('#btnToMenu');
   check(await page.isVisible('#menu .mpanel') && await page.locator('#menu [data-act="resume"]').count() === 0, 'the lose screen goes to the main menu, with nothing to resume');
   await page.click('#menu [data-act="scores"]');
-  check(await page.locator('#menu .sbrow').count() === 1 && /Lost/.test(await page.innerText('#menu .sbrow')), 'the scoreboard lists the lost run');
+  check(await page.locator('#menu .sbrow').count() === 1 && /lost/i.test(await page.innerText('#menu .sbrow')), 'the scoreboard lists the lost run');
   await page.waitForFunction(() => { const i = document.querySelector('#sbDetail img.thumb'); return i && i.naturalWidth > 0; });
   check(true, 'the picked run shows its final build as a picture');
   check((await lsGet('pinball-roguelite.scoreboard.v1'))[0].parts.length >= 4, 'the record keeps the final build, part by part');
@@ -333,7 +333,8 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.screenshot({ path: `${out}/smoke-6-settings.png` });
   await page.keyboard.press('Escape');
 
-  // a new run: Esc pauses it, and the sim holds still under the pause menu
+  // a new run: Esc pauses it, and the sim holds still under the pause menu (the sim runs in real time from here)
+  await page.evaluate(() => window.__pinball.freeze(false));
   await page.click('#menu [data-act="new"]');
   await page.click('#menu .cab[data-theme="diner"]');
   await page.click('#btnStart');

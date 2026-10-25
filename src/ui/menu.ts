@@ -133,7 +133,7 @@ export class Menu {
       const t = run ? themeById(run.machine) : null;
       const best = this.hooks.records()[0];
       const resume = run && t
-        ? `<button class="mbtn" data-act="resume"><span class="disp">Resume</span><small>${esc(title(t.tagline))} · round ${run.round} · $${run.money}${run.won ? ' · endless' : ''}</small></button>` : '';
+        ? `<button class="mbtn primary" data-act="resume"><span class="disp">Resume</span><small>${esc(title(t.tagline))} · round ${run.round} · $${run.money}${run.won ? ' · endless' : ''}</small></button>` : '';
       return `<section class="mscreen">
         <div class="mcol">
           <h1 class="mtitle" aria-label="Big Boi Pinball Designer"><img class="mboi" alt="" src="${this.hooks.bigBoi(this.machine)}"><span class="t1 disp">BIG BOI</span><span class="t2 disp">PINBALL DESIGNER</span></h1>
