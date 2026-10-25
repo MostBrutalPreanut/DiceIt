@@ -502,7 +502,7 @@ async function main() {
     switch (ev.type) {
       case 'flipper': audio.flipper(ev.on); break;
       case 'launch': audio.launch(ev.power); if (ev.power < 62) sayKey('weakPlunge'); break;
-      case 'drain': audio.drain(); if (game.mode !== 'workshop' || ev.reason === 'timeout') sayKey('drain'); break;
+      case 'drain': audio.drain(); if (ev.reason === 'timeout' && game.mode === 'round') sayKey('clock'); else if (game.mode !== 'workshop' || ev.reason === 'timeout') sayKey('drain'); break;
       case 'nudge': audio.nudge(); break;
       case 'tilt': audio.tilt(); renderer.onTilt(); sayKey('tilt'); break;
       case 'ballSearch': sayKey('search'); break;
@@ -588,6 +588,11 @@ async function main() {
     $('goalFill').style.width = inRound ? `${Math.min(100, (sc.score / goal) * 100)}%` : '0%';
     $('balls').textContent = inRound ? '●'.repeat(Math.max(0, game.ballsLeft)) + '○'.repeat(Math.max(0, game.ballsPerRound - game.ballsLeft)) : '∞';
     $('tiltFill').style.width = `${Math.min(100, game.sim.tiltMeter * 100)}%`;
+    const clock = game.sim.clockLeft;
+    ($('clockBox') as HTMLElement).hidden = game.mode !== 'round';
+    $('clockSec').textContent = clock === null ? `${game.sim.clockTotal} s` : `${Math.ceil(clock)} s`;
+    $('clockFill').style.width = `${clock === null ? 100 : (clock / game.sim.clockTotal) * 100}%`;
+    $('clockFill').classList.toggle('low', clock !== null && clock < 10);
     updateStepper();
     ($('btnCash') as HTMLButtonElement).hidden = !(game.mode === 'round' && sc.goalReached);
     $('workshop').hidden = game.mode !== 'workshop';

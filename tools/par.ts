@@ -1,8 +1,9 @@
 import type { Mods } from '../src/data/mods';
 import { PARTS, type PartId } from '../src/data/parts';
 import { UPGRADES, type UpgradeId } from '../src/data/upgrades';
-import { autoBuild, playRounds, type BuildOptions, type RoundSample } from '../src/game/autobuild';
+import { autoBuild, playRounds, type BuildOptions, type Levels, type RoundSample } from '../src/game/autobuild';
 import { Game, payoutFor } from '../src/game/game';
+import type { Layout } from '../src/sim/layout';
 
 /**
  * The par player: a sensible, unlucky-proof player that the goal curve is measured against. Each round it
@@ -65,6 +66,9 @@ export interface ParRound {
   seconds: number;
   /** The run's upgrades that round, so the economy can be re-checked against other goals. */
   mods: Mods;
+  /** The machine that was measured, so a runaway score can be replayed and explained (tools/explain.ts). */
+  layout: Layout;
+  levels: Levels;
 }
 
 export interface ParRun {
@@ -183,6 +187,7 @@ export function runPar(o: ParOptions): ParRun {
       round: n, ballsPerRound: balls, moneyStart, picked, bought, rerolls, owned: count(g), placed: g.layout.parts.filter((p) => p.placed).length,
       buildBefore: built.before, buildAfter: built.after, samples, goalCandidate: candidate, goalUsed: goal, payout, moneyHeld, moneyEnd: g.money,
       seconds: samples.reduce((a, s) => a + s.seconds, 0) / samples.length, mods: g.mods,
+      layout: JSON.parse(JSON.stringify(g.layout)), levels: { ...g.levels },
     };
     rounds.push(round);
     log(`par ${o.seed} round ${n}: ${g.layout.parts.length} parts (${round.placed} placed), goal ${Math.round(candidate)}, built ${Math.round(built.before)} -> ${Math.round(built.after)}, payout $${payout}, cash $${g.money}`);

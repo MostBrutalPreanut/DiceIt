@@ -21,6 +21,10 @@ h2 { margin: 0 0 8px; font-size: 15px; letter-spacing: .06em; color: var(--pink)
 .goalbar, .tiltbar { height: 8px; background: #0a0f24; border-radius: 99px; overflow: hidden; margin: 6px 0; }
 #goalFill { height: 100%; width: 0; background: linear-gradient(90deg, var(--neon), var(--good)); transition: width .15s; }
 #tiltFill { height: 100%; width: 0; background: linear-gradient(90deg, var(--gold), var(--bad)); }
+#clockFill { height: 100%; width: 100%; background: var(--neon); transition: width .2s linear; }
+#clockFill.low { background: var(--bad); }
+#clockBox[hidden] { display: none; }
+#clockSec { color: var(--ink); font-family: ui-monospace, Menlo, monospace; letter-spacing: 0; }
 .goalrow { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
 .goalrow b { color: var(--ink); }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }

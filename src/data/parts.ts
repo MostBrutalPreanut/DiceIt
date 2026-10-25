@@ -35,9 +35,19 @@ export interface Recipe {
   per?: string;
   /** +points per hit of this part TYPE earlier this ball (all parts of the type share it). */
   grow?: number;
+  /** The most +points `grow` can ever add. */
+  growCap?: number;
   /** +Mult per event. */
   mult?: number;
+  /** The most Mult this part type can add in one ball (all parts of the type together). */
+  multCap?: number;
   money?: number;
+  /** The most $ this part type can pay in one round. */
+  moneyCap?: number;
+  /** The most set bonuses of this type paid in one ball. */
+  setCap?: number;
+  /** The most balls a Ball Printer prints in one ball. */
+  printCap?: number;
   /** Lights up for the rest of the ball when rolled over. */
   lights?: boolean;
   /** When every light of this type on the board is lit. */
@@ -106,17 +116,17 @@ export const PARTS: Record<PartId, PartDef> = {
   pop: {
     id: 'pop', name: 'Pop Bumper', blurb: 'Classic. Goes pop.', kind: 'bumper', color: 0xff4fa3, cost: 3, weight: 3,
     shape: { type: 'circle', r: 1.2 }, rotatable: false, kickUnit: 14,
-    recipe: { points: 100, per: 'hit', grow: 5, perLevel: 10 }, dials: [kickDial(2)],
+    recipe: { points: 100, per: 'hit', grow: 5, growCap: 100, perLevel: 10 }, dials: [kickDial(2)],
   },
   coin: {
     id: 'coin', name: 'Cha-Ching Bumper', blurb: 'Pays $1 per bonk. Tips in points.', kind: 'bumper', color: 0xffd23f, cost: 4, weight: 2,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 12,
-    recipe: { points: 40, per: 'hit', money: 1, perLevel: 8 }, dials: [kickDial(2)],
+    recipe: { points: 40, per: 'hit', money: 1, moneyCap: 5, perLevel: 8 }, dials: [kickDial(2)],
   },
   mega: {
     id: 'mega', name: 'Big Boi', blurb: 'Heavy, rude, hard to miss.', kind: 'bumper', color: 0x5ee7ff, cost: 6, weight: 2,
     shape: { type: 'circle', r: 1.9 }, rotatable: false, kickUnit: 18,
-    recipe: { points: 250, per: 'hit', mult: 0.1, perLevel: 25 }, dials: [kickDial(1.5)],
+    recipe: { points: 250, per: 'hit', mult: 0.1, multCap: 3, perLevel: 25 }, dials: [kickDial(1.5)],
   },
   sling: {
     id: 'sling', name: 'Slingshot', blurb: 'A rubber band with opinions.', kind: 'kicker', color: 0xff8a3d, cost: 4, weight: 2,
@@ -136,12 +146,12 @@ export const PARTS: Record<PartId, PartDef> = {
   lane: {
     id: 'lane', name: 'Lane Rollover', blurb: 'Roll over it. It lights up. Cheap thrills.', kind: 'rollover', color: 0x9fe8ff, cost: 3, weight: 3,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 50, per: 'roll-over', lights: true, setBonus: { points: 200, mult: 0.5 }, perLevel: 10 }, dials: [],
+    recipe: { points: 50, per: 'roll-over', lights: true, setBonus: { points: 200, mult: 0.5 }, setCap: 5, perLevel: 10 }, dials: [],
   },
   printer: {
     id: 'printer', name: 'Ball Printer', blurb: 'Eats one ball. Prints two. Allegedly legal.', kind: 'saucer', color: 0xb67dff, cost: 7, weight: 1,
     shape: { type: 'circle', r: 1.1 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 200, per: 'ball caught', spawn: 1, perLevel: 50 },
+    recipe: { points: 200, per: 'ball caught', spawn: 1, printCap: 4, perLevel: 50 },
     dials: [
       {
         id: 'hold', label: 'Hold', min: 0.2, max: 2, step: 0.1, default: 0.6,
@@ -185,7 +195,7 @@ export const PARTS: Record<PartId, PartDef> = {
   bank: {
     id: 'bank', name: 'Drop-Target Bank', blurb: 'Three targets. They go down. They come back. Everyone is happy.', kind: 'bank', color: 0xff5d6c, cost: 5, weight: 2,
     shape: { type: 'box', hw: 2.6, hh: 0.45 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 60, per: 'target', setBonus: { points: 300, mult: 0.3 }, perLevel: 10 }, dials: [],
+    recipe: { points: 60, per: 'target', setBonus: { points: 300, mult: 0.3 }, setCap: 5, perLevel: 10 }, dials: [],
   },
   vari: {
     id: 'vari', name: 'Vari-Target', blurb: 'Tap it, get peanuts. Smash it, get paid.', kind: 'target', color: 0x1fe0c0, cost: 4, weight: 2,
@@ -263,6 +273,12 @@ export function lampStats(dialRadius: number, mods: Pick<Mods, 'lampRadius' | 'l
   return { radius: dialRadius + mods.lampRadius, bonus: Math.round((lampBonus(dialRadius) + mods.lampBonus) * 100) / 100 };
 }
 
+/** The +points a part's `grow` has added after `hits` hits of its type this ball (never more than its `growCap`). */
+export function grownPoints(r: Recipe, hits: number): number {
+  const g = (r.grow ?? 0) * hits;
+  return r.growCap !== undefined ? Math.min(g, r.growCap) : g;
+}
+
 /** What the run's upgrades multiply a part's base points by (Overclock for its type, a heavy ball for everything). */
 export function modFactor(id: PartId, mods: Pick<Mods, 'overclock' | 'pointsFactor'> = neutralMods()): number {
   return (1 + (mods.overclock[id] ?? 0)) * mods.pointsFactor;
@@ -308,10 +324,10 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.points) lines.push({ tag: 'score', text: `Scores ${f(r.points + lvlBonus)} per ${r.per ?? 'hit'}, times your Mult.` });
   const upg = modFactor(def.id, mods);
   if (r.points && Math.abs(upg - 1) > 0.001) lines.push({ tag: 'level', text: `Your upgrades multiply its base points by ${num(upg)}.` });
-  if (r.grow) lines.push({ tag: 'grow', text: `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it).` });
+  if (r.grow) lines.push({ tag: 'grow', text: `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it)${r.growCap ? `, up to +${num(r.growCap * factor)}` : ''}.` });
   if (r.perLevel) lines.push({ tag: 'level', text: `Level ${level} of ${MAX_LEVEL}${level ? ` (+${lvlBonus})` : ''}: each level adds +${r.perLevel} per ${r.per ?? 'hit'} for the rest of the run.` });
-  if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${num(r.mult)} per ${r.per ?? 'hit'}.` });
-  if (r.money) lines.push({ tag: 'money', text: `Pays $${r.money} per ${r.per ?? 'hit'}.` });
+  if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${num(r.mult)} per ${r.per ?? 'hit'}${r.multCap ? `, up to +${num(r.multCap)} a ball from all ${def.name}s` : ''}.` });
+  if (r.money) lines.push({ tag: 'money', text: `Pays $${r.money} per ${r.per ?? 'hit'}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
   if (def.kind === 'lamp') {
     const lamp = lampStats(inst ? dialValue(inst, 'radius') : 5, mods);
     lines.push({ tag: 'lamp', text: `Roll a ball over it to light it for this ball. While lit, every scoring part within ${num(lamp.radius)} units scores +${Math.round(lamp.bonus * 100)}%.` });
@@ -322,15 +338,15 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     const stiff = inst ? dialValue(inst, 'stiff') : 1;
     lines.push({ tag: 'note', text: `Pays more for a harder hit: ${r.tiers.map((t) => `x${t.x} ${t.name}${t.from ? ` (${num(t.from * stiff)}+ speed)` : ''}`).join(', ')}.` });
   }
-  if (r.setBonus && def.kind === 'rollover') lines.push({ tag: 'set', text: `Light every Lane Rollover on the board (you need at least two): +${num(setPts)} points and +${num(setMult)} Mult, then they reset.` });
-  if (def.kind === 'bank') lines.push({ tag: 'set', text: `Each target you hit drops. Drop all three: +${num(setPts)} points and +${num(setMult)} Mult, then they pop back up (and every new ball).` });
+  if (r.setBonus && def.kind === 'rollover') lines.push({ tag: 'set', text: `Light every Lane Rollover on the board (you need at least two): +${num(setPts)} points and +${num(setMult)} Mult, then they reset. It pays at most ${r.setCap} times a ball.` });
+  if (def.kind === 'bank') lines.push({ tag: 'set', text: `Each target you hit drops. Drop all three: +${num(setPts)} points and +${num(setMult)} Mult, then they pop back up (and every new ball). It pays at most ${r.setCap} times a ball.` });
   if (r.levelUp) {
     const t = PARTS[LEVEL_TARGETS[Math.round(inst ? dialValue(inst, 'target') : 0)] ?? 'pop'];
     lines.push({ tag: 'level', text: `Roll over it to light it; roll over it again and it goes out. Light every Level Light aimed at ${t.name}s (you need at least two) to level them up for the rest of the run, then the lights reset.` });
   }
   if (r.spawn) {
     const n = r.spawn + mods.printerExtra;
-    lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (up to 4 on the table).` });
+    lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (at most ${r.printCap} printed in one ball, and 4 on the table).` });
   }
   if (def.kind === 'saucer') {
     const hold = inst ? dialValue(inst, 'hold') : 0.6, pw = inst ? dialValue(inst, 'power') : 70;

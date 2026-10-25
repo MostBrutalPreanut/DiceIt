@@ -73,7 +73,7 @@ export const BOSS_EVERY = 3;
 // the numbers behind the effects and their sentences
 const N = {
   interestCap: 5, sponsor: 3, coupon: 1, shelf: 1, bounce: 0.3, heavyPoints: 0.25, heavyNudge: 0.6,
-  glassGravity: 0.8, glassSpin: 1.5, goldEvery: 10, overclock: 0.5, lampRadius: 2, lampBonus: 0.1,
+  glassGravity: 0.8, glassSpin: 1.5, goldEvery: 10, goldCap: 5, overclock: 0.5, lampRadius: 2, lampBonus: 0.1,
   head: 0.25, lucky: 7, ballHog: 5,
 } as const;
 
@@ -116,7 +116,7 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     text: () => `A light ball: it falls ${pct(1 - N.glassGravity)} slower, so it hangs in the air, and spinners spin ${pct(N.glassSpin - 1)} more.`,
     mods: (m) => { m.ballGravity *= N.glassGravity; m.spinBoost *= N.glassSpin; } },
   gold: { id: 'gold', name: 'Gold Ball', column: 'balls', rarity: 'common', max: 1,
-    text: () => `Every ${N.goldEvery}th scoring hit of a round pays $1.`, mods: (m) => { m.goldEvery = N.goldEvery; } },
+    text: () => `Every ${N.goldEvery}th scoring hit of a round pays $1, up to $${N.goldCap} a round.`, mods: (m) => { m.goldEvery = N.goldEvery; m.goldCap = N.goldCap; } },
   twin: { id: 'twin', name: 'Twin Ball', column: 'balls', rarity: 'legendary', max: 1,
     text: () => 'Every ball arrives with a twin: two balls in the plunger lane.', mods: (m) => { m.twin = true; } },
 

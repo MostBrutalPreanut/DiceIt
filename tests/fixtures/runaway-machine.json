@@ -1,0 +1,180 @@
+{
+ "note": "Par run 2, round 4 of the first balance run: one Ball Printer chain kept a single ball alive for 600+ s while Pop growth, Mult and coins all compounded (36.8M in one ball).",
+ "layout": {
+  "parts": [
+   {
+    "uid": 1,
+    "def": "pop",
+    "x": 17,
+    "y": 44.5,
+    "angle": 0,
+    "dials": {
+     "kick": 2
+    },
+    "placed": true
+   },
+   {
+    "uid": 2,
+    "def": "pop",
+    "x": 9.2,
+    "y": 36.6,
+    "angle": 0,
+    "dials": {
+     "kick": 2
+    },
+    "placed": true
+   },
+   {
+    "uid": 3,
+    "def": "pop",
+    "x": 6,
+    "y": 42,
+    "angle": 0,
+    "dials": {
+     "kick": 2
+    },
+    "placed": true
+   },
+   {
+    "uid": 4,
+    "def": "pop",
+    "x": 11,
+    "y": 45.5,
+    "angle": 0,
+    "dials": {
+     "kick": 2
+    },
+    "placed": true,
+    "fresh": true
+   },
+   {
+    "uid": 5,
+    "def": "lane",
+    "x": 19.5,
+    "y": 41.9,
+    "angle": 0,
+    "dials": {},
+    "placed": true,
+    "fresh": true
+   },
+   {
+    "uid": 6,
+    "def": "lane",
+    "x": 11.8,
+    "y": 27.1,
+    "angle": 0,
+    "dials": {},
+    "placed": true,
+    "fresh": true
+   },
+   {
+    "uid": 7,
+    "def": "saver",
+    "x": 13.7,
+    "y": 30,
+    "angle": 0,
+    "dials": {},
+    "placed": true,
+    "fresh": true
+   },
+   {
+    "uid": 8,
+    "def": "lane",
+    "x": 5.1,
+    "y": 31.1,
+    "angle": 0,
+    "dials": {},
+    "placed": false,
+    "fresh": true
+   },
+   {
+    "uid": 9,
+    "def": "coin",
+    "x": 18,
+    "y": 24.9,
+    "angle": 0,
+    "dials": {
+     "kick": 2
+    },
+    "placed": true,
+    "fresh": true
+   },
+   {
+    "uid": 10,
+    "def": "vari",
+    "x": 13.6,
+    "y": 35.7,
+    "angle": 4.45058959258554,
+    "dials": {
+     "stiff": 1
+    },
+    "placed": true,
+    "fresh": true
+   },
+   {
+    "uid": 11,
+    "def": "printer",
+    "x": 12.1,
+    "y": 38.8,
+    "angle": 4.974188368183839,
+    "dials": {
+     "hold": 0.6,
+     "power": 70
+    },
+    "placed": true,
+    "fresh": true
+   },
+   {
+    "uid": 12,
+    "def": "kickback",
+    "x": 9.1,
+    "y": 31.2,
+    "angle": 0.7853981633974483,
+    "dials": {
+     "power": 70
+    },
+    "placed": false,
+    "fresh": true
+   },
+   {
+    "uid": 13,
+    "def": "bank",
+    "x": 6.1,
+    "y": 25.4,
+    "angle": 2.356194490192345,
+    "dials": {},
+    "placed": false,
+    "fresh": true
+   }
+  ],
+  "gravity": 50,
+  "nextUid": 14
+ },
+ "mods": {
+  "ballsPerRound": 3,
+  "interestPer": 0,
+  "interestCap": 0,
+  "roundBonus": 0,
+  "unusedBallPay": 3,
+  "couponOff": 0,
+  "sellRate": 0.5,
+  "shopSlots": 4,
+  "ballBounce": 0,
+  "ballGravity": 1,
+  "nudge": 1,
+  "spinBoost": 1,
+  "twin": false,
+  "printerExtra": 0,
+  "pointsFactor": 1,
+  "goldEvery": 0,
+  "luckyEvery": 0,
+  "overclock": {},
+  "lampRadius": 0,
+  "lampBonus": 0,
+  "setFactor": 1,
+  "startMult": 1
+ },
+ "levels": {
+  "pop": 1
+ }
+}

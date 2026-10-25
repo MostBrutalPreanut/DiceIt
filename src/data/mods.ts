@@ -37,8 +37,9 @@ export interface Mods {
   // --- scoring (Scorer) ---
   /** Multiplier on every scoring hit. */
   pointsFactor: number;
-  /** Every Nth scoring hit of a round pays $1 (0 = never). */
+  /** Every Nth scoring hit of a round pays $1 (0 = never), up to `goldCap` $ a round. */
   goldEvery: number;
+  goldCap: number;
   /** Every Nth scoring hit of a ball pays double (0 = never). */
   luckyEvery: number;
   /** +fraction of base points for each part type (0.5 = +50%). */
@@ -56,7 +57,7 @@ export function neutralMods(): Mods {
   return {
     ballsPerRound: 3, interestPer: 0, interestCap: 0, roundBonus: 0, unusedBallPay: 3, couponOff: 0, sellRate: 0.5, shopSlots: 4,
     ballBounce: 0, ballGravity: 1, nudge: 1, spinBoost: 1, twin: false, printerExtra: 0,
-    pointsFactor: 1, goldEvery: 0, luckyEvery: 0, overclock: {}, lampRadius: 0, lampBonus: 0, setFactor: 1, startMult: 1,
+    pointsFactor: 1, goldEvery: 0, goldCap: 0, luckyEvery: 0, overclock: {}, lampRadius: 0, lampBonus: 0, setFactor: 1, startMult: 1,
   };
 }
 

@@ -113,7 +113,7 @@ export function escapeFuzz(layout: Layout, balls: number, dt = DT, substeps = SU
       for (const e of sim.step(bot.decide(sim))) {
         if (e.type === 'partHit') hits++;
         if (e.type === 'ballSearch') searches++;
-        if (e.type === 'drain') {
+        if (e.type === 'drain' && !over) { // the ball clock can end several balls on one tick: count the trial once
           over = true;
           if (e.reason === 'timeout') timeouts++;
           else drained++;

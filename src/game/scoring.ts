@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, lampStats, LEVEL_TARGETS, modFactor, PARTS, tierOf, type PartId, type PartInstance } from '../data/parts';
+import { dialFactor, dialValue, grownPoints, lampStats, LEVEL_TARGETS, modFactor, PARTS, tierOf, type PartId, type PartInstance } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import type { SimEvent } from '../sim/sim';
 
@@ -69,6 +69,14 @@ export class Scorer {
   /** Scoring hits so far this round and this ball (Gold Ball and Lucky Seven count them). */
   private roundHits = 0;
   private ballHits = 0;
+  /**
+   * What the limits in the recipes have let through so far. Every source that compounds (growth, Mult, set
+   * bonuses, coins) has a cap: this ledger of what has been paid is how the caps are kept. Per ball: Mult and
+   * sets. Per round: money.
+   */
+  private multPaid = new Map<string, number>();
+  private setsPaid = new Map<string, number>();
+  private moneyPaid = new Map<string, number>();
   readonly baseMult: number;
 
   constructor(public goal: number, private getParts: () => PartInstance[] = () => [], opts: ScorerOpts = {}) {
@@ -91,12 +99,24 @@ export class Scorer {
   resetRound() {
     this.roundLit.clear();
     this.roundHits = 0;
+    this.moneyPaid.clear();
     this.startBall();
+  }
+
+  /** How much of `want` a cap lets through (all of it when there is no cap); what passes is recorded against the key. */
+  private take(paid: Map<string, number>, key: string, want: number, cap: number | undefined): number {
+    if (want <= 0) return 0;
+    const used = paid.get(key) ?? 0;
+    const got = cap === undefined ? want : Math.max(0, Math.min(want, cap - used));
+    paid.set(key, used + got);
+    return got;
   }
 
   startBall() {
     this.mult = this.baseMult;
     this.ballHits = 0;
+    this.multPaid.clear();
+    this.setsPaid.clear();
     this.hitsByType.clear();
     this.lit.clear();
   }
@@ -127,7 +147,7 @@ export class Scorer {
   baseNow(inst: PartInstance, spins = 1, tierX = 1): number | null {
     const r = PARTS[inst.def].recipe;
     if (!r.points) return null;
-    const grown = (r.grow ?? 0) * this.hitsOf(inst.def);
+    const grown = grownPoints(r, this.hitsOf(inst.def));
     const lvl = (r.perLevel ?? 0) * this.levelOf(inst.def);
     return Math.round((r.points + lvl + grown) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum));
   }
@@ -189,6 +209,7 @@ export class Scorer {
 
     // a drop-target bank with every target down pays its set bonus (the individual hits scored already)
     if (def.kind === 'bank' && ev.bankComplete) {
+      if (this.take(this.setsPaid, inst.def, 1, r.setCap) === 0) return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`${r.setCap} sets this ball`], 'BANK SETS MAXED')];
       const pts = r.setBonus!.points * this.mods.setFactor;
       out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, r.setBonus!.mult * this.mods.setFactor, 0, [`${pts} bank bonus`], 'BANK COMPLETE'));
       return out;
@@ -196,7 +217,7 @@ export class Scorer {
 
     if (r.points) {
       const spins = ev.spins ?? 1;
-      const grown = (r.grow ?? 0) * this.hitsOf(inst.def);
+      const grown = grownPoints(r, this.hitsOf(inst.def));
       const level = (r.perLevel ?? 0) * this.levelOf(inst.def);
       const factor = dialFactor(inst);
       const lamp = this.lampBonusAt(inst);
@@ -214,11 +235,16 @@ export class Scorer {
       this.ballHits++;
       const lucky = this.mods.luckyEvery > 0 && this.ballHits % this.mods.luckyEvery === 0;
       if (lucky) notes.push('x2 lucky seven');
-      const gold = this.mods.goldEvery > 0 && this.roundHits % this.mods.goldEvery === 0 ? 1 : 0;
+      const goldDue = this.mods.goldEvery > 0 && this.roundHits % this.mods.goldEvery === 0 ? 1 : 0;
+      const gold = this.take(this.moneyPaid, 'gold', goldDue, this.mods.goldCap || undefined);
       if (gold) notes.push('+$1 gold ball');
+      const multGain = this.take(this.multPaid, inst.def, r.mult ?? 0, r.multCap);
+      if (r.mult && multGain < r.mult) notes.push('Mult maxed for this ball');
+      const coins = this.take(this.moneyPaid, inst.def, r.money ?? 0, r.moneyCap);
+      if (r.money && coins < r.money) notes.push('coin limit reached');
       const base = Math.round((r.points + level + grown) * spins * (tier?.x ?? 1) * factor * modFactor(inst.def, this.mods) * (1 + lamp.sum) * (lucky ? 2 : 1));
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
-      const scored = this.award(inst, ev.t, ev.x, ev.y, 'hit', base, r.mult ?? 0, (r.money ?? 0) + gold, notes, undefined, ev.spins);
+      const scored = this.award(inst, ev.t, ev.x, ev.y, 'hit', base, multGain, coins + gold, notes, undefined, ev.spins);
       if (tier) scored.tier = r.tiers!.indexOf(tier);
       out.push(scored);
     }
@@ -249,8 +275,12 @@ export class Scorer {
       // a set needs at least two lanes: a lone lane would "complete" itself on every roll (the auto-builder found that exploit)
       if (r.setBonus && lanes.length >= 2 && lanes.every((l) => this.lit.has(l.uid))) {
         for (const l of lanes) this.lit.delete(l.uid);
-        const pts = r.setBonus.points * this.mods.setFactor;
-        out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, r.setBonus.mult * this.mods.setFactor, 0, [`${pts} set bonus`], 'LANES COMPLETE'));
+        if (this.take(this.setsPaid, inst.def, 1, r.setCap) === 0) {
+          out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`${r.setCap} sets this ball`], 'LANE SETS MAXED'));
+        } else {
+          const pts = r.setBonus.points * this.mods.setFactor;
+          out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, r.setBonus.mult * this.mods.setFactor, 0, [`${pts} set bonus`], 'LANES COMPLETE'));
+        }
       }
     }
     return out;

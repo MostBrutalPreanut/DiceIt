@@ -108,6 +108,8 @@ export interface SimOptions {
   rescue?: boolean;
   /** The run's upgrades that change the ball and the physics (neutral if absent). */
   mods?: Partial<SimMods>;
+  /** Seconds a ball may last after its first launch, however many balls it turns into. Default BALL_TIMEOUT. */
+  ballClock?: number;
 }
 
 const simMods = (m?: Partial<SimMods>): SimMods => {
@@ -144,6 +146,11 @@ export class Sim {
   private nudgeCooldown = 0;
   private rescueOn = true;
   private mods: SimMods = simMods();
+  private ballClock = BALL_TIMEOUT;
+  /** When the current ball was first launched (null until it is). The clock runs for the whole ball, so a Ball Printer cannot keep it alive forever by printing fresh balls. */
+  private clockStart: number | null = null;
+  /** Balls the printers have printed in the current ball. */
+  private printed = 0;
   private sideOn = { L: false, R: false };
   /** Ball Savers already spent on the current ball. */
   private saversUsed = new Set<number>();
@@ -154,6 +161,7 @@ export class Sim {
     this.rng = new Rng(opts.seed ?? 1);
     this.rescueOn = opts.rescue ?? true;
     this.mods = simMods(opts.mods);
+    this.ballClock = opts.ballClock ?? BALL_TIMEOUT;
 
     const wd = B.b2DefaultWorldDef();
     wd.gravity = V(0, -layout.gravity);
@@ -176,6 +184,7 @@ export class Sim {
     this.rng = new Rng(opts.seed ?? 1);
     this.rescueOn = opts.rescue ?? true;
     this.mods = simMods(opts.mods);
+    this.ballClock = opts.ballClock ?? BALL_TIMEOUT;
     B.b2World_SetGravity(this.worldId, V(0, -layout.gravity));
     this.build(layout);
   }
@@ -194,6 +203,8 @@ export class Sim {
     this.rescues = 0;
     this.sideOn = { L: false, R: false };
     this.saversUsed.clear();
+    this.clockStart = null;
+    this.printed = 0;
     this.buildTable();
     this.flippers.push(
       this.buildFlipper('L', FLIPPER_PIVOTS.L.x, FLIPPER_PIVOTS.L.y),
@@ -381,6 +392,8 @@ export class Sim {
     this.tiltMeter = 0;
     for (const p of this.parts.values()) if (p.bank && p.bank.down.some(Boolean)) this.resetBank(p);
     this.rearm();
+    this.clockStart = null; // a new ball: a new clock, and the printers may print again
+    this.printed = 0;
     this.events.push({ type: 'ballSpawn', t: this.time, ballId: id });
     return id;
   }
@@ -414,6 +427,15 @@ export class Sim {
 
   get time() {
     return this.tick * this.dt;
+  }
+
+  /** Seconds left on the ball clock, or null before the ball is launched. */
+  get clockLeft(): number | null {
+    return this.clockStart === null ? null : Math.max(0, this.ballClock - (this.time - this.clockStart));
+  }
+
+  get clockTotal() {
+    return this.ballClock;
   }
 
   get ballCount() {
@@ -500,6 +522,7 @@ export class Sim {
           const boosted = power * (1 + this.rng.range(0, PLUNGE_NOISE));
           B.b2Body_SetLinearVelocity(ball.body, V(this.rng.range(-PLUNGE_DRIFT, PLUNGE_DRIFT), boosted));
           ball.saveUntil = this.armedSaver() ? t + SAVER_WINDOW : 0;
+          if (this.clockStart === null) this.clockStart = t;
           this.events.push({ type: 'launch', t, ballId: ball.id, power });
           this.awaitingPlunge = false;
         }
@@ -570,7 +593,8 @@ export class Sim {
     this.events.push({ type: 'partRelease', t: this.time, uid: pr.inst.uid, ballId: b.id });
 
     const def = PARTS[pr.inst.def];
-    for (let k = 0; k < (def.recipe.spawn ?? 0) + this.mods.printerExtra && this.balls.length < MAX_BALLS; k++) {
+    for (let k = 0; k < (def.recipe.spawn ?? 0) + this.mods.printerExtra && this.balls.length < MAX_BALLS && this.printed < (def.recipe.printCap ?? Infinity); k++) {
+      this.printed++;
       const a2 = pr.inst.angle + this.rng.range(0.3, 0.6) * (this.rng.next() < 0.5 ? -1 : 1);
       const id = this.addBall(pr.inst.x, pr.inst.y, -Math.sin(a2) * s * 0.9, Math.cos(a2) * s * 0.9);
       this.events.push({ type: 'extraBall', t: this.time, uid: pr.inst.uid, ballId: id });
@@ -687,15 +711,19 @@ export class Sim {
 
   private checkBalls() {
     const t = this.time;
+    // the ball clock: once it runs out every ball on the table is lost (a ball waiting in the plunger lane is not in play)
+    const expired = this.clockStart !== null && t - this.clockStart > this.ballClock;
+    if (expired) this.clockStart = null;
     for (const b of [...this.balls]) {
       b.age += this.dt;
-      if (b.held) continue;
+      if (b.held && !expired) continue;
       const p = B.b2Body_GetPosition(b.body);
       const v = B.b2Body_GetLinearVelocity(b.body);
       const inLane = p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y;
 
       let reason: 'drain' | 'timeout' | null = null;
       if (p.y < 2.2 && !inLane) reason = 'drain';
+      else if (expired && !inLane) reason = 'timeout';
       else if (b.age > BALL_TIMEOUT && !this.awaitingPlunge) reason = 'timeout';
       // a ball that leaves the table any other way is a bug; treat it as a drain so a run can't soft-lock
       else if (p.x < -1 || p.x > TABLE_W + 1 || p.y > TABLE_H + 2) reason = 'drain';
