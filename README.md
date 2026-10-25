@@ -9,6 +9,7 @@ A rogue-lite where you **build, tune and rebuild a pinball machine** to hit a sc
 - Run flow, major upgrades, rebalancing, board variety: [docs/run-flow-and-balance.md](docs/run-flow-and-balance.md)
 - Art direction, themed machines, particles, with concept sheets: [docs/art-direction.md](docs/art-direction.md)
 - How to build that look, phase by phase: [docs/art-implementation-plan.md](docs/art-implementation-plan.md)
+- Rarities, decals, bosses, the three Big Bois, and the balance plan (1,000 to millions): [docs/balance-plan.md](docs/balance-plan.md)
 
 ## Run it
 
@@ -17,11 +18,11 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-On first launch you pick a machine (Funhouse Factory, Short Order or Castle Crash); themes change looks only, and you can switch under **Machine**, where **Calm mode** also lives.
+Every run starts with picking a machine (Funhouse Factory, Short Order or Castle Crash). The machine stays for the run: it sets the look and decides what its **Big Boi** does (the Factory's Foreman raises the Mult, the Diner's Cook calls orders that pay triple, the Castle's Dragon pays a jackpot when his armour is knocked off). **Calm mode** lives under **Machine & options**.
 
-Controls: `←` left flippers, `→` right flippers (every flipper on that side), hold `Space` to charge the plunger and release to fire, `Z` `X` nudge left and right (too much tilts), `Tab` cash out once the goal is hit, `Enter` play the round from the workshop, `1` `2` `3` switch the machine's theme, `M` mute (music can be turned off on its own under Machine & options). The controls for the current mode are always in one line under the table.
+Controls: `←` left flippers, `→` right flippers (every flipper on that side), hold `Space` to charge the plunger and release to fire, `Z` `X` nudge left and right (too much tilts), `Tab` cash out once the goal is hit, `Enter` play the round from the workshop, `M` mute (music can be turned off on its own under Machine & options). The controls for the current mode are always in one line under the table.
 
-The loop is play a round, then the **Workshop** (buy and place parts), then play again; the scoreboard's title says which (PLAY or WORKSHOP), its map shows the run's fifteen rounds (every third a boss), and its big button is PLAY ROUND in the workshop and CASH OUT while you play. Every machine starts with three Pop Bumpers and a fixed Big Boi in the middle that cannot be moved and watches the ball. Drag an offer, or click it to pick it up, then drop it on the table (bought and placed in one go) or on the toolbox; nothing is paid until it is dropped, and a right-click or `Esc` puts it back. Buy puts it straight in the toolbox. Parts on the table work the same way: drag them, or click to pick one up and click again to set it down. The toolbox holds four parts: buying stops when it is full, and a part stored in a full toolbox is sold for half its price. After every boss (rounds 3, 6, 9, ...) pick one of three major upgrades or skip for $4; Play Round is locked until you do. Buy parts in the shop, click one in your toolbox and click the table to place it. Drag a part to move it, drag it onto the toolbox to take it off the board, `R` (or the mouse wheel) rotates, `Del` stores it, `Space` fires a test ball. Hover any part to see exactly how it scores. Rules upgrades are relic decals stuck on the apron (four slots); click one between rounds to peel it off. Under **Machine & options**, tick **Test Lab** to get every part for free plus lab tools. `Ctrl+Z` / `Ctrl+Y` undo and redo.
+The loop is play a round, then the **Workshop** (buy and place parts), then play again; the scoreboard's title says which (PLAY or WORKSHOP), its map shows the run's fifteen rounds (every third a boss, the final boss in round 15, named in advance under the map), and its big button is PLAY ROUND in the workshop and CASH OUT while you play. Every machine starts with three Pop Bumpers and one Big Boi in the middle: he is not for sale, cannot be moved, and watches the ball. Parts come in four rarities (common, uncommon, rare, legendary); the rarer ones start to appear later in the run and are bigger and stronger. **Lock** a shop offer and it waits for you next round. The **wall ledge** on the left (the ball stopper) moves to a new spot every run, and you can drag it up and down the wall. Drag an offer, or click it to pick it up, then drop it on the table (bought and placed in one go) or on the toolbox; nothing is paid until it is dropped, and a right-click or `Esc` puts it back. Buy puts it straight in the toolbox. Parts on the table work the same way: drag them, or click to pick one up and click again to set it down. The toolbox holds four parts: buying stops when it is full, and a part stored in a full toolbox is sold for half its price. After every boss (rounds 3, 6, 9, ...) pick one of three **decals** or skip for $4; Play Round is locked until you do. The shop also sells one decal a round. Buy parts in the shop, click one in your toolbox and click the table to place it. Drag a part to move it, drag it onto the toolbox to take it off the board, `R` (or the mouse wheel) rotates, `Del` stores it, `Space` fires a test ball. Hover any part to see exactly how it scores. Decals are run-long rules stuck on the apron (six slots); click one between rounds to peel it off. Under **Machine & options**, tick **Test Lab** to get every part for free plus lab tools. `Ctrl+Z` / `Ctrl+Y` undo and redo.
 
 ## Check it
 
@@ -47,8 +48,8 @@ npm run concept           # re-render the concept sheets in docs/concept from th
 
 ```
 src/sim/      deterministic Box2D simulation (runs headless in Node); nothing about scoring or drawing
-src/game/     scoring (points × Mult, recipes, ledger), the run state (shop, inventory, rounds, upgrades) and the auto-builder
-src/data/     content as data: parts (recipes, dials, descriptions), upgrades, the goal table, announcer lines
+src/game/     scoring (points × Mult, recipes, ledger), the run state (shop, inventory, rounds, decals, bosses) and the auto-builder
+src/data/     content as data: parts (rarities, recipes, dials, descriptions), Big Bois, decals, bosses, the goal table, announcer lines
 src/ui/       small HTML builders for the cards and tooltips
 src/render/   PixiJS renderer (reads the sim, never writes it): theme kits, projection, baked props, particles, the HUD overlay
 src/assets/   bundled fonts (Luckiest Guy, Nunito, DotGothic16) with their licences
