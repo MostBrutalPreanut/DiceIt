@@ -115,7 +115,7 @@ Each has a footprint, behaviors and dials with a trade-off shown on the part. Co
 
 ### 4b. Major upgrades (replaced by decals: see [balance-plan.md](balance-plan.md) §4)
 
-*Superseded*: the three-column upgrades below became 46 decals, and parts gained rarities (§2 there). Kept for history.
+*Superseded*: the three-column upgrades below became 44 decals, and parts gained rarities (§2 there). Kept for history.
 
 After a boss the machine offers three cards, **one per column**, and you take one for the rest of the run or skip it for $4. Offers never include a dead pick (nothing aimed at a part you do not own, nothing that needs a lamp, printer or lane you lack), respect each upgrade's maximum and exclusions, and are weighted by rarity (common 6, rare 3, legendary 1). The **Rules** column and the **legendaries** open from the second offer on. Every card's sentence is generated from the same numbers as its effect (`src/data/upgrades.ts`), and the sentence on every part (`describe`) follows the run's upgrades, so what a part says it does is what it does.
 

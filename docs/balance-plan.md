@@ -66,7 +66,7 @@ Decals are **never for sale**: after each boss you pick one of three (of three d
 so a run has **four by its final boss** (rounds 3, 6, 9, 12), one per apron slot. A decal works while it is
 stuck; peel it off to make room (that only matters in endless play after round 15).
 
-46 decals in four kinds:
+44 decals in four kinds:
 
 - **Cash** (outside the ball, in the shop and the payout): Sponsor (+$2 a round), Wide Shelf (+1 shop offer), Interest, Coupon Book, Full
   Refund, Ball Hog, Free Reroll, Layaway (+2 locks), Big Toolbox (+2 slots), Bargain Bin (one offer half price),
