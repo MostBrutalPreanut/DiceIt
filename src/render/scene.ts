@@ -3,7 +3,7 @@
 // theme, the view and the decals, so the renderer builds them once and caches them as a texture.
 import { Container, Graphics } from 'pixi.js';
 import { DECALS, type DecalIcon, type DecalLook, type DecalShape } from '../data/decals';
-import type { Rarity } from '../data/upgrades';
+import type { Rarity } from '../data/parts';
 import { LANE_WALL_X, TABLE_H, TABLE_W } from '../sim/constants';
 import { FLIPPER_PIVOTS, tableOutline, tableSegments } from '../sim/table';
 import { box, flat, hull, label, P, Prop, ribbon, ring, shadow, star, type Pt, type View } from './draw';
@@ -16,10 +16,10 @@ export const apronPoly = (): Pt[] => [
 ];
 /** The cabinet rim around the field, in sim units. */
 export const RIM = { cx: 13, cy: 26.1, hw: 14.6, hh: 27.5 };
-/** The four decal slots on the apron (sim x, y; they sit on the apron top, z = APRON_Z). */
-export const DECAL_SLOT_POS: Pt[] = [[2.6, 6.6], [5.6, 4.4], [18.4, 4.4], [21.4, 6.6]];
+/** The six decal slots on the apron (sim x, y; they sit on the apron top, z = APRON_Z): two each side, two under the drain. */
+export const DECAL_SLOT_POS: Pt[] = [[2.6, 6.6], [5.6, 4.4], [9.4, 1.6], [14.6, 1.6], [18.4, 4.4], [21.4, 6.6]];
 export const APRON_Z = 0.5;
-export const DECAL_TILT = [-8, 5, -4, 7];
+export const DECAL_TILT = [-8, 5, -3, 4, -4, 7];
 
 function rng(seed: number) { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); }
 
@@ -344,6 +344,15 @@ function decalIcon(g: Graphics, c: Container, t: Theme, icon: DecalIcon, R: numb
   }
 }
 
+/** A decal without a drawn icon prints its glyph on a paper disc. */
+function glyphIcon(g: Graphics, c: Container, t: Theme, glyph: string, R: number) {
+  const s = R * 0.5;
+  g.circle(0, 0, s * 1.05).fill(t.paper).stroke({ width: R * 0.07, color: t.ink });
+  const size = glyph.length <= 1 ? s * 1.35 : glyph.length === 2 ? s * 1.0 : glyph.length === 3 ? s * 0.78 : s * 0.62;
+  const L = label(glyph, size, t.ink);
+  c.addChild(L);
+}
+
 /** A die-cut vinyl decal: white cut margin, ink line, colour field, icon. Flat on the apron (squashed by k). */
 export function decalSprite(t: Theme, d: StuckDecal, x: number, y: number, R: number, k = 1, rot = 0): Container {
   const outer = new Container();
@@ -359,7 +368,8 @@ export function decalSprite(t: Theme, d: StuckDecal, x: number, y: number, R: nu
   g.poly(flat(path.map(([a, b]): Pt => [a + R * 0.08, b + R * 0.1]))).fill({ color: t.shadeTint, alpha: 0.25 });
   g.poly(flat(path.map(([a, b]): Pt => [a * 1.16, b * 1.16]))).fill(WHITE).stroke({ width: R * 0.06, color: t.ink, join: 'round' });
   g.poly(flat(path)).fill(d.look.color).stroke({ width: R * (rim === t.paper ? 0.06 : 0.12), color: rim === t.paper ? t.ink : rim, join: 'round' });
-  decalIcon(g, inner, t, d.look.icon, R);
+  if (d.look.icon) decalIcon(g, inner, t, d.look.icon, R);
+  else glyphIcon(g, inner, t, d.look.glyph ?? '?', R);
   return outer;
 }
 
@@ -379,7 +389,7 @@ export function emptySlot(t: Theme, x: number, y: number, R: number, k = 1): Con
   return c;
 }
 
-/** The decal look for an upgrade, if it is a Rules decal. */
-export const decalLook = (id: string) => (DECALS as Record<string, DecalLook | undefined>)[id];
+/** The look of a decal. */
+export const decalLook = (id: string): DecalLook | undefined => (DECALS as Record<string, { look: DecalLook } | undefined>)[id]?.look;
 
 export { ribbon };

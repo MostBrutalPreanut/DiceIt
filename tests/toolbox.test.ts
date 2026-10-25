@@ -44,14 +44,17 @@ describe('the toolbox holds four parts', () => {
     expect(g.part(p.uid)?.placed).toBe(false);
   });
 
-  it("an upgrade's free part with no room is sold, not lost", () => {
+  it('peeling a Big Toolbox sells what no longer fits, and says so', () => {
     const g = rich();
-    fill(g, TOOLBOX_SLOTS);
+    g.pending = [{ id: 'bigToolbox' }];
+    expect(g.chooseDecal(0)).toBe(true);
+    fill(g, TOOLBOX_SLOTS + 2);
+    expect(g.inventory.length).toBe(TOOLBOX_SLOTS + 2);
     const money = g.money;
-    g.pending = [{ id: 'saver' }];
-    expect(g.chooseUpgrade(0)).toBe(true);
+    expect(g.peel(0)).toBe(true);
     expect(g.inventory.length).toBe(TOOLBOX_SLOTS);
-    expect(g.money).toBe(money + g.sellValue(PARTS.saver));
+    expect(g.money).toBeGreaterThan(money);
+    expect(g.soldOverflow.length).toBe(2);
   });
 
   it('an old save with too much in the toolbox sells the extra on load', () => {

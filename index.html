@@ -38,10 +38,7 @@
             <div class="gauge" id="clockBox" data-tip="clock"><span class="lbl">Clock <b id="clockSec" class="num"></b></span><div class="bar"><div id="clockFill"></div></div></div>
           </div>
 
-          <div id="upgradesBox" hidden>
-            <div class="lbl">Upgrades <span class="hint">hover for what each does</span></div>
-            <div id="upgradeChips"></div>
-          </div>
+          <div id="bossBox" class="tile boss"></div>
 
           <section id="ledgerBox" class="receipt-wrap" data-tip="ledger">
             <div class="slot"></div>
@@ -84,6 +81,7 @@
           </div>
           <section id="shopBox">
             <div id="offers"></div>
+            <div id="decalShelf" hidden></div>
           </section>
           <div id="shopClosed" class="hint">The shop opens between rounds.</div>
         </div>
@@ -95,7 +93,7 @@
           <details id="machineBox">
             <summary class="lbl">Machine &amp; options</summary>
             <div class="card">
-              <div class="lbl">Theme</div>
+              <div class="lbl">Machine</div>
               <div id="themeRow" class="themes"></div>
               <label class="check"><input id="calm" type="checkbox" /> Calm mode: no shake, drift or twinkles</label>
               <label class="check"><input id="music" type="checkbox" checked /> Music (each machine has its own tune) · <kbd>M</kbd> mutes everything</label>

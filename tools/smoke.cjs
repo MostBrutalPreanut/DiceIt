@@ -19,12 +19,15 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForSelector('canvas');
-  // there is no default machine: the first visit asks for a theme
+  // there is no default machine: the first visit asks for one, and each machine names its Big Boi
   await page.waitForSelector('#themePick .cab');
   check(await page.locator('#themePick .cab').count() === 3, 'the first visit offers three machines to pick from');
+  check(/Foreman/.test(await page.innerText('#themePick')) && /Cook/.test(await page.innerText('#themePick')) && /Dragon/.test(await page.innerText('#themePick')), 'each machine says what its Big Boi does');
   await page.click('#themePick .cab[data-theme="factory"]');
   check(await page.isHidden('#themePick'), 'picking a machine closes the picker');
-  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.theme.v1')) === 'factory', 'the theme choice is saved');
+  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.theme.v1')) === 'factory', 'the machine choice is saved');
+  check(await page.evaluate(() => window.__pinball.game.machine) === 'factory', 'the run is on the picked machine');
+  check(/Next boss/i.test(await page.innerText('#bossBox')), 'the scoreboard names the next boss');
   await page.evaluate(() => window.__pinball.freeze(true));
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/smoke-1-workshop.png` });
@@ -185,17 +188,24 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.click(to.x, to.y);
   const moved = await page.evaluate(() => window.__pinball.game.placed.find((p) => p.def === 'coin'));
   check(Math.hypot(moved.x - 8, moved.y - 26) < 0.6, `a clicked part follows the pointer and the next click sets it down (${moved.x.toFixed(1)}, ${moved.y.toFixed(1)})`);
-  // 1, 2, 3 switch the theme
+  // the machine stays for the run: number keys no longer switch it
   await page.keyboard.press('Digit2');
-  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.theme.v1')) === 'diner', 'key 2 switches to the second machine');
-  await page.keyboard.press('Digit1');
+  check(await page.evaluate(() => window.__pinball.game.machine) === 'factory', 'the machine cannot be switched mid-run');
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
-  // relic decals: earn one from a Rules card, read it on the apron, peel it off
-  await page.evaluate(() => { const g = window.__pinball.game; g.pending = [{ id: 'sponsor' }, { id: 'headStart' }]; window.__pinball.refresh(); });
-  check(await page.locator('.ucard.c-rules .decalimg').count() === 1, 'a Rules card shows the decal it would stick on');
+  // lock a shop offer: it is marked, and it is still there after a reroll
+  const lockedId = await page.evaluate(() => window.__pinball.game.shop.offers[1]);
+  await page.click('button[data-lock="1"]');
+  check(await page.evaluate(() => window.__pinball.game.isLocked(1)), 'the lock button locks an offer');
+  await page.evaluate(() => { const g = window.__pinball.game; g.money += 5; g.reroll(); window.__pinball.refresh(); });
+  check(await page.evaluate(() => window.__pinball.game.shop.offers[1]) === lockedId, 'a locked offer survives a reroll');
+  await page.click('button[data-lock="1"]');
+
+  // relic decals: pick one after a boss, read it on the apron, peel it off
+  await page.evaluate(() => { const g = window.__pinball.game; g.pending = [{ id: 'sponsor' }, { id: 'headStart' }, { id: 'rubber' }]; window.__pinball.refresh(); });
+  check(await page.locator('.ucard .decalimg').count() === 3, 'every decal card shows the decal it would stick on');
   await page.click('.ucard[data-pick="1"]');
-  check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'taking the Rules card sticks a decal on the apron');
+  check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'taking a card sticks its decal on the apron');
   await page.evaluate(() => window.__pinball.renderer.draw(window.__pinball.game, 0.016, { ghost: null, selectedUid: null, hoverUid: null, showHeat: false }));
   const slot = await page.evaluate(() => window.__pinball.toScreen(2.6, 6.6, 0.5));
   await page.mouse.move(slot.x, slot.y);
@@ -216,15 +226,15 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   }
   await page.evaluate(() => { window.__pinball.game.toWorkshop(); window.__pinball.refresh(); });
 
-  // the between-rounds flow: a boss was just beaten, so an upgrade is owed before the next round
+  // the between-rounds flow: a boss was just beaten, so a decal pick is owed before the next round
   await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
-  check(await page.isVisible('#upgradeBox'), 'the upgrade picker shows over the table when one is owed');
-  check(await page.locator('.ucard').count() === 3, 'three upgrade cards are offered');
+  check(await page.isVisible('#upgradeBox'), 'the decal picker shows over the table when one is owed');
+  check(await page.locator('.ucard').count() === 3, 'three decals are offered');
   check(await page.isDisabled('#btnStart'), 'Start round is locked while the pick is owed');
   await page.screenshot({ path: `${out}/smoke-2c-upgrade.png` });
   await page.click('.ucard[data-pick="0"]');
-  check(!(await page.isDisabled('#btnStart')), 'taking a card unlocks Start round');
-  check(!(await page.isVisible('#upgradeBox')) && (await page.locator('.chip').count()) === 1, 'the offer closes and the run lists the upgrade');
+  check(!(await page.isDisabled('#btnStart')), 'taking a decal unlocks Start round');
+  check(!(await page.isVisible('#upgradeBox')) && (await page.evaluate(() => window.__pinball.game.decals.length)) === 1, 'the offer closes and the decal is on the apron');
   await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
   const cash = await page.evaluate(() => window.__pinball.game.money);
   await page.click('#btnSkip');

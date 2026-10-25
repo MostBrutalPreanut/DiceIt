@@ -1,6 +1,6 @@
 import type { Mods } from '../src/data/mods';
 import { PARTS, type PartId } from '../src/data/parts';
-import { UPGRADES, type UpgradeId } from '../src/data/upgrades';
+import { decalTitle, type DecalId } from '../src/data/decals';
 import { autoBuild, playRounds, type BuildOptions, type Levels, type RoundSample } from '../src/game/autobuild';
 import { Game, payoutFor } from '../src/game/game';
 import type { Layout } from '../src/sim/layout';
@@ -14,19 +14,24 @@ import type { Layout } from '../src/sim/layout';
 
 /** How much the par player wants each part (value per dollar decides what it buys first). */
 export const PART_VALUE: Record<PartId, number> = {
-  pop: 4, coin: 2.5, mega: 5, sling: 2.5, spinner: 3, lane: 2, printer: 4, flipper: 3, lamp: 2, uplight: 0,
-  deflector: 0.5, bank: 3.5, kickback: 1.5, saver: 3, vari: 3.5,
+  pop: 4, coin: 2.5, mega: 0, sling: 2.5, spinner: 3, lane: 2, printer: 6, flipper: 3, lamp: 2, uplight: 0,
+  deflector: 0.5, bank: 4.5, kickback: 1.5, saver: 4, vari: 4,
+  ding: 5, piggy: 4, magnet: 5, thunder: 10, jackpot: 10, xlane: 13, golden: 20, disco: 18,
 };
 /** How many of each it will own. (Level Lights need aiming in sets of two or more, which par does not do.) */
 export const PART_CAP: Record<PartId, number> = {
-  pop: 4, coin: 3, mega: 2, sling: 2, spinner: 2, lane: 3, printer: 1, flipper: 2, lamp: 2, uplight: 0,
+  pop: 4, coin: 3, mega: 0, sling: 2, spinner: 2, lane: 3, printer: 1, flipper: 2, lamp: 2, uplight: 0,
   deflector: 1, bank: 1, kickback: 2, saver: 1, vari: 2,
+  ding: 2, piggy: 1, magnet: 1, thunder: 2, jackpot: 1, xlane: 2, golden: 2, disco: 1,
 };
-/** The first card of the three it is offered that appears in this list is the one it takes. */
-export const UPGRADE_PRIORITY: UpgradeId[] = [
-  'goldenAge', 'twin', 'extraBall', 'overclock', 'levelUp', 'headStart', 'sets', 'printerPlus', 'lamps', 'sponsor', 'interest',
-  'heavy', 'gold', 'lucky', 'saver', 'kickbacks', 'flippers', 'rubber', 'glass', 'coupon', 'bigShelf', 'fullRefund', 'ballHog',
+/** The first decal of the three it is offered (or the shop's) that appears in this list is the one it takes. */
+export const DECAL_PRIORITY: DecalId[] = [
+  'goldenAge', 'twin', 'extraBall', 'glassCannon', 'multiball', 'overclock', 'levelUp', 'headStart', 'crowd', 'sets', 'lucky', 'lastCall', 'fanClub',
+  'printerPlus', 'heavy', 'lamps', 'thrifty', 'safetyNet', 'interest', 'sponsor', 'gold', 'comboKing', 'spinDoctor', 'longFuse', 'freeKick',
+  'collector', 'savingsBond', 'goldenTicket', 'rubber', 'glass', 'coupon', 'bigShelf', 'freeReroll', 'bargain', 'overshoot', 'fullRefund', 'ballHog',
 ];
+/** Decals par buys from the shop when it can spare the money (late money otherwise piles up unspent). */
+const SHOP_DECALS = new Set<DecalId>(DECAL_PRIORITY.slice(0, 20));
 const MAX_REROLLS = 2;
 
 export interface ParOptions {
@@ -148,15 +153,17 @@ export function parShop(g: Game): { bought: { id: PartId; price: number }[]; rer
     const have = count(g);
     const options = g.shop.offers
       .map((id, slot) => ({ id, slot }))
-      .filter((o): o is { id: PartId; slot: number } => o.id !== null && PART_VALUE[o.id] > 0 && g.priceOf(o.id) <= g.money && (have[o.id] ?? 0) < PART_CAP[o.id])
-      .sort((a, b) => PART_VALUE[b.id] / g.priceOf(b.id) - PART_VALUE[a.id] / g.priceOf(a.id));
+      .filter((o): o is { id: PartId; slot: number } => o.id !== null && PART_VALUE[o.id] > 0 && g.priceAt(o.slot) <= g.money && (have[o.id] ?? 0) < PART_CAP[o.id])
+      .sort((a, b) => PART_VALUE[b.id] / g.priceAt(b.slot) - PART_VALUE[a.id] / g.priceAt(a.slot));
     if (options.length && !g.toolboxFull) { // the toolbox holds four: the rest waits for the next shop
-      const price = g.priceOf(options[0].id);
+      const price = g.priceAt(options[0].slot);
       if (!g.buy(options[0].slot)) break;
       bought.push({ id: options[0].id, price });
       continue;
     }
     if (g.toolboxFull) break;
+    const d = g.shop.decal;
+    if (d && SHOP_DECALS.has(d.id) && g.apronFree && g.money >= g.decalPrice + 4 && g.buyDecal()) continue;
     if (rerolls < MAX_REROLLS && g.money - g.rerollCost >= 3 && g.reroll()) { rerolls++; continue; }
     break;
   }
@@ -168,8 +175,8 @@ export function parPick(g: Game): number {
   const offers = g.pending ?? [];
   let best = Math.max(0, offers.findIndex((_, i) => g.canTake(i))), bestRank = Infinity;
   offers.forEach((o, i) => {
-    if (!g.canTake(i)) return; // a Rules card with the apron full
-    const rank = UPGRADE_PRIORITY.indexOf(o.id);
+    if (!g.canTake(i)) return; // the apron is full
+    const rank = DECAL_PRIORITY.indexOf(o.id);
     if (rank >= 0 && rank < bestRank) { best = i; bestRank = rank; }
   });
   return best;
@@ -180,7 +187,8 @@ export function parPick(g: Game): number {
 export function runPar(o: ParOptions): ParRun {
   const log = o.log ?? (() => {});
   const g = new Game();
-  for (let i = 0; i < o.seed; i++) g.newRun(); // a different shop and set of offers for each par run
+  // a different shop, set of offers and bosses for each par run, and the three machines in turn
+  for (let i = 0; i < o.seed; i++) g.newRun((['factory', 'diner', 'castle'] as const)[o.seed % 3]);
   const upgrades: string[] = [];
   const rounds: ParRound[] = [];
 
@@ -189,15 +197,17 @@ export function runPar(o: ParOptions): ParRun {
     let picked: string | null = null;
     if (g.pending) {
       const index = parPick(g), offer = g.pending[index];
-      picked = UPGRADES[offer.id].name + (offer.target ? ` (${PARTS[offer.target].name})` : '');
+      picked = decalTitle(offer);
       upgrades.push(picked);
-      g.chooseUpgrade(index);
+      if (!g.chooseDecal(index)) g.skipPick();
     }
     const { bought, rerolls } = parShop(g);
 
-    const built = autoBuild({ layout: g.layout, mods: g.mods, levels: g.levels }, { ...o.build, seed: o.seed * 100 + n, skill: o.skill });
+    // the machine is built and measured for the round it is about to play: a boss round with the boss's rules
+    const mods = g.modsForRound;
+    const built = autoBuild({ layout: g.layout, mods, levels: g.levels, machine: g.machine }, { ...o.build, seed: o.seed * 100 + n, skill: o.skill });
     g.layout = built.machine.layout;
-    const samples = playRounds({ layout: g.layout, mods: g.mods, levels: g.levels }, { rounds: o.measure, seed: o.seed * 10000 + n, skill: o.skill });
+    const samples = playRounds({ layout: g.layout, mods, levels: g.levels, machine: g.machine }, { rounds: o.measure, seed: o.seed * 10000 + n, skill: o.skill });
 
     const balls = g.ballsPerRound;
     const candidate = goalCandidate(samples, balls, failRate(n, o.rounds, o.failStart, o.failEnd));
@@ -206,7 +216,7 @@ export function runPar(o: ParOptions): ParRun {
     for (const s of samples) {
       const k = clearBall(s, goal);
       if (!k) continue;
-      payouts.push(payoutFor({ round: n, ballsLeft: balls - k, score: s.cumulative[k - 1], goal, coins: s.coins[k - 1], money: g.money, mods: g.mods }).total);
+      payouts.push(payoutFor({ round: n, ballsLeft: balls - k, score: s.cumulative[k - 1], goal, coins: s.coins[k - 1], money: g.money, mods, boss: g.boss !== null, decals: g.decals.length }).total);
     }
     const payout = Math.round(payouts.length ? payouts.reduce((a, b) => a + b, 0) / payouts.length : 3 + n);
     const moneyHeld = g.money;
@@ -215,7 +225,7 @@ export function runPar(o: ParOptions): ParRun {
     const round: ParRound = {
       round: n, ballsPerRound: balls, moneyStart, picked, bought, rerolls, owned: count(g), placed: g.layout.parts.filter((p) => p.placed).length,
       buildBefore: built.before, buildAfter: built.after, samples, goalCandidate: candidate, goalUsed: goal, payout, moneyHeld, moneyEnd: g.money,
-      seconds: samples.reduce((a, s) => a + s.seconds, 0) / samples.length, mods: g.mods,
+      seconds: samples.reduce((a, s) => a + s.seconds, 0) / samples.length, mods,
       layout: JSON.parse(JSON.stringify(g.layout)), levels: { ...g.levels },
     };
     rounds.push(round);

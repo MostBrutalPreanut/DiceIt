@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { computeMods } from '../src/data/upgrades';
+import { computeMods } from '../src/data/decals';
 import { describe as describePart, makePart, PARTS } from '../src/data/parts';
 import { playRounds, type Machine } from '../src/game/autobuild';
 import { Scorer } from '../src/game/scoring';
@@ -41,7 +41,7 @@ describe('scoring limits', () => {
     s.startBall();
     expect(s.mult).toBe(1);
     s.consume(hit(1));
-    expect(s.mult).toBeCloseTo(1.1); // a new ball can earn it again
+    expect(s.mult).toBeCloseTo(1.15); // a new ball can earn it again
   });
 
   it('a lane set pays at most 5 times a ball, then says MAXED; the next ball pays again', () => {
@@ -182,7 +182,7 @@ describe('the runaway machine that started all this', () => {
     for (const s of samples) {
       expect(s.cumulative[2]).toBeLessThan(1_000_000); // it scored 36,786,362 in one ball before
       expect(s.seconds).toBeLessThan(3 * 100); // three balls on a 90 s clock, plus launches
-      expect(s.coins[2]).toBeLessThanOrEqual(5); // it paid $403 before
+      expect(s.coins[2]).toBeLessThanOrEqual(5 + 3); // it paid $403 before (now: the coin cap, plus its one Ball Saver tipping $1 a ball)
     }
   });
 });

@@ -1,6 +1,8 @@
-import { describe, dialFactor, dialValue, grownPoints, MAX_LEVEL, modFactor, PARTS, type DescribeCtx, type PartDef, type PartInstance, type PartKind } from '../data/parts';
+import { describe, dialFactor, dialValue, effectiveLevel, grownPoints, MAX_LEVEL, modFactor, RARITY_NAMES, TAG_NAMES, type DescribeCtx, type PartDef, type PartInstance, type PartKind } from '../data/parts';
 import type { Mods } from '../data/mods';
-import { UPGRADES, type UpgradeId } from '../data/upgrades';
+import { DECALS, KIND_NAMES, decalText, decalTitle, type DecalPick } from '../data/decals';
+import { bigBoiOf, type MachineId } from '../data/bigboi';
+import type { BossDef } from '../data/bosses';
 import type { Scorer } from '../game/scoring';
 
 export const fmt = (n: number) =>
@@ -27,18 +29,30 @@ const KIND: Record<PartKind, string> = {
   lamp: 'Lamp', bank: 'Targets', kickback: 'Kickback', saver: 'Saver', target: 'Target',
 };
 
+/** The rarity as a small coloured chip (common, uncommon, rare, legendary). */
+export const rarityChip = (r: PartDef['rarity']) => `<span class="rar r-${r}">${RARITY_NAMES[r]}</span>`;
+
 /** The level chip: nothing until a part type has levelled up, then LVL 2, and MAX LVL at the top. */
 export const levelText = (level: number) => (level >= MAX_LEVEL ? 'MAX LVL' : level > 0 ? `LVL ${level}` : '');
 
 /** The header every card shares: the name in the display face on the part's colour, a kind chip, and the level once it has one. */
-function head(def: PartDef, level: number) {
+function head(def: PartDef, level: number, machine?: MachineId) {
   const lv = def.recipe.perLevel ? levelText(level) : '';
-  return `<div class="head"><h4>${def.name}</h4><span class="kind">${KIND[def.kind]}</span>${lv ? `<span class="lvl">${lv}</span>` : ''}</div>`;
+  const name = def.id === 'mega' ? bigBoiOf(machine).title : def.name;
+  const kind = def.id === 'mega' ? bigBoiOf(machine).ability : KIND[def.kind];
+  return `<div class="head"><h4>${name}</h4><span class="kind">${kind}</span>${lv ? `<span class="lvl">${lv}</span>` : ''}</div>`;
+}
+
+/** Rarity and tags, under the header: what decals will care about. */
+function tagsRow(def: PartDef) {
+  if (def.id === 'mega') return `<div class="tags">${def.tags.map((t) => `<span class="tag">${TAG_NAMES[t]}</span>`).join('')}<span class="tag">Not for sale</span></div>`;
+  return `<div class="tags">${rarityChip(def.rarity)}${def.tags.map((t) => `<span class="tag">${TAG_NAMES[t]}</span>`).join('')}</div>`;
 }
 
 export interface TipCtx {
   level: number;
   mods: Mods;
+  machine?: MachineId;
   /** Live numbers (a part on the board): the scorer and the current Mult. */
   scorer?: Scorer;
   mult?: number;
@@ -50,9 +64,9 @@ export interface TipCtx {
  */
 export function partCard(def: PartDef, inst: PartInstance | undefined, c: TipCtx, opts: { keys?: string; blurb?: boolean; stats?: string; dial?: boolean; recipe?: boolean } = {}): string {
   const r = def.recipe;
-  const level = r.perLevel ? c.level : 0;
+  const level = r.perLevel ? effectiveLevel(def.id, c.level, c.mods) : 0;
   const lvl = (r.perLevel ?? 0) * level;
-  const o: string[] = [head(def, level)];
+  const o: string[] = [head(def, level, c.machine), tagsRow(def)];
   if (opts.blurb) o.push(`<div class="blurb">${def.blurb}</div>`);
   if (r.points) {
     const live = !!(c.scorer && inst?.placed);
@@ -77,7 +91,7 @@ export function partCard(def: PartDef, inst: PartInstance | undefined, c: TipCtx
     if (live) chips.push([`×${(c.mult ?? 1).toFixed(2)}`, 'your Mult']);
     o.push(`<div class="chips">${chips.slice(0, 5).map(([v, l]) => `<span><b>${v}</b><small>${l}</small></span>`).join('')}</div>`);
   }
-  if (opts.recipe !== false) o.push(descHtml(def, inst, { level: c.level, mods: c.mods }));
+  if (opts.recipe !== false) o.push(descHtml(def, inst, { level: c.level, mods: c.mods, machine: c.machine }));
   if (opts.stats) o.push(`<div class="stats">${opts.stats}</div>`);
   if (opts.dial) {
     const d = def.dials[0];
@@ -100,24 +114,31 @@ export function statsLine(row?: { hits: number; points: number; multAdded: numbe
   return `This round: ${out.join(' · ')}`;
 }
 
-/** A relic decal's card: the same anatomy as a part's, from the upgrade's own row. */
-export function decalCard(id: UpgradeId, color: string, peelable: boolean): string {
-  const d = UPGRADES[id];
-  const rar = d.rarity === 'legendary' ? 'Wild' : d.rarity === 'rare' ? 'Rare' : 'Common';
-  return `<div class="head" style="--head:${color}"><h4>${esc(d.name)}</h4><span class="kind">${rar} decal</span></div>
-    <ul class="desc" style="--bar:${color}"><li>${esc(d.text())}</li><li class="t-note">A run-long rule, stuck on the apron. It works from the moment you stick it.</li></ul>
-    <div class="keys">${peelable ? 'click it to peel it off between rounds · a peeled decal is gone' : 'peel it off between rounds to free the slot'}</div>`;
+/** A relic decal's card: the same anatomy as a part's, from the decal's own row. */
+export function decalCard(pick: DecalPick, peelable: boolean | null): string {
+  const d = DECALS[pick.id], color = d.look.color;
+  return `<div class="head" style="--head:${color}"><h4>${esc(decalTitle(pick))}</h4><span class="kind">${KIND_NAMES[d.kind]} decal</span></div>
+    <div class="tags">${rarityChip(d.rarity)}</div>
+    <ul class="desc" style="--bar:${color}"><li>${esc(decalText(pick))}</li><li class="t-note">A run-long rule, stuck on the apron. It works from the moment you stick it until you peel it.</li></ul>
+    ${peelable === null ? '' : `<div class="keys">${peelable ? 'click it to peel it off between rounds · a peeled decal is gone' : 'peel it off between rounds to free the slot'}</div>`}`;
+}
+
+/** A boss's card: what it breaks, and when. */
+export function bossCard(b: BossDef, round: number, now: boolean): string {
+  return `<div class="head" style="--head:var(--accent)"><h4>${esc(b.name)}</h4><span class="kind">${b.final ? 'Final boss' : 'Boss'} · round ${round}</span></div>
+    <ul class="desc" style="--bar:var(--accent)"><li>${esc(b.text)}</li><li class="t-note">${now ? 'This round. Beat it and you pick a decal.' : 'Coming up: get your machine ready for it.'}</li></ul>`;
 }
 
 /** The short explanations behind the scoreboard's numbers. */
 export const HUD_TIPS: Record<string, string> = {
   score: '<b>Score</b>: every hit adds its points × your Mult. Hover any part to see exactly what its next hit pays.',
   goal: '<b>Goal</b>: reach it before your balls run out to clear the round. Cash out (Tab) once it is hit, or keep playing for overshoot money.',
-  mult: '<b>Mult</b>: multiplies every hit. It starts each ball at ×1.00 (plus any Head Start), Big Boi and completed sets raise it, and it resets when the ball ends.',
+  mult: '<b>Mult</b>: multiplies every hit. It starts each ball at ×1.00 (plus decals like Head Start), Big Boi, sets, Spinners and X Lanes raise it, and it resets when the ball ends.',
   balls: '<b>Balls</b>: the balls left this round. Each ball lasts until it drains or its clock runs out; a Ball Printer adds balls to the table, not to this count.',
   money: '<b>Money</b>: spend it in the shop between rounds. Cha-Ching Bumpers pay coins during play (they land here), and every unused ball pays when you clear a round.',
   tilt: '<b>Tilt</b>: every nudge fills it and it drains slowly. Fill it and the machine tilts: lights out, flippers dead, the ball drains.',
-  map: '<b>The run</b>: fifteen rounds on the path, a boss every third (the big stops). The lit stop is where you are.',
+  map: '<b>The run</b>: fifteen rounds on the path, a boss every third (the big stops) and the final boss at the end. The lit stop is where you are; the next boss is named below.',
+  boss: '<b>Boss</b>: every third round a boss breaks one thing your machine relies on. You see it coming: build for it. Beat it and you pick one of three decals.',
   ledger: '<b>This round</b>: every point of the round, by the part type that scored it ($ is coins paid). Hover a part on the table for its own numbers.',
   clock: '<b>Ball clock</b>: one clock per ball (with every ball it turns into). When it runs out the ball ends.',
 };

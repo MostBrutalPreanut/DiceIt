@@ -2,10 +2,11 @@
 // the same silhouette in every theme (shape carries identity, colour second), so a new machine is a new
 // row here. Every colour the game draws, on the canvas and in the HTML panels, comes from these rows.
 import type { PartId } from '../data/parts';
+import type { MachineId } from '../data/bigboi';
 
 export type Motif = 'awning' | 'cone' | 'rivets';
 export type Debris = 'pea' | 'leaf' | 'bolt';
-export type ThemeId = 'factory' | 'diner' | 'castle';
+export type ThemeId = MachineId;
 
 export interface Theme {
   id: ThemeId;
@@ -51,6 +52,7 @@ export const FACTORY: Theme = {
     pop: '#3cc3b1', coin: '#ffae2b', mega: '#8a63f2', sling: '#ff6b6b', spinner: '#a3d143', lane: '#62b8ff',
     printer: '#ff8fc8', flipper: '#ff6b6b', lamp: '#ffe45c', uplight: '#ffffff', bank: '#c2417a', deflector: '#b8b2cc',
     kickback: '#3050ff', saver: '#c5e84a', vari: '#2c6e49',
+    ding: '#ff9a3c', piggy: '#ffa6c9', magnet: '#e04848', thunder: '#4a6cff', jackpot: '#ff5d8f', xlane: '#00a6e6', golden: '#ffd23f', disco: '#d6dcff',
   },
   art: { floorAlt: '#f2d77a', debrisA: '#d9dbe6', debrisB: '#fff8e6', props: ['#3cc3b1', '#8a63f2', '#ff5d8f', '#3cc3b1'], trunk: '#8f7ad6', foliage: '#3cc3b1', twinkle: ['#fff8e6', '#ffae2b'] },
   popMotif: 'rivets', debris: 'bolt', laneWord: 'FUN', backdrop: 'squiggle', floorArt: 'plates', surround: 'factory',
@@ -65,6 +67,7 @@ export const DINER: Theme = {
     pop: '#d9473b', coin: '#f2c14e', mega: '#f6efdf', sling: '#7f9c3c', spinner: '#5e8c8a', lane: '#f08a4b',
     printer: '#b9c6c9', flipper: '#f6efdf', lamp: '#ffe08a', uplight: '#ffffff', bank: '#7a4a2e', deflector: '#a9b4b6',
     kickback: '#2d4fb3', saver: '#9bb84d', vari: '#2c6e49',
+    ding: '#b35d2a', piggy: '#f5a3b8', magnet: '#a8322a', thunder: '#3e6fb0', jackpot: '#e05f8a', xlane: '#4aa3c8', golden: '#e8b600', disco: '#dcd6ff',
   },
   art: { floorAlt: '#5e8c8a', debrisA: '#8ea547', debrisB: '#c6d77a', props: ['#d9473b', '#f2c14e', '#7f9c3c', '#d9473b', '#f6efdf', '#f2c14e'], trunk: '#7a4a2e', foliage: '#7f9c3c', twinkle: ['#f6efdf', '#f2c14e'] },
   popMotif: 'awning', debris: 'pea', laneWord: 'EAT', backdrop: 'waves', floorArt: 'checker', surround: 'diner',
@@ -79,6 +82,7 @@ export const CASTLE: Theme = {
     pop: '#e2704f', coin: '#f2c14e', mega: '#eef1f4', sling: '#8b5a35', spinner: '#4c86c6', lane: '#7fc0e8',
     printer: '#d8c3a5', flipper: '#eef1f4', lamp: '#f59ad0', uplight: '#ffffff', bank: '#8e6bb0', deflector: '#6f6a64',
     kickback: '#00a890', saver: '#a6d65a', vari: '#38b860',
+    ding: '#c98a2e', piggy: '#f0a0b8', magnet: '#b53b3b', thunder: '#5b4fc4', jackpot: '#d0557f', xlane: '#3aa0d8', golden: '#f0c419', disco: '#e6e0ff',
   },
   art: { floorAlt: '#bcd776', debrisA: '#7aa83f', debrisB: '#eef1f4', props: ['#5b8a3a'], trunk: '#8b5a35', foliage: '#5b8a3a', twinkle: ['#fff6e0', '#ffd36e'] },
   popMotif: 'cone', debris: 'leaf', laneWord: 'WIN', backdrop: 'curls', floorArt: 'meadow', surround: 'castle',

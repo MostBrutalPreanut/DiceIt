@@ -5,7 +5,8 @@ describe('part data', () => {
   it.each(PART_IDS)('%s is well formed and explains itself', (id) => {
     const def = PARTS[id];
     expect(def.cost).toBeGreaterThan(0);
-    expect(def.weight).toBeGreaterThan(0);
+    if (id === 'mega') expect(def.weight).toBe(0); // Big Boi comes with the machine: never for sale
+    else expect(def.weight).toBeGreaterThan(0);
     for (const d of def.dials) {
       expect(d.default).toBeGreaterThanOrEqual(d.min);
       expect(d.default).toBeLessThanOrEqual(d.max);

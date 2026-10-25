@@ -1,10 +1,11 @@
 import './style.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { dialValue, footprint, PART_IDS, PARTS, type PartDef, type PartId, type PartInstance } from './data/parts';
-import { BOSS_EVERY, COLUMN_NAMES, offerText, SKIP_PAY, UPGRADE_IDS, UPGRADES, type UpgradeId, type UpgradeOffer } from './data/upgrades';
-import { DECAL_SLOTS } from './data/decals';
+import { dialValue, footprint, PARTS, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
+import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, decalTitle, KIND_NAMES, SKIP_PAY, type DecalId, type DecalPick } from './data/decals';
+import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
+import { FINAL_ROUND } from './data/bosses';
 import { AudioFx } from './audio';
-import { Game, goalFor, parseRun, TOOLBOX_SLOTS, type Arrangement, type GameEvent, type Payout } from './game/game';
+import { Game, goalFor, parseRun, type Arrangement, type GameEvent, type Payout } from './game/game';
 import type { ScoreEvent } from './game/scoring';
 import { Renderer, type DrawState } from './render/renderer';
 import { FxOverlay, rectCentre } from './render/overlay';
@@ -14,7 +15,7 @@ import { canPlace, canPlaceLedge } from './sim/layout';
 import { clampLedge, LEDGE, ledgeSeg } from './sim/table';
 import { Bot } from './sim/bot';
 import type { Input, SimEvent } from './sim/sim';
-import { decalCard, fmt, HUD_TIPS, partCard, roleVar, statsLine } from './ui/html';
+import { bossCard, decalCard, fmt, HUD_TIPS, partCard, rarityChip, roleVar, statsLine } from './ui/html';
 import { applyBackdrop, chase, makeBulbs, MultDial, Odometer } from './ui/hud';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -33,15 +34,16 @@ async function loadFonts() {
 async function main() {
   await loadFonts();
   const game = new Game();
+  let hasRun = false;
   try {
     const saved = store.get(STORE);
     const run = saved ? parseRun(saved) : null;
-    if (run) game.load(run);
+    if (run) { game.load(run, themeById(store.get(THEME_KEY))?.id); hasRun = true; }
   } catch { /* storage can be blocked; the game works without it */ }
   const persist = () => store.set(STORE, JSON.stringify(game.save()));
 
-  // there is no default machine: until the player picks one, the Factory stands in behind the picker
-  const chosen = themeById(store.get(THEME_KEY));
+  // the machine is picked for each run (it decides the look and what Big Boi does); until the first pick, the Factory stands in behind the picker
+  const chosen = hasRun ? themeById(game.machine) : null;
   let theme: Theme = chosen ?? FACTORY;
   let calm = store.get(CALM_KEY) === '1';
 
@@ -87,7 +89,9 @@ async function main() {
   say('INSERT COIN');
 
   /** What the recipe sentences need to know: this part type's level and the run's upgrades. */
-  const ctxFor = (def: PartDef) => ({ level: game.levels[def.id] ?? 0, mods: game.mods });
+  const ctxFor = (def: PartDef) => ({ level: game.levels[def.id] ?? 0, mods: game.mods, machine: game.machine });
+  /** A part's definition on this run's machine (Big Boi's recipe depends on it). */
+  const defFor = (id: PartId) => defOn(id, game.machine);
 
   // ---- theme: tokens to CSS, the backdrop, the baked icons ----------------------------------------
   const icons = new Map<string, string>();
@@ -97,7 +101,7 @@ async function main() {
     if (!url) { url = renderer.icon(id, w, h, { theme: t }).toDataURL(); icons.set(key, url); }
     return url;
   };
-  const decalURL = (id: UpgradeId) => {
+  const decalURL = (id: DecalId) => {
     const key = `${theme.id}:decal:${id}`;
     let url = icons.get(key);
     const look = game.decalLook(id);
@@ -116,26 +120,36 @@ async function main() {
     dial.build(t);
     for (const cap of ['cashCap', 'startCap']) $(cap).innerHTML = `<img alt="" src="${iconURL('button', 64, 48)}">`;
     ballsKey = '';
-    $('themeRow').innerHTML = THEMES.map((th) => `<button data-theme="${th.id}" class="${th.id === t.id ? 'on' : ''}" style="background:${th.bg};color:${th.ink}">${th.tagline.split(' ')[0]}<span class="swatch">${[th.role.pop, th.role.coin, th.role.mega, th.accent].map((c) => `<i style="background:${c}"></i>`).join('')}</span></button>`).join('');
-    for (const b of $('themeRow').querySelectorAll<HTMLButtonElement>('button[data-theme]')) b.onclick = () => { pickTheme(b.dataset.theme!); };
+    const bb = BIG_BOIS[BIG_BOI_FOR[t.id]];
+    $('themeRow').innerHTML = `<div class="machineInfo" style="background:${t.bg};color:${t.ink}"><b>${t.tagline}</b><span>${bb.title}: ${bb.ability}</span><span class="hint">The machine is picked for each run. Start a new run to change it.</span></div>`;
     upgradeKey = '';
     refreshWorkshop();
   }
+  /** A new run on the chosen machine: its look, and its Big Boi. */
   function pickTheme(id: string) {
     const t = themeById(id);
     if (!t) return;
     store.set(THEME_KEY, t.id);
     $('themePick').hidden = true;
+    overlayEl.hidden = true;
+    game.newRun(t.id as MachineId);
+    hasRun = true;
+    armed = selected = null;
+    selectedDecal = null;
     applyTheme(t);
-    say(`${t.tagline}. LOOKS ONLY. SAME PHYSICS`);
+    persist();
+    const bb = BIG_BOIS[BIG_BOI_FOR[t.id]];
+    say(`${t.tagline}. ${bb.title.toUpperCase()}. ${bb.ability.toUpperCase()}`);
   }
   function showThemePicker() {
     const box = $('themePick');
-    box.innerHTML = `<div class="pickbox"><h2>Pick your machine</h2><div class="hint">A theme changes looks only: same parts, same physics. Change it any time under Machine.</div>
-      <div class="cabs">${THEMES.map((t) => `<button class="cab" data-theme="${t.id}" style="background:${t.bg};color:${t.ink}">
-        <img alt="" src="${iconURL('mega', 160, 120, t)}"><b>${t.tagline}</b><span>${t.laneWord.split('').join(' · ')} lanes · ${t.popMotif === 'rivets' ? 'riveted' : t.popMotif === 'awning' ? 'awning' : 'turret'} bumpers</span><span class="go">Play this machine</span></button>`).join('')}</div></div>`;
+    const cancel = hasRun ? '<button class="pickcancel" id="btnPickCancel">Keep playing this run</button>' : '';
+    box.innerHTML = `<div class="pickbox"><h2>Pick your machine</h2><div class="hint">Each machine has its own look and its own Big Boi in the middle of the table, and he decides what kind of build pays best. The machine stays for the whole run.</div>
+      <div class="cabs">${THEMES.map((t) => { const bb = BIG_BOIS[BIG_BOI_FOR[t.id]]; return `<button class="cab" data-theme="${t.id}" style="background:${t.bg};color:${t.ink}">
+        <img alt="" src="${iconURL('mega', 160, 120, t)}"><b>${t.tagline}</b><span class="bb">${bb.title}</span><span class="ab"><em>${bb.ability}</em> ${bb.blurb}</span><span class="go">Play this machine</span></button>`; }).join('')}</div>${cancel}</div>`;
     box.hidden = false;
     for (const b of box.querySelectorAll<HTMLButtonElement>('.cab')) b.onclick = () => pickTheme(b.dataset.theme!);
+    if (hasRun) $('btnPickCancel').onclick = () => { box.hidden = true; };
   }
 
   function setCalm(on: boolean) {
@@ -169,11 +183,23 @@ async function main() {
 
   function offerHtml(id: PartId, price: number | null, index: number | null) {
     const def = PARTS[id];
+    const locked = index !== null && game.isLocked(index);
     const btn = index === null
       ? `<button class="buy" data-add="${id}">Add</button>`
       : `${price! < def.cost ? `<s>$${def.cost}</s>` : ''}<button class="buy" data-buy="${index}" ${game.canAfford(price!) && game.editable && !game.toolboxFull ? '' : 'disabled'}>$${price}</button>`;
-    return `<div class="offer" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}"></div>
-      <div class="name">${def.name}</div><div class="buyrow">${btn}</div><div class="blurb">${def.blurb}</div></div>`;
+    const lock = index === null ? '' : `<button class="lock ${locked ? 'on' : ''}" data-lock="${index}" title="${locked ? 'Locked: it stays for the next round. Click to unlock' : 'Lock it: it stays for the next round (and through rerolls)'}">${locked ? 'LOCKED' : 'LOCK'}</button>`;
+    return `<div class="offer r-${def.rarity} ${locked ? 'locked' : ''}" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}</div>
+      <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}</div></div>`;
+  }
+
+  /** The decal for sale this round: a sticker in a sleeve under the parts. */
+  function decalOfferHtml() {
+    const d = game.shop.decal;
+    if (!d) return '';
+    const def = DECALS[d.id], price = game.decalPrice;
+    const can = game.canAfford(price) && game.editable && game.apronFree;
+    return `<div class="decaloffer r-${def.rarity}" id="decalOffer"><img alt="" src="${decalURL(d.id)}"><div class="dtxt"><b>${decalTitle(d)}</b><span>${KIND_NAMES[def.kind]} decal ${rarityChip(def.rarity)}</span></div>
+      <button class="buy" id="btnBuyDecal" ${can ? '' : 'disabled'} title="${game.apronFree ? '' : 'The apron is full: peel a decal first'}">$${price}</button></div>`;
   }
 
   /** Test Lab: every part in the game, free, instead of 4 rotating offers. */
@@ -182,7 +208,7 @@ async function main() {
     ($('btnReroll') as HTMLButtonElement).hidden = true;
     const box = $('offers');
     box.className = 'catalog';
-    box.innerHTML = PART_IDS.map((id) => offerHtml(id, null, null)).join('');
+    box.innerHTML = SHOP_IDS.map((id) => offerHtml(id, null, null)).join('');
     bindOfferTips(box);
     for (const b of box.querySelectorAll<HTMLButtonElement>('button[data-add]')) {
       b.onclick = () => {
@@ -207,7 +233,7 @@ async function main() {
       el.addEventListener('pointerdown', (e) => {
         if ((e.target as HTMLElement).closest('button') || !game.editable || e.button !== 0) return;
         const slot = el.dataset.slot === undefined ? null : Number(el.dataset.slot);
-        if (slot !== null && !game.canAfford(game.priceOf(def.id))) { sayKey('broke'); return; }
+        if (slot !== null && !game.canAfford(game.priceAt(slot))) { sayKey('broke'); return; }
         audio.unlock();
         e.preventDefault();
         if (shopDrag?.carry) return; // the capture handler deals with a click while something is in hand
@@ -225,7 +251,35 @@ async function main() {
     rb.hidden = false;
     rb.textContent = game.rerollCost ? `REROLL $${game.rerollCost}` : 'REROLL';
     rb.disabled = !game.canAfford(game.rerollCost) || !game.editable;
-    $('offers').innerHTML = game.shop.offers.map((id, i) => (id ? offerHtml(id, game.priceOf(id), i) : `<div class="offer sold">Sold</div>`)).join('');
+    $('offers').innerHTML = game.shop.offers.map((id, i) => (id ? offerHtml(id, game.priceAt(i), i) : `<div class="offer sold">Sold</div>`)).join('');
+    $('decalShelf').innerHTML = decalOfferHtml();
+    $('decalShelf').hidden = !game.shop.decal;
+    const dOffer = document.getElementById('decalOffer');
+    if (dOffer && game.shop.decal) {
+      const pick = game.shop.decal;
+      dOffer.onmouseenter = (e) => { const tip = $('tip'); tip.className = 'card tipcard'; tip.innerHTML = decalCard(pick, null); tip.hidden = false; placeTip(e.clientX, e.clientY); };
+      dOffer.onmousemove = (e) => placeTip(e.clientX, e.clientY);
+      dOffer.onmouseleave = () => { $('tip').hidden = true; };
+      ($('btnBuyDecal') as HTMLButtonElement).onclick = () => {
+        audio.unlock();
+        const name = DECALS[pick.id].name.toUpperCase();
+        if (!game.buyDecal()) { say(game.apronFree ? 'CANNOT AFFORD IT' : 'NO ROOM ON THE APRON. PEEL ONE FIRST'); return; }
+        $('tip').hidden = true;
+        audio.goal();
+        say(`${name} STUCK ON THE APRON`);
+        persist();
+        refreshWorkshop();
+      };
+    }
+    for (const b of $('offers').querySelectorAll<HTMLButtonElement>('button[data-lock]')) {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const slot = Number(b.dataset.lock);
+        if (game.toggleLock(slot)) { audio.place(); say(game.isLocked(slot) ? 'LOCKED. IT WAITS FOR YOU' : 'UNLOCKED'); persist(); }
+        else say(`YOU CAN LOCK ${game.lockSlots}. UNLOCK ONE FIRST`);
+        renderShop();
+      };
+    }
     // fresh stock (a new round, a reroll, a new run) rolls down onto the shelf one card at a time, with a tick each
     if (game.shop.offers !== lastStock && game.editable) {
       lastStock = game.shop.offers;
@@ -255,7 +309,7 @@ async function main() {
   function renderInventory() {
     const inv = game.inventory;
     const cells = inv.map((p) => `<div class="item ${armed === p.uid ? 'armed' : ''} ${selected === p.uid ? 'sel' : ''}" data-uid="${p.uid}"><img alt="${PARTS[p.def].name}" src="${iconURL(p.def, 64, 64)}">${p.fresh ? '<span class="new">NEW</span>' : ''}</div>`);
-    const slots = Math.max(TOOLBOX_SLOTS, Math.ceil(inv.length / TOOLBOX_SLOTS) * TOOLBOX_SLOTS); // the Test Lab has no limit
+    const slots = Math.max(game.toolboxSlots, Math.ceil(inv.length / 4) * 4); // the Test Lab has no limit
     $('inventory').innerHTML = cells.join('') + '<div class="item empty"></div>'.repeat(slots - inv.length);
     // a part picked up from the toolbox can be sold right there: the latch becomes a Sell button with its price
     const held = selected !== null ? inv.find((p) => p.uid === selected) : undefined;
@@ -297,7 +351,7 @@ async function main() {
     const inst = game.part(selected ?? -1);
     card.hidden = !inst || !game.editable;
     if (!inst || !game.editable) return;
-    const def = PARTS[inst.def];
+    const def = defFor(inst.def);
     card.className = 'card tipcard';
     card.style.setProperty('--head', roleVar(def.id));
     card.innerHTML = `${partCard(def, inst, { ...ctxFor(def), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false })}
@@ -343,11 +397,10 @@ async function main() {
     const d = selectedDecal !== null ? game.decals[selectedDecal] : undefined;
     card.hidden = !d || !game.editable;
     if (!d || !game.editable) return;
-    const look = game.decalLook(d.id)!;
     card.className = 'card tipcard';
-    card.innerHTML = `${decalCard(d.id, look.color, true)}<div class="btnrow"><button id="btnPeel">Peel it off</button></div>`;
+    card.innerHTML = `${decalCard(d, true)}<div class="btnrow"><button id="btnPeel">Peel it off</button></div>`;
     $('btnPeel').onclick = () => {
-      const name = UPGRADES[d.id].name.toUpperCase();
+      const name = DECALS[d.id].name.toUpperCase();
       if (game.peel(selectedDecal!)) { selectedDecal = null; audio.remove(); say(`${name} PEELED. GONE FOR GOOD`); persist(); afterHistory(); }
     };
   }
@@ -379,50 +432,56 @@ async function main() {
     game.soldOverflow = [];
   }
 
-  // ---- major upgrades: the three cards, and the chips that list what the run has taken ----------------
-  const offerTitle = (o: UpgradeOffer) => UPGRADES[o.id].name + (o.target ? ` · ${PARTS[o.target].name}s` : '');
+  // ---- the decal selection screen after a boss, and the boss panel on the scoreboard ----------------
   let upgradeKey = '';
   function renderUpgrades() {
     const box = $('upgradeBox');
     const show = game.pending !== null && game.editable;
     box.hidden = !show;
-    const key = JSON.stringify([game.pending, game.picks, theme.id]);
+    const key = JSON.stringify([game.pending, game.decals.length, theme.id]);
     if (key !== upgradeKey) {
       upgradeKey = key;
       if (game.pending) {
-        box.innerHTML = `<h3>Choose an upgrade<small>one of three for the rest of the run, or take $${SKIP_PAY} instead</small></h3>
-          ${game.pending.map((o, i) => {
-            const d = UPGRADES[o.id];
-            const decal = d.column === 'rules' ? `<img class="decalimg" alt="" src="${decalURL(o.id)}">` : '';
-            const full = d.column === 'rules' && !game.canTake(i) ? `<span class="full">Apron full: click a decal on the apron and peel it to make room</span>` : '';
-            return `<button class="ucard c-${d.column} r-${d.rarity}" data-pick="${i}"><span class="head"><b>${offerTitle(o)}</b><span class="tag">${d.column === 'rules' ? 'DECAL' : COLUMN_NAMES[d.column].toUpperCase()}</span></span>
-              ${decal}<span class="txt">${offerText(o)}</span><span class="rar">${d.rarity === 'legendary' && d.column === 'rules' ? 'WILD' : d.rarity.toUpperCase()}</span>${full}</button>`;
-          }).join('')}
+        const full = !game.apronFree;
+        box.innerHTML = `<h3>Boss beaten! Pick a decal<small>one of three, stuck on your apron for the rest of the run (or take $${SKIP_PAY} instead)</small></h3>
+          ${full ? '<div class="full">Your apron is full: click a decal on the apron and peel it to make room.</div>' : ''}
+          <div class="ucards">${game.pending.map((o, i) => {
+            const d = DECALS[o.id];
+            return `<button class="ucard k-${d.kind} r-${d.rarity}" data-pick="${i}" ${game.canTake(i) ? '' : 'disabled'}><span class="head"><b>${decalTitle(o)}</b><span class="tag">${KIND_NAMES[d.kind].toUpperCase()}</span></span>
+              <img class="decalimg" alt="" src="${decalURL(o.id)}"><span class="txt">${d.text(o.target)}</span>${rarityChip(d.rarity)}</button>`;
+          }).join('')}</div>
           <button id="btnSkip">Skip: take $${SKIP_PAY}</button>`;
         box.querySelectorAll<HTMLButtonElement>('button[data-pick]').forEach((b) => {
           b.onclick = () => {
             audio.unlock();
             const o = game.pending?.[Number(b.dataset.pick)];
-            if (!game.chooseUpgrade(Number(b.dataset.pick))) { if (o && !game.canStick(o.id)) say('NO ROOM ON THE APRON. PEEL ONE FIRST'); return; }
+            if (!game.chooseDecal(Number(b.dataset.pick))) { if (!game.apronFree) say('NO ROOM ON THE APRON. PEEL ONE FIRST'); return; }
             audio.goal();
-            say(o && UPGRADES[o.id].column === 'rules' ? `${UPGRADES[o.id].name.toUpperCase()} STUCK ON THE APRON` : `${o ? UPGRADES[o.id].name.toUpperCase() : 'UPGRADE'} INSTALLED. THE MACHINE IS DIFFERENT NOW`);
+            say(`${o ? DECALS[o.id].name.toUpperCase() : 'DECAL'} STUCK ON THE APRON`);
             persist();
             afterHistory();
           };
         });
-        ($('btnSkip') as HTMLButtonElement).onclick = () => { if (game.skipUpgrade()) { sayKey('skipped'); persist(); afterHistory(); } };
+        ($('btnSkip') as HTMLButtonElement).onclick = () => { if (game.skipPick()) { sayKey('skipped'); persist(); afterHistory(); } };
       }
-      // the run's upgrades, grouped, with what each does on hover (Rules picks are decals on the apron instead)
-      const groups = new Map<string, { o: UpgradeOffer; n: number }>();
-      for (const p of game.picks) {
-        if (UPGRADES[p.id].column === 'rules') continue;
-        const k = `${p.id}:${p.target ?? ''}`;
-        groups.set(k, { o: p, n: (groups.get(k)?.n ?? 0) + 1 });
-      }
-      $('upgradesBox').hidden = groups.size === 0;
-      $('upgradeChips').innerHTML = [...groups.values()].map(({ o, n }) =>
-        `<span class="chip" title="${offerText(o).replace(/"/g, '&quot;')}">${offerTitle(o)}${n > 1 ? ` ×${n}` : ''}</span>`).join('');
     }
+  }
+
+  let bossKey = '';
+  /** The next boss, named on the scoreboard: you see it coming and can build for it. */
+  function renderBoss() {
+    const { round, boss } = game.nextBoss;
+    const now = round === game.round;
+    const key = `${round}|${boss.id}|${now}`;
+    if (key === bossKey) return;
+    bossKey = key;
+    const box = $('bossBox');
+    box.classList.toggle('now', now);
+    box.classList.toggle('final', boss.final);
+    box.innerHTML = `<div class="lbl">${now ? (boss.final ? 'Final boss: this round' : 'Boss: this round') : `${boss.final ? 'Final boss' : 'Next boss'}: round ${round}`}</div><b class="disp">${boss.name}</b><span>${boss.text}</span>`;
+    box.onmouseenter = (e) => { const tip = $('tip'); tip.className = 'card tipcard'; tip.innerHTML = bossCard(boss, round, now); tip.hidden = false; placeTip(e.clientX, e.clientY); };
+    box.onmousemove = (e) => placeTip(e.clientX, e.clientY);
+    box.onmouseleave = () => { $('tip').hidden = true; };
   }
 
   function refreshWorkshop() {
@@ -430,6 +489,7 @@ async function main() {
     if (carry && !game.part(carry.uid)?.placed) carry = null; // the part in hand was stored, sold or undone away
     if (selectedDecal !== null && !game.decals[selectedDecal]) selectedDecal = null;
     renderUpgrades();
+    renderBoss();
     renderShop();
     renderInventory();
     renderSelected();
@@ -668,12 +728,12 @@ async function main() {
   function showTip(cx: number, cy: number) {
     if (shopDrag?.moving || shopDrag?.carry || carry) { $('tip').hidden = true; return; }
     const inst = hover != null && !dragging ? game.part(hover) : undefined;
-    if (inst) { tipPart(PARTS[inst.def], inst, cx, cy, true); return; }
+    if (inst) { tipPart(defFor(inst.def), inst, cx, cy, true); return; }
     const d = hoverDecal !== null && !dragging ? game.decals[hoverDecal] : undefined;
     if (d) {
       const tip = $('tip');
       tip.className = 'card tipcard';
-      tip.innerHTML = decalCard(d.id, game.decalLook(d.id)!.color, game.editable);
+      tip.innerHTML = decalCard(d, game.editable);
       tip.hidden = false;
       placeTip(cx, cy);
       return;
@@ -683,7 +743,7 @@ async function main() {
       return;
     }
     if (hoverDecal !== null && !dragging && game.decals.length < DECAL_SLOTS) {
-      tipPlain('<b>Empty decal slot</b>: win a relic decal from the Rules column of a major upgrade (after every boss) and it sticks here.', cx, cy);
+      tipPlain('<b>Empty decal slot</b>: beat a boss and pick a decal, or buy one in the shop, and it sticks here.', cx, cy);
       return;
     }
     $('tip').hidden = true;
@@ -721,9 +781,6 @@ async function main() {
     }
     if ((e.code === 'Delete' || e.code === 'Backspace') && game.editable) storeSelected();
     if (e.code === 'Escape') { if (shopDrag || carry || armed !== null) cancelHold(); else { selected = null; selectedDecal = null; refreshWorkshop(); } }
-    // 1, 2, 3 switch the machine's theme (a menu comes later)
-    const ti = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code);
-    if (ti >= 0 && THEMES[ti] && THEMES[ti].id !== theme.id) pickTheme(THEMES[ti].id);
   });
   addEventListener('keyup', (e) => keys.delete(e.code));
   addEventListener('blur', () => keys.clear());
@@ -752,12 +809,14 @@ async function main() {
   // ---- buttons -------------------------------------------------------------------------------------------
   function startRound() {
     if (!game.canStart) return;
-    audio.unlock(); game.startRound(); armed = null; selected = null; selectedDecal = null; $('tip').hidden = true; refreshWorkshop(); sayKey('start'); persist();
+    audio.unlock(); game.startRound(); armed = null; selected = null; selectedDecal = null; $('tip').hidden = true; refreshWorkshop(); persist();
+    const boss = game.boss;
+    if (boss) { say(boss.shout); renderer.bigBoiMood('shocked', 2); } else sayKey('start');
   }
   $('btnStart').onclick = startRound;
   $('btnCash').onclick = () => game.cashOut();
   $('btnTest').onclick = () => { audio.unlock(); game.testBall(); sayKey('start'); };
-  $('btnReset').onclick = () => { game.newRun(); armed = selected = null; selectedDecal = null; persist(); refreshWorkshop(); say('NEW RUN. SAME OLD PHYSICS'); };
+  $('btnReset').onclick = () => showThemePicker(); // a new run starts with picking its machine
   $('btnReroll').onclick = () => { if (game.reroll()) { sayKey('reroll'); persist(); } else sayKey('broke'); refreshWorkshop(); };
   const sandbox = $('sandbox') as HTMLInputElement;
   sandbox.checked = game.sandbox;
@@ -833,14 +892,14 @@ async function main() {
   $('labBalls12').onclick = () => { audio.unlock(); game.labBalls(12); };
   $('labClear').onclick = () => { game.clearBoard(); afterHistory(); };
   const labUpgrade = $('labUpgrade') as HTMLSelectElement;
-  labUpgrade.innerHTML = UPGRADE_IDS.map((id) => `<option value="${id}">${COLUMN_NAMES[UPGRADES[id].column]}: ${UPGRADES[id].name}</option>`).join('');
+  labUpgrade.innerHTML = DECAL_IDS.map((id) => `<option value="${id}">${KIND_NAMES[DECALS[id].kind]}: ${DECALS[id].name}</option>`).join('');
   $('labTake').onclick = () => {
-    const id = labUpgrade.value as UpgradeId;
-    if (game.labUpgrade(id)) say(`${UPGRADES[id].name.toUpperCase()} TAKEN. FREE. NOTHING COUNTS`);
-    else say(game.canStick(id) ? 'NOTHING TO AIM THAT AT. OWN A PART FIRST' : 'NO ROOM ON THE APRON. PEEL ONE FIRST');
+    const id = labUpgrade.value as DecalId;
+    if (game.labDecal(id)) say(`${DECALS[id].name.toUpperCase()} STUCK. FREE. NOTHING COUNTS`);
+    else say(game.apronFree ? 'NOTHING TO AIM THAT AT. OWN A PART FIRST' : 'NO ROOM ON THE APRON. PEEL ONE FIRST');
     afterHistory();
   };
-  $('labDrop').onclick = () => { game.labClearUpgrades(); afterHistory(); };
+  $('labDrop').onclick = () => { game.labClearDecals(); afterHistory(); };
   $('labLevelUp').onclick = () => { game.levelAll(1); afterHistory(); };
   $('labLevelDown').onclick = () => { game.levelAll(-1); afterHistory(); };
 
@@ -909,31 +968,42 @@ async function main() {
   };
   const onGame = (g: GameEvent) => {
     if (g.type === 'goal') { audio.goal(); renderer.onBigMoment(); sayKey('goal'); }
-    if (g.type === 'roundWon') { sayKey('roundWon'); showOverlay('won', g.payout); persist(); }
+    if (g.type === 'roundWon') { if (g.runWon) { say('THE FINAL BOSS IS DOWN. YOU WIN. FREE PLAY!'); renderer.bigBoiMood('cool', 30); } else sayKey('roundWon'); showOverlay(g.runWon ? 'champ' : 'won', g.payout); persist(); }
     if (g.type === 'runOver') { sayKey('runOver'); audio.gameOver(); renderer.bigBoiMood('sad', 30); showOverlay('over'); }
     if (g.type === 'ballEnd') lastMultBand = 1;
   };
 
   // overlayEl is declared up top (the keyboard needs it)
-  function showOverlay(kind: 'won' | 'over', payout?: Payout) {
+  function showOverlay(kind: 'won' | 'champ' | 'over', payout?: Payout) {
     overlayEl.hidden = false;
-    overlayEl.classList.toggle('full', kind === 'over');
+    overlayEl.classList.toggle('full', kind !== 'won');
+    if (kind === 'champ' && payout) {
+      // the final boss is down: the run is won. Keep playing (endless, every boss back in the draw) or start again
+      overlayEl.innerHTML = `<div class="card summary champ"><h3>You beat the machine!</h3>
+        <div class="hint">${game.boss?.name ?? 'The final boss'} is down: ${fmt(game.scorer.score)} of ${fmt(game.scorer.goal)}.</div>
+        <div class="roundmap">${mapSvg(FINAL_ROUND + 1)}</div>
+        <div class="stats"><span><b>${FINAL_ROUND}</b><small>rounds cleared</small></span><span><b>${fmt(game.runScore)}</b><small>total points</small></span><span><b>${game.decals.length}</b><small>decals</small></span></div>
+        <div class="btnrow"><button class="primary disp" id="btnEndless">Keep playing (endless)</button><button class="disp" id="btnAgain">New run</button></div></div>`;
+      ($('btnEndless') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; game.continueAfterRound(); sayKey(game.pending ? 'upgrade' : 'workshop'); refreshWorkshop(); persist(); };
+      ($('btnAgain') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; showThemePicker(); };
+      return;
+    }
     if (kind === 'won' && payout) {
       overlayEl.innerHTML = `<div class="card"><h3>Round ${game.round} cleared!</h3>
         <div class="hint">Score ${fmt(game.scorer.score)} vs goal ${fmt(game.scorer.goal)}</div><br/>
         ${payout.lines.map((l) => `<div class="pay"><span>${l.label}</span><span>$${l.amount}</span></div>`).join('')}
         <div class="pay total"><span>Total</span><span>$${payout.total}</span></div><div class="hint">Cash on hand: $${game.money}. Spend it in the shop.</div><br/>
-        <button class="primary disp" id="btnNext">${game.round % BOSS_EVERY === 0 ? 'Choose an upgrade' : 'To the workshop'}</button></div>`;
+        <button class="primary disp" id="btnNext">${game.round % BOSS_EVERY === 0 ? 'Pick a decal' : 'To the workshop'}</button></div>`;
       ($('btnNext') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; game.continueAfterRound(); sayKey(game.pending ? 'upgrade' : 'workshop'); refreshWorkshop(); persist(); };
     } else {
       // the run in one card: how far along the map you got, your points, what your machine became
-      const boss = game.round % BOSS_EVERY === 0;
+      const boss = game.boss;
       overlayEl.innerHTML = `<div class="card summary"><h3>Run over</h3>
-        <div class="hint">${fmt(game.scorer.score)} of ${fmt(game.scorer.goal)} on round ${game.round}${boss ? ', a boss round' : ''}.</div>
+        <div class="hint">${fmt(game.scorer.score)} of ${fmt(game.scorer.goal)} on round ${game.round}${boss ? `, against ${boss.name}` : ''}.</div>
         <div class="roundmap">${mapSvg(game.round)}</div>
         <div class="stats"><span><b>${game.round - 1}</b><small>rounds cleared</small></span><span><b>${fmt(game.runScore)}</b><small>total points</small></span><span><b>${game.placed.length}</b><small>parts on the table</small></span></div>
         <button class="primary disp" id="btnAgain">New run</button></div>`;
-      ($('btnAgain') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; game.newRun(); persist(); sayKey('workshop'); refreshWorkshop(); };
+      ($('btnAgain') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; showThemePicker(); };
     }
   }
 

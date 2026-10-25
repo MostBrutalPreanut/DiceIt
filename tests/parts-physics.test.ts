@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makePart, type PartInstance } from '../src/data/parts';
+import { Scorer } from '../src/game/scoring';
 import type { Layout } from '../src/sim/layout';
 import { Bot } from '../src/sim/bot';
 import { SAVER_WINDOW } from '../src/sim/constants';
@@ -36,11 +37,13 @@ describe('each part type does its job in the physics', () => {
     void sim;
   });
 
-  it('a deflector bounces the ball without scoring', () => {
+  it('a deflector bounces the ball and reports the bounce (for its bank shot), but scores nothing', () => {
     const d = makePart('deflector', 1, 12, 30, true);
     d.angle = Math.PI / 4;
     const { events, sim } = drop(layoutOf(d), 12, 34, 0, -10, 1);
-    expect(hitsOf(events, 1)).toHaveLength(0);
+    expect(hitsOf(events, 1).length).toBeGreaterThan(0);
+    const s = new Scorer(1e9, () => [d]);
+    expect(hitsOf(events, 1).flatMap((e) => s.consume(e))).toEqual([]);
     expect(Math.abs(sim.ballStates()[0].x - 12)).toBeGreaterThan(1); // it was steered sideways
   });
 

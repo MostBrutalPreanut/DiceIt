@@ -1,4 +1,5 @@
-import type { Mods } from '../data/mods';
+import { neutralMods, type Mods } from '../data/mods';
+import type { MachineId } from '../data/bigboi';
 import { PARTS, footprint, type PartId, type PartInstance } from '../data/parts';
 import { Bot } from '../sim/bot';
 import { BUILD_AREA } from '../sim/constants';
@@ -18,6 +19,8 @@ export type Levels = Partial<Record<PartId, number>>;
 export interface Machine {
   layout: Layout;
   mods: Mods;
+  /** The machine (what its Big Boi does); the Factory if absent. */
+  machine?: MachineId;
   levels: Levels;
 }
 
@@ -48,7 +51,8 @@ export function playRounds(m: Machine, o: PlayOptions): RoundSample[] {
   for (let i = 0; i < o.rounds; i++) {
     const g = new Game();
     g.layout = cloneLayout(m.layout);
-    g.mods = m.mods;
+    g.fixedMods = { ...neutralMods(), ...m.mods };
+    if (m.machine) g.machine = m.machine;
     g.levels = { ...m.levels };
     g.goalOverride = Infinity;
     g.seed = o.seed * 1000 + i * 7 + 1;

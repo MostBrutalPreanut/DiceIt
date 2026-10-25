@@ -47,11 +47,11 @@ describe('Mult, dials, money', () => {
     const { s } = setup([makePart('mega', 10, 10, 30, true)]);
     const mega = s.consume(hit(10))[0];
     expect(mega.base).toBe(250);
-    expect(mega.multAfter).toBeCloseTo(1.1);
+    expect(mega.multAfter).toBeCloseTo(1.15);
     const pop = s.consume(hit(1))[0];
     expect(pop.base).toBe(100);
-    expect(pop.points).toBe(110); // 100 x 1.1
-    expect(pop.multBefore).toBeCloseTo(1.1);
+    expect(pop.points).toBe(115); // 100 x 1.15
+    expect(pop.multBefore).toBeCloseTo(1.15);
   });
 
   it('Kick trades against payout: 0 pays +50%, 4 pays -50%', () => {
@@ -232,13 +232,14 @@ describe('levels, Level Lights and drop-target banks', () => {
 });
 
 describe('Kickback and Ball Saver', () => {
-  it('a kick pays 150 times Mult and explains itself; the saver scores nothing', () => {
+  it('a kick pays 150 times Mult and explains itself; the saver scores nothing but tips $1 when it saves', () => {
     const { s, parts } = setup([makePart('kickback', 10, 10, 30, true), makePart('saver', 11, 14, 30, true)]);
     const kick = s.consume(hit(10, { kicked: true }))[0];
     expect(kick.base).toBe(150);
     expect(kick.notes).toEqual(['150 base']);
     expect(s.label(parts.find((p) => p.uid === 10)!)).toBe('150');
-    expect(s.consume({ type: 'ballSaved', t: 0, uid: 11, ballId: 2 })).toEqual([]);
+    const saved = s.consume({ type: 'ballSaved', t: 0, uid: 11, ballId: 2 });
+    expect(saved.map((e) => [e.points, e.money])).toEqual([[0, 1]]);
     expect(s.label(parts.find((p) => p.uid === 11)!)).toBeNull();
   });
 });

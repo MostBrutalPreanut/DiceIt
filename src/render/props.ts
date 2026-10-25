@@ -249,6 +249,116 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       }
       break;
     }
+    case 'ding': {
+      // a brass bell on a bumper skirt: it rings louder the more of the table the ball has seen
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      const bell = st.hit ? mat(t, mix(t.role.ding, WHITE, 0.4)) : role;
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      p.cyl(x, y, r * 0.55, 0.16, 0.3, metal);
+      const pts = [0, 0.25, 0.5, 0.75, 1].flatMap((u) => ring(x, y, r * (0.92 - 0.5 * u * u), 26).map(([a, b]) => P(v, a, b, 0.46 + u * 1.0)));
+      p.face(hull(pts), bell.base);
+      p.face(ring(x, y, r * 0.92, 26).map(([a, b]) => P(v, a, b, 0.46)), bell.shade, { sil: false, line: 0.4 });
+      p.face(ring(x - r * 0.2, y + r * 0.1, r * 0.18, 14).map(([a, b]) => P(v, a, b, 1.2)), bell.light, { sil: false, line: 0 });
+      p.cyl(x, y, 0.14, 1.46, 0.22, metal);
+      break;
+    }
+    case 'thunder': case 'golden': {
+      // the big bumpers: a thunder cloud with a bolt, or solid gold with a star
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05, 0.24);
+      const c = t.role[id];
+      const cap = st.hit ? mat(t, mix(c, WHITE, 0.45)) : role;
+      p.cyl(x, y, r, 0, 0.2, mat(t, id === 'golden' ? mix(c, t.shadeTint, 0.3) : t.paper));
+      p.cyl(x, y, r * 0.66, 0.2, 0.55, id === 'golden' ? mat(t, mix(c, WHITE, 0.2)) : metal);
+      const top = p.cyl(x, y, r * 0.9, 0.75, 0.3, cap);
+      void top;
+      if (id === 'thunder') {
+        const bolt: Pt[] = [[-0.25, 0.75], [0.3, 0.75], [0.02, 0.12], [0.4, 0.12], [-0.3, -0.85], [-0.05, -0.12], [-0.42, -0.12]];
+        p.face(bolt.map(([a, b]) => P(v, x + a * r * 0.7, y + b * r * 0.7, 1.06)), t.role.coin, { sil: false, line: 0.5 });
+      } else {
+        p.face(star(x, y, r * 0.62, r * 0.28, 5, Math.PI / 2).map(([a, b]) => P(v, a, b, 1.06)), WHITE, { sil: false, line: 0.5 });
+      }
+      break;
+    }
+    case 'piggy': {
+      // a piggy bank standing on its plate: the coin slot fills as it holds more
+      const c = Math.cos(angle), s = Math.sin(angle), hw = 1.1, hh = 0.55;
+      shadowPoly(under, v, t, box(x, y, hw + 0.1, hh + 0.1, angle, hh));
+      const pink = st.hit ? mat(t, mix(t.role.piggy, WHITE, 0.4)) : mat(t, t.role.piggy);
+      p.prism(box(x, y, hw, hh, angle, 0.12), 0, 0.1, metal);
+      p.prism(box(x, y, hw * 0.85, hh * 0.85, angle, hh * 0.8), 0.1, 0.95, pink);
+      for (const k of [-0.45, 0.45]) p.prism(box(x + k * c - 0.15 * s, y + k * s + 0.15 * c, 0.18, 0.12, angle), 1.05, 0.28, pink);
+      p.cyl(x + hw * 0.85 * c, y + hw * 0.85 * s, 0.26, 0.45, 0.3, mat(t, mix(t.role.piggy, t.shadeTint, 0.2)));
+      const full = Math.min(1, (st.seg ?? 0) / 6);
+      p.face(box(x, y, 0.36, 0.06, angle).map(([a, b]) => P(v, a, b, 1.06)), full > 0 ? t.role.coin : t.ink, { sil: false, line: 0.3 });
+      if (full > 0) p.op((g) => { const [X, Y] = P(v, x, y, 1.15 + full * 0.25); g.circle(X, Y, v.S * 0.16).fill(t.role.coin).stroke({ width: v.lw * 0.4, color: t.ink }); });
+      break;
+    }
+    case 'magnet': {
+      // a horseshoe magnet on a floor plate, aimed where it throws
+      const c = Math.cos(angle), s = Math.sin(angle);
+      aimArrow(p, v, t, x, y, angle, r + 0.2, t.role.magnet);
+      p.face(ring(x, y, r, 28).map(([a, b]) => P(v, a, b, 0.01)), metal.mid, { line: 0.4 });
+      p.face(ring(x, y, r * 0.78, 28).map(([a, b]) => P(v, a, b, 0.02)), st.busy ? mix(t.role.magnet, WHITE, 0.5) : mix(t.role.magnet, t.shadeTint, 0.55), { line: 0.3, sil: false });
+      const red = mat(t, t.role.magnet);
+      const pt = (lx: number, ly: number): Pt => [x + lx * c - ly * s, y + lx * s + ly * c];
+      for (const side of [-1, 1]) {
+        const [ax, ay] = pt(side * 0.42, 0.05);
+        p.prism(box(ax, ay, 0.17, 0.42, angle), 0.02, 0.6, red);
+        const [tx, ty] = pt(side * 0.42, 0.55);
+        p.prism(box(tx, ty, 0.17, 0.12, angle), 0.02, 0.6, metal);
+      }
+      const [bx, by] = pt(0, -0.42);
+      p.prism(box(bx, by, 0.59, 0.17, angle), 0.02, 0.6, red);
+      break;
+    }
+    case 'jackpot': {
+      // a scoop: a dark hole in a gold ring, the pot's arrow, and a crown on the back wall
+      aimArrow(p, v, t, x, y, angle, r + 0.25, t.role.jackpot);
+      shadow(under, v, t, x, y, r, r);
+      p.cyl(x, y, r, 0, 0.32, mat(t, t.role.jackpot));
+      p.face(ring(x, y, r * 0.72, 26).map(([a, b]) => P(v, a, b, 0.33)), st.busy ? mix(t.role.jackpot, WHITE, 0.6) : t.ink, { sil: false, line: 0.4 });
+      p.face(ring(x, y, r * 0.86, 26).map(([a, b]) => P(v, a, b, 0.33)), null, { sil: false, line: 0.3 });
+      const back = -Math.sin(angle) * -1, backy = -Math.cos(angle);
+      const crown: Pt[] = [[-0.55, 0], [-0.55, 0.45], [-0.28, 0.2], [0, 0.55], [0.28, 0.2], [0.55, 0.45], [0.55, 0]];
+      const [CX, CY] = P(v, x + back * r * 0.95, y + backy * r * 0.95, 0.35);
+      p.op((g) => {
+        g.poly(crown.flatMap(([a, b]) => [CX + a * v.S, CY - b * v.S * 1.1])).fill(t.role.coin).stroke({ width: v.lw * 0.5, color: t.ink, join: 'round' });
+      });
+      break;
+    }
+    case 'xlane': {
+      // a big rollover insert with an X on it: lit while it is ready to multiply
+      const lit = !!st.lit, c = t.role.xlane;
+      p.face(ring(x, y, r, 30).map(([a, b]) => P(v, a, b, 0.01)), metal.mid, { line: 0.4 });
+      p.face(ring(x, y, r * 0.82, 30).map(([a, b]) => P(v, a, b, 0.02)), lit ? mix(c, WHITE, 0.3) : mix(c, t.shadeTint, 0.6), { line: 0.4, sil: false });
+      for (const s2 of [-1, 1]) p.cyl(x + s2 * r * 1.0, y, 0.17, 0, 0.55, metal);
+      p.draw(body);
+      const [LX, LY] = P(v, x, y, 0.02);
+      const L = label('×', S * 1.6, lit ? t.ink : mix(c, t.shadeTint, 0.9), lit ? { stroke: t.paper, strokeW: v.lw * 0.9 } : {});
+      L.position.set(LX, LY);
+      L.scale.y = Math.max(0.6, v.k);
+      out.addChild(L);
+      return out;
+    }
+    case 'disco': {
+      // a mirror ball on a post over a floor insert: it sparkles until it has fired this ball
+      const lit = st.lit !== false, c = t.role.disco;
+      p.face(ring(x, y, r, 30).map(([a, b]) => P(v, a, b, 0.01)), lit ? mix(t.accent, WHITE, 0.3) : mix(t.accent, t.shadeTint, 0.6), { line: 0.4 });
+      p.cyl(x, y, 0.12, 0.01, 1.2, metal);
+      const [BX, BY] = P(v, x, y, 2.0), R2 = r * 0.7 * S;
+      p.silhouette(ringS(BX, BY, R2, 28));
+      p.op((g) => {
+        g.circle(BX, BY, R2).fill(lit ? c : mix(c, t.shadeTint, 0.5));
+        for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) {
+          const fx = BX + (i * R2) / 3.6, fy = BY + (j * R2) / 3.6;
+          if (Math.hypot(fx - BX, fy - BY) > R2 * 0.86) continue;
+          if ((i + j) % 2 === 0) g.rect(fx - R2 * 0.1, fy - R2 * 0.1, R2 * 0.2, R2 * 0.2).fill(lit ? WHITE : mix(c, t.shadeTint, 0.3));
+        }
+        g.circle(BX, BY, R2).stroke({ width: v.lw * 0.5, color: t.ink });
+        g.circle(BX - R2 * 0.35, BY - R2 * 0.35, R2 * 0.16).fill(WHITE);
+      });
+      break;
+    }
     case 'flipper': {
       // the extra flipper itself is drawn live from the sim; the part shows its mounting plate
       p.cyl(x, y, 0.55, 0, 0.08, metal);

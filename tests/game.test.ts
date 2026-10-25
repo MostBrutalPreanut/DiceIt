@@ -39,7 +39,7 @@ describe('shop, inventory and money', () => {
   it('places an inventory part on the board, refuses overlaps and walls, and can store it again', () => {
     const g = new Game();
     g.sandbox = true;
-    g.shop.offers = ['coin', 'lane', 'pop', 'mega'];
+    g.shop.offers = ['coin', 'lane', 'pop', 'lamp'];
     const coin = g.buy(0)!;
     expect(g.place(coin.uid, 17, 44.5)).toBe(false); // on top of a pop bumper
     expect(g.place(coin.uid, 1, 30)).toBe(false); // in the wall
@@ -107,7 +107,7 @@ describe('shop, inventory and money', () => {
   it('survives a save and load, inventory included', () => {
     const g = new Game();
     g.money = 9;
-    g.shop.offers = ['coin', 'lane', 'pop', 'mega'];
+    g.shop.offers = ['coin', 'lane', 'pop', 'lamp'];
     g.buy(0);
     const copy = new Game();
     copy.load(JSON.parse(JSON.stringify(g.save())));

@@ -6,7 +6,7 @@ import {
   LANE_WALL_X, MAX_BALL_SPEED, MAX_BALLS, NUDGE_SPEED, NUDGE_TILT, PLUNGE_CHARGE_TIME, PLUNGE_DRIFT,
   PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, SAVER_WINDOW, SUBSTEPS, TABLE_H, TABLE_W, TILT_DECAY, WALL_RESTITUTION,
 } from './constants';
-import { neutralMods, type SimMods } from '../data/mods';
+import { neutralMods, simModsOf, type SimMods } from '../data/mods';
 import { cloneLayout, type Layout } from './layout';
 import { Rng } from './rng';
 import { FLIPPER_PIVOTS, TABLE_POSTS, tableSegments } from './table';
@@ -93,6 +93,8 @@ interface PartRef {
   bank?: BankState;
   /** Kickbacks only: ready to fire. Re-armed with every new ball. */
   armed?: boolean;
+  /** Kickbacks only: shots left this ball (Free Kick gives two). */
+  charges?: number;
 }
 
 /** The three drop targets of a bank, as offsets along the part's long axis. */
@@ -112,10 +114,7 @@ export interface SimOptions {
   ballClock?: number;
 }
 
-const simMods = (m?: Partial<SimMods>): SimMods => {
-  const n = neutralMods();
-  return { ballBounce: n.ballBounce, ballGravity: n.ballGravity, nudge: n.nudge, spinBoost: n.spinBoost, twin: n.twin, printerExtra: n.printerExtra, ...m };
-};
+const simMods = (m?: Partial<SimMods>): SimMods => ({ ...simModsOf(neutralMods()), ...m });
 
 const V = (x: number, y: number) => new B.b2Vec2(x, y);
 
@@ -154,6 +153,8 @@ export class Sim {
   private sideOn = { L: false, R: false };
   /** Ball Savers already spent on the current ball. */
   private saversUsed = new Set<number>();
+  /** Safety Net saves (no part needed) already spent on the current ball. */
+  private netsUsed = 0;
 
   constructor(layout: Layout, opts: SimOptions = {}) {
     this.dt = opts.dt ?? DT;
@@ -203,6 +204,7 @@ export class Sim {
     this.rescues = 0;
     this.sideOn = { L: false, R: false };
     this.saversUsed.clear();
+    this.netsUsed = 0;
     this.clockStart = null;
     this.printed = 0;
     this.buildTable(layout.ledge);
@@ -326,7 +328,8 @@ export class Sim {
     sd.userData = { kind: 'part', uid: inst.uid };
     if (def.shape.type === 'circle') B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), def.shape.r));
     else B.b2CreatePolygonShape(body, sd, B.b2MakeBox(def.shape.hw, def.shape.hh));
-    this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body, armed: def.kind === 'kickback' ? true : undefined });
+    const kb = def.kind === 'kickback';
+    this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body, armed: kb ? true : undefined, charges: kb ? this.mods.kickbackCharges : undefined });
   }
 
   /** (Re)create the physical targets of a bank, all standing. */
@@ -401,7 +404,8 @@ export class Sim {
   /** A new ball: every Kickback is armed again and every Ball Saver is ready. */
   rearm() {
     this.saversUsed.clear();
-    for (const p of this.parts.values()) if (p.armed === false) p.armed = true;
+    this.netsUsed = 0;
+    for (const p of this.parts.values()) if (p.armed !== undefined) { p.armed = true; p.charges = this.mods.kickbackCharges; }
   }
 
   /** Test hook / multiball: drop a ball anywhere with a velocity. */
@@ -495,7 +499,8 @@ export class Sim {
 
     // flippers: every flipper follows the button of its side
     for (const side of ['L', 'R'] as const) {
-      const want = (side === 'L' ? input.left : input.right) && !this.tilted;
+      const button = this.mods.swapFlippers ? (side === 'L' ? input.right : input.left) : side === 'L' ? input.left : input.right;
+      const want = button && !this.tilted;
       if (want !== this.sideOn[side]) {
         this.sideOn[side] = want;
         this.events.push({ type: 'flipper', t, side, on: want });
@@ -521,7 +526,7 @@ export class Sim {
           // like Space Cadet's plunger: the shot is never exactly the charge you gave it
           const boosted = power * (1 + this.rng.range(0, PLUNGE_NOISE));
           B.b2Body_SetLinearVelocity(ball.body, V(this.rng.range(-PLUNGE_DRIFT, PLUNGE_DRIFT), boosted));
-          ball.saveUntil = this.armedSaver() ? t + SAVER_WINDOW : 0;
+          ball.saveUntil = this.armedSaver() || this.netsUsed < this.mods.extraSaves ? t + SAVER_WINDOW : 0;
           if (this.clockStart === null) this.clockStart = t;
           this.events.push({ type: 'launch', t, ballId: ball.id, power });
           this.awaitingPlunge = false;
@@ -561,6 +566,20 @@ export class Sim {
 
     for (const p of this.parts.values()) if (p.bank?.resetAt != null && this.tick >= p.bank.resetAt) this.resetBank(p);
 
+    // a boss's magnet tugs every free ball towards it, harder the closer it is
+    const mg = this.mods.magnet;
+    if (mg) {
+      for (const b of this.balls) {
+        if (b.held) continue;
+        const p = B.b2Body_GetPosition(b.body);
+        if (p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y) continue; // not in the plunger lane
+        const dx = mg.x - p.x, dy = mg.y - p.y, d = Math.hypot(dx, dy);
+        if (d > mg.radius || d < 0.5) continue;
+        const a = mg.strength * (1 - d / mg.radius) * this.dt;
+        const v = B.b2Body_GetLinearVelocity(b.body);
+        B.b2Body_SetLinearVelocity(b.body, V(v.x + (dx / d) * a, v.y + (dy / d) * a));
+      }
+    }
     for (const b of this.balls) {
       const v = B.b2Body_GetLinearVelocity(b.body);
       b.preSpeed = Math.hypot(v.x, v.y);
@@ -593,7 +612,7 @@ export class Sim {
     this.events.push({ type: 'partRelease', t: this.time, uid: pr.inst.uid, ballId: b.id });
 
     const def = PARTS[pr.inst.def];
-    for (let k = 0; k < (def.recipe.spawn ?? 0) + this.mods.printerExtra && this.balls.length < MAX_BALLS && this.printed < (def.recipe.printCap ?? Infinity); k++) {
+    for (let k = 0; def.recipe.spawn && k < def.recipe.spawn + this.mods.printerExtra && this.balls.length < MAX_BALLS && this.printed < (def.recipe.printCap ?? Infinity); k++) {
       this.printed++;
       const a2 = pr.inst.angle + this.rng.range(0.3, 0.6) * (this.rng.next() < 0.5 ? -1 : 1);
       const id = this.addBall(pr.inst.x, pr.inst.y, -Math.sin(a2) * s * 0.9, Math.cos(a2) * s * 0.9);
@@ -633,8 +652,8 @@ export class Sim {
         }
         continue;
       }
-      if (def.kind === 'target') {
-        // a passive standup: it just bounces the ball, and reports how hard it was hit
+      if (def.kind === 'target' || def.kind === 'deflector') {
+        // a passive standup (or a deflector bar): it just bounces the ball, and reports how hard it was hit
         this.events.push({ type: 'partHit', t: this.time, uid: pr.inst.uid, ballId: br.id, x: pr.inst.x, y: pr.inst.y, speed: br.preSpeed });
         continue;
       }
@@ -642,7 +661,7 @@ export class Sim {
 
       const bp = B.b2Body_GetPosition(br.body);
       const v = B.b2Body_GetLinearVelocity(br.body);
-      const kickSpeed = dialValue(pr.inst, 'kick') * def.kickUnit;
+      const kickSpeed = dialValue(pr.inst, 'kick') * def.kickUnit * this.mods.kickFactor;
       let nx: number, ny: number;
       if (def.shape.type === 'circle') {
         const dx = bp.x - pr.inst.x, dy = bp.y - pr.inst.y;
@@ -698,7 +717,8 @@ export class Sim {
       } else if (def.kind === 'kickback') {
         if (!pr.armed) continue;
         // like the saucer's throw: never exactly the same shot twice
-        pr.armed = false;
+        pr.charges = (pr.charges ?? 1) - 1;
+        pr.armed = pr.charges > 0;
         const a = pr.inst.angle + this.rng.range(-0.08, 0.08);
         const s = dialValue(pr.inst, 'power') * (1 + this.rng.range(-0.05, 0.05));
         B.b2Body_SetLinearVelocity(br.body, V(-Math.sin(a) * s, Math.cos(a) * s));
@@ -769,15 +789,16 @@ export class Sim {
   private trySave(b: BallRef): boolean {
     if (this.tilted || b.saveUntil < this.time) return false;
     const saver = this.armedSaver();
-    if (!saver) return false;
-    this.saversUsed.add(saver.inst.uid);
+    if (!saver && this.netsUsed >= this.mods.extraSaves) return false;
+    if (saver) this.saversUsed.add(saver.inst.uid);
+    else this.netsUsed++;
     B.b2DestroyBody(b.body);
     this.balls = this.balls.filter((x) => x !== b);
     const id = this.addBall(BALL_SPAWN.x, BALL_SPAWN.y, 0, 0);
     this.awaitingPlunge = true;
     this.plungeCharge = 0;
     this.plungeWasHeld = true; // require a fresh press
-    this.events.push({ type: 'ballSaved', t: this.time, uid: saver.inst.uid, ballId: id });
+    this.events.push({ type: 'ballSaved', t: this.time, uid: saver?.inst.uid ?? -1, ballId: id });
     return true;
   }
 

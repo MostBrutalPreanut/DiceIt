@@ -268,7 +268,7 @@ export class Renderer {
 
   /** The machine's fixed layers at the current tip, kept for the tips we visit most. */
   private updateStatic(game: Game) {
-    const decals: (StuckDecal | null)[] = [0, 1, 2, 3].map((i) => {
+    const decals: (StuckDecal | null)[] = DECAL_SLOT_POS.map((_, i) => {
       const p = game.decals[i];
       return p ? { look: game.decalLook(p.id)!, rarity: game.decalRarity(p.id) } : null;
     });
@@ -394,7 +394,11 @@ export class Renderer {
     const pulse = this.pulses.get(p.uid) ?? 0;
     switch (p.def) {
       case 'mega': return { hit: pulse > 0.35, follow: true, mood: this.moodFor(game, pulse) };
-      case 'pop': case 'coin': case 'sling': return { hit: pulse > 0.35 };
+      case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': return { hit: pulse > 0.35 };
+      case 'piggy': return { hit: pulse > 0.35, seg: game.scorer.piggies.get(p.uid) ?? 0 };
+      case 'xlane': return { lit: !tilted && !game.mods.lightsOut && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'disco': return { lit: !tilted && !game.mods.lightsOut && game.scorer.label(p) !== null && !this.discoFired(game, p.uid) };
+      case 'magnet': case 'jackpot': return { busy: heldNear(p.x, p.y) };
       case 'lane': return { lit, letter: lanes.get(p.uid) };
       case 'uplight': return { lit, target: LEVEL_TARGETS[Math.round(dialValue(p, 'target'))] ?? 'pop' };
       case 'lamp': return { lit };
@@ -406,6 +410,11 @@ export class Renderer {
       case 'printer': return { busy: heldNear(p.x, p.y) };
       default: return {};
     }
+  }
+
+  /** A Disco Ball that has already fired this ball (its ledger row has a hit since the ball started) goes dark. */
+  private discoFired(game: Game, uid: number) {
+    return game.scorer.firedOf(uid) > 0;
   }
 
   private drawParts(game: Game, dt: number, st: DrawState) {
@@ -448,7 +457,15 @@ export class Renderer {
         if (p.def === 'uplight' && ps.lit) this.glow(p.x, p.y, r * 2.3, t.role[ps.target ?? 'pop'], 0.7);
         if (p.def === 'kickback' && ps.armed) this.glow(p.x, p.y, r * 1.7, t.role.kickback, 0.45);
         if (p.def === 'saver' && ps.armed) this.glow(p.x, p.y, r * 2, t.role.saver, 0.55);
+        if ((p.def === 'xlane' || p.def === 'disco') && ps.lit) this.glow(p.x, p.y, r * 2, t.role[p.def], 0.6);
+        if (p.def === 'golden') this.glow(p.x, p.y, r * 1.8, t.role.golden, 0.35);
+        // the Cook's order: every part of the ordered type glows
+        if (game.scorer.order === p.def) {
+          this.glow(p.x, p.y, r * 2.2, t.accent, 0.55 + 0.25 * Math.sin(this.time * 6));
+          dashedRing(fx, v, p.x, p.y, r + 0.45, t.accent, v.lw * 1.3, t.ink);
+        }
       }
+      if (p.def === 'mega' && game.scorer.bigBoi === 'dragon') this.drawArmour(p, game.scorer.armour, game.scorer.slays);
       if (p.def === 'saver') {
         const s = savers.get(p.uid);
         const left = s ? (s.armed ? s.left : 0) : 0;
@@ -479,8 +496,9 @@ export class Renderer {
       }
       pv.sprite.position.set(X + jx, Y + jy);
       pv.sprite.zIndex = -p.y * 100;
-      pv.sprite.alpha = 1;
-      pv.sprite.tint = 0xffffff;
+      const jammed = game.scorer.jammed.has(p.def);
+      pv.sprite.alpha = jammed ? 0.45 : 1;
+      pv.sprite.tint = jammed ? num(mix(t.shadeTint, '#ffffff', 0.4)) : 0xffffff;
       // a hit squashes a bumper for a moment (presentation only)
       const sq = def.kind === 'bumper' && p.def !== 'mega' ? pulse * 0.12 : 0;
       pv.sprite.scale.set(1 + sq, 1 - sq);
@@ -526,6 +544,17 @@ export class Renderer {
     } else {
       const pv = this.parts.get(-1);
       if (pv) { pv.sprite.destroy(); this.parts.delete(-1); }
+    }
+  }
+
+  /** The Dragon's armour: a ring of shield plates round him, one per plate left. */
+  private drawArmour(p: PartInstance, armour: number, slays: number) {
+    const v = this.view, t = this.theme, r = footprint(PARTS.mega) + 0.55, n = armour;
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI / 2 + ((i - (n - 1) / 2) * Math.PI * 1.6) / Math.max(6, n);
+      const [X, Y] = P(v, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 0.3);
+      const w = v.S * 0.36;
+      this.topG.poly([X - w, Y - w * 0.8, X + w, Y - w * 0.8, X + w, Y + w * 0.1, X, Y + w, X - w, Y + w * 0.1]).fill(slays > 0 ? t.role.coin : t.metal).stroke({ width: v.lw * 0.7, color: t.ink, join: 'round' });
     }
   }
 
@@ -588,8 +617,8 @@ export class Renderer {
       tag.g.roundRect(-w / 2, -h / 2, w, h, h / 2).fill(t.paper).stroke({ width: v.lw * 0.7, color: t.ink });
     }
     tag.c.visible = true;
-    const floorTag = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'target' || def.kind === 'bank';
-    const z = p.def === 'mega' ? 2.05 : p.def === 'printer' ? 1.75 : p.def === 'pop' && t.popMotif === 'cone' ? 1.6 : 0.95;
+    const floorTag = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'target' || def.kind === 'bank' || p.def === 'magnet' || p.def === 'jackpot';
+    const z = p.def === 'mega' ? 2.05 : p.def === 'printer' ? 1.75 : p.def === 'pop' && t.popMotif === 'cone' ? 1.6 : p.def === 'ding' ? 1.7 : p.def === 'thunder' || p.def === 'golden' ? 1.2 : 0.95;
     const [X, Y] = floorTag ? P(v, p.x, p.y - footprint(def) - 0.75, 0) : P(v, p.x, p.y, z);
     tag.c.position.set(X, Y);
   }
@@ -695,7 +724,7 @@ export class Renderer {
       if (id === 'ball') { const g = new Graphics(); drawBall(g, vv, t, 0, 0, BALL_WEAR.plain); const c = new Container(); c.addChild(g); return c; }
       if (id === 'button') return drawButton(vv, t);
       if (id === 'flipper') { const g = new Graphics(); drawFlipper(g, vv, t, 0, 0, -0.49, 1); const c = new Container(); c.addChild(g); return c; }
-      const a = id === 'sling' ? -0.55 : id === 'spinner' ? 0.3 : id === 'deflector' ? 0.4 : id === 'bank' ? 0.15 : id === 'vari' ? 0.2 : id === 'kickback' ? -0.5 : id === 'printer' ? 0.3 : 0;
+      const a = id === 'sling' ? -0.55 : id === 'spinner' ? 0.3 : id === 'deflector' ? 0.4 : id === 'bank' ? 0.15 : id === 'vari' ? 0.2 : id === 'kickback' ? -0.5 : id === 'printer' ? 0.3 : id === 'piggy' ? 0.25 : id === 'magnet' || id === 'jackpot' ? 0.3 : 0;
       return drawPart(vv, t, id, 0, 0, a, { lit: true, letter: t.laneWord[0], target: 'pop', down: [false, false, true], armed: true, seg: 2, ...(opts.st ?? {}) });
     };
     const probe = make(10);

@@ -4,8 +4,8 @@ import { neutralMods } from '../src/data/mods';
 import { PARTS, type PartId } from '../src/data/parts';
 import type { RoundSample } from '../src/game/autobuild';
 import { Game, goalFor, niceGoal, payoutFor } from '../src/game/game';
-import { clearBall, failRate, fitLogQuadratic, goalCandidate, parPick, parShop, PART_CAP, PART_VALUE, quantile, runPar, UPGRADE_PRIORITY } from '../tools/par';
-import { UPGRADE_IDS } from '../src/data/upgrades';
+import { clearBall, failRate, fitLogQuadratic, goalCandidate, parPick, parShop, PART_CAP, PART_VALUE, quantile, runPar, DECAL_PRIORITY } from '../tools/par';
+import { DECAL_IDS } from '../src/data/decals';
 
 const round = (total: number): RoundSample => ({ cumulative: [total / 3, (total * 2) / 3, total], coins: [0, 0, 0], seconds: 100, searches: 0, points: {} });
 
@@ -96,37 +96,39 @@ describe('the payout formula the tool shares with the game', () => {
     expect(p.total).toBe(15);
     expect(lines({ ballsLeft: 0, score: 2000, coins: 0 }).total).toBe(6);
     const rich = lines({ mods: { ...neutralMods(), roundBonus: 3, interestPer: 1, interestCap: 5 } });
-    expect(rich.total).toBe(15 + 3 + 3); // sponsor, and $12 held is $3 of interest
+    expect(rich.total).toBe(15 + 3 + 2); // sponsor, and $12 held is $2 of interest ($1 per $5)
+    expect(lines({ boss: true }).total).toBe(15 + 2); // beating a boss pays $2 more
   });
 });
 
 describe('the par player', () => {
-  it('has a value and a cap for every part, and a priority for every upgrade', () => {
+  it('has a value and a cap for every part, and a priority for every decal that is not about the build', () => {
     for (const id of Object.keys(PARTS) as PartId[]) {
       expect(PART_VALUE[id]).toBeGreaterThanOrEqual(0);
       expect(PART_CAP[id]).toBeGreaterThanOrEqual(0);
     }
-    expect([...UPGRADE_PRIORITY].sort()).toEqual([...UPGRADE_IDS].sort());
+    for (const id of DECAL_PRIORITY) expect(DECAL_IDS).toContain(id);
+    expect(new Set(DECAL_PRIORITY).size).toBe(DECAL_PRIORITY.length);
   });
 
   it('shops by value per dollar within its cash and caps, never buys what it does not want, and rerolls a bare shelf', () => {
     const g = new Game();
     g.money = 20;
-    g.shop.offers = ['uplight', 'mega', 'pop', 'deflector'];
+    g.shop.offers = ['uplight', 'coin', 'pop', 'deflector'];
     const start = g.money;
     const { bought, rerolls } = parShop(g);
     const ids = bought.map((b) => b.id);
-    expect(ids.slice(0, 3)).toEqual(['pop', 'mega', 'deflector']); // value per dollar: pop 1.33, mega 0.83, deflector 0.5
+    expect(ids.slice(0, 3)).toEqual(['pop', 'coin', 'deflector']); // value per dollar: pop 1.33, coin 0.63, deflector 0.5
     expect(ids).not.toContain('uplight'); // par never buys Level Lights
     expect(g.money).toBeGreaterThanOrEqual(0);
     const rerollCost = [0, 1, 3][rerolls]; // $1, then $2
     expect(start - g.money).toBe(bought.reduce((a, b) => a + b.price, 0) + rerollCost);
     const have: Partial<Record<PartId, number>> = {};
     for (const p of g.layout.parts) have[p.def] = (have[p.def] ?? 0) + 1;
-    for (const id of Object.keys(have) as PartId[]) expect(have[id]).toBeLessThanOrEqual(PART_CAP[id]);
+    for (const id of Object.keys(have) as PartId[]) if (id !== 'mega') expect(have[id]).toBeLessThanOrEqual(PART_CAP[id]); // Big Boi comes with the machine
   });
 
-  it('takes the offered upgrade that ranks highest in its priority list', () => {
+  it('takes the offered decal that ranks highest in its priority list', () => {
     const g = new Game();
     g.pending = [{ id: 'coupon' }, { id: 'overclock', target: 'pop' }, { id: 'sponsor' }];
     expect(parPick(g)).toBe(1);

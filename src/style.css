@@ -104,7 +104,13 @@ body.still #backdrop { animation-play-state: paused; }
 #clockFill.low { background: var(--accent); }
 #clockBox[hidden] { visibility: hidden; display: block; }
 
-#upgradeChips { display: flex; flex-wrap: wrap; gap: 4px; }
+/* the next boss, named on the scoreboard; it glows when it is this round */
+.tile.boss { display: grid; gap: 2px; padding: 8px 10px; margin: 8px 0; border-left: 6px solid var(--accent); cursor: help; }
+.tile.boss b { font-size: 18px; line-height: 1.05; }
+.tile.boss span { font-size: 12px; font-weight: 600; color: var(--faint); line-height: 1.25; }
+.tile.boss.now { background: var(--accent-dim); }
+.tile.boss.now span { color: var(--ink); }
+.tile.boss.final { border-left-color: var(--ink); }
 .chip { font: 700 11px var(--ui); padding: 2px 9px; border-radius: 99px; border: var(--lw-detail) solid var(--ink); background: var(--chip); cursor: help; }
 
 /* the ledger, printed as a receipt out of a slot: square, not tilted (it's a fixture) */
@@ -254,18 +260,21 @@ select { font: 600 13px var(--ui); background: var(--paper); color: var(--ink); 
 #upgradeBox { background: var(--glow); }
 #upgradeBox h3 small { display: block; font: 600 12px var(--ui); color: var(--faint); }
 .ucard { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; width: 100%; text-align: left; margin: 0 0 8px; padding: 10px 12px; border-radius: 14px; background: var(--paper); border-left: 8px solid var(--col, var(--ink)); }
-.ucard .head { display: contents; }
+.ucard .head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; grid-column: 1; }
 .ucard .head b { font: 400 18px/1.1 var(--display); }
-.ucard .tag { font: 800 10px var(--ui); letter-spacing: .1em; padding: 1px 7px; border-radius: 99px; border: var(--lw-detail) solid var(--ink); align-self: start; background: var(--paper); }
+.ucard .tag { font: 800 10px var(--ui); letter-spacing: .1em; padding: 1px 7px; border-radius: 99px; border: var(--lw-detail) solid var(--ink); background: var(--paper); }
 .ucard .txt { grid-column: 1 / -1; font-size: 12.5px; font-weight: 600; }
 .ucard .rar { font: 800 10px var(--ui); letter-spacing: .1em; color: var(--faint); }
 .ucard .decalimg { grid-row: 1 / span 3; grid-column: 2; width: 56px; height: 56px; }
 .ucard.r-rare .rar { color: var(--ink); } .ucard.r-legendary { background: var(--glow); } .ucard.r-legendary .rar { color: var(--accent); }
-.ucard.c-board { --col: var(--role-lane-fill); } .ucard.c-balls { --col: var(--metal); } .ucard.c-parts { --col: var(--role-pop-fill); } .ucard.c-rules { --col: var(--accent); }
+.ucard.k-cash { --col: var(--coin); } .ucard.k-ball { --col: var(--metal); } .ucard.k-score { --col: var(--role-pop-fill); } .ucard.k-build { --col: var(--accent); }
+.ucard:disabled { opacity: .6; }
+.ucard .rar { grid-column: 1; justify-self: start; }
+#upgradeBox .full { font-size: 12px; font-weight: 800; color: var(--accent); margin: 0 0 8px; }
 .ucard .full { grid-column: 1 / -1; font-size: 11.5px; font-weight: 800; color: var(--accent); }
 #btnSkip { width: 100%; }
 
-.themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 4px; }
+.themes { display: grid; grid-template-columns: 1fr; gap: 6px; margin-bottom: 4px; }
 .themes button { padding: 6px 4px 4px; border-radius: 12px; display: grid; gap: 4px; justify-items: center; font-family: var(--display); font-weight: 400; font-size: 13px; }
 .themes button.on { box-shadow: 0 0 0 3px var(--accent); }
 .swatch { display: flex; gap: 2px; }
@@ -347,3 +356,34 @@ body.playing .footer { border-top: none; padding-top: 0; }
 
 /* a levelled part says so in its header: LVL 2 ... MAX LVL */
 .tipcard .lvl { font: 400 13px/1 var(--display); padding: 3px 8px 1px; border-radius: 99px; background: var(--coin); border: var(--lw-detail) solid var(--ink); white-space: nowrap; }
+
+/* rarity: a coloured chip on every card, and a coloured edge on shop offers */
+.rar { display: inline-block; font: 800 9.5px/1.4 var(--ui); letter-spacing: .08em; text-transform: uppercase; padding: 0 6px; border-radius: 99px; border: var(--lw-detail) solid var(--ink); background: var(--paper); color: var(--ink); vertical-align: 1px; }
+.rar.r-uncommon { background: #bfe8c8; } .rar.r-rare { background: #bcd6ff; } .rar.r-legendary { background: #ffd66b; }
+.offer.r-uncommon { box-shadow: inset 4px 0 0 #3fae5a; } .offer.r-rare { box-shadow: inset 4px 0 0 #3f7fe0; } .offer.r-legendary { box-shadow: inset 4px 0 0 #e0a000; background: color-mix(in srgb, var(--paper) 85%, #ffd66b); }
+.offer .plinth { position: relative; }
+.offer .plinth .rar { position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); font-size: 8px; padding: 0 4px; white-space: nowrap; }
+.tipcard .tags, .card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px; }
+.tags .tag { font: 700 10px/1.5 var(--ui); padding: 0 6px; border-radius: 99px; background: var(--chip); border: var(--lw-detail) solid var(--faint); }
+/* lock a shop offer for the next round */
+.offer { grid-template-areas: "icon name buy" "icon blurb lock"; }
+.offer .lock { grid-area: lock; font: 800 9.5px var(--ui); letter-spacing: .06em; padding: 1px 7px; border-radius: 99px; justify-self: end; align-self: end; background: var(--paper); }
+.offer .lock.on { background: var(--ink); color: var(--paper); }
+.offer.locked { outline: 3px dashed var(--ink); outline-offset: -6px; }
+/* the decal for sale: a sticker in a sleeve under the parts */
+#decalShelf { margin-top: 8px; }
+.decaloffer { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 8px; align-items: center; background: var(--glass); border: var(--lw-widget) dashed var(--ink); border-radius: 12px; padding: 6px 8px; cursor: help; }
+.decaloffer img { width: 48px; height: 48px; }
+.decaloffer .dtxt { display: grid; min-width: 0; }
+.decaloffer .dtxt b { font: 400 15px/1.05 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.decaloffer .dtxt span { font-size: 11px; font-weight: 700; color: var(--faint); }
+/* the machine picker: each Big Boi's ability under its machine */
+.cab .bb { font: 400 15px/1.1 var(--display); }
+.cab .ab { font-size: 12.5px; font-weight: 600; line-height: 1.3; max-width: 220px; }
+.cab .ab em { font-style: normal; font-weight: 800; display: block; }
+.pickcancel { margin-top: 12px; }
+.machineInfo { display: grid; gap: 2px; padding: 8px 10px; border-radius: 12px; border: var(--lw-widget) solid var(--ink); }
+.machineInfo b { font: 400 16px var(--display); }
+.machineInfo span { font-size: 12px; font-weight: 700; }
+.summary.champ h3 { color: var(--accent); }
+.summary .btnrow { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
