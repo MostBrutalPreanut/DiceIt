@@ -1,0 +1,30 @@
+{
+  "name": "pinball-roguelite",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node tools/smoke.cjs",
+    "physics-report": "vite-node tools/report-physics.ts",
+    "balance": "vite-node tools/balance.ts",
+    "build:single": "vite build -c vite.single.config.ts",
+    "artifact": "npm run build:single && node tools/make-artifact.mjs"
+  },
+  "dependencies": {
+    "phaser-box2d": "^1.1.0",
+    "pixi.js": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vite-node": "^6.0.0",
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^5.0.5"
+  }
+}

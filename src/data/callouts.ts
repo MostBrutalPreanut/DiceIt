@@ -1,0 +1,32 @@
+/** The announcer. Text-only for now (a voice is an open decision); written as data so it scales. */
+const LINES = {
+  start: ['SHOOT THE BALL, COWARD', 'PLUNGE IT LIKE YOU MEAN IT', 'HOLD SPACE. FEEL THE SPRING.', 'THE MACHINE HUNGERS'],
+  weakPlunge: ['THAT WAS A LIMP SHOT', 'THE BALL IS DISAPPOINTED IN YOU'],
+  goal: ['GOAL! SOMEBODY CALL A LAWYER', 'QUOTA SMASHED. HR IS PROUD', 'GOAL! KEEP GOING, SHOW OFF'],
+  drain: ['AND IT\'S GONE', 'GRAVITY WINS AGAIN', 'THE DRAIN SENDS ITS REGARDS', 'BALL SLEEPS WITH THE FISHES'],
+  tilt: ['TILT! HANDS OFF THE FURNITURE', 'TILT! THE MACHINE FELT THAT'],
+  search: ['BALL SEARCH... HELLO? ANYONE?', 'WHERE DID IT GO. WHERE DID IT GO.'],
+  rescue: ['THE MACHINE CHEATED FOR YOU. NOBODY SAW.'],
+  roundWon: ['ROUND CLEARED. PAY THE HUMAN', 'CASH IS KING. BUMPERS ARE QUEEN'],
+  runOver: ['GAME OVER. THE MACHINE WINS. AS ALWAYS.', 'THE QUOTA WAS NOT MET. NOBODY IS SURPRISED'],
+  mult: ['MULT ×{n}! SOMEONE STOP THIS', 'MULT ×{n}! THE NUMBERS ARE FEELING THEMSELVES', 'MULT ×{n}! THIS IS FINE'],
+  workshop: ['THE WORKSHOP IS OPEN. TOUCH EVERYTHING', 'TUNE IT. BREAK IT. TEST IT.', 'A BUMPER FOR EVERY OCCASION'],
+  place: ['PLACED. THE BALL HAS OPINIONS', 'ANOTHER ONE. BOLD CHOICE', 'NICE. IT\'S IN THE WAY.'],
+  buy: ['SOLD! ...TO YOU. CLICK THE TABLE', 'NEW TOY. WHERE DOES IT GO', 'PURCHASED. NO RETURNS ON PHYSICS'],
+  broke: ['TOO POOR. TRY A LOWER STANDARD', 'THE MACHINE ACCEPTS CASH, NOT FEELINGS'],
+  sell: ['SOLD. IT NEVER SAID GOODBYE', 'THE SCRAP DEALER SMILES'],
+  store: ['BENCHED. IT WILL BE BACK', 'INTO THE INVENTORY. SLEEP WELL'],
+  reroll: ['FRESH STOCK. SAME PRICES. SUSPICIOUS', 'REROLLED. THE DICE ARE JEALOUS'],
+  printed: ['BALL PRINTED. LAWYERS NOTIFIED', 'MULTIBALL! THE PHYSICS IS NERVOUS'],
+  lanes: ['LANES COMPLETE! LIGHTS EVERYWHERE'],
+  remove: ['IT NEVER MEANT ANYTHING TO YOU', 'SCRAPPED. THE SCRAP PILE GROWS'],
+} as const;
+
+export type CalloutKey = keyof typeof LINES;
+
+export function callout(key: CalloutKey, vars: Record<string, string | number> = {}): string {
+  const list = LINES[key];
+  let text: string = list[Math.floor(Math.random() * list.length)];
+  for (const [k, v] of Object.entries(vars)) text = text.replace(`{${k}}`, String(v));
+  return text;
+}

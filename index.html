@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Free Play</title>
+</head>
+<body>
+  <div id="app">
+    <aside id="left" class="panel">
+      <h1>FREE PLAY <small>working title · M1 workshop</small></h1>
+      <div id="modeBadge" class="badge">WORKSHOP</div>
+
+      <div class="scorebox">
+        <div class="label">SCORE</div>
+        <div id="score" class="big">0</div>
+        <div class="goalbar"><div id="goalFill"></div></div>
+        <div class="goalrow"><span>GOAL <b id="goal">—</b></span><span>ROUND <b id="round">1</b></span></div>
+      </div>
+
+      <div class="stats">
+        <div><div class="label">MULT</div><div id="mult" class="stat">×1.00</div></div>
+        <div><div class="label">BALLS</div><div id="balls" class="stat">●●●</div></div>
+        <div><div class="label">MONEY</div><div id="money" class="stat">$0</div></div>
+      </div>
+      <div class="formula">Every hit scores <b>points × Mult</b>. Hover any part to see its recipe; the number on it is what it pays right now.</div>
+
+      <div class="label">TILT</div>
+      <div class="tiltbar"><div id="tiltFill"></div></div>
+
+      <div id="actions">
+        <button id="btnStart" class="primary">Start round</button>
+        <button id="btnCash" hidden>Cash out (Tab)</button>
+      </div>
+
+      <details open class="help">
+        <summary>Controls</summary>
+        <ul>
+          <li>Click the table once so the keyboard works.</li>
+          <li><kbd>Z</kbd>/<kbd>Shift</kbd> left flipper · <kbd>/</kbd>/<kbd>Shift</kbd> right</li>
+          <li>Hold <kbd>Space</kbd> to charge the plunger, release to fire</li>
+          <li><kbd>←</kbd> <kbd>→</kbd> nudge (too much = TILT)</li>
+          <li><kbd>Tab</kbd> cash out once the goal is hit</li>
+          <li>Workshop: buy parts, click one in your inventory, click the table. Drag parts to move them, or drag them onto the inventory to take them off the board. <kbd>R</kbd> rotates, <kbd>Del</kbd> stores. <kbd>Space</kbd> fires a test ball.</li>
+          <li><kbd>M</kbd> mute</li>
+        </ul>
+      </details>
+    </aside>
+
+    <main id="center">
+      <div id="dmd"><span id="dmdText">INSERT COIN</span></div>
+      <div id="stage"></div>
+      <div id="overlay" hidden></div>
+      <div id="touch" aria-label="Touch controls">
+        <button data-key="KeyZ">LEFT</button>
+        <button data-key="Space">PLUNGE</button>
+        <button data-key="Slash">RIGHT</button>
+      </div>
+    </main>
+
+    <aside id="right" class="panel">
+      <section id="workshop">
+        <div id="invWrap">
+          <h2>Inventory <small>owned, off the board. Drag a part here to store it.</small></h2>
+          <div id="inventoryBox">
+            <div id="inventory"></div>
+            <div id="inventoryHint" class="hint">Empty.</div>
+          </div>
+        </div>
+
+        <div id="selected" class="card" hidden></div>
+
+        <h2>Shop <small>buy parts, then place them</small></h2>
+        <div class="shophead">
+          <span>Cash <b id="shopMoney">$0</b></span>
+          <button id="btnReroll">Reroll</button>
+        </div>
+        <div id="offers"></div>
+        <label class="check"><input id="sandbox" type="checkbox" /> Test Lab: every part, free, nothing counts</label>
+
+        <h2>Machine</h2>
+        <div class="card">
+          <label>Table tilt (gravity) <b id="gravVal">50</b>
+            <input id="gravity" type="range" min="30" max="80" step="1" value="50" />
+          </label>
+          <div class="hint">Steeper table: faster ball, more drains, harder to cradle.</div>
+          <div class="btnrow">
+            <button id="btnUndo" title="Ctrl+Z">Undo</button>
+            <button id="btnRedo" title="Ctrl+Y">Redo</button>
+          </div>
+          <label class="check"><input id="heat" type="checkbox" /> Heatmap: where the balls went
+            <button id="btnHeatClear" style="margin-left:auto;padding:2px 8px">clear</button></label>
+          <div class="label" style="margin-top:6px">LAYOUT SLOTS</div>
+          <div id="slots"></div>
+          <div id="slotMsg" class="hint"></div>
+        </div>
+        <div id="labTools" class="card" hidden>
+          <h3 style="margin:0 0 6px">Test Lab</h3>
+          <div class="hint">Every part is free and nothing here counts. The catalog replaces the shop.</div>
+          <div class="btnrow">
+            <button id="labBalls4">Drop 4 balls</button>
+            <button id="labBalls12">Drop 12 balls</button>
+            <button id="labClear">Clear board</button>
+            <button id="labLevelUp">Levels +1</button>
+            <button id="labLevelDown">Levels −1</button>
+          </div>
+        </div>
+        <div class="row">
+          <button id="btnTest">Test ball (Space)</button>
+          <button id="btnReset">New run</button>
+        </div>
+      </section>
+
+      <section id="ledgerBox">
+        <h2>Ledger <small>where every point came from</small></h2>
+        <table id="ledger"><thead><tr><th>Part</th><th>Hits</th><th>Points</th><th></th></tr></thead><tbody></tbody></table>
+        <div id="ledgerEmpty" class="hint">Roll a ball. Every point is attributed here.</div>
+      </section>
+    </aside>
+  </div>
+  <div id="tip" hidden></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
