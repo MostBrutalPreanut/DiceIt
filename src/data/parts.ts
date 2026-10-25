@@ -244,6 +244,8 @@ export interface PartInstance {
   placed: boolean;
   /** Bought or granted since the round started: the inventory marks it NEW until you place it or start the round. */
   fresh?: boolean;
+  /** Part of every machine (the Big Boi in the middle): it cannot be moved, stored or sold. */
+  fixed?: boolean;
 }
 
 export function defaultDials(def: PartDef): Record<string, number> {

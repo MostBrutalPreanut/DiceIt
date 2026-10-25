@@ -26,10 +26,12 @@ export interface PartState {
   armed?: boolean;
   /** Ball Printer holding a ball. */
   busy?: boolean;
+  /** Big Boi: bake only the whites of his eyes; the renderer draws pupils that follow the ball. */
+  follow?: boolean;
 }
 
 export const stateKey = (st: PartState) =>
-  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0].join('.');
+  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0].join('.');
 
 const ringS = (cx: number, cy: number, r: number, n = 20, ry = r): Pt[] => ring(cx, cy, r, n, ry);
 
@@ -71,7 +73,7 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       const domePts = [0, 0.3, 0.55, 0.78, 0.92, 1].flatMap((u) => ring(x, y, r * 0.86 * Math.cos((u * Math.PI) / 2), 28).map(([a, b]) => P(v, a, b, 1.12 + u * 0.75)));
       p.face(hull(domePts), skin.base);
       p.face(ring(x - r * 0.25, y + r * 0.2, r * 0.32, 20).map(([a, b]) => P(v, a, b, 1.75)), skin.light, { line: 0, sil: false });
-      face(p, v, t, x, y - r * 0.82, 0.78, r, st.hit ? 'oof' : 'happy');
+      face(p, v, t, x, y - r * 0.82, 0.78, r, st.hit ? 'oof' : 'happy', st.follow);
       break;
     }
     case 'sling': case 'deflector': {
@@ -286,8 +288,12 @@ function motif(p: Prop, v: View, t: Theme, x: number, y: number, r: number, z: n
   }
 }
 
-function eyes(p: Prop, v: View, t: Theme, x: number, y: number, z: number, gap: number, wide = false) {
+function eyes(p: Prop, v: View, t: Theme, x: number, y: number, z: number, gap: number, wide = false, whites = false) {
   const pts = [-1, 1].map((s) => P(v, x + s * gap * 0.5, y, z));
+  if (whites) {
+    p.op((g) => { for (const [X, Y] of pts) g.ellipse(X, Y, v.S * EYE.rx, v.S * EYE.ry).fill(WHITE).stroke({ width: v.lw * 0.45, color: t.ink }); });
+    return;
+  }
   p.op((g) => {
     for (const [X, Y] of pts) {
       g.ellipse(X, Y, v.S * (wide ? 0.13 : 0.1), v.S * (wide ? 0.13 : 0.15)).fill(t.ink);
@@ -295,10 +301,16 @@ function eyes(p: Prop, v: View, t: Theme, x: number, y: number, z: number, gap: 
     }
   });
 }
+/** Big Boi's eyes: where they sit (sim units, relative to his centre) and how big the whites are, for the live pupils. */
+export const EYE = { rx: 0.23, ry: 0.27, dy: -0.82, z: 1.03, gap: 0.6 };
+export function bigBoiEyes(v: View, x: number, y: number, r: number): Pt[] {
+  return [-1, 1].map((s) => P(v, x + s * r * EYE.gap * 0.5, y + r * EYE.dy, EYE.z));
+}
+
 /** Big Boi's face. Goofy tone: a few parts are characters, most are furniture. */
-function face(p: Prop, v: View, t: Theme, x: number, y: number, z: number, r: number, mood: 'happy' | 'oof') {
+function face(p: Prop, v: View, t: Theme, x: number, y: number, z: number, r: number, mood: 'happy' | 'oof', follow = false) {
   const s = v.S;
-  eyes(p, v, t, x, y, z + 0.25, r * 0.55, mood === 'oof');
+  eyes(p, v, t, x, y, z + 0.25, r * 0.55, mood === 'oof', follow);
   const [X, Y] = P(v, x, y, z - 0.1);
   p.op((g) => {
     for (const k of [-1, 1]) g.ellipse(X + k * r * 0.5 * s, Y + s * 0.12, s * 0.2, s * 0.11).fill({ color: t.accent, alpha: 0.55 });

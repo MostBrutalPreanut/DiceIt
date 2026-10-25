@@ -5,9 +5,10 @@ import type { ScoreEvent } from '../game/scoring';
 import { BALL_R, BUILD_AREA, TABLE_W } from '../sim/constants';
 import { flat, label, P, Prop, ribbon, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
-import { ballShadow, drawBall, drawFlipper, drawPart, groundRing, stateKey, type BallWear, type PartState } from './props';
-import { APRON_Z, arrowInserts, buildMachine, DECAL_SLOT_POS, decalSprite, RIM, type StuckDecal } from './scene';
-import { BALL_WEAR, mat, mix, num, roleFill, type Theme } from './theme';
+import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawPart, EYE, groundRing, stateKey, type BallWear, type PartState } from './props';
+import { DotMatrix } from './dmd';
+import { APRON_Z, arrowInserts, buildMachine, CAB, DECAL_SLOT_POS, decalSprite, dmdRect, machineExtent, RIM, type StuckDecal } from './scene';
+import { BALL_WEAR, mat, mix, num, roleFill, WHITE, type Theme } from './theme';
 
 export interface DrawState {
   /** A part following the pointer, about to be placed. */
@@ -50,6 +51,8 @@ export class Renderer {
   private topG = new Graphics();
   private tiltLayer = new Container();
   particles!: Particles;
+  dmd!: DotMatrix;
+  private eyes = new Map<number, Graphics>();
   private glowTex!: Texture;
   private glowPool: Sprite[] = [];
   private glowUsed = 0;
@@ -92,7 +95,8 @@ export class Renderer {
     host.appendChild(this.app.canvas);
     this.partLayer.sortableChildren = true;
     this.particles = new Particles(this.app.renderer, this.theme);
-    this.machine.addChild(this.staticSprite, this.glowLayer, this.floorFx, this.partLayer, this.ballG, this.particles.layer, this.tagLayer, this.topG);
+    this.dmd = new DotMatrix(this.theme);
+    this.machine.addChild(this.staticSprite, this.dmd.view, this.glowLayer, this.floorFx, this.partLayer, this.ballG, this.particles.layer, this.tagLayer, this.topG);
     this.world.addChild(this.machine);
     this.app.stage.addChild(this.world, this.tiltLayer);
     this.glowTex = makeGlowTexture();
@@ -105,6 +109,7 @@ export class Renderer {
     this.theme = t;
     this.flush();
     this.particles.bake(t);
+    this.dmd.setTheme(t);
     for (const tag of this.tags.values()) tag.c.destroy({ children: true });
     this.tags.clear();
   }
@@ -112,7 +117,12 @@ export class Renderer {
   setCalm(on: boolean) {
     this.calm = on;
     this.particles.calm = on;
+    this.dmd.calm = on;
   }
+
+  /** The backbox's dot-matrix display: the message scrolls in from the right. */
+  say(text: string) { this.dmd.say(text.toUpperCase()); }
+  flashDmd() { this.dmd.flash(); }
 
   /** Drop every baked texture (theme change, resize). */
   private flush() {
@@ -128,7 +138,8 @@ export class Renderer {
     if (w === this.w && h === this.h) return;
     this.w = w; this.h = h;
     // fit the machine (rim and a little air) at its tallest, flat; the surround may crop on narrow screens
-    const S = Math.max(4, Math.min((w - 12) / (RIM.hw * 2 + 1.2), (h - 16) / (RIM.hh * 2 * TIP_K + 2.6)));
+    const ext = machineExtent(TIP_K, kzFor(TIP_K));
+    const S = Math.max(4, Math.min((w - 12) / (RIM.hw * 2 + 1.6), (h - 12) / (ext.top + ext.bottom)));
     this.view.S = S;
     this.view.lw = Math.max(1, S * 0.14);
     this.flush();
@@ -140,11 +151,14 @@ export class Renderer {
     v.k = k;
     v.kz = kzFor(k);
     v.ox = this.w / 2 - RIM.cx * v.S;
-    v.oy = this.h / 2 + RIM.cy * k * v.S;
+    // the whole object (backbox to legs) is centred in the stage
+    const ext = machineExtent(k, v.kz);
+    v.oy = this.h / 2 + ((ext.top - ext.bottom) / 2) * v.S;
     // the machine leans and shoves about its bottom centre
     const [px, py] = P(v, RIM.cx, RIM.cy - RIM.hh);
     this.machine.pivot.set(px, py);
     this.machine.position.set(px, py);
+    this.dmd?.layout(dmdRect(v).screen);
   }
 
   /** Pointer position (client px) -> sim units, through the machine's transform and the tip. */
@@ -311,6 +325,7 @@ export class Renderer {
     this.drawBalls(game);
     for (let i = this.glowUsed; i < this.glowPool.length; i++) this.glowPool[i].visible = false;
     this.particles.update(dt, this.view);
+    this.dmd.update(dt);
     this.drawTilt(game);
   }
 
@@ -359,7 +374,8 @@ export class Renderer {
     const lit = !tilted && game.scorer.isLit(p.uid);
     const pulse = this.pulses.get(p.uid) ?? 0;
     switch (p.def) {
-      case 'pop': case 'coin': case 'mega': case 'sling': return { hit: pulse > 0.35 };
+      case 'mega': return { hit: pulse > 0.35, follow: true };
+      case 'pop': case 'coin': case 'sling': return { hit: pulse > 0.35 };
       case 'lane': return { lit, letter: lanes.get(p.uid) };
       case 'uplight': return { lit, target: LEVEL_TARGETS[Math.round(dialValue(p, 'target'))] ?? 'pop' };
       case 'lamp': return { lit };
@@ -385,6 +401,7 @@ export class Renderer {
     const lanes = new Map<number, string>();
     game.placed.filter((p) => p.def === 'lane').sort((a, b) => a.x - b.x || a.y - b.y).forEach((p, i) => lanes.set(p.uid, t.laneWord[i % t.laneWord.length]));
     const tilted = game.sim.tilted;
+    const seenEyes = new Set<number>();
     this.twinkleClock -= dt;
     const twinkle = this.twinkleClock <= 0;
     if (twinkle) this.twinkleClock = 0.45;
@@ -438,7 +455,7 @@ export class Renderer {
       pv.sprite.alpha = 1;
       pv.sprite.tint = 0xffffff;
       // a hit squashes a bumper for a moment (presentation only)
-      const sq = def.kind === 'bumper' ? pulse * 0.12 : 0;
+      const sq = def.kind === 'bumper' && p.def !== 'mega' ? pulse * 0.12 : 0;
       pv.sprite.scale.set(1 + sq, 1 - sq);
 
       // selection: a dashed paper ring; hover: a ring in the part's colour
@@ -448,7 +465,9 @@ export class Renderer {
         dashedRing(fx, v, p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, v.lw, t.ink);
       }
       this.drawTag(game, p);
+      if (p.def === 'mega') this.drawEyes(game, p, pv.sprite.zIndex + 1, seenEyes);
     }
+    for (const [uid, g] of this.eyes) if (!seenEyes.has(uid)) { g.destroy(); this.eyes.delete(uid); }
     // the dotted link from the hovered part to every lamp that boosts it
     const hov = st.hoverUid != null ? game.part(st.hoverUid) : undefined;
     if (hov && hov.placed && PARTS[hov.def].recipe.points) {
@@ -480,6 +499,27 @@ export class Renderer {
     } else {
       const pv = this.parts.get(-1);
       if (pv) { pv.sprite.destroy(); this.parts.delete(-1); }
+    }
+  }
+
+  /** Big Boi watches the ball: pupils inside the baked whites, turned towards the nearest ball (or idling). */
+  private drawEyes(game: Game, p: PartInstance, z: number, seen: Set<number>) {
+    seen.add(p.uid);
+    let g = this.eyes.get(p.uid);
+    if (!g) { g = new Graphics(); this.partLayer.addChild(g); this.eyes.set(p.uid, g); }
+    g.clear();
+    g.zIndex = z;
+    const v = this.view, r = PARTS.mega.shape.type === 'circle' ? PARTS.mega.shape.r : 1.9;
+    const balls = game.sim.ballStates();
+    let target: Pt | null = null, best = Infinity;
+    for (const b of balls) { const d = Math.hypot(b.x - p.x, b.y - p.y); if (d < best) { best = d; target = P(v, b.x, b.y, BALL_R); } }
+    const maxX = v.S * EYE.rx * 0.45, maxY = v.S * EYE.ry * 0.45;
+    for (const [X, Y] of bigBoiEyes(v, p.x, p.y, r)) {
+      let dx: number, dy: number;
+      if (target) { const ax = target[0] - X, ay = target[1] - Y, l = Math.hypot(ax, ay) || 1; dx = (ax / l) * maxX; dy = (ay / l) * maxY; }
+      else { dx = Math.sin(this.time * 0.7) * maxX * 0.8; dy = Math.cos(this.time * 0.45) * maxY * 0.4; }
+      g.ellipse(X + dx, Y + dy, v.S * 0.11, v.S * 0.14).fill(this.theme.ink);
+      g.circle(X + dx - v.S * 0.03, Y + dy - v.S * 0.04, v.S * 0.03).fill(WHITE);
     }
   }
 
@@ -592,7 +632,8 @@ export class Renderer {
     if (!on && this.tiltStamp) { this.tiltStamp.destroy({ children: true }); this.tiltStamp = null; }
     if (on) {
       const v = this.view;
-      const rim = [P(v, RIM.cx - RIM.hw, RIM.cy - RIM.hh), P(v, RIM.cx + RIM.hw, RIM.cy - RIM.hh), P(v, RIM.cx + RIM.hw, RIM.cy + RIM.hh), P(v, RIM.cx - RIM.hw, RIM.cy + RIM.hh)];
+      const zt = CAB.wallH;
+      const rim = [P(v, RIM.cx - RIM.hw, RIM.cy - RIM.hh, zt), P(v, RIM.cx + RIM.hw, RIM.cy - RIM.hh, zt), P(v, RIM.cx + RIM.hw, RIM.cy + RIM.hh, zt), P(v, RIM.cx - RIM.hw, RIM.cy + RIM.hh, zt)];
       this.topG.poly(flat(rim)).fill({ color: mix(this.theme.ink, '#000000', 0.4), alpha: 0.38 });
       this.tiltStamp!.position.set(this.w / 2, this.h * 0.45);
       this.tiltStamp!.scale.set(Math.min(1, this.w / 320));

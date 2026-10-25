@@ -39,7 +39,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
 
   // real shop: buy the first affordable offer, place it, then undo and redo both steps
   let s = await state();
-  check(s.placed === 3 && s.inv === 0 && s.money === 6, 'starts with 3 bumpers placed, empty inventory, $6');
+  check(s.placed === 4 && s.inv === 0 && s.money === 6, 'starts with 3 bumpers and the fixed Big Boi placed, empty inventory, $6');
   await page.click('button[data-buy]:not([disabled])');
   s = await state();
   check(s.inv === 1 && s.money < 6, 'buying puts the part in the inventory and costs money');
@@ -47,20 +47,20 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.move(p.x, p.y);
   await page.mouse.click(p.x, p.y);
   s = await state();
-  check(s.placed === 4 && s.inv === 0, 'clicking the table places it');
+  check(s.placed === 5 && s.inv === 0, 'clicking the table places it');
   check(await page.isVisible('#selected'), 'the part card is shown for the new part');
   const card = await page.innerText('#selected');
   check(/pays|flipper|Roll a ball|Scores nothing|Each target/i.test(card), 'the part card says what it pays');
   await page.click('#btnUndo');
   s = await state();
-  check(s.placed === 3 && s.inv === 1, 'undo takes the placement back');
+  check(s.placed === 4 && s.inv === 1, 'undo takes the placement back');
   await page.click('#btnUndo');
   s = await state();
   check(s.inv === 0 && s.money === 6, 'undo takes the purchase back and refunds the money');
   await page.click('#btnRedo');
   await page.click('#btnRedo');
   s = await state();
-  check(s.placed === 4, 'redo puts it all back');
+  check(s.placed === 5, 'redo puts it all back');
 
   // drag it onto the inventory panel to take it off the board
   const inv = await (await page.$('#inventoryBox')).boundingBox();
@@ -70,14 +70,14 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.move(inv.x + inv.width / 2, inv.y + inv.height / 2, { steps: 8 });
   await page.mouse.up();
   s = await state();
-  check(s.placed === 3 && s.inv === 1, 'dragging a part onto the inventory stores it');
+  check(s.placed === 4 && s.inv === 1, 'dragging a part onto the inventory stores it');
 
   // arm it from the inventory and place it again
   await page.click('#inventory .item');
   await page.mouse.move(p.x, p.y);
   await page.mouse.click(p.x, p.y);
   s = await state();
-  check(s.placed === 4 && s.inv === 0, 'clicking an inventory part then the table places it');
+  check(s.placed === 5 && s.inv === 0, 'clicking an inventory part then the table places it');
 
   // test lab: the whole catalog, free
   const moneyBefore = (await state()).money;
@@ -86,7 +86,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(adds >= 12, `the lab catalog lists every part (${adds})`);
   check(await page.isVisible('#labTools'), 'the lab tools appear');
   await page.click('button[data-add="bank"]');
-  const bank = await at(12, 33);
+  const bank = await at(12, 21);
   await page.mouse.move(bank.x, bank.y);
   await page.mouse.click(bank.x, bank.y);
   const hasBank = await page.evaluate(() => window.__pinball.game.placed.some((q) => q.def === 'bank'));
@@ -102,7 +102,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.screenshot({ path: `${out}/smoke-2b-lab-heat.png` });
   await page.click('button[data-save="0"]');
   await page.click('#labClear');
-  check((await state()).placed === 0, 'clear board stores every part');
+  check((await state()).placed === 1, 'clear board stores every part but the fixed Big Boi');
   await page.click('button[data-load="0"]');
   check((await state()).placed >= 5, 'loading a layout slot re-arranges the parts');
   await page.uncheck('#sandbox');
@@ -130,7 +130,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.click(pop2.x, pop2.y);
   await page.keyboard.press('Delete');
   const after = await state();
-  check(after.money === before + 1 && after.placed === 2 && after.inv === 4, `storing into a full toolbox sells the part for half ($${before} -> $${after.money})`);
+  check(after.money === before + 1 && after.placed === 3 && after.inv === 4, `storing into a full toolbox sells the part for half ($${before} -> $${after.money})`);
   check(await page.isHidden('#toolSell'), 'the toolbox shows no Sell button until a part in it is picked');
   await page.click('#inventory .item[data-uid]');
   check((await page.innerText('#toolSell')) === 'SELL $1', 'picking a toolbox part puts a Sell button with its price on the latch');
@@ -138,6 +138,24 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.click('#toolSell');
   const sold = await state();
   check(sold.inv === 3 && sold.money === after.money + 1, 'Sell sells it for half and frees the slot');
+  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
+
+  // buying by dragging: an offer dropped on the table lands on the board without going through the toolbox
+  await page.evaluate(() => { const g = window.__pinball.game; g.money = 20; g.shop.offers = ['coin', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
+  const offer = await (await page.$('.offer[data-slot="0"] .plinth')).boundingBox();
+  const spot = await at(12, 22);
+  const placedBefore = (await state()).placed;
+  await page.mouse.move(offer.x + offer.width / 2, offer.y + offer.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(spot.x - 40, spot.y, { steps: 6 });
+  await page.mouse.move(spot.x, spot.y, { steps: 4 });
+  await page.mouse.up();
+  const dropped = await state();
+  check(dropped.placed === placedBefore + 1 && dropped.money === 20 - 4 && dropped.inv === 0, 'dragging an offer onto the table buys it straight onto the board');
+  check(await page.isVisible('#selected') && (await page.innerText('#selected')).includes('To toolbox'), 'its card offers To toolbox');
+  const boi = await at(12, 36);
+  await page.mouse.click(boi.x, boi.y);
+  check(!(await page.innerText('#selected')).includes('Sell'), 'the fixed Big Boi cannot be sold or moved');
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
   // relic decals: earn one from a Rules card, read it on the apron, peel it off
@@ -167,7 +185,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
 
   // the between-rounds flow: a boss was just beaten, so an upgrade is owed before the next round
   await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
-  check(await page.isVisible('#stepper') && await page.isVisible('#stepUpgrade'), 'the stepper shows the Upgrade step when one is owed');
+  check(await page.isVisible('#upgradeBox'), 'the upgrade picker shows over the table when one is owed');
   check(await page.locator('.ucard').count() === 3, 'three upgrade cards are offered');
   check(await page.isDisabled('#btnStart'), 'Start round is locked while the pick is owed');
   await page.screenshot({ path: `${out}/smoke-2c-upgrade.png` });

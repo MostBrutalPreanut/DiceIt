@@ -25,18 +25,75 @@ function rng(seed: number) { let s = seed; return () => ((s = (s * 16807) % 2147
 
 export interface StuckDecal { look: DecalLook; rarity: Rarity }
 
-/** Everything that does not move: surround, rim, floor art, apron, decals, rails. */
+/**
+ * The cabinet as a diorama object (docs/concept/cabinet-a.png): the playfield sunk into a cabinet with thick
+ * walls, a backbox carrying the DMD, the machine standing on little legs. Heights in sim units (ball diameters).
+ */
+export const CAB = { wallH: 1.6, bottom: -6.5, legBottom: -10.5, boxScreenH: 6.8, boxY: 55, boxHH: 1.1 };
+const legs: Pt[] = [[-0.9, 52.2], [26.9, 52.2], [-0.9, -0.7], [26.9, -0.7]];
+const backboxH = (v: View) => CAB.boxScreenH / v.kz;
+
+/** How far the machine reaches above and below the view's origin, in sim units on screen: for fitting it. */
+export function machineExtent(k: number, kz: number) {
+  const top = (CAB.boxY + CAB.boxHH) * k + (CAB.wallH + CAB.boxScreenH / kz) * kz;
+  const bottom = -(legs[2][1] * k + CAB.legBottom * kz);
+  return { top, bottom };
+}
+
+/** The DMD screen on the backbox's front face (screen pixels in machine space). */
+export function dmdRect(v: View) {
+  const zTop = CAB.wallH + backboxH(v), y = CAB.boxY - CAB.boxHH;
+  const [x0, y0] = P(v, 0.4, y, zTop - 0.35 / v.kz), [x1, y1] = P(v, 25.6, y, CAB.wallH + 0.3 / v.kz);
+  const pad = Math.max(8, (y1 - y0) * 0.16);
+  return { frame: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, screen: { x: x0 + 14, y: y0 + pad, w: x1 - x0 - 28, h: y1 - y0 - pad * 2 } };
+}
+
+/** Everything that does not move: surround, legs, backbox, shell, the well with its floor art, apron, decals, rails. */
 export function buildMachine(v: View, t: Theme, decals: (StuckDecal | null)[]): Container {
   const root = new Container();
   const g = new Graphics();
   root.addChild(g);
-  // the diorama base: a soft shadow under the whole machine, then the surround props
-  const [SX, SY] = P(v, RIM.cx, -2.5);
-  g.ellipse(SX + v.S * 1.5, SY, v.S * 19, v.S * 1.7).fill({ color: t.shadeTint, alpha: 0.22 });
-  surround(g, v, t);
-  // the cabinet rim around the field (ground level), then the floor art inside it
-  const rim = box(RIM.cx, RIM.cy, RIM.hw, RIM.hh, 0, 1.2).map(([x, y]) => P(v, x, y));
-  g.poly(flat(rim)).fill(t.rim).stroke({ width: v.lw * 1.4, color: t.ink, join: 'round' });
+  const wood = mat(t, t.rim);
+  // the machine's shadow on the ground, and the surround standing on the same ground
+  g.poly(flat(box(RIM.cx + 1, RIM.cy - 0.7, RIM.hw + 0.8, RIM.hh + 1.1, 0, 3).map(([x, y]) => P(v, x + 0.8, y - 0.8, CAB.legBottom)))).fill({ color: t.shadeTint, alpha: 0.2 });
+  surround(g, { ...v, oy: v.oy - CAB.legBottom * v.kz * v.S }, t);
+  // the little legs, far ones first (only the front two peek out under the cabinet)
+  for (const [lx, ly] of legs) {
+    const leg = new Prop(v, t);
+    leg.cyl(lx, ly, 0.5, CAB.legBottom, CAB.bottom - CAB.legBottom, mat(t, t.metal), { n: 20 });
+    leg.cyl(lx, ly, 0.62, CAB.legBottom, 0.35, mat(t, t.rubber), { n: 20 });
+    leg.draw(g);
+  }
+  // the backbox rises from the head of the table and carries the DMD (its text is drawn live)
+  const bb = new Prop(v, t);
+  bb.prism(box(RIM.cx, CAB.boxY, RIM.hw - 0.8, CAB.boxHH, 0, 0.3), CAB.wallH, backboxH(v), wood);
+  bb.draw(g);
+  const d = dmdRect(v), fr = d.frame, sc = d.screen;
+  g.roundRect(fr.x, fr.y, fr.w, fr.h, 10).fill(t.rim).stroke({ width: v.lw * 1.4, color: t.ink });
+  const n = Math.max(6, Math.round(fr.w / 22)), pad = sc.y - fr.y, br = Math.min(4.5, pad * 0.3);
+  for (let i = 0; i <= n; i++) for (const yy of [fr.y + pad / 2 + 1, fr.y + fr.h - pad / 2 - 1]) {
+    g.circle(fr.x + 12 + (i * (fr.w - 24)) / n, yy, br).fill(i % 2 ? t.glow : mix(t.glow, t.shadeTint, 0.45)).stroke({ width: 1.6, color: t.ink });
+  }
+  g.roundRect(sc.x, sc.y, sc.w, sc.h, 6).fill(t.screen).stroke({ width: v.lw, color: t.ink });
+  // the shell: thick walls standing on the legs; its top is the rim
+  const shell = new Prop(v, t);
+  shell.prism(box(RIM.cx, RIM.cy, RIM.hw, RIM.hh, 0, 1.2), CAB.bottom, CAB.wallH - CAB.bottom, wood, { top: wood.base });
+  shell.draw(g);
+  // the well: everything inside is seen through the opening at the top of the walls, so the near wall hides the
+  // bottom edge of the floor and the inside of the far wall shows above it
+  const opening = flat(floorPoly().map(([x, y]) => P(v, x, y, CAB.wallH)));
+  const well = new Container();
+  const wellMask = new Graphics().poly(opening).fill(WHITE);
+  well.mask = wellMask;
+  root.addChild(wellMask, well);
+  const inside = new Graphics();
+  well.addChild(inside);
+  inside.poly(opening).fill(mix(t.rim, t.shadeTint, 0.5));
+  // a wallpaper stripe on the inside of the far wall, so it reads as a wall and not a shadow
+  const band = floorPoly().map(([x, y]) => P(v, x, y, CAB.wallH * 0.55));
+  inside.moveTo(band[0][0], band[0][1]);
+  for (const q of band.slice(1)) inside.lineTo(q[0], q[1]);
+  inside.stroke({ width: v.S * 0.25, color: mix(t.rim, t.shadeTint, 0.3) });
   const floorPts = flat(floorPoly().map(([x, y]) => P(v, x, y)));
   const art = new Container();
   const fg = new Graphics();
@@ -44,9 +101,9 @@ export function buildMachine(v: View, t: Theme, decals: (StuckDecal | null)[]): 
   floorArt(fg, v, t);
   const mask = new Graphics().poly(floorPts).fill(WHITE);
   art.mask = mask;
-  root.addChild(mask, art);
+  well.addChild(mask, art);
   const top = new Graphics();
-  root.addChild(top);
+  well.addChild(top);
   top.poly(floorPts).stroke({ width: v.lw, color: t.ink, join: 'round' });
   // the apron, with its relic decals: two slots each side, like the rule cards on a real machine
   const apron = new Prop(v, t);
@@ -54,12 +111,23 @@ export function buildMachine(v: View, t: Theme, decals: (StuckDecal | null)[]): 
   apron.draw(top);
   DECAL_SLOT_POS.forEach(([x, y], i) => {
     const [X, Y] = P(v, x, y, APRON_Z), R = v.S * 1.05;
-    const d = decals[i];
-    root.addChild(d ? decalSprite(t, d, X, Y, R, v.k, DECAL_TILT[i]) : emptySlot(t, X, Y, R * 0.9, v.k));
+    const dc = decals[i];
+    well.addChild(dc ? decalSprite(t, dc, X, Y, R, v.k, DECAL_TILT[i]) : emptySlot(t, X, Y, R * 0.9, v.k));
   });
   const rg = new Graphics();
-  root.addChild(rg);
+  well.addChild(rg);
   rails(rg, v, t);
+  // the cut edge round the opening: ink, then the light tone of the wood
+  const edge = new Graphics();
+  root.addChild(edge);
+  edge.poly(opening).stroke({ width: v.lw * 2.4, color: t.ink, join: 'round' });
+  edge.poly(opening).stroke({ width: v.lw * 0.9, color: wood.light, join: 'round' });
+  // the coin door and the price plate on the front face
+  const door = [P(v, 9.5, -1.4, -1.1), P(v, 16.5, -1.4, -1.1), P(v, 16.5, -1.4, -5.5), P(v, 9.5, -1.4, -5.5)];
+  edge.poly(flat(door)).fill(mat(t, t.metal).mid).stroke({ width: v.lw, color: t.ink, join: 'round' });
+  for (const dx of [11.6, 14.4]) { const [X, Y] = P(v, dx, -1.4, -2.4); edge.roundRect(X - v.S * 0.25, Y - 0.7 * v.S * v.kz, v.S * 0.5, 1.4 * v.S * v.kz, 2).fill(t.ink); }
+  const [PX, PY] = P(v, 13, -1.4, -4.1);
+  edge.roundRect(PX - 2.2 * v.S, PY - 0.5 * v.S * v.kz, 4.4 * v.S, v.S * v.kz, 3).fill(t.accent).stroke({ width: v.lw * 0.8, color: t.ink });
   return root;
 }
 

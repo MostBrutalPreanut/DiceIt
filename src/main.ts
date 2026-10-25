@@ -25,7 +25,7 @@ const store = { get: (k: string) => { try { return localStorage.getItem(k); } ca
 
 /** The three faces have to be loaded before Pixi measures any text. */
 async function loadFonts() {
-  const faces = ['400 20px "Luckiest Guy"', '500 14px Nunito', '600 14px Nunito', '700 14px Nunito', '800 14px Nunito', '400 20px DotGothic16'];
+  const faces = ['400 20px "Luckiest Guy"', '500 14px Nunito', '600 14px Nunito', '700 14px Nunito', '800 14px Nunito'];
   await Promise.race([Promise.all(faces.map((f) => document.fonts.load(f))), new Promise((r) => setTimeout(r, 2500))]);
 }
 
@@ -63,6 +63,8 @@ async function main() {
   let selectedDecal: number | null = null;
   let dragging: { uid: number; dx: number; dy: number; moved: boolean } | null = null;
   let dragFromInventory = false;
+  /** An offer being dragged out of the shop (slot null: the Test Lab catalog). */
+  let shopDrag: { id: PartId; slot: number | null; x0: number; y0: number; moving: boolean; el: HTMLElement } | null = null;
   let pointer: { x: number; y: number } | null = null;
   let ledgerTimer = 0;
   let lastMultBand = 1;
@@ -73,16 +75,8 @@ async function main() {
   $('stage').appendChild($('upgradeBox')); // the upgrade picker floats over the top of the table
   const drawState: DrawState = { ghost: null, selectedUid: null, hoverUid: null, showHeat: false, hoverDecal: null };
 
-  const say = (text: string) => {
-    const el = $('dmdText');
-    el.textContent = text;
-    // long lines shrink to fit the screen (DotGothic16 is about 0.6 em per glyph plus the tracking)
-    const w = ($('dmd').querySelector('.screen') as HTMLElement).clientWidth - 20;
-    el.style.setProperty('--dmd-size', `${Math.max(11, Math.min(24, w / (text.length * 0.62 + text.length * 0.09)))}px`);
-    el.classList.remove('pop');
-    void el.offsetWidth;
-    el.classList.add('pop');
-  };
+  /** The backbox's dot-matrix display says it: the message scrolls in from the right. */
+  const say = (text: string) => renderer.say(text);
   const sayKey = (k: CalloutKey, vars?: Record<string, string | number>) => say(callout(k, vars));
   say('INSERT COIN');
 
@@ -160,7 +154,7 @@ async function main() {
     const row = inst ? game.scorer.ledger.get(inst.uid) : undefined;
     tip.innerHTML = partCard(def, inst, { ...ctxFor(def), scorer: live ? game.scorer : undefined, mult: game.scorer.mult }, {
       stats: live ? statsLine(row) : undefined,
-      keys: live ? (game.editable ? 'drag to move · R rotate · Del store' : 'between rounds: drag, R rotate, Del store') : inst ? 'click to place it' : 'buy it, then place it on the table',
+      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? 'drag to move · R rotate · Del to toolbox' : 'in the workshop: drag, R rotate, Del to toolbox') : inst ? 'click it, then the table' : 'drag it onto the table, or Buy to put it in the toolbox',
     });
     tip.hidden = false;
     placeTip(cx, cy);
@@ -171,7 +165,7 @@ async function main() {
     const btn = index === null
       ? `<button class="buy" data-add="${id}">Add</button>`
       : `${price! < def.cost ? `<s>$${def.cost}</s>` : ''}<button class="buy" data-buy="${index}" ${game.canAfford(price!) && game.editable && !game.toolboxFull ? '' : 'disabled'}>$${price}</button>`;
-    return `<div class="offer" data-id="${id}"><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}"></div>
+    return `<div class="offer" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}"></div>
       <div class="name">${def.name}</div><div class="buyrow">${btn}</div><div class="blurb">${def.blurb}</div></div>`;
   }
 
@@ -200,9 +194,17 @@ async function main() {
   function bindOfferTips(box: HTMLElement) {
     box.querySelectorAll<HTMLElement>('.offer[data-id]').forEach((el) => {
       const def = PARTS[el.dataset.id as PartId];
-      el.onmouseenter = (e) => tipPart(def, undefined, e.clientX, e.clientY, false);
-      el.onmousemove = (e) => placeTip(e.clientX, e.clientY);
+      el.onmouseenter = (e) => { if (!shopDrag) tipPart(def, undefined, e.clientX, e.clientY, false); };
+      el.onmousemove = (e) => { if (!shopDrag) placeTip(e.clientX, e.clientY); };
       el.onmouseleave = () => { $('tip').hidden = true; };
+      el.addEventListener('pointerdown', (e) => {
+        if ((e.target as HTMLElement).closest('button') || !game.editable || e.button !== 0) return;
+        const slot = el.dataset.slot === undefined ? null : Number(el.dataset.slot);
+        if (slot !== null && !game.canAfford(game.priceOf(def.id))) { sayKey('broke'); return; }
+        audio.unlock();
+        e.preventDefault();
+        shopDrag = { id: def.id, slot, x0: e.clientX, y0: e.clientY, moving: false, el };
+      });
     });
   }
 
@@ -283,11 +285,11 @@ async function main() {
       ${def.dials.map((d) => `<div class="dial"><div class="row2"><span>${d.label}</span><b id="dv-${d.id}">${d.fmt ? d.fmt(dialValue(inst, d.id)) : dialValue(inst, d.id)}</b></div>
         <input data-dial="${d.id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${dialValue(inst, d.id)}" /><div class="hint">${d.tradeoff}</div></div>`).join('')}
       <div class="live" id="selLive">${liveText(inst)}</div>
-      <div class="btnrow">
+      ${inst.fixed ? '<div class="hint">Part of every machine: it stays where it is.</div>' : `<div class="btnrow">
         ${def.rotatable ? '<button id="btnRotL">⟲ 15°</button><button id="btnRotR">15° ⟳</button>' : ''}
-        ${inst.placed ? '<button id="btnStore">Store</button>' : ''}
+        ${inst.placed ? '<button id="btnStore">To toolbox</button>' : ''}
         <button id="btnSell">Sell $${game.sellValue(def)}</button>
-      </div>`;
+      </div>`}`;
     for (const input of card.querySelectorAll<HTMLInputElement>('input[data-dial]')) {
       for (const ev of ['pointerdown', 'keydown'] as const) input.addEventListener(ev, () => game.checkpoint());
       input.oninput = () => {
@@ -301,6 +303,7 @@ async function main() {
         persist();
       };
     }
+    if (inst.fixed) return;
     const rot = (dir: number) => { game.rotate(inst.uid, dir * (Math.PI / 12)); persist(); };
     if (def.rotatable) { $('btnRotL').onclick = () => rot(1); $('btnRotR').onclick = () => rot(-1); }
     if (inst.placed) $('btnStore').onclick = () => storeSelected();
@@ -413,6 +416,42 @@ async function main() {
     renderDecal();
   }
 
+  // ---- buying by dragging: an offer dropped on the table is bought straight onto the board, one dropped on the
+  // toolbox goes in the toolbox; a click on Buy still buys into the toolbox ----------------------------------
+  addEventListener('pointermove', (e) => {
+    if (!shopDrag) return;
+    if (!shopDrag.moving && Math.hypot(e.clientX - shopDrag.x0, e.clientY - shopDrag.y0) > 6) {
+      shopDrag.moving = true;
+      shopDrag.el.classList.add('dragging');
+      $('tip').hidden = true;
+      armed = null;
+    }
+    if (!shopDrag.moving) return;
+    const over = document.elementFromPoint(e.clientX, e.clientY);
+    pointer = over === canvas ? renderer.toSim(e.clientX, e.clientY) : null;
+    $('inventoryBox').classList.toggle('drop', !!over?.closest('#inventoryBox'));
+  });
+  addEventListener('pointerup', (e) => {
+    const d = shopDrag;
+    if (!d) return;
+    shopDrag = null;
+    d.el.classList.remove('dragging');
+    $('inventoryBox').classList.remove('drop');
+    if (!d.moving) return;
+    const over = document.elementFromPoint(e.clientX, e.clientY);
+    let part: PartInstance | null = null;
+    if (over === canvas) {
+      const p = renderer.toSim(e.clientX, e.clientY);
+      part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y) : game.buyAndPlace(d.slot, p.x, p.y);
+      if (part) { selected = part.uid; audio.place(); sayKey('place'); } else say('NO ROOM THERE');
+    } else if (over?.closest('#inventoryBox')) {
+      part = d.slot === null ? game.grant(d.id) : game.buy(d.slot);
+      if (part) { selected = part.uid; audio.place(); sayKey('buy'); } else if (game.toolboxFull) say('TOOLBOX FULL. DROP IT ON THE TABLE');
+    }
+    if (part) persist();
+    refreshWorkshop();
+  });
+
   // ---- pointer: place, select, drag, store -------------------------------------------------------
   const canvas = renderer.app.canvas;
   const hitPart = (x: number, y: number) => {
@@ -443,8 +482,10 @@ async function main() {
       if (hit) {
         selected = hit.uid;
         selectedDecal = null;
-        dragging = { uid: hit.uid, dx: hit.x - p.x, dy: hit.y - p.y, moved: false };
-        canvas.setPointerCapture(e.pointerId);
+        if (!hit.fixed) { // the Big Boi in the middle stays put
+          dragging = { uid: hit.uid, dx: hit.x - p.x, dy: hit.y - p.y, moved: false };
+          canvas.setPointerCapture(e.pointerId);
+        }
       } else if (decal !== null && game.decals[decal]) {
         selectedDecal = decal;
         selected = null;
@@ -512,6 +553,7 @@ async function main() {
   }
 
   function showTip(cx: number, cy: number) {
+    if (shopDrag?.moving) { $('tip').hidden = true; return; }
     const inst = hover != null && !dragging ? game.part(hover) : undefined;
     if (inst) { tipPart(PARTS[inst.def], inst, cx, cy, true); return; }
     const d = hoverDecal !== null && !dragging ? game.decals[hoverDecal] : undefined;
@@ -685,7 +727,7 @@ async function main() {
       case 'nudge': {
         audio.nudge();
         renderer.onNudge(ev.dir, ev.tilt);
-        if (ev.tilt > 0.55 && !calm) { $('dmd').classList.remove('flash'); void $('dmd').offsetWidth; $('dmd').classList.add('flash'); }
+        if (ev.tilt > 0.55) renderer.flashDmd();
         break;
       }
       case 'tilt': audio.tilt(); renderer.onTilt(); sayKey('tilt'); break;
@@ -758,26 +800,38 @@ async function main() {
   }
 
   // ---- HUD ------------------------------------------------------------------------------------------------------
-  /** The between-rounds bar: Shop, Upgrade (only when one is owed or was just taken), Install, and the one big button. */
+  /** The one big button: PLAY ROUND while you build (locked while an upgrade is owed). */
   function updateStepper() {
     const play = game.mode !== 'workshop';
     const owed = game.pending !== null;
-    $('stepPlay').className = `step ${play ? 'cur' : 'done'}`;
-    $('stepPlayNote').textContent = play ? `round ${game.round}` : '';
-    const up = $('stepUpgrade');
-    up.hidden = play || (!owed && !game.resolved);
-    up.className = `step ${owed ? 'owed' : 'done'}`;
-    $('stepUpgradeNote').textContent = owed ? 'pick 1 of 3' : game.resolved === 'skipped' ? `skipped, +$${SKIP_PAY}` : game.resolved ? UPGRADES[game.resolved.id].name : '';
-    $('stepShop').className = `step ${play ? '' : owed ? '' : 'cur'}`;
-    $('stepShopNote').textContent = play ? '' : game.sandbox ? 'free' : `$${game.money}`;
-    const inv = game.inventory.length, fresh = game.inventory.filter((p) => p.fresh).length;
-    $('stepInstall').className = `step ${!play && !owed && inv > 0 ? 'cur' : ''}`;
-    $('stepInstallNote').textContent = play ? '' : inv ? `${inv} to place${fresh ? `, ${fresh} new` : ''}` : 'board is set';
     const start = $('btnStart') as HTMLButtonElement;
     start.hidden = play;
     start.disabled = owed;
     start.title = owed ? 'Pick an upgrade (or skip it) first' : '';
-    start.classList.toggle('ready', !owed && inv === 0);
+    start.classList.toggle('ready', !owed && game.inventory.length === 0);
+  }
+
+  let mapKey = '';
+  /** The run as a map: fifteen stops on a winding path, every third a boss (bigger); here is lit, behind is grey. */
+  function renderMap() {
+    const key = `${game.round}|${theme.id}`;
+    if (key === mapKey) return;
+    mapKey = key;
+    const N = 15, first = Math.floor((game.round - 1) / N) * N + 1, W = 260, H = 34;
+    const pts = Array.from({ length: N }, (_, i) => [10 + ((W - 20) * i) / (N - 1), H / 2 + Math.sin(i * 0.95 + 0.4) * 6]);
+    const seg = (a: number, b: number, style: string) => `<polyline points="${pts.slice(a, b + 1).map((q) => q.join(',')).join(' ')}" style="fill:none;${style}"/>`;
+    const here = game.round - first;
+    const o = [seg(0, Math.max(0, here), 'stroke:var(--paper-dim);stroke-width:3;stroke-linecap:round;stroke-linejoin:round'),
+      seg(Math.max(0, here), N - 1, 'stroke:var(--faint);stroke-width:2.2;stroke-dasharray:2 5;stroke-linecap:round')];
+    pts.forEach(([x, y], i) => {
+      const boss = (first + i) % BOSS_EVERY === 0, r = boss ? 8.5 : 5;
+      const fill = i < here ? 'var(--paper-dim)' : i === here ? 'var(--accent)' : 'var(--paper)';
+      const line = i < here ? 'var(--faint)' : 'var(--ink)';
+      if (i === here) o.push(`<circle cx="${x}" cy="${y}" r="${r + 4.5}" style="fill:none;stroke:var(--accent);stroke-width:2;opacity:.45"/>`);
+      o.push(`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${line};stroke-width:${boss ? 2.4 : 1.8}"/>`);
+      if (boss) o.push(`<circle cx="${x}" cy="${y}" r="2.6" style="fill:${i <= here && i !== here ? 'var(--faint)' : i === here ? 'var(--paper)' : 'var(--ink)'}"/>`);
+    });
+    $('roundMap').innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${o.join('')}</svg>`;
   }
 
   let keysKey = '';
@@ -789,7 +843,7 @@ async function main() {
     const k = (key: string, what: string) => `<kbd>${key}</kbd><span>${what}</span>`;
     $('keys').innerHTML = mode === 'play'
       ? [k('←', ''), k('→', 'flippers'), k('Space', 'shoot'), k('Z', ''), k('X', 'nudge'), k('Tab', 'cash out'), k('M', 'mute')].join(' ')
-      : [k('Enter', 'play round'), k('Space', 'test ball'), k('R', 'rotate'), k('Del', 'store'), k('Ctrl+Z', 'undo'), k('M', 'mute')].join(' ');
+      : [k('Enter', 'play round'), k('Space', 'test ball'), k('R', 'rotate'), k('Del', 'to toolbox'), k('Ctrl+Z', 'undo'), k('M', 'mute')].join(' ');
   }
 
   let ballsKey = '';
@@ -808,10 +862,9 @@ async function main() {
   function updateHud(dt: number) {
     const sc = game.scorer;
     const inRound = game.mode === 'round' || game.mode === 'roundEnd' || game.mode === 'runOver';
-    // the scoreboard names the step of the loop you are on: build (shop and place), then play
+    // the scoreboard says which half of the loop you are in: the workshop (buy and place), or play
     const playing = game.mode !== 'workshop';
-    $('phaseTitle').textContent = playing ? 'PLAY' : 'BUILD';
-    $('phaseNote').textContent = playing ? 'then build' : game.sandbox ? 'test lab' : 'then play';
+    $('phaseTitle').textContent = playing ? 'PLAY' : 'WORKSHOP';
     document.body.classList.toggle('playing', playing);
     odometer.set(sc.score);
     $('mult').textContent = `×${sc.mult.toFixed(2)}`;
@@ -819,9 +872,7 @@ async function main() {
     dial.set(sc.mult, theme);
     const money = game.money + (inRound ? sc.money : 0) - coinsInFlight;
     $('shopMoney').textContent = game.sandbox ? '$∞' : `$${Math.max(0, money)}`;
-    $('round').textContent = String(game.round);
-    const stage = (game.round - 1) % BOSS_EVERY;
-    for (let i = 0; i < 3; i++) $(`stage${i}`).className = i === stage ? 'cur' : i < stage ? 'done' : '';
+    renderMap();
     const goal = inRound ? sc.goal : goalFor(game.round);
     $('goal').textContent = fmt(goal);
     $('toGo').textContent = inRound ? (sc.goalReached ? 'GOAL HIT!' : `${fmt(Math.max(0, goal - sc.score))} to go`) : 'next round';
@@ -943,9 +994,11 @@ async function main() {
     drawState.hoverUid = hover;
     drawState.hoverDecal = hoverDecal;
     const armedPart = armed != null ? game.part(armed) : undefined;
-    drawState.ghost = game.editable && armedPart && pointer
-      ? { def: armedPart.def, x: pointer.x, y: pointer.y, angle: armedPart.angle, valid: canPlace(game.layout, armedPart.def, pointer.x, pointer.y) }
-      : null;
+    drawState.ghost = game.editable && shopDrag?.moving && pointer
+      ? { def: shopDrag.id, x: pointer.x, y: pointer.y, angle: 0, valid: canPlace(game.layout, shopDrag.id, pointer.x, pointer.y) }
+      : game.editable && armedPart && pointer
+        ? { def: armedPart.def, x: pointer.x, y: pointer.y, angle: armedPart.angle, valid: canPlace(game.layout, armedPart.def, pointer.x, pointer.y) }
+        : null;
     renderer.draw(game, dt, drawState);
     updateHud(dt);
     // the marquee bulbs chase (they hold still in Calm mode)

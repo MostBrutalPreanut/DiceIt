@@ -11,12 +11,9 @@
     <aside id="left" class="panel housing">
       <i class="screw tl"></i><i class="screw tr"></i><i class="screw bl"></i><i class="screw br"></i>
       <div class="inner">
-        <header class="marquee"><span class="bulbs"></span><h1 class="disp" id="phaseTitle">BUILD</h1><span id="phaseNote" class="badge">then play</span></header>
+        <header class="marquee"><span class="bulbs"></span><h1 class="disp" id="phaseTitle">WORKSHOP</h1></header>
         <div class="scroll">
-          <div class="tile roundstrip">
-            <b class="disp">ROUND <span id="round">1</span></b>
-            <span class="stages"><i id="stage0">OPEN</i><i id="stage1">MAIN</i><i id="stage2">BOSS</i></span>
-          </div>
+          <div class="tile roundmap" id="roundMap" data-tip="map"></div>
 
           <div class="lbl">Score</div>
           <div id="score" class="odo" data-tip="score"></div>
@@ -66,15 +63,6 @@
     </aside>
 
     <main id="center">
-      <div id="dmd"><span class="bulbs top"></span><div class="screen"><span id="dmdText">INSERT COIN</span></div><span class="bulbs bottom"></span></div>
-      <div id="stepper">
-        <ol>
-          <li id="stepPlay" class="step"><b>1</b><span>Play</span><i id="stepPlayNote"></i></li>
-          <li id="stepShop" class="step"><b>2</b><span>Shop</span><i id="stepShopNote"></i></li>
-          <li id="stepUpgrade" class="step" hidden><b>★</b><span>Upgrade</span><i id="stepUpgradeNote"></i></li>
-          <li id="stepInstall" class="step"><b>3</b><span>Place</span><i id="stepInstallNote"></i></li>
-        </ol>
-      </div>
       <div id="stage"></div>
       <div id="upgradeBox" class="card" hidden></div>
       <div id="overlay" hidden></div>

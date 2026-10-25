@@ -31,9 +31,9 @@ describe('undo and redo', () => {
     g.checkpoint();
     g.place(2, 12, 30);
     g.store(3);
-    expect(g.placed.map((p) => p.uid)).toEqual([2]);
+    expect(g.placed.map((p) => p.uid)).toEqual([2, 4]); // 4 is the fixed Big Boi
     g.undo(); // the store
-    expect(g.placed.map((p) => p.uid).sort()).toEqual([2, 3]);
+    expect(g.placed.map((p) => p.uid).sort()).toEqual([2, 3, 4]);
     g.undo(); // the move
     expect(g.part(2)!.x).toBe(11);
     g.undo(); // the sale
@@ -59,7 +59,7 @@ describe('undo and redo', () => {
     g.undo();
     g.undo();
     for (let i = 0; i < 240; i++) g.step(NO_INPUT);
-    expect(g.placed).toHaveLength(3);
+    expect(g.placed).toHaveLength(4);
   });
 });
 
@@ -72,7 +72,7 @@ describe('layout slots', () => {
     g.rotate(1, 1);
     const r = g.applyArrangement(saved);
     expect(r).toEqual({ placed: 3, missing: 0 });
-    expect(g.placed.map((p) => [p.x, p.y]).sort()).toEqual(saved.parts.map((p) => [p.x, p.y]).sort());
+    expect(g.placed.filter((p) => !p.fixed).map((p) => [p.x, p.y]).sort()).toEqual(saved.parts.map((p) => [p.x, p.y]).sort());
     g.undo(); // loading a layout is undoable
     expect(g.part(1)!.x).toBe(5);
   });
@@ -124,7 +124,7 @@ describe('the test lab', () => {
     l.labBalls(8);
     expect(l.sim.ballCount).toBe(8);
     l.clearBoard();
-    expect(l.placed).toHaveLength(0);
+    expect(l.placed.map((p) => p.def)).toEqual(['mega']); // the fixed Big Boi stays
     expect(l.inventory).toHaveLength(3);
     l.levelAll(2);
     expect(l.levels.pop).toBe(2);

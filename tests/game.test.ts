@@ -5,9 +5,10 @@ import { Rng } from '../src/sim/rng';
 import { NO_INPUT } from '../src/sim/sim';
 
 describe('shop, inventory and money', () => {
-  it('starts with three pop bumpers on the board, an empty inventory and some cash', () => {
+  it('starts with three pop bumpers and the fixed Big Boi on the board, an empty inventory and some cash', () => {
     const g = new Game();
-    expect(g.placed).toHaveLength(3);
+    expect(g.placed.map((p) => p.def)).toEqual(['pop', 'pop', 'pop', 'mega']);
+    expect(g.placed.filter((p) => p.fixed).map((p) => p.def)).toEqual(['mega']);
     expect(g.inventory).toHaveLength(0);
     expect(g.money).toBe(START_MONEY);
     expect(new Set(g.shop.offers).size).toBe(4);
@@ -43,10 +44,10 @@ describe('shop, inventory and money', () => {
     expect(g.place(coin.uid, 17, 44.5)).toBe(false); // on top of a pop bumper
     expect(g.place(coin.uid, 1, 30)).toBe(false); // in the wall
     expect(g.place(coin.uid, 12, 30)).toBe(true);
-    expect(g.placed).toHaveLength(4);
+    expect(g.placed).toHaveLength(5);
     expect(g.inventory).toHaveLength(0);
     g.store(coin.uid);
-    expect(g.placed).toHaveLength(3);
+    expect(g.placed).toHaveLength(4);
     expect(g.inventory.map((p) => p.uid)).toEqual([coin.uid]);
   });
 
@@ -56,7 +57,7 @@ describe('shop, inventory and money', () => {
     expect(g.sell(1)).toBe(sellPrice(PARTS.pop));
     expect(g.money).toBe(before + sellPrice(PARTS.pop));
     expect(g.part(1)).toBeUndefined();
-    expect(g.placed).toHaveLength(2);
+    expect(g.placed).toHaveLength(3);
   });
 
   it('rerolls cost more each time, change the offers, and need money', () => {
@@ -86,7 +87,7 @@ describe('shop, inventory and money', () => {
     g.startRound();
     expect(g.buy(0)).toBeNull();
     g.store(1);
-    expect(g.placed).toHaveLength(3);
+    expect(g.placed).toHaveLength(4);
     g.setDial(1, 'kick', 4);
     expect(g.part(1)!.dials.kick).toBe(2);
   });

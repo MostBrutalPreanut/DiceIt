@@ -104,7 +104,7 @@ A → B → C → D → E → F, with H alongside and G after the major-upgrade 
 - **Less text:** no "times your Mult" on every part, no dial sentences in the recipe, the Kick dial is now called Bounce, and the spare-ball note left the money row.
 - **Controls:** ← → work the flippers (all flippers on that side), Space shoots, Z X nudge; the keys for the current mode sit in one line under the table.
 
-### Proposal: the cabinet as a diorama object (not built yet)
+### The cabinet as a diorama object (option A, built)
 
 To read as a pinball machine rather than a screen, like the cut-open objects in the style references: sink the playfield into a cabinet with thick walls (the inside of the far wall shows, the near wall hides the floor's edge, a light cut edge round the opening), raise a backbox from the head of the table that carries the DMD, and stand the machine on legs. Option B also tips it to k 0.78 with taller heights and leans it 0.15 sideways so the right side (side art, flipper button) shows.
 
@@ -115,3 +115,5 @@ To read as a pinball machine rather than a screen, like the cut-open objects in 
 | ![](concept/cabinet-b.png) | B in all three themes |
 
 Rendered by `npm run concept` (`dioramaMachine()` in `tools/concept/scenes.ts`).
+
+Option A is in the game: the playfield sunk into the cabinet (walls 1.6 high, the inside of the far wall showing, a light cut edge), the backbox carrying the display, the coin door on the front and little legs under it. The display is now a real dot matrix drawn on the backbox: text is rasterised from bold Nunito into lit dots (the thin DotGothic16 face was hard to read and is gone), new messages scroll in from the right and settle in the middle, long ones keep scrolling, and a tilt warning flashes it. Other changes from the same playtest: a fixed Big Boi in the middle of every machine whose pupils follow the nearest ball, the scoreboard titled PLAY or WORKSHOP with no step pills, a fifteen-stop map of the run instead of the round strip, and buying by dragging an offer onto the table or the toolbox.

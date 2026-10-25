@@ -5,7 +5,6 @@
 @font-face { font-family: 'Nunito'; font-weight: 600; font-display: block; src: url('./assets/fonts/nunito-latin-600-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Nunito'; font-weight: 700; font-display: block; src: url('./assets/fonts/nunito-latin-700-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Nunito'; font-weight: 800; font-display: block; src: url('./assets/fonts/nunito-latin-800-normal.woff2') format('woff2'); }
-@font-face { font-family: 'DotGothic16'; font-weight: 400; font-display: block; src: url('./assets/fonts/dotgothic16-latin-400-normal.woff2') format('woff2'); }
 
 :root {
   color-scheme: light;
@@ -13,7 +12,6 @@
   --lw-frame: 3.5px; --lw-widget: 2.5px; --lw-detail: 1.8px;
   --display: 'Luckiest Guy', 'Arial Black', sans-serif;
   --ui: 'Nunito', ui-rounded, system-ui, sans-serif;
-  --dmd-face: 'DotGothic16', ui-monospace, monospace;
   /* placeholders until a theme is applied (the Factory's tokens) */
   --bg: #f6d54a; --paper: #fff8e6; --ink: #3b2a4a; --shade: #6a4fa0; --rim: #8f7ad6;
 }
@@ -55,14 +53,9 @@ body.still #backdrop { animation-play-state: paused; }
 .hint { color: var(--faint); font-size: 12px; font-weight: 600; }
 .tile { background: var(--tile); border: var(--lw-widget) solid var(--ink); border-radius: 14px; }
 
-/* round strip */
-.roundstrip { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px 6px 14px; height: 40px; }
-.roundstrip b { font-size: 19px; transform: translateY(2px); }
-.stages { display: flex; gap: 5px; }
-.stages i { font: 800 10.5px var(--ui); font-style: normal; letter-spacing: .6px; width: 44px; height: 20px; display: grid; place-items: center; border-radius: 10px; border: var(--lw-detail) solid var(--ink); background: var(--paper); }
-.stages i.done { background: var(--paper-dim); color: var(--faint); }
-.stages i.cur { background: var(--accent); color: var(--paper); }
-
+/* the run as a map: fifteen stops, every third a boss; where you are now is lit, the stops behind you are grey */
+.roundmap { height: 44px; padding: 0 8px; display: flex; align-items: center; }
+.roundmap svg { width: 100%; height: 34px; overflow: visible; }
 /* score on odometer drums: fixed-width digits never wobble as the score ticks */
 .odo { display: flex; justify-content: center; gap: 3px; background: var(--ink); border-radius: 12px; padding: 7px; margin: 0 auto; width: max-content; max-width: 100%; }
 .drum { position: relative; width: var(--dw, 36px); height: 46px; background: var(--paper); border-radius: 6px; overflow: hidden; border: var(--lw-detail) solid var(--ink); }
@@ -163,34 +156,8 @@ select { font: 600 13px var(--ui); background: var(--paper); color: var(--ink); 
 .check input { accent-color: var(--accent); }
 .check button { margin-left: auto; }
 
-/* ---- the centre: DMD marquee, the between-rounds stepper, the stage ---- */
+/* ---- the centre: the stage, the controls line ---- */
 #center { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-#dmd { position: relative; flex: none; align-self: center; width: min(560px, 100%); background: var(--rim); border: var(--lw-frame) solid var(--ink); border-radius: 16px; padding: 15px 18px; box-shadow: 6px 7px 0 var(--drop); }
-#dmd .bulbs { left: 14px; right: 14px; }
-#dmd .bulbs.top { top: 4px; } #dmd .bulbs.bottom { top: auto; bottom: 4px; }
-#dmd .screen { position: relative; background: var(--screen); border: var(--lw-frame) solid var(--ink); border-radius: 8px; height: 40px; display: grid; place-items: center; overflow: hidden; }
-#dmd .screen::after { content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(90deg, transparent 0 3.6px, var(--screen) 3.6px 5px), repeating-linear-gradient(0deg, transparent 0 3.6px, var(--screen) 3.6px 5px); }
-#dmdText { font: 400 var(--dmd-size, 24px)/1 var(--dmd-face); letter-spacing: 2px; color: var(--dmd); white-space: nowrap; padding: 0 8px; max-width: 100%; overflow: hidden; text-overflow: clip; }
-#dmdText.pop { animation: dmd .35s ease-out; }
-#dmd.flash .screen { animation: flash .18s steps(2) 3; }
-@keyframes dmd { from { transform: scale(1.12); } to { transform: none; } }
-@keyframes flash { 50% { background: var(--dmd); } }
-
-#stepper { display: flex; align-items: center; gap: 12px; padding: 10px 4px 0; flex: none; }
-#stepper[hidden] { display: none; }
-#stepper ol { list-style: none; display: flex; gap: 6px; margin: 0; padding: 0; flex: 1; min-width: 0; flex-wrap: wrap; }
-.step { display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 99px; border: var(--lw-widget) solid var(--ink); background: var(--paper); font-size: 12px; font-weight: 700; white-space: nowrap; }
-.step[hidden] { display: none; }
-.step b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--well); border: var(--lw-detail) solid var(--ink); font-size: 11px; }
-.step i { font-style: normal; font-size: 11px; color: var(--faint); }
-.step.active b { background: var(--accent); color: var(--paper); }
-.step.owed { background: var(--glow); animation: owed 1.1s ease-in-out infinite; }
-.step.owed b { background: var(--role-coin); }
-.step.done b { background: var(--good); }
-@keyframes owed { 50% { box-shadow: 0 0 0 4px var(--accent-dim); } }
-#btnStart.ready { animation: ready 1.4s ease-in-out infinite; }
-
 #stage { flex: 1; min-height: 0; position: relative; }
 #stage canvas { display: block; width: 100%; height: 100%; }
 #overlay { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: var(--drop); }
@@ -218,7 +185,8 @@ select { font: 600 13px var(--ui); background: var(--paper); color: var(--ink); 
 
 .fixed #shopBox { margin-top: 12px; }
 #offers { display: grid; gap: 8px; }
-.offer { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-areas: "icon name buy" "icon blurb blurb"; gap: 0 10px; align-items: center; background: var(--paper); border: var(--lw-widget) solid var(--ink); border-radius: 12px; padding: 6px 8px 6px 6px; min-height: 64px; cursor: help; }
+.offer { touch-action: none; display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-areas: "icon name buy" "icon blurb blurb"; gap: 0 10px; align-items: center; background: var(--paper); border: var(--lw-widget) solid var(--ink); border-radius: 12px; padding: 6px 8px 6px 6px; min-height: 64px; cursor: help; }
+.offer.dragging { opacity: .5; }
 .offer.sold { opacity: .4; display: grid; place-items: center; grid-template-columns: 1fr; grid-template-areas: none; font-family: var(--display); font-size: 16px; cursor: default; }
 .plinth { grid-area: icon; align-self: stretch; border-radius: 8px; display: grid; place-items: center; }
 .plinth img { width: 52px; height: 52px; display: block; }
@@ -328,7 +296,6 @@ select { font: 600 13px var(--ui); background: var(--paper); color: var(--ink); 
   #center { height: 88vh; min-height: 540px; order: -1; }
   .housing { max-height: none; }
   .scroll { overflow: visible; }
-  #dmd { padding: 14px 16px; }
 }
 
 /* one slot on the scoreboard: PLAY ROUND while you build, CASH OUT while you play */
@@ -339,9 +306,6 @@ select { font: 600 13px var(--ui); background: var(--paper); color: var(--ink); 
 /* the controls in one short line under the table */
 .keys { flex: none; height: 26px; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; font-size: 12px; color: var(--ink); }
 .keys span { opacity: .75; }
-#stepper { height: 44px; }
-#stepper.off { visibility: hidden; }
-.step.cur b { background: var(--accent); color: var(--paper); }
 #upgradeBox { position: absolute; z-index: 4; top: 10px; left: 50%; transform: translateX(-50%); width: min(400px, calc(100% - 16px)); max-height: calc(100% - 170px); overflow: auto; margin: 0; }
 #shopClosed { display: none; text-align: center; padding: 10px 0 2px; }
 #machineBox { margin-top: 4px; }

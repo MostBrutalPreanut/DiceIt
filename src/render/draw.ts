@@ -9,7 +9,7 @@ export interface View { S: number; ox: number; oy: number; k: number; kz: number
 export type Pt = [number, number];
 
 /** Typography (the goofy pairing): a display face for big bold things, a UI face for reading, a DMD face. */
-export const TYPE = { display: 'Luckiest Guy', ui: 'Nunito', dmd: 'DotGothic16' };
+export const TYPE = { display: 'Luckiest Guy', ui: 'Nunito' };
 
 export const P = (v: View, x: number, y: number, z = 0): Pt => [v.ox + (x + y * v.shx) * v.S, v.oy - (y * v.k + z * v.kz) * v.S];
 /** The inverse of P on the floor plane (z = 0): screen point -> sim point. Pointer picking uses it. */
@@ -158,7 +158,7 @@ export function inkLine(g: Graphics, pts: Pt[], w: number, color: string, ink: s
 }
 
 /** A Text in one of the three faces. Luckiest Guy is never bolded: it has one weight. */
-export function label(s: string, size: number, fill: string, opts: { face?: 'display' | 'ui' | 'dmd'; weight?: TextStyleOptions['fontWeight']; stroke?: string; strokeW?: number; anchorY?: number; spacing?: number } = {}) {
+export function label(s: string, size: number, fill: string, opts: { face?: 'display' | 'ui'; weight?: TextStyleOptions['fontWeight']; stroke?: string; strokeW?: number; anchorY?: number; spacing?: number } = {}) {
   const face = opts.face ?? 'display';
   const t = new Text({
     text: s,

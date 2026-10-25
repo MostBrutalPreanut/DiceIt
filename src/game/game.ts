@@ -2,7 +2,7 @@ import { makePart, MAX_LEVEL, PARTS, PART_IDS, sellPrice, type PartDef, type Par
 import { neutralMods, type Mods, type SimMods } from '../data/mods';
 import { BOSS_EVERY, computeMods, rollUpgradeOffers, SKIP_PAY, UPGRADES, type Rarity, type UpgradePick, type RunView, type UpgradeApi, type UpgradeId, type UpgradeOffer } from '../data/upgrades';
 import { DECAL_SLOTS, DECALS, type DecalLook } from '../data/decals';
-import { canPlace, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
+import { canPlace, ensureBigBoi, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
 import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
 import { GOALS, GOAL_GROWTH } from '../data/goals';
 import { Rng } from '../sim/rng';
@@ -471,7 +471,7 @@ export class Game {
   arrangement(): Arrangement {
     return {
       gravity: this.layout.gravity,
-      parts: this.placed.map((p) => ({ def: p.def, x: p.x, y: p.y, angle: p.angle, dials: { ...p.dials } })),
+      parts: this.placed.filter((p) => !p.fixed).map((p) => ({ def: p.def, x: p.x, y: p.y, angle: p.angle, dials: { ...p.dials } })),
     };
   }
 
@@ -482,10 +482,10 @@ export class Game {
   applyArrangement(a: Arrangement): { placed: number; missing: number } {
     if (!this.editable) return { placed: 0, missing: 0 };
     this.checkpoint();
-    for (const p of this.layout.parts) p.placed = false;
+    for (const p of this.layout.parts) if (!p.fixed) p.placed = false;
     let placed = 0, missing = 0;
     for (const e of a.parts) {
-      let inst = this.layout.parts.find((p) => !p.placed && p.def === e.def);
+      let inst = this.layout.parts.find((p) => !p.placed && !p.fixed && p.def === e.def);
       if (!inst && this.sandbox) {
         inst = makePart(e.def, this.layout.nextUid++);
         this.layout.parts.push(inst);
@@ -537,7 +537,7 @@ export class Game {
   clearBoard() {
     if (!this.editable) return;
     this.checkpoint();
-    for (const p of this.layout.parts) p.placed = false;
+    for (const p of this.layout.parts) if (!p.fixed) p.placed = false;
     this.clearHeat();
     this.toWorkshop();
   }
@@ -577,6 +577,7 @@ export class Game {
     this.offersSoFar = s.offers ?? this.picks.length;
     this.history = [];
     this.future = [];
+    ensureBigBoi(this.layout);
     this.enforceToolbox();
     this.soldOverflow = [];
     this.clearHeat();
@@ -612,6 +613,33 @@ export class Game {
     return inst;
   }
 
+  /** Buy an offer straight onto the board at (x, y), dragged from the shop: it needs room on the table, not in the toolbox. */
+  buyAndPlace(slot: number, x: number, y: number): PartInstance | null {
+    const id = this.shop.offers[slot];
+    if (!this.editable || !id) return null;
+    const cost = this.priceOf(id);
+    if (!this.canAfford(cost) || !canPlace(this.layout, id, x, y)) return null;
+    this.checkpoint();
+    if (!this.sandbox) this.money -= cost;
+    this.shop.offers[slot] = null;
+    return this.addPlaced(id, x, y);
+  }
+
+  /** Test Lab: any part, free, straight onto the board. */
+  grantAndPlace(id: PartId, x: number, y: number): PartInstance | null {
+    if (!this.editable || !this.sandbox || !canPlace(this.layout, id, x, y)) return null;
+    this.checkpoint();
+    return this.addPlaced(id, x, y);
+  }
+
+  private addPlaced(id: PartId, x: number, y: number): PartInstance {
+    const inst = makePart(id, this.layout.nextUid++, x, y, true);
+    this.layout.parts.push(inst);
+    this.clearHeat();
+    this.sim.updatePart(inst);
+    return inst;
+  }
+
   /** What a part costs in the shop right now (Coupon Book takes $1 off each, never below $1). */
   priceOf(id: PartId): number {
     return Math.max(1, PARTS[id].cost - this.mods.couponOff);
@@ -633,7 +661,7 @@ export class Game {
 
   sell(uid: number): number {
     const p = this.part(uid);
-    if (!this.editable || !p) return 0;
+    if (!this.editable || !p || p.fixed) return 0;
     this.checkpoint();
     this.clearHeat();
     const refund = this.sandbox ? 0 : this.sellValue(PARTS[p.def]);
@@ -648,7 +676,7 @@ export class Game {
   /** Put an inventory part on the board (or move a placed one). */
   place(uid: number, x: number, y: number, checkpoint = false): boolean {
     const p = this.part(uid);
-    if (!this.editable || !p || !canPlace(this.layout, p.def, x, y, uid)) return false;
+    if (!this.editable || !p || p.fixed || !canPlace(this.layout, p.def, x, y, uid)) return false;
     if (checkpoint) this.checkpoint();
     this.clearHeat();
     p.x = x;
@@ -665,7 +693,7 @@ export class Game {
    */
   store(uid: number): number | null {
     const p = this.part(uid);
-    if (!this.editable || !p || !p.placed) return null;
+    if (!this.editable || !p || !p.placed || p.fixed) return null;
     this.checkpoint();
     this.clearHeat();
     if (this.toolboxFull) return this.sellOverflow(p);
@@ -676,7 +704,7 @@ export class Game {
 
   rotate(uid: number, delta: number) {
     const p = this.part(uid);
-    if (!this.editable || !p || !PARTS[p.def].rotatable) return;
+    if (!this.editable || !p || p.fixed || !PARTS[p.def].rotatable) return;
     this.checkpoint();
     this.clearHeat();
     const TAU = Math.PI * 2;

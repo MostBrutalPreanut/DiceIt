@@ -14,11 +14,25 @@ export interface Layout {
   nextUid: number;
 }
 
+/** Every machine has a Big Boi in the middle that cannot be moved: the mascot, and the table's anchor. */
+export const BIG_BOI_AT = { x: 12, y: 36 };
+export function bigBoi(uid: number): PartInstance {
+  return { ...makePart('mega', uid, BIG_BOI_AT.x, BIG_BOI_AT.y, true), fixed: true };
+}
+
+/** Old layouts from before the fixed Big Boi get one, where there is room for it. */
+export function ensureBigBoi(l: Layout): boolean {
+  if (l.parts.some((p) => p.fixed)) return false;
+  if (!canPlace(l, 'mega', BIG_BOI_AT.x, BIG_BOI_AT.y)) return false;
+  l.parts.push(bigBoi(l.nextUid++));
+  return true;
+}
+
 export function starterLayout(): Layout {
   return {
-    parts: [makePart('pop', 1, 17, 44.5, true), makePart('pop', 2, 11, 45.5, true), makePart('pop', 3, 6, 42, true)],
+    parts: [makePart('pop', 1, 17, 44.5, true), makePart('pop', 2, 11, 45.5, true), makePart('pop', 3, 6, 42, true), bigBoi(4)],
     gravity: DEFAULT_GRAVITY,
-    nextUid: 4,
+    nextUid: 5,
   };
 }
 

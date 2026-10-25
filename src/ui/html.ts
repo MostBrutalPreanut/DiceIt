@@ -114,6 +114,7 @@ export const HUD_TIPS: Record<string, string> = {
   balls: '<b>Balls</b>: the balls left this round. Each ball lasts until it drains or its clock runs out; a Ball Printer adds balls to the table, not to this count.',
   money: '<b>Money</b>: spend it in the shop between rounds. Cha-Ching Bumpers pay coins during play (they land here), and every unused ball pays when you clear a round.',
   tilt: '<b>Tilt</b>: every nudge fills it and it drains slowly. Fill it and the machine tilts: lights out, flippers dead, the ball drains.',
+  map: '<b>The run</b>: fifteen rounds on the path, a boss every third (the big stops). The lit stop is where you are.',
   ledger: '<b>This round</b>: every point of the round, by the part type that scored it ($ is coins paid). Hover a part on the table for its own numbers.',
   clock: '<b>Ball clock</b>: one clock per ball (with every ball it turns into). When it runs out the ball ends.',
 };
