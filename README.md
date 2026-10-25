@@ -27,7 +27,11 @@ npm run typecheck
 npm run build && npx vite preview --port 4173 &
 npm run smoke -- ./shots  # drives the built game in headless Chromium
 npm run physics-report    # tunnelling rate per timestep, escape fuzz
-npm run balance           # bot plays rounds; goal clear rates
+npm run balance           # the balance table: par machines play whole runs, the goal curve, economy, pacing (about 30 min)
+npm run balance -- --quick     # a rough look in a couple of minutes
+npm run balance -- --write     # also regenerate src/data/goals.ts, the goal for every round
+npm run balance -- --verify --seed-base=10   # judge fresh par machines against the goals now in the game
+npm run clears            # the old quick check: how often the starter machine clears round 1
 npx vite-node tools/launch-spread.ts   # where do launched balls land?
 ```
 
@@ -35,11 +39,11 @@ npx vite-node tools/launch-spread.ts   # where do launched balls land?
 
 ```
 src/sim/      deterministic Box2D simulation (runs headless in Node); nothing about scoring or drawing
-src/game/     scoring (points × Mult, recipes, ledger) and the run state: shop, inventory, rounds
-src/data/     content as data: parts (recipes, dials, descriptions), announcer lines
+src/game/     scoring (points × Mult, recipes, ledger), the run state (shop, inventory, rounds, upgrades) and the auto-builder
+src/data/     content as data: parts (recipes, dials, descriptions), upgrades, the goal table, announcer lines
 src/ui/       small HTML builders for the cards and tooltips
 src/render/   PixiJS renderer (reads the sim, never writes it)
-tools/        stress/fuzz runners, balance bot, browser smoke test
+tools/        stress/fuzz runners, the par player and balance table, browser smoke test
 tests/        vitest
 ```
 

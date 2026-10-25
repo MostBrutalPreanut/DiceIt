@@ -322,7 +322,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     const stiff = inst ? dialValue(inst, 'stiff') : 1;
     lines.push({ tag: 'note', text: `Pays more for a harder hit: ${r.tiers.map((t) => `x${t.x} ${t.name}${t.from ? ` (${num(t.from * stiff)}+ speed)` : ''}`).join(', ')}.` });
   }
-  if (r.setBonus && def.kind === 'rollover') lines.push({ tag: 'set', text: `Light every Lane Rollover on the board: +${num(setPts)} points and +${num(setMult)} Mult, then they reset.` });
+  if (r.setBonus && def.kind === 'rollover') lines.push({ tag: 'set', text: `Light every Lane Rollover on the board (you need at least two): +${num(setPts)} points and +${num(setMult)} Mult, then they reset.` });
   if (def.kind === 'bank') lines.push({ tag: 'set', text: `Each target you hit drops. Drop all three: +${num(setPts)} points and +${num(setMult)} Mult, then they pop back up (and every new ball).` });
   if (r.levelUp) {
     const t = PARTS[LEVEL_TARGETS[Math.round(inst ? dialValue(inst, 'target') : 0)] ?? 'pop'];

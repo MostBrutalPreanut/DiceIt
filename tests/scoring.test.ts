@@ -323,3 +323,16 @@ describe('Lane change: the flipper buttons shift the lit lanes', () => {
     expect(mix.s.isLit(41)).toBe(true); // a lamp is not a lane
   });
 });
+
+describe('a lone lane is not a set', () => {
+  it('one Lane Rollover just scores and lights; it never pays the set bonus by itself', () => {
+    const { s } = setup([makePart('lane', 10, 8, 30, true)]);
+    for (let i = 0; i < 5; i++) {
+      const out = s.consume(hit(10));
+      expect(out).toHaveLength(1);
+      expect(out[0].kind).toBe('hit');
+    }
+    expect(s.mult).toBe(1);
+    expect(s.isLit(10)).toBe(true);
+  });
+});

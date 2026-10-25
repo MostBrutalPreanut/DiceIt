@@ -3,6 +3,7 @@ import { neutralMods, type Mods, type SimMods } from '../data/mods';
 import { BOSS_EVERY, computeMods, rollUpgradeOffers, SKIP_PAY, UPGRADES, type UpgradePick, type RunView, type UpgradeApi, type UpgradeId, type UpgradeOffer } from '../data/upgrades';
 import { canPlace, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
 import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
+import { GOALS, GOAL_GROWTH } from '../data/goals';
 import { Rng } from '../sim/rng';
 import { createSim, NO_INPUT, type Input, type Sim, type SimEvent } from '../sim/sim';
 import { Scorer, type ScoreEvent } from './scoring';
@@ -25,9 +26,16 @@ export const BALLS_PER_ROUND = 3; // the base; Extra Ball upgrades add to it (Ga
 export const START_MONEY = 6;
 export const SHOP_SLOTS = 4;
 
-/** Placeholder goal curve. The real one gets set against the balance bot (see docs/game-plan.md). */
+/** Two significant figures: goals read as 4,300 or 12,000, not 4,312. */
+export function niceGoal(n: number): number {
+  const mag = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, n))) - 1));
+  return Math.round(n / mag) * mag;
+}
+
+/** The goal for a round: the balance bot's table (src/data/goals.ts), then GOAL_GROWTH a round beyond it. */
 export function goalFor(round: number): number {
-  return Math.round((2500 * Math.pow(1.7, round - 1)) / 100) * 100;
+  if (round <= GOALS.length) return GOALS[Math.max(1, round) - 1];
+  return niceGoal(GOALS[GOALS.length - 1] * Math.pow(GOAL_GROWTH, round - GOALS.length));
 }
 
 export interface StepResult {
@@ -133,7 +141,10 @@ export class Game {
   private history: string[] = [];
   private future: string[] = [];
   private runSeed = 1;
-  private seed = 1;
+  /** Seed for the next sim reset (tools set it to vary the plunger and saucer randomness). */
+  seed = 1;
+  /** Tools: play a round against this goal instead of the table's (Infinity = play every ball out). */
+  goalOverride: number | null = null;
 
   constructor() {
     this.sim = createSim(this.layout, { seed: this.seed, mods: this.simMods() });
@@ -206,7 +217,7 @@ export class Game {
     this.mode = 'round';
     this.ballsLeft = this.ballsPerRound;
     this.payout = null;
-    this.scorer = this.newScorer(goalFor(this.round), true);
+    this.scorer = this.newScorer(this.goalOverride ?? goalFor(this.round), true);
     this.scorer.resetRound();
     this.sim.spawnBall();
   }
@@ -664,16 +675,21 @@ export class Game {
   }
 
   private computePayout(): Payout {
-    const lines: Payout['lines'] = [];
-    lines.push({ label: `Round ${this.round} cleared`, amount: 3 + this.round });
-    if (this.mods.roundBonus > 0) lines.push({ label: 'Sponsor', amount: this.mods.roundBonus });
-    if (this.ballsLeft > 0) lines.push({ label: `${this.ballsLeft} unused ball${this.ballsLeft > 1 ? 's' : ''} x $${this.mods.unusedBallPay}`, amount: this.mods.unusedBallPay * this.ballsLeft });
-    const interest = Math.min(this.mods.interestCap, Math.floor(this.money / 4) * this.mods.interestPer);
-    if (interest > 0) lines.push({ label: `Interest on $${this.money}`, amount: interest });
-    const over = this.scorer.score / this.scorer.goal;
-    const doublings = Math.min(3, Math.max(0, Math.floor(Math.log2(over))));
-    if (doublings > 0) lines.push({ label: `Overshoot (${over.toFixed(1)}x goal)`, amount: 2 * doublings });
-    if (this.scorer.money > 0) lines.push({ label: 'Coins from play', amount: this.scorer.money });
-    return { lines, total: lines.reduce((a, l) => a + l.amount, 0) };
+    return payoutFor({ round: this.round, ballsLeft: this.ballsLeft, score: this.scorer.score, goal: this.scorer.goal, coins: this.scorer.money, money: this.money, mods: this.mods });
   }
+}
+
+/** What a cleared round pays. One formula, used by the game and by the balance tool's economy check. */
+export function payoutFor(i: { round: number; ballsLeft: number; score: number; goal: number; coins: number; money: number; mods: Mods }): Payout {
+  const lines: Payout['lines'] = [];
+  lines.push({ label: `Round ${i.round} cleared`, amount: 3 + i.round });
+  if (i.mods.roundBonus > 0) lines.push({ label: 'Sponsor', amount: i.mods.roundBonus });
+  if (i.ballsLeft > 0) lines.push({ label: `${i.ballsLeft} unused ball${i.ballsLeft > 1 ? 's' : ''} x $${i.mods.unusedBallPay}`, amount: i.mods.unusedBallPay * i.ballsLeft });
+  const interest = Math.min(i.mods.interestCap, Math.floor(i.money / 4) * i.mods.interestPer);
+  if (interest > 0) lines.push({ label: `Interest on $${i.money}`, amount: interest });
+  const over = i.score / i.goal;
+  const doublings = Math.min(3, Math.max(0, Math.floor(Math.log2(over))));
+  if (doublings > 0) lines.push({ label: `Overshoot (${over.toFixed(1)}x goal)`, amount: 2 * doublings });
+  if (i.coins > 0) lines.push({ label: 'Coins from play', amount: i.coins });
+  return { lines, total: lines.reduce((a, l) => a + l.amount, 0) };
 }

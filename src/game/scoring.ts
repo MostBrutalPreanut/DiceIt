@@ -246,7 +246,8 @@ export class Scorer {
     if (r.lights && def.kind === 'rollover') {
       this.lit.add(inst.uid);
       const lanes = this.placed().filter((p) => p.def === inst.def);
-      if (r.setBonus && lanes.every((l) => this.lit.has(l.uid))) {
+      // a set needs at least two lanes: a lone lane would "complete" itself on every roll (the auto-builder found that exploit)
+      if (r.setBonus && lanes.length >= 2 && lanes.every((l) => this.lit.has(l.uid))) {
         for (const l of lanes) this.lit.delete(l.uid);
         const pts = r.setBonus.points * this.mods.setFactor;
         out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, r.setBonus.mult * this.mods.setFactor, 0, [`${pts} set bonus`], 'LANES COMPLETE'));
