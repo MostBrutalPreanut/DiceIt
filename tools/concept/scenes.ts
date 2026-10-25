@@ -168,13 +168,13 @@ function backdropPreview(u: number): string {
 
 function rng(seed: number) { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); }
 
-function playfield(v: View, t: Theme, build: Placed[], fx = true, decals?: typeof DECALS): string {
+function playfield(v: View, t: Theme, build: Placed[], fx = true, decals?: typeof DECALS, opts: { noRim?: boolean } = {}): string {
   const clip = uid('clip_' + t.id);
   const out: string[] = [];
   out.push(`<defs><clipPath id="${clip}"><path d="${poly(floorPoly().map(([x, y]) => P(v, x, y)))}"/></clipPath></defs>`);
   // the cabinet rim around the field (ground level)
   const rimPts = box(13, 26.1, 14.6, 27.5, 0, 1.2);
-  out.push(`<path d="${poly(rimPts.map(([x, y]) => P(v, x, y)))} ${poly(floorPoly().map(([x, y]) => P(v, x, y)))}" fill-rule="evenodd" fill="${t.rim}" stroke="${t.ink}" stroke-width="${f(v.lw * 1.4)}"/>`);
+  if (!opts.noRim) out.push(`<path d="${poly(rimPts.map(([x, y]) => P(v, x, y)))} ${poly(floorPoly().map(([x, y]) => P(v, x, y)))}" fill-rule="evenodd" fill="${t.rim}" stroke="${t.ink}" stroke-width="${f(v.lw * 1.4)}"/>`);
   out.push(floorArt(v, t, clip));
   out.push(`<path d="${poly(floorPoly().map(([x, y]) => P(v, x, y)))}" fill="none" stroke="${t.ink}" stroke-width="${f(v.lw)}"/>`);
   // apron, with a rule card like a real machine
@@ -316,7 +316,7 @@ const hullOf = (pts: Pt[]) => { // tiny local hull to keep surround self-contain
 
 // ------------------------------------------------------------------ HUD pieces
 function dmd(t: Theme, x: number, y: number, w: number, h: number, msg: string) {
-  const id = uid('dmd_' + t.id), fs = h * 0.6;
+  const id = uid('dmd_' + t.id), fs = Math.min(h * 0.6, (w - 16) / (msg.length * 0.78));
   // the text is centred on its measured cap height, so it sits mid-panel top to bottom
   return `<defs><mask id="${id}m"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#fff"/>${Array.from({ length: Math.ceil(w / 5) }, (_, i) => `<rect x="${x + i * 5 + 3.6}" y="${y}" width="1.4" height="${h}" fill="#000"/>`).join('')}${Array.from({ length: Math.ceil(h / 5) }, (_, i) => `<rect x="${x}" y="${y + i * 5 + 3.6}" width="${w}" height="1.4" fill="#000"/>`).join('')}</mask></defs>` +
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="#241a26" stroke="${t.ink}" stroke-width="${LW.frame}"/>` +
@@ -677,6 +677,107 @@ function tiltSheet(): string {
 const stampText = (t: Theme, x: number, y: number, s: string) =>
   `<g transform="translate(${x} ${y}) rotate(-12)"><rect x="-110" y="-44" width="220" height="88" rx="14" fill="none" stroke="${t.accent}" stroke-width="9"/>${text(t, 0, 26, s, 72, { w: 700, anchor: 'middle', fill: t.accent })}</g>`;
 
+// ------------------------------------------------------------------ the cabinet as a diorama object (options A and B)
+// A: the playfield sunk into a tray with thick walls, a backbox carrying the DMD, legs and a base, same angle as today.
+// B: A, tipped a little more (k 0.8, taller heights) and leaned sideways so the cabinet's right side shows too.
+interface CabOpt { name: string; k: number; kz: number; shx: number; diorama: boolean }
+const CAB_NOW: CabOpt = { name: 'Today', k: 0.9, kz: 0.51, shx: 0, diorama: false };
+const CAB_A: CabOpt = { name: 'A · Tray and backbox', k: 0.9, kz: 0.51, shx: 0, diorama: true };
+const CAB_B: CabOpt = { name: 'B · A + the angle', k: 0.78, kz: 0.72, shx: 0.15, diorama: true };
+const WALL_H = 1.6, SHELL_BOTTOM = -7, LEG_BOTTOM = -9.5;
+
+/** The DMD panel: the rim-coloured frame, a row of bulbs top and bottom, the dot-matrix screen. */
+function dmdPanel(t: Theme, x: number, y: number, w: number, h: number, msg: string) {
+  const bulbs: string[] = [], n = Math.max(6, Math.round(w / 22)), pad = Math.max(8, h * 0.16);
+  for (let i = 0; i <= n; i++) for (const yy of [y + pad / 2 + 1, y + h - pad / 2 - 1]) bulbs.push(`<circle cx="${f(x + 12 + (i * (w - 24)) / n)}" cy="${f(yy)}" r="${f(Math.min(4.5, pad * 0.3))}" fill="${i % 2 ? t.glow : mix(t.glow, t.shadeTint, 0.45)}" stroke="${t.ink}" stroke-width="${LW.detail}"/>`);
+  return `<rect x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(h)}" rx="10" fill="${t.rim}" stroke="${t.ink}" stroke-width="${LW.frame}"/>` + bulbs.join('') + dmd(t, x + 14, y + pad, w - 28, h - pad * 2, msg);
+}
+const OUTER = () => box(13, 26.1, 14.6, 27.5, 0, 1.2);
+
+/** The machine standing on its base: centred on cx, with the bottom of its base at baseY. */
+function dioramaMachine(t: Theme, cx: number, baseY: number, S: number, o: CabOpt, msg: string): string {
+  const lowZ = o.diorama ? LEG_BOTTOM : 0, frontY = -1.4;
+  const oy = baseY - (-frontY * o.k - lowZ * o.kz) * S;
+  const v: View = { S, ox: cx - (13 + 26 * o.shx) * S, oy, k: o.k, kz: o.kz, shx: o.shx, lw: 2 };
+  const out: string[] = [];
+  if (!o.diorama) {
+    // today: a flat machine on the page, the DMD floating above it as an HTML card
+    out.push(surround(v, t), playfield(v, t, BUILD, false));
+    const [, top] = P(v, 13, 53.6);
+    out.push(dmdPanel(t, cx - 12 * S, top - 7.4 * S, 24 * S, 5.6 * S, msg));
+    return out.join('');
+  }
+  const wood = mat(t, t.rim);
+  // the machine's shadow on the ground, and the surround standing on the same ground
+  const shadowPts = box(14, 25.4, 15.4, 28.6, 0, 3).map(([x, y]) => P(v, x + 0.8, y - 0.8, LEG_BOTTOM));
+  out.push(`<path d="${poly(shadowPts)}" fill="${t.shadeTint}" opacity="0.2"/>`);
+  out.push(surround({ ...v, oy: v.oy + -LEG_BOTTOM * o.kz * S }, t));
+  // legs, far ones first
+  for (const [lx, ly] of [[0.2, 52], [25.8, 52], [0.2, 0.4], [25.8, 0.4]] as const) {
+    const leg = new Prop(v, t);
+    leg.cyl(lx, ly, 0.55, LEG_BOTTOM, SHELL_BOTTOM - LEG_BOTTOM, mat(t, t.metal));
+    out.push(leg.svg());
+  }
+  // the backbox rises from the head of the table and carries the DMD: the text bar becomes part of the machine
+  // its height is set so the panel stands about 6.5 units tall on screen whatever the angle
+  const boxH = 6.8 / o.kz;
+  const bb = new Prop(v, t);
+  bb.prism(box(13, 55, 13.8, 1.1, 0, 0.3), WALL_H, boxH, wood);
+  out.push(bb.svg());
+  const [x0, y0] = P(v, 0.4, 53.9, WALL_H + boxH - 0.35 / o.kz), [x1, y1] = P(v, 25.6, 53.9, WALL_H + 0.3 / o.kz);
+  out.push(dmdPanel(t, x0, y0, x1 - x0, y1 - y0, msg));
+  // the shell: thick walls standing on the legs, its top is the rim
+  const shell = new Prop(v, t);
+  shell.prism(OUTER(), SHELL_BOTTOM, WALL_H - SHELL_BOTTOM, wood, { top: wood.base });
+  out.push(shell.svg());
+  // the well: everything inside is seen through the opening at the top of the walls, so the near wall hides
+  // the bottom of the floor and the inside of the far wall shows above it
+  const opening = floorPoly().map(([x, y]) => P(v, x, y, WALL_H));
+  const cid = uid('well');
+  out.push(`<defs><clipPath id="${cid}"><path d="${poly(opening)}"/></clipPath></defs><g clip-path="url(#${cid})">`);
+  out.push(`<path d="${poly(opening)}" fill="${mix(t.rim, t.shadeTint, 0.5)}"/>`);
+  // the inside of the far wall gets a wallpaper stripe, so it reads as a wall and not a shadow
+  const band = floorPoly().map(([x, y]) => P(v, x, y, WALL_H * 0.55));
+  out.push(`<path d="${line(band)}" fill="none" stroke="${mix(t.rim, t.shadeTint, 0.3)}" stroke-width="${f(S * 0.25)}"/>`);
+  out.push(playfield(v, t, BUILD, false, undefined, { noRim: true }));
+  out.push('</g>');
+  // the cut edge round the opening: ink, then the light tone of the wood, like the carton flaps in the references
+  out.push(`<path d="${poly(opening)}" fill="none" stroke="${t.ink}" stroke-width="${f(v.lw * 2.4)}" stroke-linejoin="round"/>`);
+  out.push(`<path d="${poly(opening)}" fill="none" stroke="${wood.light}" stroke-width="${f(v.lw * 0.9)}" stroke-linejoin="round"/>`);
+  // the coin door on the front face
+  const door = [P(v, 9.5, -1.4, -1.2), P(v, 16.5, -1.4, -1.2), P(v, 16.5, -1.4, -5.8), P(v, 9.5, -1.4, -5.8)];
+  out.push(`<path d="${poly(door)}" fill="${mat(t, t.metal).mid}" stroke="${t.ink}" stroke-width="2.2" stroke-linejoin="round"/>`);
+  for (const dx of [11.6, 14.4]) { const [X, Y] = P(v, dx, -1.4, -2.6); out.push(`<rect x="${f(X - 3)}" y="${f(Y - 0.7 * S * o.kz)}" width="6" height="${f(1.4 * S * o.kz)}" rx="2.5" fill="${t.ink}"/>`); }
+  const [PX, PY] = P(v, 13, -1.4, -4.3);
+  out.push(`<rect x="${f(PX - 2.2 * S)}" y="${f(PY - 0.5 * S * o.kz)}" width="${f(4.4 * S)}" height="${f(1 * S * o.kz)}" rx="3" fill="${t.accent}" stroke="${t.ink}" stroke-width="1.8"/>`);
+  if (o.shx > 0) {
+    // the right side shows: side art and the right flipper button
+    const side = (y: number, z: number) => P(v, 27.6, y, z);
+    out.push(`<path d="${poly([side(5, 0.4), side(48, 0.4), side(42, -6.4), side(11, -6.4)])}" fill="${t.accent}" stroke="${t.ink}" stroke-width="2" stroke-linejoin="round"/>`);
+    out.push(`<path d="${poly([side(14, -1.6), side(39, -1.6), side(36, -4.6), side(17, -4.6)])}" fill="${t.paper}" stroke="${t.ink}" stroke-width="1.8" stroke-linejoin="round"/>`);
+    const [BX, BY] = side(3, -0.6);
+    out.push(`<ellipse cx="${f(BX + 2)}" cy="${f(BY)}" rx="${f(0.3 * S)}" ry="${f(0.5 * S)}" fill="${t.ink}"/><ellipse cx="${f(BX)}" cy="${f(BY)}" rx="${f(0.3 * S)}" ry="${f(0.5 * S)}" fill="${t.accent}" stroke="${t.ink}" stroke-width="1.8"/>`);
+  }
+  return out.join('');
+}
+
+/** Three machines side by side, each with a caption card under it. */
+function cabinetSheet(title: string, sub: string, cols: { t: Theme; o: CabOpt; label: string; lines: string[] }[]): string {
+  const W = 1800, H = 1120, colW = W / cols.length, S = 11.5;
+  const o: string[] = [`<rect width="${W}" height="${H}" fill="${cols[0].t.bg}"/>`, backdrop(cols[0].t, W, H, 0)];
+  o.push(text(cols[0].t, 40, 62, title, 34, { w: 700, fill: cols[0].t.paper, stroke: cols[0].t.ink }));
+  o.push(text(cols[0].t, 40, 96, sub, 17, { w: 600 }));
+  cols.forEach((c, i) => {
+    const cx = colW * i + colW / 2;
+    if (i > 0 && cols[i].t !== cols[i - 1].t) o.push(`<rect x="${colW * i}" y="120" width="${colW}" height="${H - 120}" fill="${c.t.bg}"/>${''}`);
+    o.push(dioramaMachine(c.t, cx, 925, S, c.o, c.o.diorama ? 'BIG BOI SAYS OOF' : 'BIG BOI SAYS OOF'));
+    o.push(card(c.t, cx - 270, 950, 540, 150, c.t.paper, 16));
+    o.push(text(c.t, cx - 248, 986, c.label, 22, { w: 700 }));
+    c.lines.forEach((ln, k) => o.push(text(c.t, cx - 248, 1018 + k * 22, ln, 15, { w: 600 })));
+  });
+  return svgDoc(W, H, o.join(''));
+}
+
 // ------------------------------------------------------------------ output
 function svgDoc(w: number, h: number, body: string) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`;
@@ -689,6 +790,13 @@ async function main() {
     'screen-factory': screen(FACTORY), 'screen-diner': screen(DINER), 'screen-castle': screen(CASTLE),
     'parts-sheet': partsSheet(), 'particles': particleSheet(), 'key-art-lineup': keyArt(),
     'relics': relicSheet(), 'fonts': fontSheet(), 'tilt': tiltSheet(),
+    'cabinet-compare': cabinetSheet('From a screen to a machine', 'the same table and build, three ways to draw the cabinet', [
+      { t: FACTORY, o: CAB_NOW, label: 'Today', lines: ['A flat field on the page; the DMD is a', 'separate card floating above it.'] },
+      { t: FACTORY, o: CAB_A, label: CAB_A.name, lines: ['The field sinks into a cabinet with thick walls;', 'the DMD lives on a backbox; the cabinet stands', 'on legs. Same angle as today: aiming unchanged.'] },
+      { t: FACTORY, o: CAB_B, label: CAB_B.name, lines: ['Tipped a little more (k 0.78, taller heights)', 'and leaned sideways (0.15): the right side shows,', 'with side art and the flipper button.'] },
+    ]),
+    'cabinet-a': cabinetSheet('Option A · tray and backbox', 'the playfield sunk into the cabinet, the DMD on a backbox, the machine on legs · same angle as today', THEMES.map((t) => ({ t, o: CAB_A, label: t.tagline, lines: ['the inside of the far wall shows above', 'the floor; the near wall hides its edge'] }))),
+    'cabinet-b': cabinetSheet('Option B · tray, backbox and the angle', 'A, tipped to k 0.78 with taller heights and a 0.15 sideways lean, so two faces of the machine show', THEMES.map((t) => ({ t, o: CAB_B, label: t.tagline, lines: ['the right side carries the side art and', 'the flipper button; the lean is adjustable'] }))),
   };
   const require = createRequire(import.meta.url);
   const { chromium } = require('playwright');

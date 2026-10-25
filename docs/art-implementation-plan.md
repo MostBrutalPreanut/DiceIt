@@ -103,3 +103,15 @@ A → B → C → D → E → F, with H alongside and G after the major-upgrade 
 - **Toolbox:** four slots. Buying stops when it is full, and a part stored in a full toolbox (or granted by an upgrade) is sold for its sell price.
 - **Less text:** no "times your Mult" on every part, no dial sentences in the recipe, the Kick dial is now called Bounce, and the spare-ball note left the money row.
 - **Controls:** ← → work the flippers (all flippers on that side), Space shoots, Z X nudge; the keys for the current mode sit in one line under the table.
+
+### Proposal: the cabinet as a diorama object (not built yet)
+
+To read as a pinball machine rather than a screen, like the cut-open objects in the style references: sink the playfield into a cabinet with thick walls (the inside of the far wall shows, the near wall hides the floor's edge, a light cut edge round the opening), raise a backbox from the head of the table that carries the DMD, and stand the machine on legs. Option B also tips it to k 0.78 with taller heights and leans it 0.15 sideways so the right side (side art, flipper button) shows.
+
+| | |
+|---|---|
+| ![](concept/cabinet-compare.png) | today, A and B side by side (Factory) |
+| ![](concept/cabinet-a.png) | A in all three themes |
+| ![](concept/cabinet-b.png) | B in all three themes |
+
+Rendered by `npm run concept` (`dioramaMachine()` in `tools/concept/scenes.ts`).
