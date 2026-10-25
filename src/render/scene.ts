@@ -49,7 +49,7 @@ export function dmdRect(v: View) {
 }
 
 /** Everything that does not move: surround, legs, backbox, shell, the well with its floor art, apron, decals, rails. */
-export function buildMachine(v: View, t: Theme, decals: (StuckDecal | null)[]): Container {
+export function buildMachine(v: View, t: Theme, decals: (StuckDecal | null)[], ledge?: number): Container {
   const root = new Container();
   const g = new Graphics();
   root.addChild(g);
@@ -116,7 +116,7 @@ export function buildMachine(v: View, t: Theme, decals: (StuckDecal | null)[]): 
   });
   const rg = new Graphics();
   well.addChild(rg);
-  rails(rg, v, t);
+  rails(rg, v, t, ledge);
   // the cut edge round the opening: ink, then the light tone of the wood
   const edge = new Graphics();
   root.addChild(edge);
@@ -187,8 +187,8 @@ export function arrowInserts(g: Graphics, v: View, t: Theme, on: number) {
 }
 
 /** The walls as continuous rails: stacked strokes from the floor to the rail top, ink first. */
-function rails(g: Graphics, v: View, t: Theme) {
-  const segs = tableSegments(), m = mat(t, t.rail), w = 0.48 * v.S, h = 0.75, steps = 5;
+function rails(g: Graphics, v: View, t: Theme, ledge?: number) {
+  const segs = tableSegments(ledge), m = mat(t, t.rail), w = 0.48 * v.S, h = 0.75, steps = 5;
   const chains: Pt[][] = [];
   for (const s of segs) {
     const last = chains[chains.length - 1];

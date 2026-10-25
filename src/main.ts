@@ -10,7 +10,8 @@ import { Renderer, type DrawState } from './render/renderer';
 import { FxOverlay, rectCentre } from './render/overlay';
 import { FACTORY, roleFill, themeById, THEMES, themeVars, type Theme } from './render/theme';
 import { DT } from './sim/constants';
-import { canPlace } from './sim/layout';
+import { canPlace, canPlaceLedge } from './sim/layout';
+import { clampLedge, LEDGE, ledgeSeg } from './sim/table';
 import { Bot } from './sim/bot';
 import type { Input, SimEvent } from './sim/sim';
 import { decalCard, fmt, HUD_TIPS, partCard, roleVar, statsLine } from './ui/html';
@@ -67,6 +68,9 @@ async function main() {
   let shopDrag: { id: PartId; slot: number | null; x0: number; y0: number; moving: boolean; carry: boolean; el: HTMLElement } | null = null;
   /** A part picked up off the table with a click: it follows the pointer until the next click sets it down. */
   let carry: { uid: number; moved: boolean } | null = null;
+  /** The wall ledge being dragged up or down the left wall: where it would go, and where the grab started. */
+  let ledgeDrag: { dy: number; y: number } | null = null;
+  let hoverLedge = false;
   let pointer: { x: number; y: number } | null = null;
   let ledgerTimer = 0;
   let lastMultBand = 1;
@@ -75,7 +79,7 @@ async function main() {
   let coinsInFlight = 0;
   const overlayEl = $('overlay');
   $('stage').appendChild($('upgradeBox')); // the upgrade picker floats over the top of the table
-  const drawState: DrawState = { ghost: null, selectedUid: null, hoverUid: null, showHeat: false, hoverDecal: null };
+  const drawState: DrawState = { ghost: null, selectedUid: null, hoverUid: null, showHeat: false, hoverDecal: null, ledge: null };
 
   /** The backbox's dot-matrix display says it: the message scrolls in from the right. */
   const say = (text: string) => renderer.say(text);
@@ -519,11 +523,25 @@ async function main() {
     return best;
   };
 
+  /** Is a sim point on the wall ledge? (Its handle is a little fatter than the rail.) */
+  const onLedge = (x: number, y: number) => {
+    const s = ledgeSeg(game.layout.ledge);
+    const dx = s.x2 - s.x1, dy = s.y2 - s.y1, u = Math.max(0, Math.min(1, ((x - s.x1) * dx + (y - s.y1) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(x - (s.x1 + u * dx), y - (s.y1 + u * dy)) < 0.9;
+  };
+
   canvas.addEventListener('pointerdown', (e) => {
     audio.unlock();
     if (!game.editable || e.button !== 0) return;
     const p = renderer.toSim(e.clientX, e.clientY);
     pointer = p;
+    if (!carry && armed === null && !hitPart(p.x, p.y) && onLedge(p.x, p.y)) {
+      const y = game.layout.ledge ?? LEDGE.default;
+      ledgeDrag = { dy: y - p.y, y };
+      canvas.setPointerCapture(e.pointerId);
+      audio.pickUp();
+      return;
+    }
     if (carry) { // a part picked up off the table: this click sets it down where it is
       carry = null;
       audio.place();
@@ -559,6 +577,8 @@ async function main() {
   canvas.addEventListener('pointermove', (e) => {
     pointer = renderer.toSim(e.clientX, e.clientY);
     hover = hitPart(pointer.x, pointer.y)?.uid ?? null;
+    hoverLedge = hover === null && game.editable && (ledgeDrag !== null || onLedge(pointer.x, pointer.y));
+    if (ledgeDrag) ledgeDrag.y = clampLedge(pointer.y + ledgeDrag.dy);
     hoverDecal = hover === null ? renderer.decalAt(e.clientX, e.clientY) : null;
     if (carry && game.editable) {
       if (game.place(carry.uid, pointer.x, pointer.y, !carry.moved)) carry.moved = true;
@@ -576,6 +596,15 @@ async function main() {
     showTip(e.clientX, e.clientY);
   });
   canvas.addEventListener('pointerup', (e) => {
+    if (ledgeDrag) {
+      const y = ledgeDrag.y;
+      ledgeDrag = null;
+      if (y !== (game.layout.ledge ?? LEDGE.default)) {
+        if (game.moveLedge(y)) { audio.place(); say('LEDGE MOVED. THE BALL WILL NOTICE'); persist(); } else say('NO ROOM THERE');
+      }
+      refreshWorkshop();
+      return;
+    }
     if (dragging) {
       // a click without a drag picks the part up: it follows the pointer until the next click
       if (!dragging.moved) { carry = { uid: dragging.uid, moved: false }; dragging = null; audio.pickUp(); refreshWorkshop(); return; }
@@ -599,7 +628,7 @@ async function main() {
     storeSelected();
   }, true);
   canvas.addEventListener('pointerleave', () => {
-    pointer = null; hover = null; hoverDecal = null; $('tip').hidden = true;
+    pointer = null; hover = null; hoverDecal = null; hoverLedge = false; $('tip').hidden = true;
     // a part in hand goes back to its spot when the pointer leaves the table (reaching for its card, say)
     if (carry) { if (carry.moved) { game.undo(); persist(); } carry = null; refreshWorkshop(); }
   });
@@ -649,6 +678,10 @@ async function main() {
       placeTip(cx, cy);
       return;
     }
+    if (hoverLedge && !dragging) {
+      tipPlain('<b>Wall ledge</b>: a ball sliding down the left wall rolls back into the field off it, so where it sits decides where those balls land. Every run puts it somewhere new; drag it up or down the wall to move it (free).', cx, cy);
+      return;
+    }
     if (hoverDecal !== null && !dragging && game.decals.length < DECAL_SLOTS) {
       tipPlain('<b>Empty decal slot</b>: win a relic decal from the Rules column of a major upgrade (after every boss) and it sticks here.', cx, cy);
       return;
@@ -694,6 +727,7 @@ async function main() {
   });
   addEventListener('keyup', (e) => keys.delete(e.code));
   addEventListener('blur', () => keys.clear());
+  document.addEventListener('visibilitychange', () => { if (document.hidden) keys.clear(); });
   document.addEventListener('click', (e) => { if (e.target instanceof HTMLButtonElement) e.target.blur(); });
 
   // on-screen controls for touch devices send the same key events the keyboard does
@@ -1127,6 +1161,9 @@ async function main() {
     drawState.selectedUid = game.editable ? selected : null;
     drawState.hoverUid = hover;
     drawState.hoverDecal = hoverDecal;
+    drawState.ledge = game.editable && (ledgeDrag || hoverLedge)
+      ? { y: ledgeDrag?.y ?? game.layout.ledge ?? LEDGE.default, valid: !ledgeDrag || canPlaceLedge(game.layout, ledgeDrag.y), moving: !!ledgeDrag }
+      : null;
     const armedPart = armed != null ? game.part(armed) : undefined;
     drawState.ghost = game.editable && (shopDrag?.moving || shopDrag?.carry) && pointer
       ? { def: shopDrag.id, x: pointer.x, y: pointer.y, angle: 0, valid: canPlace(game.layout, shopDrag.id, pointer.x, pointer.y) }

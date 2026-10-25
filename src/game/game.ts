@@ -2,8 +2,9 @@ import { makePart, MAX_LEVEL, PARTS, PART_IDS, sellPrice, type PartDef, type Par
 import { neutralMods, type Mods, type SimMods } from '../data/mods';
 import { BOSS_EVERY, computeMods, rollUpgradeOffers, SKIP_PAY, UPGRADES, type Rarity, type UpgradePick, type RunView, type UpgradeApi, type UpgradeId, type UpgradeOffer } from '../data/upgrades';
 import { DECAL_SLOTS, DECALS, type DecalLook } from '../data/decals';
-import { canPlace, ensureBigBoi, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
+import { canPlace, canPlaceLedge, ensureBigBoi, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
 import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
+import { clampLedge, LEDGE } from '../sim/table';
 import { GOALS, GOAL_GROWTH } from '../data/goals';
 import { Rng } from '../sim/rng';
 import { createSim, NO_INPUT, type Input, type Sim, type SimEvent } from '../sim/sim';
@@ -404,6 +405,7 @@ export class Game {
     this.future = [];
     this.clearHeat();
     this.runSeed++;
+    this.layout.ledge = randomLedge(new Rng(this.runSeed * 613 + 17), this.layout);
     this.shop = { offers: rollOffers(new Rng(this.runSeed), this.mods.shopSlots), rerolls: 0 };
     this.toWorkshop();
   }
@@ -728,6 +730,16 @@ export class Game {
     if (p.placed) this.sim.updatePart(p);
   }
 
+  /** Move the wall ledge (the ball stopper) up or down the left wall. Free, like moving a part. */
+  moveLedge(y: number, checkpoint = true): boolean {
+    if (!this.editable || !canPlaceLedge(this.layout, y)) return false;
+    if (checkpoint) this.checkpoint();
+    this.clearHeat();
+    this.layout.ledge = y;
+    this.toWorkshop(); // the wall is cabinet furniture: the sim rebuilds its table
+    return true;
+  }
+
   setGravity(g: number) {
     if (!this.editable) return;
     this.clearHeat();
@@ -751,7 +763,12 @@ export class Game {
 
   step(input: Input = NO_INPUT): StepResult {
     const result: StepResult = { sim: [], score: [], game: [] };
-    if (this.mode === 'roundEnd' || this.mode === 'runOver') return result;
+    if (this.mode === 'roundEnd' || this.mode === 'runOver') {
+      // the table is empty, but the flippers still follow the buttons: freezing the sim here left a flipper
+      // that was held as the last ball drained stuck up for the whole payout screen
+      result.sim = this.sim.step(input).filter((e) => e.type === 'flipper');
+      return result;
+    }
 
     const wasGoal = this.scorer.goalReached;
     const events = this.sim.step(input);
@@ -790,6 +807,15 @@ export class Game {
   private computePayout(): Payout {
     return payoutFor({ round: this.round, ballsLeft: this.ballsLeft, score: this.scorer.score, goal: this.scorer.goal, coins: this.scorer.money, money: this.money, mods: this.mods });
   }
+}
+
+/** A new run puts the wall ledge somewhere new, so balls coming down the left wall do not always land in the same place. */
+export function randomLedge(rng: Rng, layout: Layout): number {
+  for (let i = 0; i < 20; i++) {
+    const y = clampLedge(rng.range(22, LEDGE.max));
+    if (canPlaceLedge(layout, y)) return y;
+  }
+  return LEDGE.default;
 }
 
 /** What a cleared round pays. One formula, used by the game and by the balance tool's economy check. */

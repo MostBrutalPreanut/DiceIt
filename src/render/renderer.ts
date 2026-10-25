@@ -3,6 +3,7 @@ import { dialValue, footprint, lampStats, LEVEL_TARGETS, PARTS, type PartId, typ
 import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
 import { BALL_R, BUILD_AREA, TABLE_W } from '../sim/constants';
+import { ledgeSeg } from '../sim/table';
 import { flat, label, P, Prop, ribbon, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
 import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
@@ -18,6 +19,8 @@ export interface DrawState {
   showHeat: boolean;
   /** The decal slot under the pointer, if any. */
   hoverDecal?: number | null;
+  /** The wall ledge under the pointer or being dragged: where it would go, and whether it fits there. */
+  ledge?: { y: number; valid: boolean; moving: boolean } | null;
 }
 
 /**
@@ -269,7 +272,7 @@ export class Renderer {
       const p = game.decals[i];
       return p ? { look: game.decalLook(p.id)!, rarity: game.decalRarity(p.id) } : null;
     });
-    const dk = JSON.stringify(decals.map((d) => d && [d.look.shape, d.look.icon, d.rarity]));
+    const dk = JSON.stringify([game.layout.ledge ?? null, decals.map((d) => d && [d.look.shape, d.look.icon, d.rarity])]);
     if (dk !== this.decalKey) {
       this.decalKey = dk;
       for (const s of this.statics.values()) s.tex.destroy(true);
@@ -282,7 +285,7 @@ export class Renderer {
     let s = this.statics.get(key);
     if (!s) {
       const v: View = { ...this.view };
-      const c = buildMachine(v, this.theme, decals);
+      const c = buildMachine(v, this.theme, decals, game.layout.ledge);
       const frame = new Rectangle(0, 0, Math.ceil(this.w), Math.ceil(this.h));
       const tex = this.app.renderer.generateTexture({ target: c, frame, resolution: this.app.renderer.resolution, antialias: true });
       c.destroy({ children: true });
@@ -327,6 +330,7 @@ export class Renderer {
     // the arrow inserts crawl up the middle (frozen in Calm mode and dark on TILT)
     arrowInserts(fx, this.view, this.theme, game.sim.tilted ? -1 : this.calm ? 0 : Math.floor(this.time * 3) % 3);
     this.drawParts(game, dt, st);
+    if (st.ledge) this.drawLedge(st.ledge);
     this.drawFlippers(game);
     this.drawPlunger(game);
     this.drawBalls(game);
@@ -523,6 +527,18 @@ export class Renderer {
       const pv = this.parts.get(-1);
       if (pv) { pv.sprite.destroy(); this.parts.delete(-1); }
     }
+  }
+
+  /** The wall ledge's handle: a dashed outline where it is (hover) or would go (drag). */
+  private drawLedge(l: { y: number; valid: boolean; moving: boolean }) {
+    const v = this.view, t = this.theme, s = ledgeSeg(l.y);
+    const a = P(v, s.x1, s.y1, 0.8), b = P(v, s.x2, s.y2, 0.8);
+    const color = !l.valid ? t.accent : l.moving ? t.paper : t.role.lane;
+    this.topG.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: v.S * 0.62 + v.lw * 2, color: t.ink, cap: 'round', alpha: 0.85 });
+    this.topG.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: v.S * 0.62, color, cap: 'round', alpha: 0.9 });
+    // grip arrows: it moves up and down the wall
+    const [mx, my] = P(v, (s.x1 + s.x2) / 2 + 0.6, (s.y1 + s.y2) / 2, 0.8);
+    for (const d of [-1, 1]) this.topG.poly([mx - v.S * 0.3, my + d * v.S * 0.55, mx + v.S * 0.3, my + d * v.S * 0.55, mx, my + d * v.S * 0.95]).fill(t.ink);
   }
 
   /** Big Boi watches the ball: pupils inside the baked whites, turned towards the nearest ball (or idling). */

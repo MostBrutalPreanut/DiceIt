@@ -205,7 +205,7 @@ export class Sim {
     this.saversUsed.clear();
     this.clockStart = null;
     this.printed = 0;
-    this.buildTable();
+    this.buildTable(layout.ledge);
     this.flippers.push(
       this.buildFlipper('L', FLIPPER_PIVOTS.L.x, FLIPPER_PIVOTS.L.y),
       this.buildFlipper('R', FLIPPER_PIVOTS.R.x, FLIPPER_PIVOTS.R.y),
@@ -230,7 +230,7 @@ export class Sim {
 
   // ---- table construction -------------------------------------------------
 
-  private buildTable() {
+  private buildTable(ledge?: number) {
     const bd = B.b2DefaultBodyDef();
     bd.type = B.b2BodyType.b2_staticBody;
     this.ground = B.b2CreateBody(this.worldId, bd);
@@ -239,7 +239,7 @@ export class Sim {
     sd.friction = 0.05;
     sd.restitution = WALL_RESTITUTION;
     sd.userData = { kind: 'wall' };
-    for (const g of tableSegments()) {
+    for (const g of tableSegments(ledge)) {
       B.b2CreateSegmentShape(this.ground, sd, new B.b2Segment(V(g.x1, g.y1), V(g.x2, g.y2)));
     }
     const post = B.b2DefaultShapeDef();
