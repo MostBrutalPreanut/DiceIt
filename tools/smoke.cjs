@@ -203,9 +203,13 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
 
   // relic decals: pick one after a boss, read it on the apron, peel it off
   await page.evaluate(() => { const g = window.__pinball.game; g.pending = [{ id: 'sponsor' }, { id: 'headStart' }, { id: 'rubber' }]; window.__pinball.refresh(); });
-  check(await page.locator('.ucard .decalimg').count() === 3, 'every decal card shows the decal it would stick on');
-  await page.click('.ucard[data-pick="1"]');
-  check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'taking a card sticks its decal on the apron');
+  check(await page.locator('.dp-card .dp-img').count() === 3, 'every decal card shows the decal it would stick on');
+  const cardText = await page.innerText('.dp-card[data-pick="1"]');
+  check(/Head Start/i.test(cardText) && /Score/i.test(cardText) && /Common/i.test(cardText) && /\+0\.5 Mult/.test(cardText) && /apron slot 1 of 4/i.test(cardText), 'a decal card reads its name, kind, rarity, rule and the apron slot it goes to');
+  await page.click('.dp-card[data-pick="1"]'); // waits for the card to land and turn over
+  await page.waitForFunction(() => window.__pinball.game.decals.length === 1, null, { timeout: 5000 }).catch(() => {});
+  check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'taking a card sticks its decal on the apron (once it has flown there)');
+  await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
   await page.evaluate(() => window.__pinball.renderer.draw(window.__pinball.game, 0.016, { ghost: null, selectedUid: null, hoverUid: null, showHeat: false }));
   const slot = await page.evaluate(() => window.__pinball.toScreen(2.6, 6.6, 0.5));
   await page.mouse.move(slot.x, slot.y);
@@ -229,16 +233,36 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   // the between-rounds flow: a boss was just beaten, so a decal pick is owed before the next round
   await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
   check(await page.isVisible('#upgradeBox'), 'the decal picker shows over the table when one is owed');
-  check(await page.locator('.ucard').count() === 3, 'three decals are offered');
+  check(await page.locator('.dp-card').count() === 3, 'three decals are offered');
+  const bossName = await page.evaluate(() => window.__pinball.game.bossAt(3).name);
+  check((await page.innerText('.dp-head')).toLowerCase().includes(bossName.toLowerCase()), `the reveal names the boss that was beaten (${bossName})`);
   check(await page.isDisabled('#btnStart'), 'Start round is locked while the pick is owed');
   await page.screenshot({ path: `${out}/smoke-2c-upgrade.png` });
-  await page.click('.ucard[data-pick="0"]');
+  await page.waitForSelector('#upgradeBox.dp-settled', { timeout: 5000 });
+  await page.screenshot({ path: `${out}/smoke-2c-upgrade-settled.png` });
+  // the keyboard: the arrows lift a card, Enter sticks it
+  await page.keyboard.press('ArrowRight');
+  check(await page.evaluate(() => document.querySelector('.dp-card.is-sel')?.dataset.pick) === '0', 'an arrow key lifts the first card');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.__pinball.game.decals.length === 1, null, { timeout: 5000 }).catch(() => {});
   check(!(await page.isDisabled('#btnStart')), 'taking a decal unlocks Start round');
+  await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
   check(!(await page.isVisible('#upgradeBox')) && (await page.evaluate(() => window.__pinball.game.decals.length)) === 1, 'the offer closes and the decal is on the apron');
   await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
   const cash = await page.evaluate(() => window.__pinball.game.money);
   await page.click('#btnSkip');
   check((await page.evaluate(() => window.__pinball.game.money)) === cash + 4, 'skipping pays $4');
+  await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
+  // the number keys pick straight away, S skips
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  await page.keyboard.press('KeyS');
+  check((await page.evaluate(() => window.__pinball.game.money)) === cash + 4 && !(await page.evaluate(() => window.__pinball.game.pending)), 'S skips for the cash');
+  await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  await page.keyboard.press('Digit3');
+  await page.waitForFunction(() => window.__pinball.game.decals.length === 1, null, { timeout: 5000 }).catch(() => {});
+  check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'a number key sticks that card');
+  await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
   // a real round with the bot at the controls: the machine tips towards you while the ball is live
