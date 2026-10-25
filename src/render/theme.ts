@@ -34,7 +34,11 @@ export interface Theme {
   /** each part's role colour; must stay distinguishable within the theme */
   role: Record<PartId, string>;
   /** the few colours the surround, floor art and debris need beyond the tokens above */
-  art: { floorAlt: string; debrisA: string; debrisB: string; props: string[]; trunk: string; foliage: string; twinkle: [string, string] };
+  art: {
+    floorAlt: string; debrisA: string; debrisB: string; props: string[]; trunk: string; foliage: string; twinkle: [string, string];
+    /** castle: the flagstones of the floor path (grey-brown rock tones) and the castle's wall stone */
+    rock?: string[]; stone?: string;
+  };
   popMotif: Motif;
   debris: Debris;
   backdrop: 'squiggle' | 'waves' | 'curls'; // the page behind the machine, drifting slowly
@@ -87,7 +91,10 @@ export const CASTLE: Theme = {
     ding: '#c98a2e', piggy: '#f0a0b8', magnet: '#b53b3b', thunder: '#5b4fc4', jackpot: '#d0557f', xlane: '#3aa0d8', golden: '#f0c419', disco: '#e6e0ff',
     flipperR: '#eef1f4', duck: '#f2c14e', goal: '#4c86c6', strip: '#e2704f', roller: '#7fc0e8',
   },
-  art: { floorAlt: '#bcd776', debrisA: '#7aa83f', debrisB: '#eef1f4', props: ['#5b8a3a'], trunk: '#8b5a35', foliage: '#5b8a3a', twinkle: ['#fff6e0', '#ffd36e'] },
+  art: {
+    floorAlt: '#bcd776', debrisA: '#7aa83f', debrisB: '#eef1f4', props: ['#5b8a3a', '#7aa83f'], trunk: '#8b5a35', foliage: '#5b8a3a', twinkle: ['#fff6e0', '#ffd36e'],
+    rock: ['#b8aa96', '#9e8f7b', '#c6bdad', '#918679', '#aaa294'], stone: '#d6ccbc',
+  },
   popMotif: 'cone', debris: 'leaf', laneWord: 'WIN', backdrop: 'curls', floorArt: 'meadow', surround: 'castle',
 };
 
