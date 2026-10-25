@@ -195,7 +195,7 @@ describe('the between-rounds flow', () => {
     lab.sandbox = true;
     lab.grant('coin');
     take(lab, 'goldenAge');
-    expect(lab.levels).toEqual({ pop: 1, coin: 1 });
+    expect(lab.levels).toEqual({ pop: 1, mega: 1, coin: 1 }); // the fixed Big Boi is owned too
   });
 
   it('survives a save and load with its upgrades and a waiting offer, and an undo gives the offer back', () => {
@@ -497,7 +497,7 @@ describe('what the upgrades do: parts and rules', () => {
     g.sandbox = true;
     const spots: [PartId, number, number][] = [
       ['lamp', 8, 30], ['printer', 12, 27], ['lane', 6, 38], ['lane', 12, 40], ['bank', 17, 33], ['kickback', 4.5, 20],
-      ['saver', 12, 18], ['vari', 18, 26], ['spinner', 8, 35],
+      ['saver', 12, 18], ['vari', 18, 26], ['spinner', 7, 34],
     ];
     for (const [id, x, y] of spots) expect(g.place(g.grant(id)!.uid, x, y)).toBe(true);
     for (const id of UPGRADE_IDS) expect(g.labUpgrade(id)).toBe(true);

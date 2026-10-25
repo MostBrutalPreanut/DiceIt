@@ -1,7 +1,8 @@
 import { makePart, MAX_LEVEL, PARTS, PART_IDS, sellPrice, type PartDef, type PartId, type PartInstance } from '../data/parts';
 import { neutralMods, type Mods, type SimMods } from '../data/mods';
-import { BOSS_EVERY, computeMods, rollUpgradeOffers, SKIP_PAY, UPGRADES, type UpgradePick, type RunView, type UpgradeApi, type UpgradeId, type UpgradeOffer } from '../data/upgrades';
-import { canPlace, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
+import { BOSS_EVERY, computeMods, rollUpgradeOffers, SKIP_PAY, UPGRADES, type Rarity, type UpgradePick, type RunView, type UpgradeApi, type UpgradeId, type UpgradeOffer } from '../data/upgrades';
+import { DECAL_SLOTS, DECALS, type DecalLook } from '../data/decals';
+import { canPlace, ensureBigBoi, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
 import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
 import { GOALS, GOAL_GROWTH } from '../data/goals';
 import { Rng } from '../sim/rng';
@@ -25,6 +26,8 @@ export interface Payout {
 export const BALLS_PER_ROUND = 3; // the base; Extra Ball upgrades add to it (Game.ballsPerRound)
 export const START_MONEY = 6;
 export const SHOP_SLOTS = 4;
+/** The toolbox holds this many parts off the board; anything stored in a full toolbox is sold for its sell price. */
+export const TOOLBOX_SLOTS = 4;
 
 /** Two significant figures: goals read as 4,300 or 12,000, not 4,312. */
 export function niceGoal(n: number): number {
@@ -65,6 +68,8 @@ export interface RunSave {
   picks?: UpgradePick[];
   pending?: UpgradeOffer[] | null;
   offers?: number;
+  /** The run's total points so far (absent in older saves). */
+  runScore?: number;
 }
 
 /** Validate a saved run from storage. Returns null for anything that is not a v2 save. */
@@ -145,6 +150,10 @@ export class Game {
   seed = 1;
   /** Tools: play a round against this goal instead of the table's (Infinity = play every ball out). */
   goalOverride: number | null = null;
+  /** Every point the run has scored in its rounds (the lose screen's total). */
+  runScore = 0;
+  /** Parts the toolbox had no room for and that were sold instead; the UI reports these and clears the list. */
+  soldOverflow: { def: PartId; refund: number }[] = [];
 
   constructor() {
     this.sim = createSim(this.layout, { seed: this.seed, mods: this.simMods() });
@@ -184,6 +193,28 @@ export class Game {
 
   get placed(): PartInstance[] {
     return placedParts(this.layout);
+  }
+
+  /** The toolbox is full (the Test Lab has no limit). */
+  get toolboxFull(): boolean {
+    return !this.sandbox && this.inventory.length >= TOOLBOX_SLOTS;
+  }
+
+  /** Sells a part the toolbox has no room for, at its sell price, and remembers it for the UI. */
+  private sellOverflow(inst: PartInstance): number {
+    const refund = this.sandbox ? 0 : this.sellValue(PARTS[inst.def]);
+    this.money += refund;
+    this.layout.parts = this.layout.parts.filter((q) => q.uid !== inst.uid);
+    if (inst.placed) this.sim.removePart(inst.uid);
+    this.soldOverflow.push({ def: inst.def, refund });
+    return refund;
+  }
+
+  /** Sells whatever no longer fits in the toolbox (newest first), e.g. after loading a layout slot or an old save. */
+  enforceToolbox() {
+    if (this.sandbox) return;
+    const inv = this.inventory;
+    for (const p of inv.slice(TOOLBOX_SLOTS).reverse()) this.sellOverflow(p);
   }
 
   part(uid: number): PartInstance | undefined {
@@ -249,10 +280,51 @@ export class Game {
     return offers;
   }
 
+  // ---- relic decals: the Rules column, stuck on the apron ----------------------------------------------
+
+  /** The Rules picks the run has stuck on the apron, in slot order (at most DECAL_SLOTS). */
+  get decals(): UpgradePick[] {
+    return this.picks.filter((p) => UPGRADES[p.id].column === 'rules');
+  }
+
+  decalLook(id: UpgradeId): DecalLook | undefined {
+    return DECALS[id];
+  }
+
+  decalRarity(id: UpgradeId): Rarity {
+    return UPGRADES[id].rarity;
+  }
+
+  /** A Rules upgrade needs a free apron slot; the others can always be taken. */
+  canStick(id: UpgradeId): boolean {
+    return UPGRADES[id].column !== 'rules' || this.decals.length < DECAL_SLOTS;
+  }
+
+  /** Whether the pending card at `index` can be taken right now (a Rules card needs a free slot: peel one first). */
+  canTake(index: number): boolean {
+    const offer = this.pending?.[index];
+    return !!offer && this.editable && this.canStick(offer.id);
+  }
+
+  /**
+   * Peel a decal off the apron between rounds. A peeled decal is gone: its rule stops at once (the run's mods
+   * are rebuilt without it) and the slot is free for the next Rules pick.
+   */
+  peel(slot: number): boolean {
+    const d = this.decals[slot];
+    if (!d || !this.editable) return false;
+    this.checkpoint();
+    const i = this.picks.indexOf(d);
+    this.picks.splice(i, 1);
+    this.mods = computeMods(this.picks);
+    this.toWorkshop();
+    return true;
+  }
+
   /** Take one of the three pending upgrades. Parts it grants arrive in the inventory marked NEW. */
   chooseUpgrade(index: number): boolean {
     const offer = this.pending?.[index];
-    if (!offer || !this.editable) return false;
+    if (!offer || !this.editable || !this.canStick(offer.id)) return false;
     this.checkpoint();
     const pick: UpgradePick = { id: offer.id, target: offer.target };
     this.pending = null;
@@ -266,7 +338,7 @@ export class Game {
     if (!this.editable || !this.sandbox) return false;
     const def = UPGRADES[id];
     const target = def.targets ? def.targets(this.view())[0] : undefined;
-    if (def.targets && !target) return false;
+    if ((def.targets && !target) || !this.canStick(id)) return false;
     this.checkpoint();
     this.applyPick({ id, target });
     return true;
@@ -289,7 +361,9 @@ export class Game {
         const inst = makePart(id, this.layout.nextUid++);
         Object.assign(inst.dials, dials);
         inst.fresh = true;
+        const full = this.toolboxFull;
         this.layout.parts.push(inst);
+        if (full) this.sellOverflow(inst); // no room in the toolbox: it is sold for its sell price
       },
       levelUp: (id) => void this.levelUp(id),
       levelable: () => this.layout.parts.map((p) => p.def).filter((id) => PARTS[id].recipe.perLevel && (this.levels[id] ?? 0) < MAX_LEVEL),
@@ -316,6 +390,7 @@ export class Game {
   }
 
   newRun() {
+    this.runScore = 0;
     this.layout = starterLayout();
     this.round = 1;
     this.money = START_MONEY;
@@ -401,7 +476,7 @@ export class Game {
   arrangement(): Arrangement {
     return {
       gravity: this.layout.gravity,
-      parts: this.placed.map((p) => ({ def: p.def, x: p.x, y: p.y, angle: p.angle, dials: { ...p.dials } })),
+      parts: this.placed.filter((p) => !p.fixed).map((p) => ({ def: p.def, x: p.x, y: p.y, angle: p.angle, dials: { ...p.dials } })),
     };
   }
 
@@ -412,10 +487,10 @@ export class Game {
   applyArrangement(a: Arrangement): { placed: number; missing: number } {
     if (!this.editable) return { placed: 0, missing: 0 };
     this.checkpoint();
-    for (const p of this.layout.parts) p.placed = false;
+    for (const p of this.layout.parts) if (!p.fixed) p.placed = false;
     let placed = 0, missing = 0;
     for (const e of a.parts) {
-      let inst = this.layout.parts.find((p) => !p.placed && p.def === e.def);
+      let inst = this.layout.parts.find((p) => !p.placed && !p.fixed && p.def === e.def);
       if (!inst && this.sandbox) {
         inst = makePart(e.def, this.layout.nextUid++);
         this.layout.parts.push(inst);
@@ -431,6 +506,7 @@ export class Game {
       } else missing++;
     }
     this.layout.gravity = a.gravity;
+    this.enforceToolbox();
     this.clearHeat();
     this.toWorkshop();
     return { placed, missing };
@@ -466,7 +542,7 @@ export class Game {
   clearBoard() {
     if (!this.editable) return;
     this.checkpoint();
-    for (const p of this.layout.parts) p.placed = false;
+    for (const p of this.layout.parts) if (!p.fixed) p.placed = false;
     this.clearHeat();
     this.toWorkshop();
   }
@@ -487,7 +563,7 @@ export class Game {
   save(): RunSave {
     return {
       v: 2, layout: this.layout, money: this.money, round: this.round, shop: this.shop, sandbox: this.sandbox, runSeed: this.runSeed, levels: this.levels,
-      picks: this.picks, pending: this.pending, offers: this.offersSoFar,
+      picks: this.picks, pending: this.pending, offers: this.offersSoFar, runScore: this.runScore,
     };
   }
 
@@ -504,8 +580,12 @@ export class Game {
     this.pending = s.pending && s.pending.every((o) => o.id in UPGRADES) ? s.pending : null;
     this.resolved = null;
     this.offersSoFar = s.offers ?? this.picks.length;
+    this.runScore = s.runScore ?? 0;
     this.history = [];
     this.future = [];
+    ensureBigBoi(this.layout);
+    this.enforceToolbox();
+    this.soldOverflow = [];
     this.clearHeat();
     this.toWorkshop();
   }
@@ -527,7 +607,7 @@ export class Game {
   /** Buy an offer into the inventory. Returns the new part, or null if you cannot. */
   buy(slot: number): PartInstance | null {
     const id = this.shop.offers[slot];
-    if (!this.editable || !id) return null;
+    if (!this.editable || !id || this.toolboxFull) return null;
     const cost = this.priceOf(id);
     if (!this.canAfford(cost)) return null;
     this.checkpoint();
@@ -536,6 +616,33 @@ export class Game {
     const inst = makePart(id, this.layout.nextUid++);
     inst.fresh = true;
     this.layout.parts.push(inst);
+    return inst;
+  }
+
+  /** Buy an offer straight onto the board at (x, y), dragged from the shop: it needs room on the table, not in the toolbox. */
+  buyAndPlace(slot: number, x: number, y: number): PartInstance | null {
+    const id = this.shop.offers[slot];
+    if (!this.editable || !id) return null;
+    const cost = this.priceOf(id);
+    if (!this.canAfford(cost) || !canPlace(this.layout, id, x, y)) return null;
+    this.checkpoint();
+    if (!this.sandbox) this.money -= cost;
+    this.shop.offers[slot] = null;
+    return this.addPlaced(id, x, y);
+  }
+
+  /** Test Lab: any part, free, straight onto the board. */
+  grantAndPlace(id: PartId, x: number, y: number): PartInstance | null {
+    if (!this.editable || !this.sandbox || !canPlace(this.layout, id, x, y)) return null;
+    this.checkpoint();
+    return this.addPlaced(id, x, y);
+  }
+
+  private addPlaced(id: PartId, x: number, y: number): PartInstance {
+    const inst = makePart(id, this.layout.nextUid++, x, y, true);
+    this.layout.parts.push(inst);
+    this.clearHeat();
+    this.sim.updatePart(inst);
     return inst;
   }
 
@@ -560,7 +667,7 @@ export class Game {
 
   sell(uid: number): number {
     const p = this.part(uid);
-    if (!this.editable || !p) return 0;
+    if (!this.editable || !p || p.fixed) return 0;
     this.checkpoint();
     this.clearHeat();
     const refund = this.sandbox ? 0 : this.sellValue(PARTS[p.def]);
@@ -575,7 +682,7 @@ export class Game {
   /** Put an inventory part on the board (or move a placed one). */
   place(uid: number, x: number, y: number, checkpoint = false): boolean {
     const p = this.part(uid);
-    if (!this.editable || !p || !canPlace(this.layout, p.def, x, y, uid)) return false;
+    if (!this.editable || !p || p.fixed || !canPlace(this.layout, p.def, x, y, uid)) return false;
     if (checkpoint) this.checkpoint();
     this.clearHeat();
     p.x = x;
@@ -586,19 +693,24 @@ export class Game {
     return true;
   }
 
-  /** Take a part off the board and back into the inventory. */
-  store(uid: number) {
+  /**
+   * Take a part off the board and back into the toolbox. If the toolbox is full the part is sold instead,
+   * for its sell price: the return value is that refund (null when it was stored).
+   */
+  store(uid: number): number | null {
     const p = this.part(uid);
-    if (!this.editable || !p || !p.placed) return;
+    if (!this.editable || !p || !p.placed || p.fixed) return null;
     this.checkpoint();
     this.clearHeat();
+    if (this.toolboxFull) return this.sellOverflow(p);
     p.placed = false;
     this.sim.updatePart(p);
+    return null;
   }
 
   rotate(uid: number, delta: number) {
     const p = this.part(uid);
-    if (!this.editable || !p || !PARTS[p.def].rotatable) return;
+    if (!this.editable || !p || p.fixed || !PARTS[p.def].rotatable) return;
     this.checkpoint();
     this.clearHeat();
     const TAU = Math.PI * 2;
@@ -660,6 +772,7 @@ export class Game {
     if (forced) this.sim.reset(this.layout, { seed: this.seed++ }); // Cash Out: clear the table at once
     this.ballsLeft--;
     out.push({ type: 'ballEnd', ballsLeft: this.ballsLeft });
+    if (this.scorer.goalReached || this.ballsLeft <= 0) this.runScore += this.scorer.score;
     if (this.scorer.goalReached) {
       this.payout = this.computePayout();
       this.money += this.payout.total;

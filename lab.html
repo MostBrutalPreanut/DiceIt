@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prop Lab</title>
+  <style>
+    html, body { margin: 0; height: auto !important; overflow: auto !important; background: #efe8dc !important; font: 600 14px Nunito, system-ui, sans-serif; color: #3b2a4a; }
+    header { padding: 14px 20px 0; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    h1 { margin: 0; font: 400 28px 'Luckiest Guy', sans-serif; }
+    label { display: flex; gap: 6px; align-items: center; }
+    #lab { padding: 10px 20px 20px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Prop lab</h1>
+    <span>every part, in every theme and state, with its collision footprint</span>
+    <label><input id="foot" type="checkbox" checked /> footprint</label>
+    <label>tip <input id="tip" type="range" min="0.8" max="1" step="0.02" value="0.86" /> <b id="tipv">0.86</b></label>
+  </header>
+  <div id="lab"></div>
+  <script type="module" src="/src/lab.ts"></script>
+</body>
+</html>
