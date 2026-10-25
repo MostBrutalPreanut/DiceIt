@@ -158,6 +158,31 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(!(await page.innerText('#selected')).includes('Sell'), 'the fixed Big Boi cannot be sold or moved');
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
+  // click and drop: click an offer to pick it up, click the table to buy it onto the board; a right-click puts it back unpaid
+  await page.evaluate(() => { const g = window.__pinball.game; g.money = 20; g.shop.offers = ['coin', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
+  await page.click('.offer[data-slot="0"] .plinth');
+  const spot2 = await at(12, 22);
+  await page.mouse.move(spot2.x, spot2.y, { steps: 4 });
+  await page.mouse.click(spot2.x, spot2.y, { button: 'right' });
+  check((await state()).money === 20, 'a right-click puts a picked-up offer back without paying');
+  await page.click('.offer[data-slot="0"] .plinth');
+  await page.mouse.move(spot2.x, spot2.y, { steps: 4 });
+  await page.mouse.click(spot2.x, spot2.y);
+  const clicked = await state();
+  check(clicked.money === 16 && clicked.placed === 5, 'click an offer, then click the table: bought and placed in one go');
+  // click a part on the table to pick it up, click again to set it down somewhere else
+  const from = await at(12, 22), to = await at(8, 26);
+  await page.mouse.click(from.x, from.y);
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await page.mouse.click(to.x, to.y);
+  const moved = await page.evaluate(() => window.__pinball.game.placed.find((p) => p.def === 'coin'));
+  check(Math.hypot(moved.x - 8, moved.y - 26) < 0.6, `a clicked part follows the pointer and the next click sets it down (${moved.x.toFixed(1)}, ${moved.y.toFixed(1)})`);
+  // 1, 2, 3 switch the theme
+  await page.keyboard.press('Digit2');
+  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.theme.v1')) === 'diner', 'key 2 switches to the second machine');
+  await page.keyboard.press('Digit1');
+  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
+
   // relic decals: earn one from a Rules card, read it on the apron, peel it off
   await page.evaluate(() => { const g = window.__pinball.game; g.pending = [{ id: 'sponsor' }, { id: 'headStart' }]; window.__pinball.refresh(); });
   check(await page.locator('.ucard.c-rules .decalimg').count() === 1, 'a Rules card shows the decal it would stick on');
@@ -229,6 +254,16 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   }
   check(new Set(shots).size === 3, 'the three themes render differently');
   await page.evaluate(() => { const d = window.__pinball; d.theme('factory'); d.game.newRun(); d.refresh(); });
+
+  // losing: the whole page greys out under a summary with the map and the run's points
+  await page.evaluate(() => { const d = window.__pinball; d.game.newRun(); d.refresh(); });
+  await page.click('#btnStart');
+  await page.evaluate(() => { const d = window.__pinball; d.game.scorer.goal = 1e12; d.advance(240, 2); });
+  check(await page.evaluate(() => window.__pinball.game.mode) === 'runOver', 'a round against an impossible goal ends the run');
+  const ov = await (await page.$('#overlay')).boundingBox();
+  check(ov.x <= 1 && ov.y <= 1 && ov.width >= 1430, 'the lose screen greys out the whole page');
+  check(await page.locator('#overlay .summary .roundmap svg').count() === 1 && /total points/i.test(await page.innerText('#overlay')), 'the lose screen shows the map and the total points');
+  await page.screenshot({ path: `${out}/smoke-4-run-over.png` });
 
   if (errors.length) fail('console errors:\n' + errors.join('\n'));
   else console.log('ok: no console errors');

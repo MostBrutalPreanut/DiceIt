@@ -28,10 +28,13 @@ export interface PartState {
   busy?: boolean;
   /** Big Boi: bake only the whites of his eyes; the renderer draws pupils that follow the ball. */
   follow?: boolean;
+  /** Big Boi's mood: happy, oof (just hit), sad (a bad shot), shocked (a nice combo), cool (a seriously high Mult). */
+  mood?: Mood;
 }
+export type Mood = 'happy' | 'oof' | 'sad' | 'shocked' | 'cool';
 
 export const stateKey = (st: PartState) =>
-  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0].join('.');
+  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? ''].join('.');
 
 const ringS = (cx: number, cy: number, r: number, n = 20, ry = r): Pt[] => ring(cx, cy, r, n, ry);
 
@@ -73,7 +76,7 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       const domePts = [0, 0.3, 0.55, 0.78, 0.92, 1].flatMap((u) => ring(x, y, r * 0.86 * Math.cos((u * Math.PI) / 2), 28).map(([a, b]) => P(v, a, b, 1.12 + u * 0.75)));
       p.face(hull(domePts), skin.base);
       p.face(ring(x - r * 0.25, y + r * 0.2, r * 0.32, 20).map(([a, b]) => P(v, a, b, 1.75)), skin.light, { line: 0, sil: false });
-      face(p, v, t, x, y - r * 0.82, 0.78, r, st.hit ? 'oof' : 'happy', st.follow);
+      face(p, v, t, x, y - r * 0.82, 0.78, r, st.mood ?? (st.hit ? 'oof' : 'happy'), st.follow);
       break;
     }
     case 'sling': case 'deflector': {
@@ -308,14 +311,45 @@ export function bigBoiEyes(v: View, x: number, y: number, r: number): Pt[] {
 }
 
 /** Big Boi's face. Goofy tone: a few parts are characters, most are furniture. */
-function face(p: Prop, v: View, t: Theme, x: number, y: number, z: number, r: number, mood: 'happy' | 'oof', follow = false) {
-  const s = v.S;
-  eyes(p, v, t, x, y, z + 0.25, r * 0.55, mood === 'oof', follow);
+function face(p: Prop, v: View, t: Theme, x: number, y: number, z: number, r: number, mood: Mood, follow = false) {
+  const s = v.S, lw = v.lw;
+  const eyePts = [-1, 1].map((k) => P(v, x + k * r * EYE.gap * 0.5, y, z + 0.25));
+  if (mood === 'cool') {
+    // seriously high combo: sunglasses, and a smirk
+    p.op((g) => {
+      const [[ax, ay], [bx, by]] = eyePts, w = s * 0.34, h = s * 0.24;
+      g.moveTo(ax, ay - h * 0.4).lineTo(bx, by - h * 0.4).stroke({ width: lw * 0.9, color: t.ink });
+      for (const [X, Y] of eyePts) g.roundRect(X - w, Y - h, w * 2, h * 1.9, h * 0.8).fill(t.ink);
+      for (const [X, Y] of eyePts) g.moveTo(X - w * 0.6, Y - h * 0.4).lineTo(X - w * 0.1, Y - h * 0.75).stroke({ width: lw * 0.6, color: WHITE, cap: 'round' });
+    });
+  } else if (follow) {
+    // the whites, baked; the renderer draws the pupils so they can follow the ball
+    const big = mood === 'shocked' ? 1.25 : 1;
+    p.op((g) => { for (const [X, Y] of eyePts) g.ellipse(X, Y, s * EYE.rx * big, s * EYE.ry * big).fill(WHITE).stroke({ width: lw * 0.45, color: t.ink }); });
+  } else eyes(p, v, t, x, y, z + 0.25, r * 0.55, mood === 'oof' || mood === 'shocked');
   const [X, Y] = P(v, x, y, z - 0.1);
   p.op((g) => {
-    for (const k of [-1, 1]) g.ellipse(X + k * r * 0.5 * s, Y + s * 0.12, s * 0.2, s * 0.11).fill({ color: t.accent, alpha: 0.55 });
-    if (mood === 'happy') g.moveTo(X - s * 0.22, Y).quadraticCurveTo(X, Y + s * 0.28, X + s * 0.22, Y).stroke({ width: v.lw * 0.6, color: t.ink, cap: 'round' });
-    else g.ellipse(X, Y + s * 0.06, s * 0.14, s * 0.18).fill(t.ink);
+    for (const k of [-1, 1]) g.ellipse(X + k * r * 0.5 * s, Y + s * 0.12, s * 0.2, s * 0.11).fill({ color: t.accent, alpha: mood === 'sad' ? 0.25 : 0.55 });
+    const brow = (lift: number, droop: number) => {
+      for (const [k, [ex, ey]] of [-1, 1].map((kk, i) => [kk, eyePts[i]] as const)) {
+        const by = ey - s * (EYE.ry + 0.12 + lift);
+        g.moveTo(ex - s * 0.18, by + k * -droop * s).lineTo(ex + s * 0.18, by + k * droop * s).stroke({ width: lw * 0.7, color: t.ink, cap: 'round' });
+      }
+    };
+    switch (mood) {
+      case 'happy': g.moveTo(X - s * 0.22, Y).quadraticCurveTo(X, Y + s * 0.28, X + s * 0.22, Y).stroke({ width: lw * 0.6, color: t.ink, cap: 'round' }); break;
+      case 'oof': g.ellipse(X, Y + s * 0.06, s * 0.14, s * 0.18).fill(t.ink); break;
+      case 'sad': // a bad shot: droopy brows, a frown
+        brow(0, -0.08);
+        g.moveTo(X - s * 0.2, Y + s * 0.16).quadraticCurveTo(X, Y - s * 0.08, X + s * 0.2, Y + s * 0.16).stroke({ width: lw * 0.6, color: t.ink, cap: 'round' });
+        break;
+      case 'shocked': // a nice combo: brows up, mouth wide open
+        brow(0.1, 0.04);
+        g.ellipse(X, Y + s * 0.08, s * 0.17, s * 0.25).fill(t.ink);
+        g.ellipse(X, Y + s * 0.2, s * 0.09, s * 0.07).fill(t.accent);
+        break;
+      case 'cool': g.moveTo(X - s * 0.16, Y + s * 0.06).quadraticCurveTo(X + s * 0.05, Y + s * 0.2, X + s * 0.22, Y - s * 0.02).stroke({ width: lw * 0.6, color: t.ink, cap: 'round' }); break;
+    }
   });
 }
 

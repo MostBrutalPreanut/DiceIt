@@ -45,19 +45,17 @@
 
           <section id="ledgerBox" class="receipt-wrap" data-tip="ledger">
             <div class="slot"></div>
-            <div class="receipt">
-              <div class="lbl center">This round</div>
-              <table id="ledger"><tbody></tbody></table>
-              <div id="ledgerEmpty" class="hint center">Roll a ball. Every point is attributed here.</div>
-              <div class="rtotal"><span>ROUND TOTAL</span><b id="ledgerTotal" class="disp">0</b></div>
+            <div class="paper">
+              <div class="receipt">
+                <div class="lbl center">This round</div>
+                <table id="ledger"><tbody></tbody></table>
+                <div id="ledgerEmpty" class="hint center">Roll a ball. Every point is attributed here.</div>
+                <div class="rtotal"><span>ROUND TOTAL</span><b id="ledgerTotal" class="disp">0</b></div>
+              </div>
+              <svg class="zig" viewBox="0 0 160 8" preserveAspectRatio="none"><path d="M0 0H160V0L150 8L140 0L130 8L120 0L110 8L100 0L90 8L80 0L70 8L60 0L50 8L40 0L30 8L20 0L10 8L0 0Z" /></svg>
             </div>
-            <svg class="zig" viewBox="0 0 160 8" preserveAspectRatio="none"><path d="M0 0H160V0L150 8L140 0L130 8L120 0L110 8L100 0L90 8L80 0L70 8L60 0L50 8L40 0L30 8L20 0L10 8L0 0Z" /></svg>
           </section>
 
-          <div id="actions">
-            <button id="btnStart" class="arcade"><span class="cap" id="startCap"></span><span class="disp">PLAY ROUND</span></button>
-            <button id="btnCash" class="arcade" hidden disabled><span class="cap" id="cashCap"></span><span class="disp">CASH OUT</span></button>
-          </div>
         </div>
       </div>
     </aside>
@@ -77,9 +75,9 @@
     <aside id="right" class="panel housing">
       <i class="screw tl"></i><i class="screw tr"></i><i class="screw bl"></i><i class="screw br"></i>
       <div class="inner">
-        <header class="marquee"><span class="bulbs"></span><h2 class="disp">SHOP</h2><button id="btnReroll" class="pill">Reroll</button></header>
+        <header class="marquee"><span class="bulbs"></span><h2 class="disp">SHOP</h2></header>
         <div class="fixed">
-          <div class="tile moneyrow" data-tip="money"><span id="coinStack" class="coins"><i></i><i></i><i></i></span><b id="shopMoney" class="disp">$0</b><span id="moneyTick" class="tick"></span><span class="hint" id="shopNote">buy, then place</span></div>
+          <div class="moneyrow"><span class="money" data-tip="money"><span id="coinStack" class="coins"><i></i><i></i><i></i></span><b id="shopMoney" class="disp">$0</b><span id="moneyTick" class="tick"></span></span><button id="btnReroll" class="pill">Reroll</button></div>
           <div id="invWrap">
             <div class="lbl">Toolbox</div>
             <div id="inventoryBox" class="toolbox"><div id="inventory"></div><button id="toolSell" class="latch" hidden></button></div>
@@ -100,6 +98,7 @@
               <div class="lbl">Theme</div>
               <div id="themeRow" class="themes"></div>
               <label class="check"><input id="calm" type="checkbox" /> Calm mode: no shake, drift or twinkles</label>
+              <label class="check"><input id="music" type="checkbox" checked /> Music (each machine has its own tune) · <kbd>M</kbd> mutes everything</label>
               <div class="btnrow">
                 <button id="btnUndo" title="Ctrl+Z">Undo</button>
                 <button id="btnRedo" title="Ctrl+Y">Redo</button>
@@ -132,6 +131,12 @@
               </div>
             </div>
           </details>
+        </div>
+        <div class="footer">
+          <div id="actions">
+            <button id="btnStart" class="arcade"><span class="cap" id="startCap"></span><span class="disp">PLAY ROUND</span></button>
+            <button id="btnCash" class="arcade" hidden disabled><span class="cap" id="cashCap"></span><span class="disp">CASH OUT</span></button>
+          </div>
         </div>
       </div>
     </aside>

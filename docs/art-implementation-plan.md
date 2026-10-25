@@ -117,3 +117,14 @@ To read as a pinball machine rather than a screen, like the cut-open objects in 
 Rendered by `npm run concept` (`dioramaMachine()` in `tools/concept/scenes.ts`).
 
 Option A is in the game: the playfield sunk into the cabinet (walls 1.6 high, the inside of the far wall showing, a light cut edge), the backbox carrying the display, the coin door on the front and little legs under it. The display is now a real dot matrix drawn on the backbox: text is rasterised from bold Nunito into lit dots (the thin DotGothic16 face was hard to read and is gone), new messages scroll in from the right and settle in the middle, long ones keep scrolling, and a tilt warning flashes it. Other changes from the same playtest: a fixed Big Boi in the middle of every machine whose pupils follow the nearest ball, the scoreboard titled PLAY or WORKSHOP with no step pills, a fifteen-stop map of the run instead of the round strip, and buying by dragging an offer onto the table or the toolbox.
+
+### Juice pass
+
+- **Sound:** every part type has its own synthesised voice (a rubbery boing for Pop Bumpers, a ka-ching for Cha-Ching, a low thump for Big Boi, a snap for Slingshots, rattling ticks for Spinners, a thunk for drop targets and so on), still climbing the Mult ladder; shop cards tick as they roll in, buying rings, placing clunks, the receipt chatters as it prints. A soft arcade loop plays underneath, one tune per theme (bouncy square-wave Factory, swung jazzy Diner, plucked dorian Castle), with its own switch.
+- **The display** idles on the live score while you play (and the round and goal in the workshop), flashes every hit at once, and comments scroll in, hold about two seconds and clear.
+- **Hits** shake the part that was hit; only strong hits shake the table (presentation only, never the sim).
+- **Score pop-ups** are frameless chunky numbers that fly out of the hit in an arc in their own direction; from 1,000 they turn gold with a burst behind, from 5,000 they sparkle.
+- **Big Boi's moods:** happy, oof when hit, sad after a drain, a limp plunge or a tilt, shocked at a completed set, a printed ball or a new Mult band, and sunglasses from ×3 Mult.
+- **The receipt** feeds out of its slot when a round starts and prints each new line as a part type first scores. The round buttons moved to the bottom of the shop panel to give it room.
+- **The shop** rolls new stock down onto the shelf. The money row lost its frame and holds the Reroll button (each reroll in a round costs $1 more).
+- **The lose screen** greys out the whole page under a summary: the run's map, rounds cleared, total points, parts on the table.

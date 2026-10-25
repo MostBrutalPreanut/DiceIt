@@ -222,3 +222,19 @@ describe('ball saver in a round', () => {
     expect(g.sim.awaitingPlunge).toBe(true);
   });
 });
+
+describe('the run total', () => {
+  it('adds every round score, and a new run starts it again', () => {
+    const g = new Game();
+    g.startRound();
+    g.scorer.score = 500;
+    g.ballsLeft = 1;
+    g.scorer.goal = 1e9;
+    (g as unknown as { endBall: (f: boolean) => void }).endBall(false);
+    expect(g.mode).toBe('runOver');
+    expect(g.runScore).toBe(500);
+    g.newRun();
+    expect(g.runScore).toBe(0);
+  });
+});
+

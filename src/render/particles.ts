@@ -76,7 +76,7 @@ export class Particles {
   private tex = new Map<string, Texture>();
   private live: P3[] = [];
   private smoke: Smoke[] = [];
-  private stickers: { c: Container; x: number; y: number; z: number; age: number; life: number; rot: number; drift: number; size: number }[] = [];
+  private stickers: { c: Container; x: number; y: number; z: number; vx: number; vy: number; vz: number; spin: number; age: number; life: number; rot: number }[] = [];
   calm = false;
 
   constructor(private renderer: Renderer, private theme: Theme) {
@@ -152,26 +152,44 @@ export class Particles {
     this.smoke.push({ age: 0, life: 0.6 + Math.random() * 0.4, x, y, z, dir: Math.random() < 0.5 ? -1 : 1, w });
   }
 
-  /** The score popup as a paper sticker: the points in the part's colour, the math line under it. */
-  sticker(main: string, sub: string, color: string, x: number, y: number, z: number, scale: number) {
+  /**
+   * A score pop-up: just the number, in chunky toy lettering (ink outline and a solid drop under it), flying out
+   * of the hit in an arc in its own direction, then shrinking away. Bigger numbers are bigger; from 1,000 they
+   * turn gold with a burst in the part's colour behind them, from 5,000 they sparkle too.
+   */
+  sticker(main: string, _sub: string, color: string, x: number, y: number, z: number, scale: number, points = 0) {
     if (this.stickers.length >= MAX_STICKERS) this.stickers.shift()!.c.destroy({ children: true });
     const t = this.theme;
+    const big = points >= 1000, huge = points >= 5000, word = /[A-Z]{2}/.test(main);
     const c = new Container();
-    const fs = 22 * scale, fs2 = 10.5 * scale;
-    const m = label(main, fs, color, { stroke: t.ink, strokeW: fs * 0.14 });
-    const s = sub ? label(sub, fs2, t.ink, { face: 'ui', weight: '700' }) : null;
-    const w = Math.max(m.width, s?.width ?? 0) + 18 * scale, h = fs + (s ? fs2 + 6 : 0) + 12 * scale;
-    const g = new Graphics();
-    g.roundRect(-w / 2 + 3 * scale, -h / 2 + 4 * scale, w, h, 9 * scale).fill({ color: t.shadeTint, alpha: 0.25 });
-    g.roundRect(-w / 2, -h / 2, w, h, 9 * scale).fill(t.paper).stroke({ width: 2.2 * scale, color: t.ink });
-    m.position.set(0, s ? -h / 2 + 6 * scale + fs / 2 : 0);
-    c.addChild(g, m);
-    if (s) { s.position.set(0, h / 2 - 5 * scale - fs2 / 2); c.addChild(s); }
-    // events that land together stack upwards instead of printing on top of each other
-    let stack = 0;
-    for (const q of this.stickers) if (q.age < 0.5 && Math.hypot(q.x - x, q.y - y) < 3) stack++;
+    const fs = (word ? 20 : 30) * scale * (huge ? 1.3 : big ? 1.12 : 1);
+    const fill = word ? t.paper : big ? t.role.coin : color;
+    const stroke = fs * 0.2, drop = Math.max(2, fs * 0.09);
+    if (big && !word) {
+      const R = fs * 1.15;
+      const g = new Graphics();
+      g.poly(flat(star(0, 0, R, R * 0.68, 11, Math.random()))).fill(color).stroke({ width: Math.max(2, fs * 0.09), color: t.ink, join: 'round' });
+      c.addChild(g);
+    }
+    // the solid drop: the same lettering in ink, nudged down and right, so the number reads as a chunky toy
+    for (let i = 2; i >= 1; i--) {
+      const d = label(main, fs, t.ink, { stroke: t.ink, strokeW: stroke });
+      d.position.set(drop * i * 0.6, drop * i * 0.7);
+      c.addChild(d);
+    }
+    const m = label(main, fs, fill, { stroke: t.ink, strokeW: stroke });
+    c.addChild(m);
+    // a light glint on the face of the lettering
+    const glint = label(main, fs, '#ffffff', {});
+    glint.alpha = 0.28;
+    glint.scale.set(0.98, 0.5);
+    glint.position.set(-fs * 0.02, -fs * 0.16);
+    c.addChild(glint);
     this.stickerLayer.addChild(c);
-    this.stickers.push({ c, x, y, z: z + stack * 1.6, age: 0, life: 0.9, rot: ((Math.random() - 0.5) * 12 * Math.PI) / 180, drift: 1.4, size: h });
+    // each one leaves in its own direction: up and out to one side, falling back in an arc
+    const side = Math.random() < 0.5 ? -1 : 1, spread = 1.5 + Math.random() * 3.5;
+    this.stickers.push({ c, x, y, z, vx: side * spread, vy: (Math.random() - 0.3) * 2, vz: 7 + Math.random() * 3 + (big ? 2 : 0), spin: side * (0.2 + Math.random() * 0.4), age: 0, life: big ? 1.3 : 1, rot: ((Math.random() - 0.5) * 12 * Math.PI) / 180 });
+    if (huge) for (let i = 0; i < 4; i++) this.sparkle(x + (Math.random() - 0.5) * 3, y + (Math.random() - 0.5) * 2, z + Math.random(), 1.2, true);
   }
 
   clear() {
@@ -228,12 +246,16 @@ export class Particles {
     for (const st of this.stickers) {
       st.age += dt;
       const u = st.age / st.life;
-      // slap on (big), hold, drift up, then shrink out
-      const sc = u < 0.12 ? 1.3 - (u / 0.12) * 0.3 : u < 0.75 ? 1 : 1 - (u - 0.75) / 0.25;
-      const [X, Y] = P(v, st.x, st.y, st.z + Math.min(1, u * 2) * st.drift);
+      st.x += st.vx * dt;
+      st.y += st.vy * dt;
+      st.vz -= 16 * dt;
+      st.z += st.vz * dt;
+      // slap on big, hold, then shrink away as it falls
+      const sc = u < 0.1 ? 1.35 - (u / 0.1) * 0.35 : u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3;
+      const [X, Y] = P(v, st.x, st.y, Math.max(0.5, st.z));
       st.c.position.set(X, Y);
       st.c.scale.set(Math.max(0, sc));
-      st.c.rotation = st.rot;
+      st.c.rotation = st.rot + st.spin * st.age;
     }
     this.stickers = this.stickers.filter((s) => {
       if (s.age >= s.life) { s.c.destroy({ children: true }); return false; }

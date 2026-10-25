@@ -68,6 +68,8 @@ export interface RunSave {
   picks?: UpgradePick[];
   pending?: UpgradeOffer[] | null;
   offers?: number;
+  /** The run's total points so far (absent in older saves). */
+  runScore?: number;
 }
 
 /** Validate a saved run from storage. Returns null for anything that is not a v2 save. */
@@ -148,6 +150,8 @@ export class Game {
   seed = 1;
   /** Tools: play a round against this goal instead of the table's (Infinity = play every ball out). */
   goalOverride: number | null = null;
+  /** Every point the run has scored in its rounds (the lose screen's total). */
+  runScore = 0;
   /** Parts the toolbox had no room for and that were sold instead; the UI reports these and clears the list. */
   soldOverflow: { def: PartId; refund: number }[] = [];
 
@@ -386,6 +390,7 @@ export class Game {
   }
 
   newRun() {
+    this.runScore = 0;
     this.layout = starterLayout();
     this.round = 1;
     this.money = START_MONEY;
@@ -558,7 +563,7 @@ export class Game {
   save(): RunSave {
     return {
       v: 2, layout: this.layout, money: this.money, round: this.round, shop: this.shop, sandbox: this.sandbox, runSeed: this.runSeed, levels: this.levels,
-      picks: this.picks, pending: this.pending, offers: this.offersSoFar,
+      picks: this.picks, pending: this.pending, offers: this.offersSoFar, runScore: this.runScore,
     };
   }
 
@@ -575,6 +580,7 @@ export class Game {
     this.pending = s.pending && s.pending.every((o) => o.id in UPGRADES) ? s.pending : null;
     this.resolved = null;
     this.offersSoFar = s.offers ?? this.picks.length;
+    this.runScore = s.runScore ?? 0;
     this.history = [];
     this.future = [];
     ensureBigBoi(this.layout);
@@ -766,6 +772,7 @@ export class Game {
     if (forced) this.sim.reset(this.layout, { seed: this.seed++ }); // Cash Out: clear the table at once
     this.ballsLeft--;
     out.push({ type: 'ballEnd', ballsLeft: this.ballsLeft });
+    if (this.scorer.goalReached || this.ballsLeft <= 0) this.runScore += this.scorer.score;
     if (this.scorer.goalReached) {
       this.payout = this.computePayout();
       this.money += this.payout.total;

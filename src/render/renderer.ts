@@ -5,7 +5,7 @@ import type { ScoreEvent } from '../game/scoring';
 import { BALL_R, BUILD_AREA, TABLE_W } from '../sim/constants';
 import { flat, label, P, Prop, ribbon, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
-import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawPart, EYE, groundRing, stateKey, type BallWear, type PartState } from './props';
+import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
 import { DotMatrix } from './dmd';
 import { APRON_Z, arrowInserts, buildMachine, CAB, DECAL_SLOT_POS, decalSprite, dmdRect, machineExtent, RIM, type StuckDecal } from './scene';
 import { BALL_WEAR, mat, mix, num, roleFill, WHITE, type Theme } from './theme';
@@ -25,6 +25,8 @@ export interface DrawState {
  * size between building and playing, so it stays at one tip in every mode; TILT leans and goes dark instead.
  */
 export const TIP_K = 0.9;
+/** At this Mult Big Boi puts his sunglasses on. */
+export const COOL_MULT = 3;
 /** k is quantised so the baked textures can be shared between frames of the tip animation. */
 const K_STEP = 0.02;
 const quantK = (k: number) => Math.round(k / K_STEP) * K_STEP;
@@ -53,6 +55,10 @@ export class Renderer {
   particles!: Particles;
   dmd!: DotMatrix;
   private eyes = new Map<number, Graphics>();
+  /** Big Boi's mood for a while (sad after a bad shot, shocked at a combo); otherwise happy, or cool at a high Mult. */
+  private mood: { m: Mood; until: number } | null = null;
+  /** Every hit shakes the part that was hit for a moment. */
+  private shakes = new Map<number, { t: number; amp: number }>();
   private glowTex!: Texture;
   private glowPool: Sprite[] = [];
   private glowUsed = 0;
@@ -120,8 +126,14 @@ export class Renderer {
     this.dmd.calm = on;
   }
 
-  /** The backbox's dot-matrix display: the message scrolls in from the right. */
+  /** The backbox's dot-matrix display: a comment scrolls in from the right, holds, then clears. */
   say(text: string) { this.dmd.say(text.toUpperCase()); }
+  /** A hit flashes up on the display at once. */
+  pop(text: string) { this.dmd.pop(text.toUpperCase()); }
+  /** What the display shows between comments (the score while you play). */
+  idle(text: string) { this.dmd.idle(text.toUpperCase()); }
+  /** Big Boi pulls a face for a while. */
+  bigBoiMood(m: Mood, seconds: number) { this.mood = { m, until: this.time + seconds }; }
   flashDmd() { this.dmd.flash(); }
 
   /** Drop every baked texture (theme change, resize). */
@@ -201,23 +213,18 @@ export class Renderer {
     }
     const mag = Math.log10(Math.max(10, ev.points));
     if (ev.kind === 'hit') {
+      this.shakes.set(ev.uid, { t: 0.2, amp: Math.min(1, 0.35 + (mag - 1) * 0.2) });
       if (def.kind === 'bumper' || def.kind === 'kicker' || def.kind === 'target') this.particles.hit(ev.def, ev.x, ev.y, ev.points, 0.8 + mag * 0.12);
       else this.particles.debris(ev.x, ev.y, 3, 0.8);
       if (def.kind === 'bank') this.particles.puff(ev.x, ev.y, 0.2, 1);
       if (def.kind === 'saucer') this.particles.smokeAt(ev.x, ev.y + 0.2, 1.7);
       if (def.kind === 'kickback') this.particles.smokeAt(ev.x, ev.y, 0.4, 0.7);
-      if (!this.calm) this.trauma = Math.min(1, this.trauma + 0.1 + mag * 0.03);
+      // only a strong hit shakes the whole table (a presentation shake: the sim never feels it)
+      if (!this.calm && ev.points >= 400) this.trauma = Math.min(1, this.trauma + Math.min(0.45, (mag - 2.5) * 0.3));
     }
     if (ev.kind === 'bonus') for (let i = 0; i < 4; i++) this.particles.sparkle(ev.x + (Math.random() - 0.5) * 3, ev.y + (Math.random() - 0.5) * 2, 1 + Math.random(), 1.2, i % 2 === 0);
-    if (ev.label) this.particles.sticker(ev.label, ev.kind === 'bonus' && ev.base ? `+${ev.base} ×${ev.multBefore.toFixed(2)}` : '', color, ev.x, ev.y, 2.2, 1.05);
-    else this.particles.sticker(`+${ev.points}`, this.mathLine(ev), color, ev.x, ev.y, 1.6, 0.7 + mag * 0.12);
-  }
-
-  /** "100 +5 grown ×1.30": exactly how the points were made. */
-  private mathLine(ev: ScoreEvent): string {
-    const parts = ev.notes.map((n) => n.replace(' base', ''));
-    if (Math.abs(ev.multBefore - 1) > 0.001) parts.push(`×${ev.multBefore.toFixed(2)}`);
-    return parts.join(' ');
+    if (ev.label) this.particles.sticker(ev.label, '', color, ev.x, ev.y, 2.2, 1, 0);
+    else this.particles.sticker(ev.points.toLocaleString('en-US'), '', color, ev.x, ev.y, 1.6, 0.62 + mag * 0.14, ev.points);
   }
 
   /** A Ball Saver just returned a ball: sparkles and a shout where it sits. */
@@ -369,12 +376,20 @@ export class Renderer {
     }
   }
 
+  /** A pulled face wins; then a flinch when hit; a seriously high Mult makes him cool (and cool does not flinch). */
+  private moodFor(game: Game, pulse: number): Mood {
+    if (this.mood && this.time < this.mood.until) return this.mood.m;
+    const cool = game.mode === 'round' && game.scorer.mult >= COOL_MULT;
+    if (cool) return 'cool';
+    return pulse > 0.35 ? 'oof' : 'happy';
+  }
+
   private partState(game: Game, p: PartInstance, lanes: Map<number, string>, banks: Map<number, boolean[]>, kick: Map<number, boolean>, savers: Map<number, { armed: boolean; left: number }>, heldNear: (x: number, y: number) => boolean): PartState {
     const tilted = game.sim.tilted;
     const lit = !tilted && game.scorer.isLit(p.uid);
     const pulse = this.pulses.get(p.uid) ?? 0;
     switch (p.def) {
-      case 'mega': return { hit: pulse > 0.35, follow: true };
+      case 'mega': return { hit: pulse > 0.35, follow: true, mood: this.moodFor(game, pulse) };
       case 'pop': case 'coin': case 'sling': return { hit: pulse > 0.35 };
       case 'lane': return { lit, letter: lanes.get(p.uid) };
       case 'uplight': return { lit, target: LEVEL_TARGETS[Math.round(dialValue(p, 'target'))] ?? 'pop' };
@@ -450,7 +465,14 @@ export class Renderer {
       }
       if (pv.sprite.texture !== b.tex) { pv.sprite.texture = b.tex; pv.sprite.anchor.set(b.ax, b.ay); }
       const [X, Y] = P(v, p.x, p.y);
-      pv.sprite.position.set(X, Y);
+      const sh = this.shakes.get(p.uid);
+      let jx = 0, jy = 0;
+      if (sh) {
+        sh.t -= dt;
+        if (sh.t <= 0 || this.calm) this.shakes.delete(p.uid);
+        else { const a = sh.amp * v.S * 0.22 * (sh.t / 0.2); jx = (Math.random() - 0.5) * 2 * a; jy = (Math.random() - 0.5) * a; }
+      }
+      pv.sprite.position.set(X + jx, Y + jy);
       pv.sprite.zIndex = -p.y * 100;
       pv.sprite.alpha = 1;
       pv.sprite.tint = 0xffffff;
@@ -465,7 +487,7 @@ export class Renderer {
         dashedRing(fx, v, p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, v.lw, t.ink);
       }
       this.drawTag(game, p);
-      if (p.def === 'mega') this.drawEyes(game, p, pv.sprite.zIndex + 1, seenEyes);
+      if (p.def === 'mega') this.drawEyes(game, p, pv.sprite.zIndex + 1, seenEyes, ps.mood ?? 'happy', jx, jy);
     }
     for (const [uid, g] of this.eyes) if (!seenEyes.has(uid)) { g.destroy(); this.eyes.delete(uid); }
     // the dotted link from the hovered part to every lamp that boosts it
@@ -503,12 +525,14 @@ export class Renderer {
   }
 
   /** Big Boi watches the ball: pupils inside the baked whites, turned towards the nearest ball (or idling). */
-  private drawEyes(game: Game, p: PartInstance, z: number, seen: Set<number>) {
+  private drawEyes(game: Game, p: PartInstance, z: number, seen: Set<number>, mood: Mood, jx: number, jy: number) {
     seen.add(p.uid);
     let g = this.eyes.get(p.uid);
     if (!g) { g = new Graphics(); this.partLayer.addChild(g); this.eyes.set(p.uid, g); }
     g.clear();
     g.zIndex = z;
+    g.position.set(jx, jy);
+    if (mood === 'cool') return; // behind the sunglasses
     const v = this.view, r = PARTS.mega.shape.type === 'circle' ? PARTS.mega.shape.r : 1.9;
     const balls = game.sim.ballStates();
     let target: Pt | null = null, best = Infinity;

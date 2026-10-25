@@ -64,7 +64,9 @@ async function main() {
   let dragging: { uid: number; dx: number; dy: number; moved: boolean } | null = null;
   let dragFromInventory = false;
   /** An offer being dragged out of the shop (slot null: the Test Lab catalog). */
-  let shopDrag: { id: PartId; slot: number | null; x0: number; y0: number; moving: boolean; el: HTMLElement } | null = null;
+  let shopDrag: { id: PartId; slot: number | null; x0: number; y0: number; moving: boolean; carry: boolean; el: HTMLElement } | null = null;
+  /** A part picked up off the table with a click: it follows the pointer until the next click sets it down. */
+  let carry: { uid: number; moved: boolean } | null = null;
   let pointer: { x: number; y: number } | null = null;
   let ledgerTimer = 0;
   let lastMultBand = 1;
@@ -106,6 +108,7 @@ async function main() {
     applyBackdrop(t);
     renderer.setTheme(t);
     overlay.setTheme(t);
+    audio.setTheme(t.id);
     dial.build(t);
     for (const cap of ['cashCap', 'startCap']) $(cap).innerHTML = `<img alt="" src="${iconURL('button', 64, 48)}">`;
     ballsKey = '';
@@ -203,14 +206,15 @@ async function main() {
         if (slot !== null && !game.canAfford(game.priceOf(def.id))) { sayKey('broke'); return; }
         audio.unlock();
         e.preventDefault();
-        shopDrag = { id: def.id, slot, x0: e.clientX, y0: e.clientY, moving: false, el };
+        if (shopDrag?.carry) return; // the capture handler deals with a click while something is in hand
+        shopDrag = { id: def.id, slot, x0: e.clientX, y0: e.clientY, moving: false, carry: false, el };
       });
     });
   }
 
+  let lastStock: unknown = null;
   function renderShop() {
     $('shopBox').classList.toggle('locked', !game.editable);
-    $('shopNote').textContent = game.toolboxFull ? 'toolbox full: place or sell first' : 'buy, then place';
     if (game.sandbox) { renderCatalog(); return; }
     $('offers').className = '';
     const rb = $('btnReroll') as HTMLButtonElement;
@@ -218,6 +222,15 @@ async function main() {
     rb.textContent = game.rerollCost ? `REROLL $${game.rerollCost}` : 'REROLL';
     rb.disabled = !game.canAfford(game.rerollCost) || !game.editable;
     $('offers').innerHTML = game.shop.offers.map((id, i) => (id ? offerHtml(id, game.priceOf(id), i) : `<div class="offer sold">Sold</div>`)).join('');
+    // fresh stock (a new round, a reroll, a new run) rolls down onto the shelf one card at a time, with a tick each
+    if (game.shop.offers !== lastStock && game.editable) {
+      lastStock = game.shop.offers;
+      $('offers').querySelectorAll<HTMLElement>('.offer').forEach((el, i) => {
+        el.classList.add('roll');
+        el.style.animationDelay = `${i * 0.09}s`;
+        setTimeout(() => audio.shopRoll(i), i * 90);
+      });
+    }
     bindOfferTips($('offers'));
     for (const b of $('offers').querySelectorAll<HTMLButtonElement>('button[data-buy]')) {
       b.onclick = () => {
@@ -226,7 +239,7 @@ async function main() {
         if (!part) { sayKey('broke'); return; }
         armed = part.uid;
         selected = part.uid;
-        audio.place();
+        audio.buy();
         sayKey('buy');
         persist();
         refreshWorkshop();
@@ -265,6 +278,7 @@ async function main() {
         $('tip').hidden = true;
         const uid = Number(el.dataset.uid);
         armed = armed === uid && !dragFromInventory ? null : uid;
+        if (armed !== null) audio.pickUp();
         selected = uid;
         selectedDecal = null;
         dragFromInventory = armed !== null;
@@ -408,6 +422,7 @@ async function main() {
 
   function refreshWorkshop() {
     reportSold();
+    if (carry && !game.part(carry.uid)?.placed) carry = null; // the part in hand was stored, sold or undone away
     if (selectedDecal !== null && !game.decals[selectedDecal]) selectedDecal = null;
     renderUpgrades();
     renderShop();
@@ -416,41 +431,80 @@ async function main() {
     renderDecal();
   }
 
-  // ---- buying by dragging: an offer dropped on the table is bought straight onto the board, one dropped on the
-  // toolbox goes in the toolbox; a click on Buy still buys into the toolbox ----------------------------------
+  // ---- buying: drag an offer, or click it to pick it up, then drop it on the table (it lands on the board) or on
+  // the toolbox. Nothing is paid until it is dropped; a right-click or Esc puts it back. Buy still goes to the toolbox.
+  const dropShop = (d: NonNullable<typeof shopDrag>, cx: number, cy: number): boolean => {
+    const over = document.elementFromPoint(cx, cy);
+    let part: PartInstance | null = null;
+    if (over === canvas) {
+      const p = renderer.toSim(cx, cy);
+      part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y) : game.buyAndPlace(d.slot, p.x, p.y);
+      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); } else { say('NO ROOM THERE'); return false; }
+    } else if (over?.closest('#inventoryBox')) {
+      part = d.slot === null ? game.grant(d.id) : game.buy(d.slot);
+      if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(game.toolboxFull ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
+    } else return false;
+    persist();
+    return true;
+  };
+  const endShop = () => {
+    if (!shopDrag) return;
+    shopDrag.el.classList.remove('dragging');
+    shopDrag = null;
+    $('inventoryBox').classList.remove('drop');
+    refreshWorkshop();
+  };
   addEventListener('pointermove', (e) => {
     if (!shopDrag) return;
-    if (!shopDrag.moving && Math.hypot(e.clientX - shopDrag.x0, e.clientY - shopDrag.y0) > 6) {
+    if (!shopDrag.moving && !shopDrag.carry && Math.hypot(e.clientX - shopDrag.x0, e.clientY - shopDrag.y0) > 6) {
       shopDrag.moving = true;
       shopDrag.el.classList.add('dragging');
       $('tip').hidden = true;
       armed = null;
+      audio.pickUp();
     }
-    if (!shopDrag.moving) return;
+    if (!shopDrag.moving && !shopDrag.carry) return;
     const over = document.elementFromPoint(e.clientX, e.clientY);
     pointer = over === canvas ? renderer.toSim(e.clientX, e.clientY) : null;
     $('inventoryBox').classList.toggle('drop', !!over?.closest('#inventoryBox'));
   });
   addEventListener('pointerup', (e) => {
     const d = shopDrag;
-    if (!d) return;
-    shopDrag = null;
-    d.el.classList.remove('dragging');
-    $('inventoryBox').classList.remove('drop');
-    if (!d.moving) return;
-    const over = document.elementFromPoint(e.clientX, e.clientY);
-    let part: PartInstance | null = null;
-    if (over === canvas) {
-      const p = renderer.toSim(e.clientX, e.clientY);
-      part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y) : game.buyAndPlace(d.slot, p.x, p.y);
-      if (part) { selected = part.uid; audio.place(); sayKey('place'); } else say('NO ROOM THERE');
-    } else if (over?.closest('#inventoryBox')) {
-      part = d.slot === null ? game.grant(d.id) : game.buy(d.slot);
-      if (part) { selected = part.uid; audio.place(); sayKey('buy'); } else if (game.toolboxFull) say('TOOLBOX FULL. DROP IT ON THE TABLE');
+    if (!d || e.button !== 0) return;
+    if (d.moving) { dropShop(d, e.clientX, e.clientY); endShop(); return; }
+    if (!d.carry) { // a click: it stays in hand until it is dropped or put back
+      d.carry = true;
+      d.el.classList.add('dragging');
+      $('tip').hidden = true;
+      armed = null;
+      audio.pickUp();
     }
-    if (part) persist();
-    refreshWorkshop();
   });
+  // while an offer is in hand, the next click drops it (or a right-click puts it back)
+  addEventListener('pointerdown', (e) => {
+    const d = shopDrag;
+    if (!d?.carry) return;
+    if ((e.target as HTMLElement).closest('.offer') === d.el && e.button === 0) { endShop(); e.stopPropagation(); return; }
+    if (e.button !== 0) { endShop(); e.stopPropagation(); return; }
+    const over = document.elementFromPoint(e.clientX, e.clientY);
+    if (over === canvas || over?.closest('#inventoryBox')) {
+      e.stopPropagation();
+      e.preventDefault();
+      if (dropShop(d, e.clientX, e.clientY)) endShop();
+      return;
+    }
+    if (!(e.target as HTMLElement).closest('.offer')) endShop();
+  }, true);
+  addEventListener('contextmenu', (e) => {
+    if (shopDrag || carry || armed !== null) { e.preventDefault(); cancelHold(); }
+  });
+  /** Right-click or Esc: whatever is in hand goes back where it came from. */
+  function cancelHold() {
+    if (shopDrag) { endShop(); audio.remove(); }
+    if (carry) { if (carry.moved) game.undo(); carry = null; audio.remove(); persist(); }
+    armed = null;
+    refreshWorkshop();
+  }
 
   // ---- pointer: place, select, drag, store -------------------------------------------------------
   const canvas = renderer.app.canvas;
@@ -468,6 +522,13 @@ async function main() {
     if (!game.editable || e.button !== 0) return;
     const p = renderer.toSim(e.clientX, e.clientY);
     pointer = p;
+    if (carry) { // a part picked up off the table: this click sets it down where it is
+      carry = null;
+      audio.place();
+      persist();
+      refreshWorkshop();
+      return;
+    }
     if (armed !== null) {
       if (game.place(armed, p.x, p.y, true)) {
         selected = armed;
@@ -497,6 +558,11 @@ async function main() {
     pointer = renderer.toSim(e.clientX, e.clientY);
     hover = hitPart(pointer.x, pointer.y)?.uid ?? null;
     hoverDecal = hover === null ? renderer.decalAt(e.clientX, e.clientY) : null;
+    if (carry && game.editable) {
+      if (game.place(carry.uid, pointer.x, pointer.y, !carry.moved)) carry.moved = true;
+      const box = $('inventoryBox').getBoundingClientRect();
+      $('inventoryBox').classList.toggle('drop', e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom);
+    }
     if (dragging && game.editable) {
       if (game.place(dragging.uid, pointer.x + dragging.dx, pointer.y + dragging.dy, !dragging.moved)) {
         dragging.moved = true;
@@ -509,17 +575,33 @@ async function main() {
   });
   canvas.addEventListener('pointerup', (e) => {
     if (dragging) {
+      // a click without a drag picks the part up: it follows the pointer until the next click
+      if (!dragging.moved) { carry = { uid: dragging.uid, moved: false }; dragging = null; audio.pickUp(); refreshWorkshop(); return; }
       // dropped on the toolbox: take it off the board
       const el = document.elementFromPoint(e.clientX, e.clientY);
       if (el?.closest('#inventoryBox')) storeSelected();
+      else audio.place();
       persist();
       dragging = null;
       $('inventoryBox').classList.remove('drop');
       refreshWorkshop();
     }
   });
-  canvas.addEventListener('pointerleave', () => { pointer = null; hover = null; hoverDecal = null; $('tip').hidden = true; });
-  canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); armed = null; refreshWorkshop(); });
+  // a part carried off the table can be put in the toolbox with a click on it
+  $('inventoryBox').addEventListener('pointerdown', (e) => {
+    if (!carry || e.button !== 0) return;
+    e.stopPropagation();
+    selected = carry.uid;
+    carry = null;
+    $('inventoryBox').classList.remove('drop');
+    storeSelected();
+  }, true);
+  canvas.addEventListener('pointerleave', () => {
+    pointer = null; hover = null; hoverDecal = null; $('tip').hidden = true;
+    // a part in hand goes back to its spot when the pointer leaves the table (reaching for its card, say)
+    if (carry) { if (carry.moved) { game.undo(); persist(); } carry = null; refreshWorkshop(); }
+  });
+  canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); });
   canvas.addEventListener('wheel', (e) => {
     const uid = armed ?? selected;
     if (uid == null || !game.editable) return;
@@ -553,7 +635,7 @@ async function main() {
   }
 
   function showTip(cx: number, cy: number) {
-    if (shopDrag?.moving) { $('tip').hidden = true; return; }
+    if (shopDrag?.moving || shopDrag?.carry || carry) { $('tip').hidden = true; return; }
     const inst = hover != null && !dragging ? game.part(hover) : undefined;
     if (inst) { tipPart(PARTS[inst.def], inst, cx, cy, true); return; }
     const d = hoverDecal !== null && !dragging ? game.decals[hoverDecal] : undefined;
@@ -603,7 +685,10 @@ async function main() {
       if (uid != null) { game.rotate(uid, (e.shiftKey ? -1 : 1) * (Math.PI / 12)); persist(); }
     }
     if ((e.code === 'Delete' || e.code === 'Backspace') && game.editable) storeSelected();
-    if (e.code === 'Escape') { armed = null; selected = null; selectedDecal = null; refreshWorkshop(); }
+    if (e.code === 'Escape') { if (shopDrag || carry || armed !== null) cancelHold(); else { selected = null; selectedDecal = null; refreshWorkshop(); } }
+    // 1, 2, 3 switch the machine's theme (a menu comes later)
+    const ti = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code);
+    if (ti >= 0 && THEMES[ti] && THEMES[ti].id !== theme.id) pickTheme(THEMES[ti].id);
   });
   addEventListener('keyup', (e) => keys.delete(e.code));
   addEventListener('blur', () => keys.clear());
@@ -652,6 +737,11 @@ async function main() {
   $('gravVal').textContent = gravity.value;
   for (const ev of ['pointerdown', 'keydown'] as const) gravity.addEventListener(ev, () => game.checkpoint());
   gravity.oninput = () => { game.setGravity(Number(gravity.value)); $('gravVal').textContent = gravity.value; persist(); };
+  const MUSIC_KEY = 'pinball-roguelite.music.v1';
+  const musicBox = $('music') as HTMLInputElement;
+  musicBox.checked = store.get(MUSIC_KEY) !== '0';
+  audio.setMusic(musicBox.checked);
+  musicBox.onchange = () => { audio.unlock(); audio.setMusic(musicBox.checked); store.set(MUSIC_KEY, musicBox.checked ? '1' : '0'); };
   const calmBox = $('calm') as HTMLInputElement;
   calmBox.checked = calm;
   calmBox.onchange = () => setCalm(calmBox.checked);
@@ -722,23 +812,27 @@ async function main() {
   const onSimEvent = (ev: SimEvent) => {
     switch (ev.type) {
       case 'flipper': audio.flipper(ev.on); break;
-      case 'launch': audio.launch(ev.power); if (ev.power < 62) sayKey('weakPlunge'); break;
-      case 'drain': audio.drain(); if (ev.reason === 'timeout' && game.mode === 'round') sayKey('clock'); else if (game.mode !== 'workshop' || ev.reason === 'timeout') sayKey('drain'); break;
+      case 'launch': audio.launch(ev.power); if (ev.power < 62) { sayKey('weakPlunge'); renderer.bigBoiMood('sad', 1.5); } break;
+      case 'drain':
+        audio.drain();
+        if (game.mode === 'round' && game.sim.ballCount === 0) renderer.bigBoiMood('sad', 2.2); // a bad shot: Big Boi is sad
+        if (ev.reason === 'timeout' && game.mode === 'round') sayKey('clock'); else if (game.mode !== 'workshop' || ev.reason === 'timeout') sayKey('drain');
+        break;
       case 'nudge': {
         audio.nudge();
         renderer.onNudge(ev.dir, ev.tilt);
         if (ev.tilt > 0.55) renderer.flashDmd();
         break;
       }
-      case 'tilt': audio.tilt(); renderer.onTilt(); sayKey('tilt'); break;
+      case 'tilt': audio.tilt(); renderer.onTilt(); sayKey('tilt'); renderer.bigBoiMood('sad', 3); break;
       case 'ballSearch': sayKey('search'); break;
       case 'rescue': sayKey('rescue'); break;
-      case 'extraBall': sayKey('printed'); renderer.onBigMoment(); audio.goal(); break;
+      case 'extraBall': sayKey('printed'); renderer.onBigMoment(); audio.goal(); renderer.bigBoiMood('shocked', 1.6); break;
       case 'partRelease': { const p = game.part(ev.uid); if (p) renderer.onRelease(p.x, p.y); break; }
       case 'ballSaved': {
         const saver = game.part(ev.uid);
         if (saver) renderer.onSaved(saver.x, saver.y);
-        sayKey('saved'); renderer.onBigMoment(); audio.goal();
+        sayKey('saved'); renderer.onBigMoment(); audio.saved();
         break;
       }
       case 'partHit': if (ev.kicked) { audio.launch(70); sayKey('kicked'); } break;
@@ -750,6 +844,7 @@ async function main() {
     coinsInFlight = Math.max(0, coinsInFlight - 1);
     const c = $('coinStack'), tick = $('moneyTick');
     c.classList.remove('land'); void c.offsetWidth; c.classList.add('land');
+    audio.coinLand();
     tick.textContent = '+$1';
     tick.classList.remove('go'); void tick.offsetWidth; tick.classList.add('go');
   };
@@ -764,26 +859,29 @@ async function main() {
       const now = performance.now();
       if (s.kind === 'bonus' || now - lastStamp > 350) {
         lastStamp = now;
-        overlay.stamp(`×${s.multAfter.toFixed(2)}`, roleFill(theme, s.def), renderer.toClient(s.x, s.y, 2), () => rectCentre($('multDial')), s.kind === 'bonus', () => dial.kick());
+        overlay.stamp(`×${s.multAfter.toFixed(2)}`, roleFill(theme, s.def), renderer.toClient(s.x, s.y, 2), () => rectCentre($('multDial')), s.kind === 'bonus', () => { dial.kick(); audio.stamp(); });
       }
     }
-    if (s.kind === 'bonus') { audio.goal(); say(s.label ?? 'BONUS!'); renderer.onBigMoment(); }
-    else if (s.kind === 'light') audio.place();
-    else audio.bumper(s.multAfter, PARTS[s.def].recipe.money !== undefined);
+    // every part has its own voice; a set or a level-up gets a fanfare and a shocked Big Boi
+    if (s.kind === 'bonus') { audio.bonus(); say(s.label ?? 'BONUS!'); renderer.onBigMoment(); renderer.bigBoiMood('shocked', 1.6); }
+    else audio.hit(s.def, s.multAfter, { spins: s.spins, tier: s.tier, points: s.points });
+    // while you play, the display flashes every hit
+    if (s.kind === 'hit' && game.mode === 'round') renderer.pop(`+${fmt(s.points)}`);
     const band = Math.floor(s.multAfter);
-    if (band > lastMultBand) sayKey('mult', { n: band });
+    if (band > lastMultBand) { sayKey('mult', { n: band }); renderer.bigBoiMood('shocked', 1.4); }
     lastMultBand = band;
   };
   const onGame = (g: GameEvent) => {
     if (g.type === 'goal') { audio.goal(); renderer.onBigMoment(); sayKey('goal'); }
     if (g.type === 'roundWon') { sayKey('roundWon'); showOverlay('won', g.payout); persist(); }
-    if (g.type === 'runOver') { sayKey('runOver'); showOverlay('over'); }
+    if (g.type === 'runOver') { sayKey('runOver'); audio.gameOver(); renderer.bigBoiMood('sad', 30); showOverlay('over'); }
     if (g.type === 'ballEnd') lastMultBand = 1;
   };
 
   // overlayEl is declared up top (the keyboard needs it)
   function showOverlay(kind: 'won' | 'over', payout?: Payout) {
     overlayEl.hidden = false;
+    overlayEl.classList.toggle('full', kind === 'over');
     if (kind === 'won' && payout) {
       overlayEl.innerHTML = `<div class="card"><h3>Round ${game.round} cleared!</h3>
         <div class="hint">Score ${fmt(game.scorer.score)} vs goal ${fmt(game.scorer.goal)}</div><br/>
@@ -792,8 +890,12 @@ async function main() {
         <button class="primary disp" id="btnNext">${game.round % BOSS_EVERY === 0 ? 'Choose an upgrade' : 'To the workshop'}</button></div>`;
       ($('btnNext') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; game.continueAfterRound(); sayKey(game.pending ? 'upgrade' : 'workshop'); refreshWorkshop(); persist(); };
     } else {
-      overlayEl.innerHTML = `<div class="card"><h3>Run over</h3>
-        <div class="hint">Score ${fmt(game.scorer.score)} vs goal ${fmt(game.scorer.goal)} on round ${game.round}.</div><br/>
+      // the run in one card: how far along the map you got, your points, what your machine became
+      const boss = game.round % BOSS_EVERY === 0;
+      overlayEl.innerHTML = `<div class="card summary"><h3>Run over</h3>
+        <div class="hint">${fmt(game.scorer.score)} of ${fmt(game.scorer.goal)} on round ${game.round}${boss ? ', a boss round' : ''}.</div>
+        <div class="roundmap">${mapSvg(game.round)}</div>
+        <div class="stats"><span><b>${game.round - 1}</b><small>rounds cleared</small></span><span><b>${fmt(game.runScore)}</b><small>total points</small></span><span><b>${game.placed.length}</b><small>parts on the table</small></span></div>
         <button class="primary disp" id="btnAgain">New run</button></div>`;
       ($('btnAgain') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; game.newRun(); persist(); sayKey('workshop'); refreshWorkshop(); };
     }
@@ -811,16 +913,12 @@ async function main() {
     start.classList.toggle('ready', !owed && game.inventory.length === 0);
   }
 
-  let mapKey = '';
   /** The run as a map: fifteen stops on a winding path, every third a boss (bigger); here is lit, behind is grey. */
-  function renderMap() {
-    const key = `${game.round}|${theme.id}`;
-    if (key === mapKey) return;
-    mapKey = key;
-    const N = 15, first = Math.floor((game.round - 1) / N) * N + 1, W = 260, H = 34;
+  function mapSvg(round: number) {
+    const N = 15, first = Math.floor((round - 1) / N) * N + 1, W = 260, H = 34;
     const pts = Array.from({ length: N }, (_, i) => [10 + ((W - 20) * i) / (N - 1), H / 2 + Math.sin(i * 0.95 + 0.4) * 6]);
     const seg = (a: number, b: number, style: string) => `<polyline points="${pts.slice(a, b + 1).map((q) => q.join(',')).join(' ')}" style="fill:none;${style}"/>`;
-    const here = game.round - first;
+    const here = round - first;
     const o = [seg(0, Math.max(0, here), 'stroke:var(--paper-dim);stroke-width:3;stroke-linecap:round;stroke-linejoin:round'),
       seg(Math.max(0, here), N - 1, 'stroke:var(--faint);stroke-width:2.2;stroke-dasharray:2 5;stroke-linecap:round')];
     pts.forEach(([x, y], i) => {
@@ -829,9 +927,16 @@ async function main() {
       const line = i < here ? 'var(--faint)' : 'var(--ink)';
       if (i === here) o.push(`<circle cx="${x}" cy="${y}" r="${r + 4.5}" style="fill:none;stroke:var(--accent);stroke-width:2;opacity:.45"/>`);
       o.push(`<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fill};stroke:${line};stroke-width:${boss ? 2.4 : 1.8}"/>`);
-      if (boss) o.push(`<circle cx="${x}" cy="${y}" r="2.6" style="fill:${i <= here && i !== here ? 'var(--faint)' : i === here ? 'var(--paper)' : 'var(--ink)'}"/>`);
+      if (boss) o.push(`<circle cx="${x}" cy="${y}" r="2.6" style="fill:${i < here ? 'var(--faint)' : i === here ? 'var(--paper)' : 'var(--ink)'}"/>`);
     });
-    $('roundMap').innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${o.join('')}</svg>`;
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${o.join('')}</svg>`;
+  }
+  let mapKey = '';
+  function renderMap() {
+    const key = `${game.round}|${theme.id}`;
+    if (key === mapKey) return;
+    mapKey = key;
+    $('roundMap').innerHTML = mapSvg(game.round);
   }
 
   let keysKey = '';
@@ -847,6 +952,8 @@ async function main() {
   }
 
   let ballsKey = '';
+  let receiptScorer: unknown = null;
+  let receiptOrder: PartId[] = [];
   function updateBalls(inRound: boolean) {
     const key = inRound ? `${game.ballsLeft}/${game.ballsPerRound}` : 'inf';
     if (key === ballsKey) return;
@@ -867,6 +974,7 @@ async function main() {
     $('phaseTitle').textContent = playing ? 'PLAY' : 'WORKSHOP';
     document.body.classList.toggle('playing', playing);
     odometer.set(sc.score);
+    renderer.idle(playing ? fmt(sc.score) : `ROUND ${game.round}  GOAL ${fmt(goalFor(game.round))}`);
     $('mult').textContent = `×${sc.mult.toFixed(2)}`;
     $('mult').classList.toggle('hot', sc.mult >= 2);
     dial.set(sc.mult, theme);
@@ -900,21 +1008,45 @@ async function main() {
     ledgerTimer += dt;
     if (ledgerTimer > 0.12) {
       ledgerTimer = 0;
-      // the receipt groups the ledger by part type: "Pop Bumper ×3 ... 4,210"
+      // the receipt groups the ledger by part type, in the order they first scored, so it prints downwards:
+      // it feeds out at the start of a round, and each new line feeds out after the last
+      if (game.scorer !== receiptScorer) {
+        receiptScorer = game.scorer;
+        receiptOrder = [];
+        $('ledger').querySelector('tbody')!.innerHTML = '';
+        if (game.mode === 'round') { const w = $('ledgerBox'); w.classList.remove('feed'); void w.offsetWidth; w.classList.add('feed'); audio.print(3); }
+      }
       const groups = new Map<PartId, { n: number; points: number; money: number }>();
       for (const r of sc.ledgerRows()) {
         const g = groups.get(r.def) ?? { n: 0, points: 0, money: 0 };
         g.n++; g.points += r.points; g.money += r.money;
         groups.set(r.def, g);
       }
-      const rows = [...groups.entries()].sort((a, b) => b[1].points - a[1].points);
+      const fresh = [...groups.keys()].filter((id) => !receiptOrder.includes(id));
+      if (fresh.length) { receiptOrder.push(...fresh); audio.print(fresh.length); }
+      const body = $('ledger').querySelector('tbody')!;
+      if (!receiptOrder.length) body.innerHTML = '';
+      // rows are kept and updated in place, so a line feeds out once and then just counts up
+      for (const id of receiptOrder) {
+        const g = groups.get(id);
+        if (!g) continue;
+        let tr = body.querySelector<HTMLTableRowElement>(`tr[data-id="${id}"]`);
+        if (!tr) {
+          tr = document.createElement('tr');
+          tr.dataset.id = id;
+          tr.className = 'new';
+          tr.innerHTML = `<td class="name"><i style="background:${roleVar(id)}"></i><span></span></td><td class="pts"></td>`;
+          body.appendChild(tr);
+        }
+        const name = id === 'lane' ? `Lanes ${theme.laneWord}` : `${PARTS[id].name}${g.n > 1 ? ` ×${g.n}` : ''}`;
+        const pts = `${g.money ? `$${g.money} · ` : ''}${fmt(g.points)}`;
+        const [nameEl, ptsEl] = [tr.querySelector('span')!, tr.querySelector<HTMLElement>('.pts')!];
+        if (nameEl.textContent !== name) nameEl.textContent = name;
+        if (ptsEl.textContent !== pts) ptsEl.textContent = pts;
+      }
+      const rows = receiptOrder.filter((id) => groups.has(id)).map((id) => [id, groups.get(id)!] as const);
       $('ledgerEmpty').hidden = rows.length > 0;
       $('ledger').hidden = rows.length === 0;
-      $('ledger').querySelector('tbody')!.innerHTML = rows.map(([id, g]) => {
-        const d = PARTS[id];
-        const name = id === 'lane' ? `Lanes ${theme.laneWord}` : `${d.name}${g.n > 1 ? ` ×${g.n}` : ''}`;
-        return `<tr><td class="name"><i style="background:${roleVar(id)}"></i>${name}</td><td class="pts">${g.money ? `$${g.money} · ` : ''}${fmt(g.points)}</td></tr>`;
-      }).join('');
       $('ledgerTotal').textContent = fmt(rows.reduce((a, [, g]) => a + g.points, 0));
       if (game.editable && selected != null && $('selLive')) {
         const inst = game.part(selected);
@@ -994,7 +1126,7 @@ async function main() {
     drawState.hoverUid = hover;
     drawState.hoverDecal = hoverDecal;
     const armedPart = armed != null ? game.part(armed) : undefined;
-    drawState.ghost = game.editable && shopDrag?.moving && pointer
+    drawState.ghost = game.editable && (shopDrag?.moving || shopDrag?.carry) && pointer
       ? { def: shopDrag.id, x: pointer.x, y: pointer.y, angle: 0, valid: canPlace(game.layout, shopDrag.id, pointer.x, pointer.y) }
       : game.editable && armedPart && pointer
         ? { def: armedPart.def, x: pointer.x, y: pointer.y, angle: armedPart.angle, valid: canPlace(game.layout, armedPart.def, pointer.x, pointer.y) }
