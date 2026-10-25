@@ -52,7 +52,7 @@ interface Ring { p: Particle; on: boolean; age: number; life: number; x: number;
 
 const easeOut = (u: number) => 1 - (1 - u) * (1 - u);
 /** The share of a chip's flight spent bursting out of the part. */
-const POP = 0.26;
+const POP = 0.2;
 
 /** A damped spring for the "bump" of a counter: kick() adds velocity, step() returns the scale offset. */
 class Bump {
