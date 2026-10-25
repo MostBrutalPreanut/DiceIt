@@ -8,7 +8,7 @@ import { AudioFx } from './audio';
 import { Game, goalFor, parseRun, type Arrangement, type GameEvent, type Payout } from './game/game';
 import type { ScoreEvent } from './game/scoring';
 import { Renderer, type DrawState } from './render/renderer';
-import { FxOverlay, rectCentre } from './render/overlay';
+import { FxOverlay } from './render/overlay';
 import { FACTORY, roleFill, themeById, THEMES, themeVars, type Theme } from './render/theme';
 import { DT } from './sim/constants';
 import { canPlace, canPlaceLedge } from './sim/layout';
@@ -19,6 +19,8 @@ import { bossCard, decalCard, fmt, HUD_TIPS, partCard, rarityChip, roleVar, stat
 import { applyBackdrop, chase, makeBulbs, MultDial, Odometer } from './ui/hud';
 import { DecalPicker } from './ui/decalPick';
 import './ui/decalPick.css';
+import { Flyers } from './ui/flyers';
+import './ui/flyers.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORE = 'pinball-roguelite.run.v2';
@@ -54,6 +56,8 @@ async function main() {
   const overlay = new FxOverlay(theme);
   await overlay.init();
   const audio = new AudioFx();
+  /** Points and coins fly from the part to the score dock and the money stack. */
+  const flyers = new Flyers(overlay, renderer, { coinLand: () => audio.coinLand() });
   const odometer = new Odometer($('score'));
   const dial = new MultDial($('multDial'));
 
@@ -79,8 +83,6 @@ async function main() {
   let ledgerTimer = 0;
   let lastMultBand = 1;
   let lastStamp = 0;
-  /** Coins still flying to the money stack: the balance counts them when they land. */
-  let coinsInFlight = 0;
   const overlayEl = $('overlay');
   $('stage').appendChild($('upgradeBox')); // the upgrade picker floats over the top of the table
   const drawState: DrawState = { ghost: null, selectedUid: null, hoverUid: null, showHeat: false, hoverDecal: null, ledge: null };
@@ -895,27 +897,15 @@ async function main() {
       default: break;
     }
   };
-  const moneyEl = () => $('coinStack');
-  const landCoin = () => {
-    coinsInFlight = Math.max(0, coinsInFlight - 1);
-    const c = $('coinStack'), tick = $('moneyTick');
-    c.classList.remove('land'); void c.offsetWidth; c.classList.add('land');
-    audio.coinLand();
-    tick.textContent = '+$1';
-    tick.classList.remove('go'); void tick.offsetWidth; tick.classList.add('go');
-  };
   const onScore = (s: ScoreEvent) => {
     renderer.onScore(s);
-    // coins fly to the money stack, a rising Mult stamps and flies to the dial: effects point at their consequence
-    if (s.money > 0 && !simulating) {
-      const from = renderer.toClient(s.x, s.y, 1.1);
-      for (let i = 0; i < s.money; i++) { coinsInFlight++; overlay.coin(from, () => rectCentre(moneyEl()), landCoin, i * 0.08); }
-    }
+    // points fly to the score dock, coins to the money stack, a rising Mult stamps and flies to the dial: effects point at their consequence
+    if (!simulating) flyers.onScore(s);
     if (s.multAfter > s.multBefore + 1e-9 && !simulating) {
       const now = performance.now();
       if (s.kind === 'bonus' || now - lastStamp > 350) {
         lastStamp = now;
-        overlay.stamp(`×${s.multAfter.toFixed(2)}`, roleFill(theme, s.def), renderer.toClient(s.x, s.y, 2), () => rectCentre($('multDial')), s.kind === 'bonus', () => { dial.kick(); audio.stamp(); });
+        overlay.stamp(`×${s.multAfter.toFixed(2)}`, roleFill(theme, s.def), renderer.toClient(s.x, s.y, 2), () => flyers.multTarget(), s.kind === 'bonus', () => { dial.kick(); flyers.kickMult(); audio.stamp(); });
       }
     }
     // every part has its own voice; a set or a level-up gets a fanfare and a shocked Big Boi
@@ -1045,7 +1035,7 @@ async function main() {
     $('mult').textContent = `×${sc.mult.toFixed(2)}`;
     $('mult').classList.toggle('hot', sc.mult >= 2);
     dial.set(sc.mult, theme);
-    const money = game.money + (inRound ? sc.money : 0) - coinsInFlight;
+    const money = game.money + (inRound ? sc.money : 0) - flyers.coinsInFlight;
     $('shopMoney').textContent = game.sandbox ? '$∞' : `$${Math.max(0, money)}`;
     renderMap();
     const goal = inRound ? sc.goal : goalFor(game.round);
@@ -1053,6 +1043,7 @@ async function main() {
     $('toGo').textContent = inRound ? (sc.goalReached ? 'GOAL HIT!' : `${fmt(Math.max(0, goal - sc.score))} to go`) : 'next round';
     $('goalFill').style.width = inRound ? `${Math.min(100, (sc.score / goal) * 100)}%` : '0%';
     $('goalFill').parentElement!.classList.toggle('hit', inRound && sc.goalReached);
+    flyers.hud({ round: sc, score: sc.score, goal, mult: sc.mult, money: game.sandbox ? null : game.money + (inRound ? sc.money : 0), playing, theme });
     updateBalls(inRound);
     $('tiltFill').style.width = `${Math.min(100, game.sim.tiltMeter * 100)}%`;
     $('tiltFill').classList.toggle('danger', game.sim.tiltMeter > 0.55 || game.sim.tilted);
@@ -1131,13 +1122,13 @@ async function main() {
   /** True while a test hook runs many seconds of sim in one go: no effects fly to the HUD then. */
   let simulating = false;
   const debug = {
-    game, keys, renderer, fps: 0, steps: 0,
+    game, keys, renderer, flyers, fps: 0, steps: 0,
     freeze(v = true) { frozen = v; },
-    /** Run `seconds` of sim time with the bot at the controls, drawing at 60 fps of sim time. */
-    advance(seconds: number, seed = 1, skill = 0.9) {
+    /** Run `seconds` of sim time with the bot at the controls, drawing at 60 fps of sim time (fx: let points and coins fly). */
+    advance(seconds: number, seed = 1, skill = 0.9, fx = false) {
       const bot = new Bot(seed, skill);
       const frames = Math.round(seconds * 60);
-      simulating = true;
+      simulating = !fx;
       try {
         for (let f = 0; f < frames; f++) {
           for (let i = 0; i < 4; i++) stepOnce(bot.decide(game.sim));

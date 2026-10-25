@@ -113,7 +113,8 @@ export class Renderer {
     this.glowTex = makeGlowTexture();
     this.partLayer.addChild(this.plungerG);
     this.layout();
-    new ResizeObserver(() => this.layout()).observe(host);
+    // Pixi only follows window resizes on its own; the stage can also change size with the page (the score dock)
+    new ResizeObserver(() => { this.app.resize(); this.layout(); }).observe(host);
   }
 
   setTheme(t: Theme) {
