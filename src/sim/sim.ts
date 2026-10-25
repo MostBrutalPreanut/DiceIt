@@ -64,6 +64,8 @@ interface BallRef {
   held: { uid: number; until: number } | null;
   /** Sim time until which a drain of this ball is saved (set when the plunger launches it; 0 = not saveable). */
   saveUntil: number;
+  /** Speed just before the last step: the impact speed, since the contact has already bounced it by the time we see it. */
+  preSpeed: number;
 }
 interface FlipperRef {
   fid: number;
@@ -297,7 +299,7 @@ export class Sim {
     }
     const sd = B.b2DefaultShapeDef();
     sd.friction = 0.1;
-    sd.restitution = def.kind === 'deflector' ? 0.6 : def.kind === 'kicker' ? 0.3 : 0.45;
+    sd.restitution = def.kind === 'deflector' ? 0.6 : def.kind === 'kicker' ? 0.3 : def.kind === 'target' ? 0.5 : 0.45;
     sd.isSensor = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'saucer' || def.kind === 'lamp' || def.kind === 'kickback';
     sd.userData = { kind: 'part', uid: inst.uid };
     if (def.shape.type === 'circle') B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), def.shape.r));
@@ -392,7 +394,7 @@ export class Sim {
     sd.restitution = 0.3;
     sd.userData = { kind: 'ball', id };
     B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), BALL_R));
-    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0 });
+    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0, preSpeed: 0 });
     return id;
   }
 
@@ -522,6 +524,10 @@ export class Sim {
 
     for (const p of this.parts.values()) if (p.bank?.resetAt != null && this.tick >= p.bank.resetAt) this.resetBank(p);
 
+    for (const b of this.balls) {
+      const v = B.b2Body_GetLinearVelocity(b.body);
+      b.preSpeed = Math.hypot(v.x, v.y);
+    }
     B.b2World_Step(this.worldId, this.dt, this.substeps);
 
     this.processContacts();
@@ -587,6 +593,11 @@ export class Sim {
           pr.bank.resetAt = this.tick + Math.round(BANK_RESET_AFTER / this.dt);
           this.events.push({ ...hit, bankComplete: true });
         }
+        continue;
+      }
+      if (def.kind === 'target') {
+        // a passive standup: it just bounces the ball, and reports how hard it was hit
+        this.events.push({ type: 'partHit', t: this.time, uid: pr.inst.uid, ballId: br.id, x: pr.inst.x, y: pr.inst.y, speed: br.preSpeed });
         continue;
       }
       if (def.kind !== 'bumper' && def.kind !== 'kicker') continue;

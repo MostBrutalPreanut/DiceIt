@@ -5,8 +5,8 @@
  */
 import { SAVER_WINDOW } from '../sim/constants';
 
-export type PartId = 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver';
-export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver';
+export type PartId = 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver' | 'vari';
+export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target';
 
 /** Part types can be levelled up for the rest of the run (Space Cadet's bumper upgrades). */
 export const MAX_LEVEL = 5;
@@ -47,6 +47,32 @@ export interface Recipe {
   perLevel?: number;
   /** A Level Light: toggles on each pass; lighting every light aimed at one type levels that type up. */
   levelUp?: boolean;
+  /** Harder hits pay more: the points are multiplied by the highest tier the ball's speed reaches. */
+  tiers?: HitTier[];
+}
+
+/** One step of a vari-target: balls at least `from` fast (scaled by the part's Stiffness) pay `x` times. */
+export interface HitTier {
+  from: number;
+  x: number;
+  name: string;
+}
+
+export const VARI_TIERS: HitTier[] = [
+  { from: 0, x: 1, name: 'soft' },
+  { from: 12, x: 2, name: 'firm' },
+  { from: 28, x: 4, name: 'hard' },
+  { from: 50, x: 8, name: 'smash' },
+];
+
+/** The tier a ball of this speed reaches on this part (the Stiffness dial scales how fast it must be). */
+export function tierOf(inst: PartInstance, speed: number): HitTier | null {
+  const tiers = PARTS[inst.def].recipe.tiers;
+  if (!tiers) return null;
+  const stiff = dialValue(inst, 'stiff');
+  let best = tiers[0];
+  for (const t of tiers) if (speed >= t.from * stiff) best = t;
+  return best;
 }
 
 export type Shape = { type: 'circle'; r: number } | { type: 'box'; hw: number; hh: number };
@@ -160,6 +186,16 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'box', hw: 2.6, hh: 0.45 }, rotatable: true, kickUnit: 0,
     recipe: { points: 60, per: 'target', setBonus: { points: 300, mult: 0.3 }, perLevel: 10 }, dials: [],
   },
+  vari: {
+    id: 'vari', name: 'Vari-Target', blurb: 'Tap it, get peanuts. Smash it, get paid.', kind: 'target', color: 0x1fe0c0, cost: 4, weight: 2,
+    shape: { type: 'box', hw: 1.3, hh: 0.35 }, rotatable: true, kickUnit: 0,
+    recipe: { points: 40, per: 'hit', tiers: VARI_TIERS },
+    dials: [{
+      id: 'stiff', label: 'Stiffness', min: 0.5, max: 2, step: 0.25, default: 1,
+      tradeoff: 'A stiffer target needs a harder hit for every tier, but pays more once you get there.',
+      payoff: (v) => 1 + 0.5 * (v - 1), fmt: (v) => v.toFixed(2),
+    }],
+  },
   deflector: {
     id: 'deflector', name: 'Deflector', blurb: 'A bouncy bar. Scores nothing, steers everything.', kind: 'deflector', color: 0x8b95c9, cost: 1, weight: 2,
     shape: { type: 'box', hw: 2.2, hh: 0.28 }, rotatable: true, kickUnit: 0, recipe: {}, dials: [],
@@ -256,6 +292,11 @@ export function describe(def: PartDef, inst?: PartInstance, level = 0): DescLine
     lines.push({ tag: 'lamp', text: `Roll a ball over it to light it for this ball. While lit, every scoring part within ${num(rad)} units scores +${Math.round(lampBonus(rad) * 100)}%.` });
   }
   if (r.lights && def.kind === 'rollover') lines.push({ tag: 'note', text: 'Lights up for the rest of this ball.' });
+  if (def.id === 'lane') lines.push({ tag: 'note', text: 'Lane change: every time you press a flipper button the lit lanes shift one lane (Z left, / right, wrapping round), so you can steer which lane is still dark.' });
+  if (r.tiers) {
+    const stiff = inst ? dialValue(inst, 'stiff') : 1;
+    lines.push({ tag: 'note', text: `Pays more for a harder hit: ${r.tiers.map((t) => `x${t.x} ${t.name}${t.from ? ` (${num(t.from * stiff)}+ speed)` : ''}`).join(', ')}.` });
+  }
   if (r.setBonus && def.kind === 'rollover') lines.push({ tag: 'set', text: `Light every Lane Rollover on the board: +${r.setBonus.points} points and +${num(r.setBonus.mult)} Mult, then they reset.` });
   if (def.kind === 'bank') lines.push({ tag: 'set', text: `Each target you hit drops. Drop all three: +${r.setBonus!.points} points and +${num(r.setBonus!.mult)} Mult, then they pop back up (and every new ball).` });
   if (r.levelUp) {

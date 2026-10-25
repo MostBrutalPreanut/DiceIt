@@ -35,6 +35,8 @@ export class Renderer {
   private particles: Particle[] = [];
   private popups: Popup[] = [];
   private pulses = new Map<number, number>();
+  /** Vari-targets: the tier of the last hit, shown by how many segments light up. */
+  private lastTier = new Map<number, { tier: number; glow: number }>();
   private spin = new Map<number, { angle: number; speed: number }>();
   private trails = new Map<number, { x: number; y: number }[]>();
   private partLabels = new Map<number, Text>();
@@ -78,6 +80,7 @@ export class Renderer {
 
   onScore(ev: ScoreEvent) {
     this.pulses.set(ev.uid, 1);
+    if (ev.tier !== undefined) this.lastTier.set(ev.uid, { tier: ev.tier, glow: 1 });
     const def = PARTS[ev.def];
     if (ev.spins) {
       const sp = this.spin.get(ev.uid) ?? { angle: 0, speed: 0 };
@@ -212,7 +215,7 @@ export class Renderer {
   }
 
   /** One part's body. `alpha` < 1 is used for the ghost. */
-  private drawPartShape(def: PartDef, x: number, y: number, angle: number, opts: { pulse?: number; lit?: boolean; spin?: number; alpha?: number; inst?: PartInstance; down?: boolean[]; armed?: boolean; left?: number } = {}) {
+  private drawPartShape(def: PartDef, x: number, y: number, angle: number, opts: { pulse?: number; lit?: boolean; spin?: number; alpha?: number; inst?: PartInstance; down?: boolean[]; armed?: boolean; left?: number; tier?: number; glow?: number } = {}) {
     const g = this.g, pulse = opts.pulse ?? 0, a = opts.alpha ?? 1, col = hex(def.color);
     const X = this.X(x), Y = this.Y(y);
     if (def.shape.type === 'circle') {
@@ -289,6 +292,15 @@ export class Renderer {
         if (isDown) g.poly(pts).stroke({ width: 1, color: col, alpha: 0.35 * a });
         else g.poly(pts).fill({ color: col, alpha: (0.55 + pulse * 0.45) * a }).stroke({ width: this.s * 0.14, color: 0xffffff, alpha: 0.7 * a, join: 'round' });
       }
+    } else if (def.kind === 'target') {
+      // a plate in four segments, one per tier: the segments up to the last hit's tier glow
+      const c = Math.cos(angle), sn = Math.sin(angle), n = def.recipe.tiers?.length ?? 4, seg = hw / (n / 2);
+      g.poly(this.boxPts(x, y, hw, hh * 1.7, angle)).fill({ color: 0x07241f, alpha: a }).stroke({ width: this.s * 0.16, color: col, alpha: a, join: 'round' });
+      for (let i = 0; i < n; i++) {
+        const off = -hw + seg * (i + 0.5);
+        const on = (opts.tier ?? -1) >= i;
+        g.poly(this.boxPts(x + c * off, y + sn * off, seg * 0.42, hh * 0.85, angle)).fill({ color: col, alpha: (0.22 + (on ? 0.78 * (opts.glow ?? 0) : 0)) * a });
+      }
     } else if (def.kind === 'deflector') {
       g.poly(this.boxPts(x, y, hw, hh, angle)).fill({ color: 0x1a2250, alpha: a }).stroke({ width: this.s * 0.2, color: col, alpha: a, join: 'round' });
     } else {
@@ -324,7 +336,12 @@ export class Renderer {
       }
       const lit = game.scorer.isLit(p.uid);
       const saver = savers.get(p.uid);
-      this.drawPartShape(def, p.x, p.y, p.angle, { pulse, lit, spin: sp?.angle ?? 0, inst: p, down: banks.get(p.uid), armed: kickbacks.get(p.uid) ?? saver?.armed, left: saver?.left });
+      const lt = this.lastTier.get(p.uid);
+      if (lt) {
+        lt.glow = Math.max(0, lt.glow - dt * 0.7);
+        if (lt.glow === 0) this.lastTier.delete(p.uid);
+      }
+      this.drawPartShape(def, p.x, p.y, p.angle, { pulse, lit, spin: sp?.angle ?? 0, inst: p, down: banks.get(p.uid), armed: kickbacks.get(p.uid) ?? saver?.armed, left: saver?.left, tier: lt?.tier, glow: lt?.glow });
       // level pips above the part: one gold dot per level this part type has earned
       const lvl = def.recipe.perLevel ? game.scorer.levelOf(p.def) : 0;
       for (let i = 0; i < lvl; i++) {
@@ -348,7 +365,7 @@ export class Renderer {
         }
         if (t.text !== text) t.text = text;
         t.style.fontSize = font;
-        const below = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'saver';
+        const below = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'saver' || def.kind === 'target';
         t.position.set(this.X(p.x), this.Y(p.y) + (below ? this.s * (footprint(def) + 0.9) : 0));
         t.visible = true;
       } else if (t) t.visible = false;

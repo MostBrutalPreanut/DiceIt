@@ -38,7 +38,7 @@ Full Tilt! Pinball shipped three tables: **Space Cadet**, **Skulduggery** and **
 |---|---|---|
 | Lane Rollover set | Light them all: bonus and reset. | ✅ |
 | Level Light | Toggles on pass; a full set levels a part type for the run. | ✅ |
-| **Lane change** | Pressing a flipper button **shifts which lane is lit** ("many games shift the illuminated insert from one lane to another by triggering the left and right flipper buttons"; a common, legitimate tactic). It gives the flippers a second job and lets a skilled player steer a shot. | ▶ **S**: a dial on any lane group |
+| **Lane change** | Pressing a flipper button **shifts which lane is lit** ("many games shift the illuminated insert from one lane to another by triggering the left and right flipper buttons"; a common, legitimate tactic). It gives the flippers a second job and lets a skilled player steer a shot. | ✅ built on every Lane Rollover group (no dial: with no cost it would always be on). Left shifts left, right shifts right, wrapping round; a shift keeps the same number lit, so it never completes a set |
 | Rank ring | A ring of lights filled by missions; full = tier up. | 💡 M |
 | Combo lights | Chain shots within N seconds for rising points. | 💡 S |
 | Arrow hints | Light the next target. | 💡 S |
@@ -49,7 +49,7 @@ Full Tilt! Pinball shipped three tables: **Space Cadet**, **Skulduggery** and **
 |---|---|---|
 | Drop-target bank | Targets fall when hit; all down pays and resets. Real machines also have in-line banks and designs that drop a second target when one is hit. | ✅ |
 | Standup target | Stays up when struck (the spot target). | ▶ S |
-| **Vari-target** | Scores more for a harder hit. | ▶ S (score by ball speed) |
+| **Vari-target** | Scores more for a harder hit. | ✅ four tiers by impact speed (the speed just before the contact, since the bounce has already slowed the ball afterwards), with a Stiffness dial |
 | **Bash target** | Built to be hit hard; bounces the ball back. Scores by speed. | 💡 S |
 | **Captive ball** | A ball trapped on the table with limited movement; hit it to score. | 💡 M |
 | **Alternating / property-changing target** | A target that switches between two values or colours; hit it at the right moment for the high value. Patents describe targets that present alternatives to keep the player interested. | 💡 M |
@@ -123,7 +123,7 @@ From the museum and the Atlas Obscura pinball listings (via search):
 
 ## 4. A priority order (value for the machine ÷ effort)
 
-1. **Lane change** (flippers rotate the lit lane) and **vari-targets**: tiny, very pinball, give skill a role in the build.
+1. **Lane change ✅** (flippers rotate the lit lane) and **vari-targets ✅**: tiny, very pinball, give skill a role in the build.
 2. **Kickback ✅, ball saver ✅, magic post**: board-improvement parts that also work as major upgrades.
 3. **Standup and bash targets, captive ball**: cheap variety.
 4. **Magnet (timed)** and **teleporter pair**: they change the ball's path the way the best real parts do.

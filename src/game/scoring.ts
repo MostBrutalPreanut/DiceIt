@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, lampBonus, LEVEL_TARGETS, MAX_LEVEL, PARTS, type PartId, type PartInstance } from '../data/parts';
+import { dialFactor, dialValue, lampBonus, LEVEL_TARGETS, MAX_LEVEL, PARTS, tierOf, type PartId, type PartInstance } from '../data/parts';
 import type { SimEvent } from '../sim/sim';
 
 /**
@@ -23,6 +23,8 @@ export interface ScoreEvent {
   notes: string[];
   label?: string;
   spins?: number;
+  /** Vari-target: index of the tier this hit reached. */
+  tier?: number;
 }
 
 export interface LedgerRow {
@@ -111,12 +113,12 @@ export class Scorer {
   }
 
   /** What this part would score per event right now, before Mult. Null for parts that do not score. */
-  baseNow(inst: PartInstance, spins = 1): number | null {
+  baseNow(inst: PartInstance, spins = 1, tierX = 1): number | null {
     const r = PARTS[inst.def].recipe;
     if (!r.points) return null;
     const grown = (r.grow ?? 0) * this.hitsOf(inst.def);
     const lvl = (r.perLevel ?? 0) * this.levelOf(inst.def);
-    return Math.round((r.points + lvl + grown) * spins * dialFactor(inst) * (1 + this.lampBonusAt(inst).sum));
+    return Math.round((r.points + lvl + grown) * spins * tierX * dialFactor(inst) * (1 + this.lampBonusAt(inst).sum));
   }
 
   /** The short number drawn on the part itself ("100", "10/spin", "+25%"). */
@@ -125,6 +127,8 @@ export class Scorer {
     if (def.kind === 'lamp') return `+${Math.round(lampBonus(dialValue(inst, 'radius')) * 100)}%`;
     const n = this.baseNow(inst);
     if (n === null) return null;
+    const tiers = def.recipe.tiers;
+    if (tiers) return `${n}-${this.baseNow(inst, 1, tiers[tiers.length - 1].x)}`; // soft hit to smash
     return def.recipe.per === 'spin' ? `${n}/spin` : String(n);
   }
 
@@ -150,6 +154,11 @@ export class Scorer {
 
   /** Turn one physical event into zero or more attributed score events. */
   consume(ev: SimEvent): ScoreEvent[] {
+    // lane change: a flipper button shifts which lanes are lit
+    if (ev.type === 'flipper') {
+      if (ev.on) this.shiftLanes(ev.side === 'L' ? -1 : 1);
+      return [];
+    }
     if (ev.type !== 'partHit') return [];
     const inst = this.getParts().find((p) => p.uid === ev.uid && p.placed);
     if (!inst) return [];
@@ -179,14 +188,18 @@ export class Scorer {
       const level = (r.perLevel ?? 0) * this.levelOf(inst.def);
       const factor = dialFactor(inst);
       const lamp = this.lampBonusAt(inst);
+      const tier = tierOf(inst, ev.speed);
       const notes = [`${r.points}${spins > 1 ? ` x${spins} spins` : ''} base`];
       if (level) notes.push(`+${level} level`);
       if (grown) notes.push(`+${grown} grown`);
+      if (tier) notes.push(`x${tier.x} ${tier.name} hit`);
       if (Math.abs(factor - 1) > 0.001) notes.push(`x${Math.round(factor * 100) / 100} dial`);
       if (lamp.sum) notes.push(`+${Math.round(lamp.sum * 100)}% lamp`);
-      const base = Math.round((r.points + level + grown) * spins * factor * (1 + lamp.sum));
+      const base = Math.round((r.points + level + grown) * spins * (tier?.x ?? 1) * factor * (1 + lamp.sum));
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
-      out.push(this.award(inst, ev.t, ev.x, ev.y, 'hit', base, r.mult ?? 0, r.money ?? 0, notes, undefined, ev.spins));
+      const scored = this.award(inst, ev.t, ev.x, ev.y, 'hit', base, r.mult ?? 0, r.money ?? 0, notes, undefined, ev.spins);
+      if (tier) scored.tier = r.tiers!.indexOf(tier);
+      out.push(scored);
     }
 
     // Level Lights (Space Cadet's bumper upgrade lanes): each pass toggles the light; when every light
@@ -218,6 +231,21 @@ export class Scorer {
       }
     }
     return out;
+  }
+
+  /**
+   * Lane change: shift the lit Lane Rollovers one lane along (left to right by position, wrapping round).
+   * The number lit never changes, so shifting cannot complete a set; it only moves where the dark lane is.
+   */
+  private shiftLanes(dir: -1 | 1) {
+    const lanes = this.placed().filter((p) => p.def === 'lane').sort((a, b) => a.x - b.x || a.y - b.y);
+    const n = lanes.length;
+    if (n < 2) return;
+    const was = lanes.map((l) => this.lit.has(l.uid));
+    lanes.forEach((l, i) => {
+      if (was[(i - dir + n) % n]) this.lit.add(l.uid);
+      else this.lit.delete(l.uid);
+    });
   }
 
   ledgerRows(): LedgerRow[] {

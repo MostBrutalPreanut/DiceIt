@@ -79,7 +79,7 @@ You asked for improvements to the board and randomness at the start. Space Cadet
 ## 6. Order of work
 
 1. ✅ Levels, Level Lights, drop-target bank, Test Lab, undo/redo, layout slots, heatmap.
-2. ▶ Kickback ✅ and ball saver ✅ (both built as parts); lane change and vari-target still to do (the cheap, very-pinball parts; catalog §4).
+2. ✅ Kickback, ball saver, vari-target and lane change (the cheap, very-pinball parts; catalog §4).
 3. The **Upgrade** screen and the first ~20 upgrades; the between-rounds stepper.
 4. The **auto-builder** and the **balance table**; set the real goal curve.
 5. Cabinet picks and the seeded board.

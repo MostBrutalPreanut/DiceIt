@@ -205,6 +205,30 @@ describe('kickback', () => {
   });
 });
 
+describe('vari-target', () => {
+  const target = () => layoutOf(makePart('vari', 1, 12, 30, true));
+  const hitWith = (vy: number) => {
+    const sim = createSim(target());
+    sim.addBall(12, 34, 0, vy);
+    const ev: SimEvent[] = [];
+    for (let i = 0; i < 240 * 0.6 && hitsOf(ev, 1).length === 0; i++) ev.push(...sim.step(NO_INPUT));
+    for (let i = 0; i < 6; i++) sim.step(NO_INPUT); // a few ticks after the bounce
+    return { sim, hit: hitsOf(ev, 1)[0] as Extract<SimEvent, { type: 'partHit' }> | undefined };
+  };
+
+  it('is a solid target: it bounces the ball back and reports the speed it was hit at', () => {
+    const { sim, hit } = hitWith(-40);
+    expect(hit).toBeDefined();
+    expect(hit!.speed).toBeGreaterThan(38); // the impact speed, not the speed after the bounce
+    expect(hit!.speed).toBeLessThan(75);
+    expect(sim.ballStates()[0].vy).toBeGreaterThan(0); // thrown back up
+  });
+
+  it('a harder shot reports a higher speed than a soft drop', () => {
+    expect(hitWith(-90).hit!.speed).toBeGreaterThan(hitWith(-5).hit!.speed + 40);
+  });
+});
+
 describe('ball saver', () => {
   const saverAt = (uid: number, x: number) => makePart('saver', uid, x, 30, true);
   /** Hold the plunger for `charge` seconds, then let go and run until something drains or `seconds` pass. */
