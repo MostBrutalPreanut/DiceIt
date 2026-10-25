@@ -160,6 +160,14 @@ async function main() {
   addEventListener('blur', () => keys.clear());
   document.addEventListener('click', (e) => { if (e.target instanceof HTMLButtonElement) e.target.blur(); });
 
+  // on-screen controls for touch devices send the same key events the keyboard does
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#touch button')) {
+    const code = b.dataset.key!;
+    const fire = (type: 'keydown' | 'keyup') => dispatchEvent(new KeyboardEvent(type, { code }));
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); fire('keydown'); });
+    for (const t of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) b.addEventListener(t, () => fire('keyup'));
+  }
+
   const readInput = (): Input => {
     const input: Input = {
       left: keys.has('KeyZ') || keys.has('ShiftLeft'),

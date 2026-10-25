@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Free Play (working title)</title>
+  <title>Free Play</title>
 </head>
 <body>
   <div id="app">
@@ -35,6 +35,7 @@
       <details open class="help">
         <summary>Controls</summary>
         <ul>
+          <li>Click the table once so the keyboard works.</li>
           <li><kbd>Z</kbd>/<kbd>Shift</kbd> left flipper · <kbd>/</kbd>/<kbd>Shift</kbd> right</li>
           <li>Hold <kbd>Space</kbd> to charge the plunger, release to fire</li>
           <li><kbd>←</kbd> <kbd>→</kbd> nudge (too much = TILT)</li>
@@ -49,6 +50,11 @@
       <div id="dmd"><span id="dmdText">INSERT COIN</span></div>
       <div id="stage"></div>
       <div id="overlay" hidden></div>
+      <div id="touch" aria-label="Touch controls">
+        <button data-key="KeyZ">LEFT</button>
+        <button data-key="Space">PLUNGE</button>
+        <button data-key="Slash">RIGHT</button>
+      </div>
     </main>
 
     <aside id="right" class="panel">

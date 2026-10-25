@@ -1,11 +1,14 @@
 :root {
+  color-scheme: dark;
   --bg: #070b18; --panel: #0f1630; --panel2: #151d3f; --ink: #e8ecff; --muted: #8b95c9;
   --neon: #4dfcff; --pink: #ff4fa3; --gold: #ffd23f; --good: #62f08a; --bad: #ff5d6c; --line: #26305e;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink);
   font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-#app { display: grid; grid-template-columns: 290px minmax(0, 1fr) 330px; gap: 12px; height: 100vh; padding: 12px; }
+#app { display: grid; grid-template-columns: 290px minmax(0, 1fr) 330px; gap: 12px; height: 100%; padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow: auto; }
 h1 { margin: 0 0 6px; font-size: 20px; letter-spacing: .08em; color: var(--neon); text-shadow: 0 0 12px #4dfcff66; }
 h1 small, h2 small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: .02em; text-shadow: none; }
@@ -61,7 +64,11 @@ td { padding: 3px 4px; border-top: 1px solid var(--line); font-family: ui-monosp
 td.name { font-family: inherit; }
 td i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
 .share { height: 6px; border-radius: 99px; background: var(--neon); min-width: 2px; }
+#touch { display: none; gap: 8px; padding: 8px; background: #0a0f24; border-top: 1px solid var(--line); }
+#touch button { flex: 1; padding: 18px 8px; font-weight: 800; letter-spacing: .12em; touch-action: none; user-select: none; -webkit-user-select: none; }
+#touch button:active { background: var(--neon); color: #001; }
+@media (pointer: coarse), (max-width: 700px) { #touch { display: flex; } }
 @media (max-width: 1000px) {
-  #app { grid-template-columns: 1fr; height: auto; }
-  #center { height: 80vh; }
+  #app { grid-template-columns: minmax(0, 1fr); height: auto; }
+  #center { height: 85vh; min-height: 520px; order: -1; }
 }
