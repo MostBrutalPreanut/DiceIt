@@ -120,7 +120,7 @@ describe('what each boss does', () => {
     const g = bossRound('jammer', (x) => { x.layout.parts.push(makePart('coin', 50, 12, 28, true)); });
     expect([...g.scorer.jammed]).toEqual(['pop']); // three Pops beat one Cha-Ching
     expect(g.scorer.consume(hit(1))).toEqual([]);
-    expect(g.scorer.consume(hit(50))[0].base).toBe(40);
+    expect(g.scorer.consume(hit(50))[0].base).toBe(8);
   });
 
   it('Flat Rate: Mult gains are halved', () => {
@@ -145,10 +145,10 @@ describe('what each boss does', () => {
   it('The Auditor: decals are off until half the goal, and the goal is 20% higher', () => {
     const g = bossRound('auditor', (x) => { x.decals = [{ id: 'overclock', target: 'pop' }]; });
     expect(g.scorer.goal).toBe(Math.round(goalFor(15) * 1.2));
-    expect(g.scorer.consume(hit(1))[0].base).toBe(100);
+    expect(g.scorer.consume(hit(1))[0].base).toBe(20);
     g.scorer.score = g.scorer.goal / 2;
     g.scorer.consume(hit(2));
-    expect(g.scorer.consume(hit(3))[0].base).toBe(Math.round((100 + 10) * 1.5));
+    expect(g.scorer.consume(hit(3))[0].base).toBe(Math.round((20 + 2) * 1.5));
   });
 
   it('The Overlord: a random part type is switched off every ball, and Mult gains are halved', () => {

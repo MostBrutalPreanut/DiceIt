@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describe as describePart, makePart, PARTS, type PartInstance } from '../src/data/parts';
+import { describe as describePart, makePart, MAX_LEVEL, PARTS, type PartInstance } from '../src/data/parts';
 import { Scorer } from '../src/game/scoring';
 import { starterLayout } from '../src/sim/layout';
 import type { SimEvent } from '../src/sim/sim';
@@ -17,9 +17,9 @@ function setup(extra: PartInstance[] = []) {
 describe('Pop Bumper: 100, +5 for every Pop hit this ball', () => {
   it('scores 100 first, then 105, then 110, no matter which pop is hit', () => {
     const { s } = setup();
-    expect(s.consume(hit(1))[0].base).toBe(100);
-    expect(s.consume(hit(2))[0].base).toBe(105);
-    expect(s.consume(hit(1))[0].base).toBe(110);
+    expect(s.consume(hit(1))[0].base).toBe(20);
+    expect(s.consume(hit(2))[0].base).toBe(21);
+    expect(s.consume(hit(1))[0].base).toBe(22);
     expect(s.hitsOf('pop')).toBe(3);
   });
 
@@ -27,18 +27,18 @@ describe('Pop Bumper: 100, +5 for every Pop hit this ball', () => {
     const { s } = setup();
     s.consume(hit(1));
     const e = s.consume(hit(2))[0];
-    expect(e.notes).toEqual(['100 base', '+5 grown']);
-    expect(e.base).toBe(105);
-    expect(e.points).toBe(105); // Mult is still x1
+    expect(e.notes).toEqual(['20 base', '+1 grown']);
+    expect(e.base).toBe(21);
+    expect(e.points).toBe(21); // Mult is still x1
   });
 
   it('forgets its growth every ball, and the label on the part tracks it', () => {
     const { s, parts } = setup();
     s.consume(hit(1));
     s.consume(hit(2));
-    expect(s.label(parts[0])).toBe('110');
+    expect(s.label(parts[0])).toBe('22');
     s.startBall();
-    expect(s.label(parts[0])).toBe('100');
+    expect(s.label(parts[0])).toBe('20');
   });
 });
 
@@ -46,11 +46,11 @@ describe('Mult, dials, money', () => {
   it('multiplies base points by Mult, and Big Boi raises Mult', () => {
     const { s } = setup([makePart('mega', 10, 10, 30, true)]);
     const mega = s.consume(hit(10))[0];
-    expect(mega.base).toBe(250);
+    expect(mega.base).toBe(50);
     expect(mega.multAfter).toBeCloseTo(1.15);
     const pop = s.consume(hit(1))[0];
-    expect(pop.base).toBe(100);
-    expect(pop.points).toBe(115); // 100 x 1.15
+    expect(pop.base).toBe(20);
+    expect(pop.points).toBe(23); // 100 x 1.15
     expect(pop.multBefore).toBeCloseTo(1.15);
   });
 
@@ -58,8 +58,8 @@ describe('Mult, dials, money', () => {
     const { s, parts } = setup();
     parts[0].dials.kick = 4;
     parts[1].dials.kick = 0;
-    expect(s.consume(hit(1))[0].base).toBe(50);
-    expect(s.consume(hit(2))[0].base).toBe(158); // (100 + 5 grown) x 1.5
+    expect(s.consume(hit(1))[0].base).toBe(10);
+    expect(s.consume(hit(2))[0].base).toBe(32); // (20 + 1 grown) x 1.5
   });
 
   it('Cha-Ching pays $1 per hit', () => {
@@ -81,11 +81,11 @@ describe('lamps, lanes and spinners', () => {
   it('a Lamp brightens a step a hit: +10% a step to parts inside its glow, nothing outside, up to five steps', () => {
     const lamp = makePart('lamp', 10, 17, 40, true); // pop 1 is at (17, 44.5): 4.5 away, inside radius 5
     const { s } = setup([lamp]);
-    expect(s.consume(hit(1))[0].base).toBe(100); // lamp not lit yet
+    expect(s.consume(hit(1))[0].base).toBe(20); // lamp not lit yet
     s.startBall();
     const first = s.consume(hit(10))[0];
     expect(first.label).toBe('LAMP 1/5');
-    expect(first.base).toBe(50);
+    expect(first.base).toBe(10);
     expect(s.consume(hit(1))[0].notes).toContain('+10% lamp');
     s.consume(hit(10));
     expect(s.consume(hit(1))[0].notes).toContain('+20% lamp');
@@ -101,7 +101,7 @@ describe('lamps, lanes and spinners', () => {
     lamp.dials.radius = 8;
     const { s } = setup([lamp]);
     s.consume(hit(10));
-    expect(s.consume(hit(1))[0].base).toBe(104); // 0.2 - 0.02 x 8 = +4% a step
+    expect(s.consume(hit(1))[0].base).toBe(21); // 0.2 - 0.02 x 8 = +4% a step
   });
 
   it('a full drop-target set lights every Lamp at full glow for a few seconds', () => {
@@ -121,7 +121,7 @@ describe('lamps, lanes and spinners', () => {
     const third = s.consume(hit(13));
     expect(third).toHaveLength(2);
     expect(third[1].label).toBe('LANES COMPLETE');
-    expect(third[1].base).toBe(200);
+    expect(third[1].base).toBe(40);
     expect(third[1].multAfter).toBeCloseTo(1.5);
     expect([10, 11, 13].some((u) => s.isLit(u))).toBe(false);
   });
@@ -131,8 +131,8 @@ describe('lamps, lanes and spinners', () => {
     spin.dials.drag = 0;
     const { s } = setup([spin]);
     const e = s.consume(hit(10, { spins: 5 }))[0];
-    expect(e.base).toBe(50);
-    expect(s.label(spin)).toBe('10/spin');
+    expect(e.base).toBe(10);
+    expect(s.label(spin)).toBe('2/spin');
   });
 });
 
@@ -145,7 +145,7 @@ describe('attribution', () => {
 
   it('flags the goal the moment the score crosses it, and ignores parts in the inventory', () => {
     const parts = [makePart('pop', 1, 10, 30, true), makePart('pop', 2, 10, 20, false)];
-    const s = new Scorer(150, () => parts);
+    const s = new Scorer(30, () => parts);
     expect(s.consume(hit(2))).toHaveLength(0); // stored: cannot score
     s.consume(hit(1));
     expect(s.goalReached).toBe(false);
@@ -164,9 +164,9 @@ describe('levels, Level Lights and drop-target banks', () => {
     const s = new Scorer(1e9, () => parts);
     s.startBall();
     const e = s.consume(hit(1))[0];
-    expect(e.base).toBe(120); // 100 + 2 levels x 10
-    expect(e.notes).toContain('+20 level');
-    expect(s.label(parts[0])).toBe('125'); // next hit: 100 + 20 level + 5 grown from the hit just made
+    expect(e.base).toBe(30); // 20 + 2 levels x 5
+    expect(e.notes).toContain('+10 level');
+    expect(s.label(parts[0])).toBe('31'); // next hit: 20 + 10 level + 1 grown from the hit just made
   });
 
   it('a Level Light toggles: lit on the first pass, out on the second', () => {
@@ -213,7 +213,7 @@ describe('levels, Level Lights and drop-target banks', () => {
   });
 
   it('reports maxed-out bumpers instead of levelling past the cap', () => {
-    const parts = [...starterLayout().parts.map((p) => ({ ...p, level: 5 })), ...lights()];
+    const parts = [...starterLayout().parts.map((p) => ({ ...p, level: MAX_LEVEL })), ...lights()];
     const s = new Scorer(1e9, () => parts);
     s.consume(hit(20));
     expect(s.consume(hit(21)).find((e) => e.kind === 'bonus')!.label).toContain('MAXED');
@@ -223,13 +223,13 @@ describe('levels, Level Lights and drop-target banks', () => {
     const bank = makePart('bank', 30, 12, 30, true);
     const parts = [...starterLayout().parts, bank];
     const s = new Scorer(1e9, () => parts);
-    expect(s.consume(hit(30, { index: 0 }))[0].base).toBe(60);
+    expect(s.consume(hit(30, { index: 0 }))[0].base).toBe(12);
     s.consume(hit(30, { index: 1 }));
     const last = s.consume(hit(30, { index: 2 }));
     expect(last).toHaveLength(1);
     const done = s.consume(hit(30, { bankComplete: true }));
     expect(done[0].label).toBe('BANK COMPLETE');
-    expect(done[0].base).toBe(300);
+    expect(done[0].base).toBe(60);
     expect(done[0].multAfter).toBeCloseTo(1.3);
   });
 });
@@ -238,9 +238,9 @@ describe('Kickback and Ball Saver', () => {
   it('a kick pays 150 times Mult and explains itself; the saver scores nothing and remembers it was used', () => {
     const { s, parts } = setup([makePart('kickback', 10, 10, 30, true), makePart('saver', 11, 14, 30, true)]);
     const kick = s.consume(hit(10, { kicked: true }))[0];
-    expect(kick.base).toBe(150);
-    expect(kick.notes).toEqual(['150 base']);
-    expect(s.label(parts.find((p) => p.uid === 10)!)).toBe('150');
+    expect(kick.base).toBe(30);
+    expect(kick.notes).toEqual(['30 base']);
+    expect(s.label(parts.find((p) => p.uid === 10)!)).toBe('30');
     expect(s.consume({ type: 'ballSaved', t: 0, uid: 11, ballId: 2 })).toEqual([]);
     expect(s.saversUsed.has(11)).toBe(true);
     expect(s.label(parts.find((p) => p.uid === 11)!)).toBeNull();
@@ -260,24 +260,24 @@ describe('Vari-Target: harder hits pay more', () => {
 
   it('pays x1, x2, x4 or x8 of 40 by how fast the ball was going, and says which', () => {
     const v = vari();
-    expect([5, 15, 35, 70].map((sp) => score(v, sp).base)).toEqual([40, 80, 160, 320]);
-    expect(score(v, 70).notes).toEqual(['40 base', 'x8 smash hit']);
+    expect([5, 15, 35, 70].map((sp) => score(v, sp).base)).toEqual([8, 16, 32, 64]);
+    expect(score(v, 70).notes).toEqual(['8 base', 'x8 smash hit']);
     expect(score(v, 70).tier).toBe(3);
     expect(score(v, 5).tier).toBe(0);
   });
 
   it('a stiffer target needs a harder hit per tier but pays more', () => {
     const stiff = vari(2); // thresholds x2, payout x1.5
-    expect(score(stiff, 35).base).toBe(Math.round(40 * 2 * 1.5)); // 35 is only "firm" at stiffness 2 (needs 56 for hard)
-    expect(score(stiff, 120).base).toBe(Math.round(40 * 8 * 1.5));
+    expect(score(stiff, 35).base).toBe(Math.round(8 * 2 * 1.5)); // 35 is only "firm" at stiffness 2 (needs 56 for hard)
+    expect(score(stiff, 120).base).toBe(Math.round(8 * 8 * 1.5));
     const soft = vari(0.5); // thresholds x0.5, payout x0.75
-    expect(score(soft, 35).base).toBe(Math.round(40 * 8 * 0.75)); // 25 is already a smash
+    expect(score(soft, 35).base).toBe(Math.round(8 * 8 * 0.75)); // 25 is already a smash
   });
 
   it('the label on the part is the soft-to-smash range, and the description matches the dial', () => {
     const { s } = setup([vari()]);
     const part = vari();
-    expect(s.label(part)).toBe('40-320');
+    expect(s.label(part)).toBe('8-64');
     const text = describePart(PARTS.vari, part).map((l) => l.text).join(' ');
     expect(text).toContain('×8 at 50 (a smash)');
     part.dials.stiff = 2;

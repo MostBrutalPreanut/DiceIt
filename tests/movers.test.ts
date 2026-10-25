@@ -32,8 +32,8 @@ describe('the moving parts: Rubber Duck, Roller, Goal', () => {
     const s = scorer([makePart('duck', 1, 12, 30, true)]);
     expect(s.consume(hit(1))).toEqual([]); // the rail is not the duck
     const pays = Array.from({ length: 12 }, () => s.consume(hit(1, { mover: true }))[0].base);
-    expect(pays.slice(0, 3)).toEqual([300, 400, 500]);
-    expect(pays[11]).toBe(1300); // 300 + the 1000 cap
+    expect(pays.slice(0, 3)).toEqual([60, 80, 100]);
+    expect(pays[11]).toBe(260); // 300 + the 1000 cap
   });
 
   it('a hit on the duck makes it paddle faster for the rest of the ball', () => {
@@ -56,9 +56,9 @@ describe('the moving parts: Rubber Duck, Roller, Goal', () => {
 
   it('the Roller pays ×3 for a hit near either end of its rail', () => {
     const s = scorer([makePart('roller', 1, 12, 30, true)]);
-    expect(s.consume(hit(1, { mover: true }))[0].base).toBe(150);
+    expect(s.consume(hit(1, { mover: true }))[0].base).toBe(30);
     const edge = s.consume(hit(1, { mover: true, edge: true }))[0];
-    expect(edge.base).toBe(450);
+    expect(edge.base).toBe(90);
     expect(edge.label).toBe('EDGE SHOT!');
   });
 
@@ -67,7 +67,7 @@ describe('the moving parts: Rubber Duck, Roller, Goal', () => {
     expect(s.consume(hit(1, { mover: true }))).toEqual([]); // the goalie saved it
     const g = s.consume(hit(1, { goal: true, t: 1 }))[0];
     expect(g.label).toBe('GOAL!');
-    expect(g.base).toBe(1500);
+    expect(g.base).toBe(300);
     expect(s.mult).toBeCloseTo(1.5);
     expect(s.consume(hit(1, { goal: true, t: 1.5 }))).toEqual([]);
     expect(s.consume(hit(1, { goal: true, t: 3 }))[0].label).toBe('GOAL!');
@@ -96,12 +96,12 @@ describe('Glow Strip', () => {
   it('lights for 5 s whenever anything pays a bonus, and the parts on it pay +50%', () => {
     const parts = [makePart('strip', 1, 12, 30, true), makePart('pop', 2, 12, 30, true), makePart('bank', 3, 6, 20, true)];
     const s = scorer(parts);
-    expect(s.consume(hit(2, { t: 0 }))[0].base).toBe(100);
+    expect(s.consume(hit(2, { t: 0 }))[0].base).toBe(20);
     s.consume(hit(3, { bankComplete: true, t: 1 }));
     const lit = s.consume(hit(2, { t: 2 }))[0];
-    expect(lit.base).toBe(Math.round(105 * 1.5));
+    expect(lit.base).toBe(Math.round(21 * 1.5));
     expect(lit.notes).toContain('+50% glow strip');
-    expect(s.consume(hit(2, { t: 7 }))[0].base).toBe(110);
+    expect(s.consume(hit(2, { t: 7 }))[0].base).toBe(22);
   });
 });
 

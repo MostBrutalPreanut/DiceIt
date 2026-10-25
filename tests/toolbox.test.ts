@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PARTS } from '../src/data/parts';
-import { Game, parseRun, TOOLBOX_SLOTS } from '../src/game/game';
+import { Game, parseRun, TOOLBOX_SLOTS, UPKEEP } from '../src/game/game';
 
 /** A game with plenty of money and a shelf of cheap Pop Bumpers. */
 function rich() {
@@ -29,7 +29,7 @@ describe('the toolbox holds four parts', () => {
     const onBoard = g.placed[0];
     const money = g.money;
     expect(g.store(onBoard.uid)).toBe(g.sellValue(PARTS.pop));
-    expect(g.money).toBe(money + g.sellValue(PARTS.pop));
+    expect(g.money).toBe(money - UPKEEP.move + g.sellValue(PARTS.pop)); // moving it off the table costs, then it sells
     expect(g.part(onBoard.uid)).toBeUndefined();
     expect(g.inventory.length).toBe(TOOLBOX_SLOTS);
     expect(g.soldOverflow).toEqual([{ def: 'pop', refund: g.sellValue(PARTS.pop) }]);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { makePart, PARTS, sellPrice } from '../src/data/parts';
-import { Game, rollOffers, START_MONEY } from '../src/game/game';
+import { makePart, MAX_LEVEL, PARTS, sellPrice } from '../src/data/parts';
+import { Game, rollOffers, START_MONEY, UPKEEP } from '../src/game/game';
 import { Rng } from '../src/sim/rng';
 import { NO_INPUT } from '../src/sim/sim';
 
@@ -51,11 +51,11 @@ describe('shop, inventory and money', () => {
     expect(g.inventory.map((p) => p.uid)).toEqual([coin.uid]);
   });
 
-  it('selling refunds half the price and removes the part for good', () => {
+  it('scrapping a part that has played costs $1 and removes it for good; one bought this visit goes back for its price', () => {
     const g = new Game();
-    const before = g.money;
-    expect(g.sell(1)).toBe(sellPrice(PARTS.pop));
-    expect(g.money).toBe(before + sellPrice(PARTS.pop));
+    g.money = 10;
+    expect(g.sell(1)).toBe(-UPKEEP.scrap);
+    expect(g.money).toBe(10 - UPKEEP.scrap);
     expect(g.part(1)).toBeUndefined();
     expect(g.placed).toHaveLength(3);
   });
@@ -167,10 +167,11 @@ describe('levels', () => {
   it('levels live on the part: they survive a save and load, stop at the cap, and reset on a new run', () => {
     const g = new Game();
     const mega = g.placed.find((p) => p.def === 'mega')!;
-    expect(g.levelUp(mega, 7)).toBe(5);
+    expect(g.levelUp(mega, 7)).toBe(7);
+    expect(g.levelUp(mega, 7)).toBe(MAX_LEVEL);
     const copy = new Game();
     copy.load(JSON.parse(JSON.stringify(g.save())));
-    expect(copy.placed.find((p) => p.def === 'mega')!.level).toBe(5);
+    expect(copy.placed.find((p) => p.def === 'mega')!.level).toBe(MAX_LEVEL);
     copy.newRun();
     expect(copy.layout.parts.every((p) => !p.level)).toBe(true);
   });

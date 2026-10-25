@@ -19,15 +19,15 @@ describe('part data', () => {
 
   it('the Pop Bumper says exactly what it does', () => {
     const text = describePart(PARTS.pop, makePart('pop', 1)).map((l) => l.text).join(' ');
-    expect(text).toContain('Scores 100 per hit');
-    expect(text).toContain('+5 for every Pop Bumper hit this ball');
+    expect(text).toContain('Scores 20 per hit');
+    expect(text).toContain('+1 for every Pop Bumper hit this ball');
   });
 
   it('descriptions follow the dials', () => {
     const p = makePart('pop', 1);
     p.dials.kick = 4;
     expect(dialFactor(p)).toBeCloseTo(0.5);
-    expect(describePart(PARTS.pop, p).map((l) => l.text).join(' ')).toContain('Scores 50 per hit');
+    expect(describePart(PARTS.pop, p).map((l) => l.text).join(' ')).toContain('Scores 10 per hit');
     expect(describePart(PARTS.flipperR, makePart('flipperR', 2))[0].text).toContain('Right');
     expect(describePart(PARTS.flipper, makePart('flipper', 3))[0].text).toContain('Left');
   });

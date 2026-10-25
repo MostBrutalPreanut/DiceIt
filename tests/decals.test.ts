@@ -49,7 +49,8 @@ describe('decal data', () => {
   });
 
   it('every decal changes something', () => {
-    for (const id of DECAL_IDS) expect(modsOf({ id, target: DECALS[id].targets ? 'pop' : undefined }), id).not.toEqual(neutralMods());
+    // (Momentum and Afterglow change nothing at once: they keep Mult from the rounds after)
+    for (const id of DECAL_IDS) if (!DECALS[id].grows) expect(modsOf({ id, target: DECALS[id].targets ? 'pop' : undefined }), id).not.toEqual(neutralMods());
   });
 });
 
@@ -254,12 +255,16 @@ describe('what the decals do: cash', () => {
     expect(g.money).toBe(20 - price);
   });
 
-  it('Full Refund returns the whole price when you sell', () => {
+  it('Free Hands makes moving and scrapping free, and a part with no room sells for its full price', () => {
     const g = new Game();
+    g.money = 10;
     expect(g.sellValue(PARTS.printer)).toBe(3);
+    expect(g.removeValue(g.part(1)!)).toBe(-1); // a Pop Bumper that has played: scrapping it costs
     take(g, 'fullRefund');
     expect(g.sellValue(PARTS.printer)).toBe(7);
-    expect(g.sell(1)).toBe(3); // a Pop Bumper
+    expect(g.moveFee(g.part(1)!)).toBe(0);
+    expect(g.sell(1)).toBe(0);
+    expect(g.money).toBe(10);
   });
 
   it('Bargain Bin marks a half-price offer in the shop at once, and peeling it takes the discount back', () => {
@@ -325,8 +330,8 @@ describe('what the decals do: the ball', () => {
     const s = new Scorer(1e9, () => starterLayout().parts, { mods: m });
     s.startBall();
     const e = s.consume(hit(1))[0];
-    expect(e.base).toBe(125);
-    expect(e.notes).toEqual(['100 base', 'x1.25 decals']);
+    expect(e.base).toBe(25);
+    expect(e.notes).toEqual(['20 base', 'x1.25 decals']);
     const nudged = (mods: Mods) => {
       const sim = createSim(layoutOf(), { mods });
       sim.addBall(12, 30, 0, 0);
@@ -400,29 +405,29 @@ describe('what the decals do: scoring and builds', () => {
     const m = computeMods([{ id: 'overclock', target: 'pop' }]);
     const pop = makePart('pop', 1, 17, 44.5, true);
     const text = describePart(PARTS.pop, pop, { mods: m }).map((l) => l.text).join(' ');
-    expect(text).toContain('Scores 150 per hit');
+    expect(text).toContain('Scores 30 per hit');
     const s = new Scorer(1e9, () => starterLayout().parts, { mods: m });
     s.startBall();
-    expect(s.consume(hit(1))[0].base).toBe(150);
+    expect(s.consume(hit(1))[0].base).toBe(30);
     const coin = new Scorer(1e9, () => [makePart('coin', 9, 12, 30, true)], { mods: m });
-    expect(coin.consume(hit(9))[0].base).toBe(40); // other types are untouched
+    expect(coin.consume(hit(9))[0].base).toBe(8); // other types are untouched
   });
 
   it('Level Up counts a type two levels higher; Golden Age counts every type one higher', () => {
     const s = new Scorer(1e9, () => starterLayout().parts, { mods: computeMods([{ id: 'levelUp', target: 'pop' }]) });
     s.startBall();
-    expect(s.consume(hit(1))[0].base).toBe(120);
+    expect(s.consume(hit(1))[0].base).toBe(30); // 20 + 2 levels x 5
     const g = new Scorer(1e9, () => starterLayout().parts, { mods: modsOf('goldenAge') });
     g.startBall();
-    expect(g.consume(hit(1))[0].base).toBe(110);
+    expect(g.consume(hit(1))[0].base).toBe(25);
   });
 
   it('descriptions follow every decal that changes a number', () => {
     const text = (id: PartId, m: Mods, inst = makePart(id, 1)) => describePart(PARTS[id], inst, { mods: m }).map((l) => l.text).join(' ');
     expect(text('lamp', modsOf('lamps'))).toContain('within 7 units +14%');
     expect(text('printer', modsOf('printerPlus'))).toContain('Prints 2 more balls');
-    expect(text('lane', modsOf('sets'))).toContain('+400 points and +1 Mult');
-    expect(text('bank', modsOf('sets'))).toContain('+600 points and +0.6 Mult');
+    expect(text('lane', modsOf('sets'))).toContain('+80 points and +1 Mult');
+    expect(text('bank', modsOf('sets'))).toContain('+120 points and +0.6 Mult');
     expect(text('sling', modsOf('comboKing'))).toContain('+100%');
   });
 
@@ -433,10 +438,10 @@ describe('what the decals do: scoring and builds', () => {
     s.consume(hit(1));
     s.consume(hit(2));
     const done = s.consume(hit(3)).find((e) => e.kind === 'bonus')!;
-    expect(done.base).toBe(400);
+    expect(done.base).toBe(80);
     expect(done.multAfter - done.multBefore).toBeCloseTo(1);
     const bank = new Scorer(1e9, () => [makePart('bank', 5, 12, 30, true)], { mods: modsOf('sets') });
-    expect(bank.consume(hit(5, { bankComplete: true }))[0].base).toBe(600);
+    expect(bank.consume(hit(5, { bankComplete: true }))[0].base).toBe(120);
   });
 
   it('Head Start, Crowd Pleaser and Minimalist raise the Mult every ball starts at, in a real round', () => {
@@ -454,44 +459,44 @@ describe('what the decals do: scoring and builds', () => {
   it('Lucky Seven triples every 7th scoring hit of a ball', () => {
     const s = new Scorer(1e9, () => [makePart('coin', 9, 12, 30, true)], { mods: modsOf('lucky') });
     s.startBall();
-    expect(Array.from({ length: 8 }, () => s.consume(hit(9))[0].base)).toEqual([40, 40, 40, 40, 40, 40, 120, 40]);
+    expect(Array.from({ length: 8 }, () => s.consume(hit(9))[0].base)).toEqual([8, 8, 8, 8, 8, 8, 24, 8]);
   });
 
   it('Bumper Car pays bumpers 50% more and everything else 25% less', () => {
     const parts = [makePart('pop', 1, 6, 30, true), makePart('sling', 2, 12, 30, true)];
     const s = new Scorer(1e9, () => parts, { mods: modsOf('bumperCar') });
     s.startBall();
-    expect(s.consume(hit(1))[0].base).toBe(150);
-    expect(s.consume(hit(2))[0].base).toBe(23);
+    expect(s.consume(hit(1))[0].base).toBe(30);
+    expect(s.consume(hit(2))[0].base).toBe(5); // 6 x 0.75
   });
 
   it('Purist doubles every hit while the table holds four part types or fewer', () => {
     const parts = [makePart('pop', 1, 6, 30, true), makePart('coin', 2, 12, 30, true)];
     const s = new Scorer(1e9, () => parts, { mods: modsOf('purist') });
     s.startBall();
-    expect(s.consume(hit(1))[0].base).toBe(200);
+    expect(s.consume(hit(1))[0].base).toBe(40);
     for (const [i, id] of (['sling', 'lane', 'vari'] as PartId[]).entries()) parts.push(makePart(id, 10 + i, 4 + i * 4, 40, true));
-    expect(s.consume(hit(2))[0].base).toBe(40); // five types now: no bonus
+    expect(s.consume(hit(2))[0].base).toBe(8); // five types now: no bonus
   });
 
   it('Multiball Madness and Last Call pay double when they apply', () => {
     let balls = 1, last = false;
     const s = new Scorer(1e9, () => [makePart('coin', 9, 12, 30, true)], { mods: modsOf('multiball', 'lastCall'), balls: () => balls, lastBall: () => last });
     s.startBall();
-    expect(s.consume(hit(9))[0].base).toBe(40);
+    expect(s.consume(hit(9))[0].base).toBe(8);
     balls = 2;
-    expect(s.consume(hit(9))[0].base).toBe(80);
+    expect(s.consume(hit(9))[0].base).toBe(16);
     last = true;
-    expect(s.consume(hit(9))[0].base).toBe(160);
+    expect(s.consume(hit(9))[0].base).toBe(32);
   });
 
   it('Thrifty pays 1% more per $1 held, up to 50%', () => {
     let cash = 20;
     const s = new Scorer(1e9, () => [makePart('coin', 9, 12, 30, true)], { mods: modsOf('thrifty'), cash: () => cash });
     s.startBall();
-    expect(s.consume(hit(9))[0].base).toBe(48);
+    expect(s.consume(hit(9))[0].base).toBe(10); // 8 x 1.2
     cash = 500;
-    expect(s.consume(hit(9))[0].base).toBe(60);
+    expect(s.consume(hit(9))[0].base).toBe(12);
   });
 
   it('a bot plays a whole round with a busy board and a full apron of decals, and nothing goes wrong', () => {

@@ -135,10 +135,14 @@ describe('the test lab', () => {
     expect(pop.level).toBe(0);
   });
 
-  it('selling in the lab refunds nothing, selling for real refunds half', () => {
+  it('removing in the lab costs and refunds nothing; for real, a part bought this visit goes back for its price', () => {
     const l = lab();
     expect(l.sell(1)).toBe(0);
     const g = new Game();
-    expect(g.sell(1)).toBe(sellPrice(PARTS.pop));
+    g.money = 20;
+    g.shop.offers[0] = 'printer';
+    const bought = g.buy(0)!;
+    expect(g.sell(bought.uid)).toBe(g.priceOf('printer'));
+    expect(g.money).toBe(20);
   });
 });

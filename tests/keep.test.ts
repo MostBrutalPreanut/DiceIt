@@ -1,0 +1,135 @@
+import { describe, expect, it } from 'vitest';
+import { makePart, MAX_LEVEL, PARTS, type PartInstance } from '../src/data/parts';
+import { Game, TUNE, UPKEEP } from '../src/game/game';
+import type { SimEvent } from '../src/sim/sim';
+
+const hit = (uid: number, extra: Partial<Extract<SimEvent, { type: 'partHit' }>> = {}): SimEvent =>
+  ({ type: 'partHit', t: 0, uid, ballId: 1, x: 0, y: 0, speed: 10, ...extra });
+
+/** Play a round to its goal at once. */
+function clearRound(g: Game, mult = 1) {
+  g.startRound();
+  g.scorer.mult = mult;
+  g.scorer.peakMult = mult;
+  g.scorer.score = g.scorer.goal;
+  g.scorer.goalReached = true;
+  g.cashOut();
+  g.continueAfterRound();
+}
+
+describe('Mult that is kept from round to round', () => {
+  it('a Trophy Cup keeps +0.03 Mult a hit for the rest of the run: every ball after starts that much higher', () => {
+    const g = new Game();
+    const cup = makePart('trophy', 50, 12, 28, true);
+    g.layout.parts.push(cup);
+    g.startRound();
+    for (let i = 0; i < 10; i++) g.scorer.consume(hit(50));
+    expect(cup.polish).toBeCloseTo(0.3);
+    expect(g.keptMult).toBeCloseTo(0.3);
+    g.toWorkshop();
+    g.startRound();
+    expect(g.scorer.mult).toBeCloseTo(1.3);
+  });
+
+  it('a Trophy Cup stops at its cap, and the polish goes with the cup', () => {
+    const g = new Game();
+    const cup: PartInstance = { ...makePart('trophy', 50, 12, 28, true), polish: 3.99 };
+    g.layout.parts.push(cup);
+    g.startRound();
+    g.scorer.consume(hit(50));
+    g.scorer.consume(hit(50));
+    expect(cup.polish).toBe(PARTS.trophy.recipe.keep!.cap);
+    g.toWorkshop();
+    g.money = 10;
+    g.sell(50);
+    expect(g.keptMult).toBe(0);
+  });
+
+  it('Momentum keeps +0.5 Mult for every round you clear', () => {
+    const g = new Game();
+    g.decals = [{ id: 'momentum' }];
+    clearRound(g);
+    expect(g.decals[0].grown).toBeCloseTo(0.5);
+    clearRound(g);
+    expect(g.keptMult).toBeCloseTo(1);
+    g.startRound();
+    expect(g.scorer.mult).toBeCloseTo(2);
+  });
+
+  it('Afterglow keeps 15% of the best Mult of every round', () => {
+    const g = new Game();
+    g.decals = [{ id: 'afterglow' }];
+    clearRound(g, 8);
+    expect(g.decals[0].grown).toBeCloseTo(1.2);
+  });
+
+  it('what a decal has kept is written on it, and survives a save', () => {
+    const g = new Game();
+    g.decals = [{ id: 'momentum', grown: 1.5 }];
+    const copy = new Game();
+    copy.load(JSON.parse(JSON.stringify(g.save())));
+    expect(copy.keptMult).toBeCloseTo(1.5);
+  });
+});
+
+describe('the Tune-up', () => {
+  it('levels a part up for money, dearer every level, up to the top level', () => {
+    const g = new Game();
+    g.money = 1000;
+    const pop = g.part(1)!;
+    expect(g.tuneCost(pop)).toBe(TUNE.base);
+    expect(g.tuneUp(1)).toBe(true);
+    expect(pop.level).toBe(1);
+    expect(g.money).toBe(1000 - TUNE.base);
+    expect(g.tuneCost(pop)).toBe(TUNE.base + TUNE.step);
+    while (g.tuneUp(1));
+    expect(pop.level).toBe(MAX_LEVEL);
+    expect(g.canTune(pop)).toBe(false);
+  });
+
+  it('needs the money, and only parts with levels can be tuned', () => {
+    const g = new Game();
+    g.money = 0;
+    expect(g.tuneUp(1)).toBe(false);
+    g.money = 50;
+    g.layout.parts.push(makePart('saver', 60, 12, 20, true));
+    expect(g.tuneUp(60)).toBe(false);
+  });
+});
+
+describe('moving and removing parts costs money', () => {
+  it('moving a part that has played a round costs $1, once a visit', () => {
+    const g = new Game();
+    g.money = 5;
+    const pop = g.part(1)!;
+    expect(g.moveFee(pop)).toBe(UPKEEP.move);
+    expect(g.place(1, pop.x - 1, pop.y)).toBe(true);
+    expect(g.money).toBe(5 - UPKEEP.move);
+    expect(g.place(1, pop.x - 1, pop.y)).toBe(true); // already paid this visit
+    expect(g.money).toBe(5 - UPKEEP.move);
+    clearRound(g);
+    expect(g.moveFee(g.part(1)!)).toBe(UPKEEP.move); // the next visit charges again
+  });
+
+  it('with no money a part that has played cannot move', () => {
+    const g = new Game();
+    g.money = 0;
+    const pop = g.part(1)!;
+    expect(g.place(1, pop.x - 1, pop.y)).toBe(false);
+    expect(g.store(1)).toBeNull();
+    expect(pop.placed).toBe(true);
+  });
+
+  it('a part bought this visit moves freely and goes back for what it cost; a pack refunds its whole price', () => {
+    const g = new Game();
+    g.money = 20;
+    g.shop.offers[0] = 'lane';
+    const first = g.buyAndPlace(0, 12, 30)!;
+    expect(g.moveFee(first)).toBe(0);
+    expect(g.place(first.uid, 12, 28)).toBe(true);
+    const lanes = g.layout.parts.filter((p) => p.def === 'lane');
+    const back = lanes.reduce((a, p) => a + (g.sell(p.uid) ?? 0), 0);
+    expect(back).toBe(PARTS.lane.cost);
+    expect(g.money).toBe(20);
+  });
+});

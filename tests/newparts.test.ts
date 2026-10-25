@@ -94,51 +94,51 @@ describe('the new parts', () => {
     const s = scorer(parts);
     s.consume(hit(1, { t: 0 }));
     const hot = s.consume(hit(2, { t: 0.5 }))[0];
-    expect(hot.base).toBe(60);
+    expect(hot.base).toBe(12);
     expect(hot.hot).toBe(true);
-    expect(s.consume(hit(2, { t: 0.6 }))[0].base).toBe(40); // used up
+    expect(s.consume(hit(2, { t: 0.6 }))[0].base).toBe(8); // used up
     s.consume(hit(1, { t: 1 }));
-    expect(s.consume(hit(2, { t: 3 }))[0].base).toBe(40); // too late
+    expect(s.consume(hit(2, { t: 3 }))[0].base).toBe(8); // too late
   });
 
   it('a Deflector bank shot adds +25% to the next hit, and scores nothing itself', () => {
     const parts = [makePart('deflector', 1, 6, 30, true), makePart('coin', 2, 12, 30, true)];
     const s = scorer(parts);
     expect(s.consume(hit(1))).toEqual([]);
-    expect(s.consume(hit(2))[0].base).toBe(50);
+    expect(s.consume(hit(2))[0].base).toBe(10);
   });
 
   it('only a smash on a Vari-Target makes the ball hot', () => {
     const parts = [makePart('vari', 1, 6, 30, true), makePart('coin', 2, 12, 30, true)];
     const s = scorer(parts);
     s.consume(hit(1, { speed: 20 }));
-    expect(s.consume(hit(2))[0].base).toBe(40);
+    expect(s.consume(hit(2))[0].base).toBe(8);
     s.consume(hit(1, { speed: 60 }));
-    expect(s.consume(hit(2))[0].base).toBe(60);
+    expect(s.consume(hit(2))[0].base).toBe(12);
   });
 
-  it('a Spinner raises the Mult per spin, up to +0.75 a ball', () => {
+  it('a Spinner raises the Mult per spin, up to +1.5 a ball', () => {
     const s = scorer([makePart('spinner', 1, 6, 30, true)]);
     s.consume(hit(1, { spins: 10 }));
     expect(s.mult).toBeCloseTo(1.1);
     for (let i = 0; i < 20; i++) s.consume(hit(1, { spins: 10 }));
-    expect(s.mult).toBeCloseTo(1.75);
+    expect(s.mult).toBeCloseTo(2.5);
   });
 
   it('a Ding-Dong Bell pays more for every different part type the ball has hit', () => {
     const parts = [makePart('ding', 1, 6, 30, true), makePart('pop', 2, 12, 30, true), makePart('coin', 3, 18, 30, true)];
     const s = scorer(parts);
-    expect(s.consume(hit(1))[0].base).toBe(60);
+    expect(s.consume(hit(1))[0].base).toBe(12);
     s.consume(hit(2));
     s.consume(hit(3));
-    expect(s.consume(hit(1))[0].base).toBe(60 + 3 * 40); // ding, pop and coin
+    expect(s.consume(hit(1))[0].base).toBe(12 + 3 * 8); // ding, pop and coin
   });
 
   it('a Thunder Bumper feeds the Pops: each hit counts as three Pop hits for their growth', () => {
     const parts = [makePart('thunder', 1, 6, 30, true), makePart('pop', 2, 14, 30, true)];
     const s = scorer(parts);
-    expect(s.consume(hit(1))[0].base).toBe(300);
-    expect(s.consume(hit(2))[0].base).toBe(115);
+    expect(s.consume(hit(1))[0].base).toBe(60);
+    expect(s.consume(hit(2))[0].base).toBe(23);
   });
 
   it('a Piggy Bank stores $1 a hit and a smash breaks it for what it holds +$1', () => {
@@ -152,17 +152,17 @@ describe('the new parts', () => {
     expect(s.piggies.get(1)).toBe(5); // it holds five
   });
 
-  it('a Jackpot Scoop pays the pot: +40 for every scoring hit this ball, then it starts again', () => {
+  it('a Jackpot Scoop pays the pot: +8 for every scoring hit this ball, then it starts again', () => {
     const parts = [makePart('jackpot', 1, 6, 30, true), makePart('coin', 2, 12, 30, true)];
     const s = scorer(parts);
     for (let i = 0; i < 10; i++) s.consume(hit(2));
     const jp = s.consume(hit(1, { caught: true }))[0];
-    expect(jp.base).toBe(200 + 400);
+    expect(jp.base).toBe(40 + 80);
     expect(jp.label).toBe('JACKPOT!');
-    expect(s.consume(hit(1, { caught: true }))[0].base).toBe(200);
+    expect(s.consume(hit(1, { caught: true }))[0].base).toBe(40);
   });
 
-  it('an X Lane multiplies the Mult by 1.25, goes dark for 3 s, lights a lane, and stops at x2 a ball', () => {
+  it('an X Lane multiplies the Mult by 1.25, goes dark for 3 s, lights a lane, and stops at x3 a ball', () => {
     const parts = [makePart('xlane', 1, 6, 30, true), makePart('lane', 2, 12, 30, true), makePart('lane', 3, 18, 30, true)];
     const s = scorer(parts);
     s.consume(hit(1, { t: 0 }));
@@ -172,26 +172,26 @@ describe('the new parts', () => {
     expect(s.mult).toBeCloseTo(1.25); // still dark
     const alone = scorer([makePart('xlane', 1, 6, 30, true)]);
     for (let i = 0; i < 10; i++) alone.consume(hit(1, { t: i * 4 }));
-    expect(alone.mult).toBeCloseTo(2);
+    expect(alone.mult).toBeCloseTo(3);
   });
 
   it('a Golden Bumper multiplies the Mult and pays $1 every fifth hit', () => {
     const s = scorer([makePart('golden', 1, 6, 30, true)]);
     const ev = Array.from({ length: 10 }, () => s.consume(hit(1))[0]);
     expect(ev.map((e) => e.money)).toEqual([0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-    expect(s.mult).toBeCloseTo(1.05 ** 10, 2);
+    expect(s.mult).toBeCloseTo(1.06 ** 10, 1);
   });
 
   it('a Disco Ball doubles the Mult and lights every Lamp, once a ball', () => {
     const parts = [makePart('disco', 1, 6, 30, true), makePart('lamp', 2, 12, 30, true)];
     const s = scorer(parts);
     const e = s.consume(hit(1))[0];
-    expect(e.base).toBe(1000);
+    expect(e.base).toBe(200);
     expect(s.mult).toBeCloseTo(2);
     expect(s.isLit(2)).toBe(true);
     expect(s.consume(hit(1))).toEqual([]);
     s.startBall();
-    expect(s.consume(hit(1))[0].base).toBe(1000);
+    expect(s.consume(hit(1))[0].base).toBe(200);
   });
 
   it('a full drop-target bank lights every Lamp', () => {
@@ -236,14 +236,14 @@ describe('Big Boi depends on the machine', () => {
   it('the Cook calls an order when he is hit: one part lights up, its next hit pays triple, then it goes dark', () => {
     const s = scorer(table(), { machine: 'diner', seed: 3 });
     expect(s.order).toBeNull(); // no order until he is hit
-    expect(s.consume(hit(10))[0].base).toBe(150);
+    expect(s.consume(hit(10))[0].base).toBe(30);
     const lit = s.order!;
     expect([1, 2]).toContain(lit);
     const other = lit === 1 ? 2 : 1;
-    expect(s.consume(hit(other))[0].base).toBe(100); // the other Pop is not the order
-    expect(s.consume(hit(lit))[0].base).toBe(315); // (100 + 5 grown) x3
+    expect(s.consume(hit(other))[0].base).toBe(20); // the other Pop is not the order
+    expect(s.consume(hit(lit))[0].base).toBe(63); // (100 + 5 grown) x3
     expect(s.order).toBeNull();
-    expect(s.consume(hit(lit))[0].base).toBe(110); // once only
+    expect(s.consume(hit(lit))[0].base).toBe(22); // once only
     expect(s.mult).toBe(1); // no Mult from orders
   });
 
@@ -252,7 +252,7 @@ describe('Big Boi depends on the machine', () => {
     const events: ReturnType<typeof s.consume> = [];
     for (let i = 0; i < DRAGON.armour; i++) events.push(...s.consume(hit(10)));
     const broke = events.find((e) => e.label === 'ARMOUR BROKEN!')!;
-    expect(broke.base).toBe(2000);
+    expect(broke.base).toBe(400);
     expect(s.mult).toBe(1);
     expect(s.armour).toBe(DRAGON.armour + 1);
     for (let i = 0; i < 30; i++) s.consume(hit(10)); // no limit a ball

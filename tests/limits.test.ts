@@ -21,21 +21,21 @@ describe('scoring limits', () => {
     const s = new Scorer(1e9, () => [makePart('pop', 1, 10, 30, true)]);
     s.startBall();
     const bases = Array.from({ length: 100 }, () => s.consume(hit(1))[0].base);
-    expect(bases[0]).toBe(100);
-    expect(bases[19]).toBe(195);
-    expect(bases[20]).toBe(200);
-    expect(bases[99]).toBe(200);
-    expect(s.label(makePart('pop', 1, 10, 30, true))).toBe('200');
+    expect(bases[0]).toBe(20);
+    expect(bases[19]).toBe(39);
+    expect(bases[20]).toBe(40);
+    expect(bases[99]).toBe(40);
+    expect(s.label(makePart('pop', 1, 10, 30, true))).toBe('40');
     s.startBall(); // growth is per ball
-    expect(s.consume(hit(1))[0].base).toBe(100);
+    expect(s.consume(hit(1))[0].base).toBe(20);
   });
 
-  it('Big Boi adds at most +3 Mult a ball, shared by every Big Boi, and says so when it is maxed', () => {
+  it('Big Boi adds at most +5 Mult a ball, shared by every Big Boi, and says so when it is maxed', () => {
     const s = new Scorer(1e9, () => [makePart('mega', 1, 8, 30, true), makePart('mega', 2, 16, 30, true)]);
     s.startBall();
     let last;
     for (let i = 0; i < 100; i++) last = s.consume(hit(1 + (i % 2)))[0];
-    expect(s.mult).toBeCloseTo(4);
+    expect(s.mult).toBeCloseTo(6);
     expect(last!.notes).toContain('Mult maxed for this ball');
     expect(last!.multAfter).toBe(last!.multBefore); // a maxed hit still scores, it just adds no Mult
     s.startBall();
@@ -63,7 +63,7 @@ describe('scoring limits', () => {
     s.startBall();
     const paid = Array.from({ length: 8 }, () => s.consume(hit(1, { bankComplete: true }))[0]);
     expect(paid.filter((e) => e.label === 'BANK COMPLETE')).toHaveLength(8);
-    expect(paid[0].base).toBe(600);
+    expect(paid[0].base).toBe(120);
   });
 
   it('Cha-Ching pays at most $5 a round, however many balls: a new ball does not refill it, a new round does', () => {
@@ -91,8 +91,8 @@ describe('scoring limits', () => {
 
 describe('the limits are written on the parts', () => {
   it('every cap is in the recipe sentence next to the number it limits', () => {
-    expect(text('pop')).toContain('up to +100');
-    expect(text('mega')).toContain('up to +3 a ball');
+    expect(text('pop')).toContain('up to +20');
+    expect(text('mega')).toContain('up to +5 a ball');
     expect(text('coin')).toContain('up to $5 a round');
     expect(text('lane')).toContain('At most 5 sets a ball');
     expect(text('printer')).toContain('at most 4 printed in one ball');

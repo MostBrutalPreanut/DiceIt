@@ -16,7 +16,7 @@ describe('the fixed Big Boi', () => {
     const b = boi(g);
     expect(g.place(b.uid, 12, 26)).toBe(false);
     expect(g.store(b.uid)).toBeNull();
-    expect(g.sell(b.uid)).toBe(0);
+    expect(g.sell(b.uid)).toBeNull();
     expect(g.part(b.uid)?.placed).toBe(true);
     g.setDial(b.uid, 'kick', 3);
     expect(g.part(b.uid)!.dials.kick).toBe(3);
