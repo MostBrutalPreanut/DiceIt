@@ -7,6 +7,8 @@ A rogue-lite where you **build, tune and rebuild a pinball machine** to hit a sc
 - What the physics spike measured: [docs/m0-physics-findings.md](docs/m0-physics-findings.md)
 - Creative parts from real machines (with sources): [docs/parts-catalog.md](docs/parts-catalog.md)
 - Run flow, major upgrades, rebalancing, board variety: [docs/run-flow-and-balance.md](docs/run-flow-and-balance.md)
+- Art direction, themed machines, particles, with concept sheets: [docs/art-direction.md](docs/art-direction.md)
+- How to build that look, phase by phase: [docs/art-implementation-plan.md](docs/art-implementation-plan.md)
 
 ## Run it
 
@@ -29,6 +31,7 @@ npm run smoke -- ./shots  # drives the built game in headless Chromium
 npm run physics-report    # tunnelling rate per timestep, escape fuzz
 npm run balance           # bot plays rounds; goal clear rates
 npx vite-node tools/launch-spread.ts   # where do launched balls land?
+npm run concept           # re-render the concept sheets in docs/concept from the real table and parts
 ```
 
 ## Layout
