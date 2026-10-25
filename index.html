@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Free Play (working title)</title>
+</head>
+<body>
+  <div id="app">
+    <aside id="left" class="panel">
+      <h1>FREE PLAY <small>working title · M0 feel spike</small></h1>
+      <div id="modeBadge" class="badge">WORKSHOP</div>
+
+      <div class="scorebox">
+        <div class="label">SCORE</div>
+        <div id="score" class="big">0</div>
+        <div class="goalbar"><div id="goalFill"></div></div>
+        <div class="goalrow"><span>GOAL <b id="goal">—</b></span><span>ROUND <b id="round">1</b></span></div>
+      </div>
+
+      <div class="stats">
+        <div><div class="label">MULT</div><div id="mult" class="stat">×1.00</div></div>
+        <div><div class="label">BALLS</div><div id="balls" class="stat">●●●</div></div>
+        <div><div class="label">MONEY</div><div id="money" class="stat">$0</div></div>
+      </div>
+
+      <div class="label">TILT</div>
+      <div class="tiltbar"><div id="tiltFill"></div></div>
+
+      <div id="actions">
+        <button id="btnStart" class="primary">Start round</button>
+        <button id="btnCash" hidden>Cash out (Tab)</button>
+      </div>
+
+      <details open class="help">
+        <summary>Controls</summary>
+        <ul>
+          <li><kbd>Z</kbd>/<kbd>Shift</kbd> left flipper · <kbd>/</kbd>/<kbd>Shift</kbd> right</li>
+          <li>Hold <kbd>Space</kbd> to charge the plunger, release to fire</li>
+          <li><kbd>←</kbd> <kbd>→</kbd> nudge (too much = TILT)</li>
+          <li><kbd>Tab</kbd> cash out once the goal is hit</li>
+          <li>Workshop: pick a part, click the table. Drag to move, <kbd>Del</kbd> removes. Space fires a test ball.</li>
+          <li><kbd>M</kbd> mute</li>
+        </ul>
+      </details>
+    </aside>
+
+    <main id="center">
+      <div id="dmd"><span id="dmdText">INSERT COIN</span></div>
+      <div id="stage"></div>
+      <div id="overlay" hidden></div>
+    </main>
+
+    <aside id="right" class="panel">
+      <section id="workshop">
+        <h2>Workshop <small>build · tune · test</small></h2>
+        <div id="palette"></div>
+        <div id="selected" class="card" hidden></div>
+        <div class="card">
+          <label>Table tilt (gravity) <b id="gravVal">50</b>
+            <input id="gravity" type="range" min="30" max="80" step="1" value="50" />
+          </label>
+          <div class="hint">Steeper table: faster ball, more drains, harder to cradle.</div>
+        </div>
+        <div class="row">
+          <button id="btnTest">Test ball (Space)</button>
+          <button id="btnReset">Reset layout</button>
+        </div>
+      </section>
+
+      <section id="ledgerBox">
+        <h2>Ledger <small>where every point came from</small></h2>
+        <table id="ledger"><thead><tr><th>Part</th><th>Hits</th><th>Points</th><th></th></tr></thead><tbody></tbody></table>
+        <div id="ledgerEmpty" class="hint">Roll a ball. Every point is attributed here.</div>
+      </section>
+    </aside>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
