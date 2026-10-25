@@ -35,7 +35,7 @@ const kzFor = (k: number) => 0.3 + 0.3 * Math.min(1, Math.max(0, (1 - k) / 0.14)
 
 interface Baked { tex: Texture; ax: number; ay: number }
 interface PartView { sprite: Sprite }
-interface Tag { c: Container; g: Graphics; txt: Text; text: string; pips: number }
+interface Tag { c: Container; g: Graphics; txt: Text; text: string }
 
 /** Draws the latest sim state. It reads the sim and never writes to it. */
 export class Renderer {
@@ -435,6 +435,7 @@ export class Renderer {
       const lt = this.lastTier.get(p.uid);
       if (lt) { lt.glow = Math.max(0, lt.glow - dt * 0.7); if (lt.glow === 0) this.lastTier.delete(p.uid); }
       const ps = this.partState(game, p, lanes, banks, kick, savers, heldNear);
+      if (def.recipe.perLevel) ps.level = game.scorer.levelOf(p.def);
       // glows live on the floor, under every part: lamps, lit inserts, armed kickbacks, a ready saver
       const r = footprint(def);
       if (!tilted) {
@@ -547,11 +548,10 @@ export class Renderer {
     }
   }
 
-  /** The live value printed on a part: a paper sticker, a hair rotated, with its level pips under it. */
+  /** The live value printed on a part: a paper sticker, a hair rotated (its level is in the part's art). */
   private drawTag(game: Game, p: PartInstance) {
     const t = this.theme, v = this.view, def = PARTS[p.def];
     const text = def.kind === 'saver' || def.kind === 'flipper' || def.kind === 'deflector' ? null : game.scorer.label(p);
-    const lvl = def.recipe.perLevel ? game.scorer.levelOf(p.def) : 0;
     let tag = this.tags.get(p.uid);
     if (!text) { if (tag) tag.c.visible = false; return; }
     const fs = Math.max(9, v.S * 0.62);
@@ -560,17 +560,16 @@ export class Renderer {
       c.addChild(g, txt);
       c.rotation = (-4 * Math.PI) / 180;
       this.tagLayer.addChild(c);
-      tag = { c, g, txt, text: '', pips: -1 };
+      tag = { c, g, txt, text: '' };
       this.tags.set(p.uid, tag);
     }
-    if (tag.text !== text || tag.pips !== lvl || tag.txt.style.fontSize !== fs) {
-      tag.text = text; tag.pips = lvl;
+    if (tag.text !== text || tag.txt.style.fontSize !== fs) {
+      tag.text = text;
       tag.txt.text = text;
       tag.txt.style.fontSize = fs;
       const w = tag.txt.width + fs * 0.9, h = fs * 1.35;
       tag.g.clear();
       tag.g.roundRect(-w / 2, -h / 2, w, h, h / 2).fill(t.paper).stroke({ width: v.lw * 0.7, color: t.ink });
-      for (let i = 0; i < lvl; i++) tag.g.circle((i - (lvl - 1) / 2) * fs * 0.62, h / 2 + fs * 0.42, fs * 0.24).fill(t.role.coin).stroke({ width: Math.max(1, v.lw * 0.45), color: t.ink });
     }
     tag.c.visible = true;
     const floorTag = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'target' || def.kind === 'bank';

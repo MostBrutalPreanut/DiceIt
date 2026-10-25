@@ -10,10 +10,10 @@ import { neutralMods, type Mods } from './mods';
 export type PartId = 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver' | 'vari';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target';
 
-/** Part types can be levelled up for the rest of the run (Space Cadet's bumper upgrades). */
+/** Bumpers can be levelled up for the rest of the run (Space Cadet's bumper upgrades); nothing else has levels. */
 export const MAX_LEVEL = 5;
 /** The part types a Level Light can be aimed at. */
-export const LEVEL_TARGETS: PartId[] = ['pop', 'coin', 'mega', 'sling'];
+export const LEVEL_TARGETS: PartId[] = ['pop', 'coin', 'mega'];
 
 export interface DialDef {
   id: string;
@@ -133,12 +133,12 @@ export const PARTS: Record<PartId, PartDef> = {
   sling: {
     id: 'sling', name: 'Slingshot', blurb: 'A rubber band with opinions.', kind: 'kicker', cost: 4, weight: 2,
     shape: { type: 'box', hw: 1.7, hh: 0.4 }, rotatable: true, kickUnit: 16,
-    recipe: { points: 30, per: 'hit', perLevel: 10 }, dials: [kickDial(3, 'How hard it snaps the ball away. Softer pays more per hit; harder throws it across the table.')],
+    recipe: { points: 30, per: 'hit' }, dials: [kickDial(3, 'How hard it snaps the ball away. Softer pays more per hit; harder throws it across the table.')],
   },
   spinner: {
     id: 'spinner', name: 'Spinner', blurb: 'Whee. Faster ball, more whee.', kind: 'spinner', cost: 4, weight: 2,
     shape: { type: 'box', hw: 1.4, hh: 0.3 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 10, per: 'spin', perLevel: 3 },
+    recipe: { points: 10, per: 'spin' },
     dials: [{
       id: 'drag', label: 'Drag', min: 0, max: 3, step: 0.25, default: 1,
       tradeoff: 'A heavier spinner pays more per spin, but slows the ball down more.', ends: ['light, pays less', 'heavy, slows the ball'],
@@ -148,12 +148,12 @@ export const PARTS: Record<PartId, PartDef> = {
   lane: {
     id: 'lane', name: 'Lane Rollover', blurb: 'Roll over it. It lights up. Cheap thrills.', kind: 'rollover', cost: 3, weight: 3,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 50, per: 'roll-over', lights: true, setBonus: { points: 200, mult: 0.5 }, setCap: 5, perLevel: 10 }, dials: [],
+    recipe: { points: 50, per: 'roll-over', lights: true, setBonus: { points: 200, mult: 0.5 }, setCap: 5 }, dials: [],
   },
   printer: {
     id: 'printer', name: 'Ball Printer', blurb: 'Eats one ball. Prints two. Allegedly legal.', kind: 'saucer', cost: 7, weight: 1,
     shape: { type: 'circle', r: 1.1 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 200, per: 'ball caught', spawn: 1, printCap: 4, perLevel: 50 },
+    recipe: { points: 200, per: 'ball caught', spawn: 1, printCap: 4 },
     dials: [
       {
         id: 'hold', label: 'Hold', min: 0.2, max: 2, step: 0.1, default: 0.6,
@@ -190,14 +190,14 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { points: 10, per: 'pass', levelUp: true },
     dials: [{
       id: 'target', label: 'Levels up', min: 0, max: LEVEL_TARGETS.length - 1, step: 1, default: 0,
-      tradeoff: 'Which part type this light upgrades. Lights aimed at different types complete separately.', ends: ['Pop Bumpers', 'Slingshots'],
+      tradeoff: 'Which part type this light upgrades. Lights aimed at different types complete separately.', ends: ['Pop Bumpers', 'Big Bois'],
       fmt: (v) => PARTS[LEVEL_TARGETS[Math.round(v)] ?? 'pop'].name,
     }],
   },
   bank: {
     id: 'bank', name: 'Drop-Target Bank', blurb: 'Three targets. They go down. They come back. Everyone is happy.', kind: 'bank', cost: 5, weight: 2,
     shape: { type: 'box', hw: 2.6, hh: 0.45 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 60, per: 'target', setBonus: { points: 300, mult: 0.3 }, setCap: 5, perLevel: 10 }, dials: [],
+    recipe: { points: 60, per: 'target', setBonus: { points: 300, mult: 0.3 }, setCap: 5 }, dials: [],
   },
   vari: {
     id: 'vari', name: 'Vari-Target', blurb: 'Tap it, get peanuts. Smash it, get paid.', kind: 'target', cost: 4, weight: 2,
@@ -329,7 +329,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   const upg = modFactor(def.id, mods);
   if (r.points && Math.abs(upg - 1) > 0.001) lines.push({ tag: 'level', text: `Your upgrades multiply its base points by ${num(upg)}.` });
   if (r.grow) lines.push({ tag: 'grow', text: `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it)${r.growCap ? `, up to +${num(r.growCap * factor)}` : ''}.` });
-  if (r.perLevel) lines.push({ tag: 'level', text: `Level ${level}/${MAX_LEVEL}: each level adds +${r.perLevel} for the rest of the run.` });
+  // levels come from the Level Lights: a part that has none says nothing about them; a levelled one is marked in its card's header
   if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${num(r.mult)} per ${r.per ?? 'hit'}${r.multCap ? `, up to +${num(r.multCap)} a ball from all ${def.name}s` : ''}.` });
   if (r.money) lines.push({ tag: 'money', text: `Pays $${r.money} per ${r.per ?? 'hit'}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
   if (def.kind === 'lamp') {

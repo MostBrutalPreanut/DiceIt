@@ -3,10 +3,10 @@
 // every part for free. Things that change every frame (glows, value tags, smoke) are drawn by the
 // renderer; what is drawn here is baked once per part x state x theme into a texture.
 import { Container, Graphics } from 'pixi.js';
-import { PARTS, type PartId } from '../data/parts';
+import { MAX_LEVEL, PARTS, type PartId } from '../data/parts';
 import { BALL_R, FLIPPER_LENGTH } from '../sim/constants';
 import { box, flat, hull, label, P, Prop, ring, shadow, shadowPoly, star, type Pt, type View } from './draw';
-import { mat, mix, WHITE, type Theme } from './theme';
+import { mat, mix, mixHue, WHITE, type Theme } from './theme';
 
 export interface PartState {
   /** Lane Rollover: its letter of the theme's word, and whether it is lit. */
@@ -30,17 +30,19 @@ export interface PartState {
   follow?: boolean;
   /** Big Boi's mood: happy, oof (just hit), sad (a bad shot), shocked (a nice combo), cool (a seriously high Mult). */
   mood?: Mood;
+  /** The part type's level (0 to 5): its colour steps towards gold with each level, like Space Cadet's bumpers. */
+  level?: number;
 }
 export type Mood = 'happy' | 'oof' | 'sad' | 'shocked' | 'cool';
 
 export const stateKey = (st: PartState) =>
-  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? ''].join('.');
+  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0].join('.');
 
 const ringS = (cx: number, cy: number, r: number, n = 20, ry = r): Pt[] => ring(cx, cy, r, n, ry);
 
 /** Draws one part at sim position (x, y). The returned container holds a Graphics and any lettering. */
 export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, angle = 0, st: PartState = {}): Container {
-  const def = PARTS[id], role = mat(t, t.role[id]), metal = mat(t, t.metal);
+  const def = PARTS[id], role = mat(t, levelColour(t, id, def.recipe.perLevel ? st.level ?? 0 : 0)), metal = mat(t, t.metal);
   const out = new Container();
   const under = new Graphics(), body = new Graphics(), over = new Graphics();
   out.addChild(under, body);
@@ -256,6 +258,18 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
   p.draw(body);
   out.addChild(over);
   return out;
+}
+
+/**
+ * A levelled part wears it in its colour, the way Space Cadet's bumpers change colour as they upgrade: each
+ * level moves the part's role colour a step towards gold, and at the top level it is gold. The Cha-Ching
+ * bumper, already gold, warms towards the theme's hot accent instead.
+ */
+export function levelColour(t: Theme, id: PartId, level: number): string {
+  const base = t.role[id];
+  if (level <= 0) return base;
+  const to = id === 'coin' ? t.accent : t.role.coin;
+  return mixHue(base, to, Math.min(level, MAX_LEVEL) / MAX_LEVEL);
 }
 
 /** A floor arrow insert showing where an eject sends the ball (rotatable ejectors: Ball Printer). */

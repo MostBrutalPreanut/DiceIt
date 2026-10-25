@@ -9,8 +9,8 @@ import { THEMES } from './render/theme';
 
 /** The states worth seeing per part: idle first, then whatever it can light, drop or say. */
 const STATES: Partial<Record<PartId, [string, PartState][]>> = {
-  pop: [['idle', {}], ['hit', { hit: true }]],
-  coin: [['idle', {}], ['hit', { hit: true }]],
+  pop: [['idle', {}], ['hit', { hit: true }], ['lvl 2', { level: 2 }], ['max lvl', { level: 5 }]],
+  coin: [['idle', {}], ['hit', { hit: true }], ['max lvl', { level: 5 }]],
   mega: [['idle', {}], ['oof', { hit: true }]],
   sling: [['idle', {}], ['hit', { hit: true }]],
   spinner: [['idle', {}], ['turning', { spin: 3 }]],

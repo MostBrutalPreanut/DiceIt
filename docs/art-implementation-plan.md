@@ -128,3 +128,7 @@ Option A is in the game: the playfield sunk into the cabinet (walls 1.6 high, th
 - **The receipt** feeds out of its slot when a round starts and prints each new line as a part type first scores. The round buttons moved to the bottom of the shop panel to give it room.
 - **The shop** rolls new stock down onto the shelf. The money row lost its frame and holds the Reroll button (each reroll in a round costs $1 more).
 - **The lose screen** greys out the whole page under a summary: the run's map, rounds cleared, total points, parts on the table.
+
+### Levels, made quiet
+
+Only bumpers (Pop Bumper, Cha-Ching, Big Boi) have levels now; Level Lights can only be aimed at them, and the Level Up and Golden Age upgrades only offer them. A part with no level says nothing about levels; a levelled one shows LVL 2 (or MAX LVL) in its card's header, and its art carries the rest: like Space Cadet's bumpers, each level moves its colour round the colour wheel towards gold (Cha-Ching, already gold, towards the theme's hot accent), and at the top level it is gold.

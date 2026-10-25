@@ -344,3 +344,6 @@ body.playing .footer { border-top: none; padding-top: 0; }
 .summary .stats span { background: var(--chip); border: var(--lw-detail) solid var(--ink); border-radius: 12px; padding: 6px 4px; }
 .summary .stats b { display: block; font: 400 22px/1.1 var(--display); }
 .summary .stats small { color: var(--faint); font-size: 11px; font-weight: 700; }
+
+/* a levelled part says so in its header: LVL 2 ... MAX LVL */
+.tipcard .lvl { font: 400 13px/1 var(--display); padding: 3px 8px 1px; border-radius: 99px; background: var(--coin); border: var(--lw-detail) solid var(--ink); white-space: nowrap; }

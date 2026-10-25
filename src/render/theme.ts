@@ -106,6 +106,26 @@ export const mix = (a: string, b: string, t: number) => {
   const A = hx(a), B = hx(b);
   return toHex(A.map((n, i) => n + (B[i] - n) * t));
 };
+/** Blends two colours round the colour wheel (hue, saturation, lightness), so the steps between stay vivid. */
+export const mixHue = (a: string, b: string, t: number) => {
+  const toHsl = (c: string) => {
+    const [r, g, bb] = hx(c).map((n) => n / 255), max = Math.max(r, g, bb), min = Math.min(r, g, bb), l = (max + min) / 2, d = max - min;
+    if (d === 0) return [0, 0, l];
+    const sat = d / (1 - Math.abs(2 * l - 1));
+    const h = max === r ? ((g - bb) / d + 6) % 6 : max === g ? (bb - r) / d + 2 : (r - g) / d + 4;
+    return [h * 60, sat, l];
+  };
+  const [h1, s1, l1] = toHsl(a), [h2, s2, l2] = toHsl(b);
+  let dh = h2 - h1;
+  if (s1 < 0.05) dh = 0; // a grey or white has no hue of its own: take the target's
+  if (dh > 180) dh -= 360;
+  if (dh < -180) dh += 360;
+  const h = (((s1 < 0.05 ? h2 : h1 + dh * t) % 360) + 360) % 360, sat = s1 + (s2 - s1) * t, l = l1 + (l2 - l1) * t;
+  const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, bb] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return toHex([r + m, g + m, bb + m].map((n) => n * 255));
+};
+
 /** '#rrggbb' to the 0xrrggbb number Pixi tints take. */
 export const num = (c: string) => parseInt(c.slice(1), 16);
 export const rgba = (c: string, a: number) => `rgba(${hx(c).join(',')},${a})`;

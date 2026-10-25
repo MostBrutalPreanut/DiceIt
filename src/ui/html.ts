@@ -27,10 +27,13 @@ const KIND: Record<PartKind, string> = {
   lamp: 'Lamp', bank: 'Targets', kickback: 'Kickback', saver: 'Saver', target: 'Target',
 };
 
-/** The header every card shares: the name in the display face on the part's colour, a kind chip and level pips. */
+/** The level chip: nothing until a part type has levelled up, then LVL 2, and MAX LVL at the top. */
+export const levelText = (level: number) => (level >= MAX_LEVEL ? 'MAX LVL' : level > 0 ? `LVL ${level}` : '');
+
+/** The header every card shares: the name in the display face on the part's colour, a kind chip, and the level once it has one. */
 function head(def: PartDef, level: number) {
-  const pips = def.recipe.perLevel ? `<span class="pips">${Array.from({ length: MAX_LEVEL }, (_, i) => `<i class="${i < level ? 'on' : ''}"></i>`).join('')}</span>` : '';
-  return `<div class="head"><h4>${def.name}</h4><span class="kind">${KIND[def.kind]}</span>${pips}</div>`;
+  const lv = def.recipe.perLevel ? levelText(level) : '';
+  return `<div class="head"><h4>${def.name}</h4><span class="kind">${KIND[def.kind]}</span>${lv ? `<span class="lvl">${lv}</span>` : ''}</div>`;
 }
 
 export interface TipCtx {
@@ -65,7 +68,7 @@ export function partCard(def: PartDef, inst: PartInstance | undefined, c: TipCtx
     const top = tiers ? tiers[tiers.length - 1].x : 1;
     const now = tiers ? `${pays(base)}–${pays(base * top)}` : String(pays(base));
     o.push(`<div class="now">${live ? `Next ${per} pays ${now}` : `Pays ${now} per ${per}`}</div>`);
-    const chips: [string, string][] = [[String(r.points + lvl), level ? `base + Lv ${level}` : 'base']];
+    const chips: [string, string][] = [[String(r.points + lvl), 'base']];
     if (grown) chips.push([`+${grown}`, 'grown this ball']);
     if (Math.abs(dial - 1) > 0.001) chips.push([`×${num(dial)}`, 'dial']);
     if (Math.abs(upg - 1) > 0.001) chips.push([`×${num(upg)}`, 'upgrades']);
