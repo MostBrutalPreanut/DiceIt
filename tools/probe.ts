@@ -27,7 +27,8 @@ export function restingSpots(id: PartId, opts: { angle?: number; step?: number; 
       for (let i = 0; i < 240 * 4 && sim.ballCount > 0; i++) {
         sim.step(NO_INPUT);
         const b = sim.ballStates()[0];
-        if (!b || b.held) { still = 0; continue; }
+        if (!b || b.y < cy - r - 1) break; // gone past the part: it did not stop on it
+        if (b.held) { still = 0; continue; }
         if (Math.hypot(b.vx, b.vy) < 0.6) still += sim.dt; else still = 0;
         if (still >= rest) {
           rests.push({ id, angle: p.angle, from: [Math.round(dx * 10) / 10, Math.round(dy * 10) / 10], at: [Math.round((b.x - cx) * 100) / 100, Math.round((b.y - cy) * 100) / 100] });
