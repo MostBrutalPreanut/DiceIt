@@ -16,7 +16,7 @@ import type { Layout } from '../src/sim/layout';
 export const PART_VALUE: Record<PartId, number> = {
   pop: 4, coin: 2.5, mega: 0, sling: 2.5, spinner: 3, lane: 2, printer: 6, flipper: 3, lamp: 2, uplight: 0,
   deflector: 0.5, bank: 4.5, kickback: 1.5, saver: 4, vari: 4,
-  ding: 5, piggy: 4, magnet: 5, thunder: 10, jackpot: 10, xlane: 13, golden: 20, disco: 18, trophy: 9,
+  ding: 5, piggy: 4, magnet: 5, thunder: 10, jackpot: 10, xlane: 13, golden: 20, disco: 18, trophy: 16,
   flipperR: 3, duck: 9, goal: 18, strip: 4, roller: 6,
 };
 /** How many of each it will own. (Level Lights need aiming in sets of two or more, which par does not do.) */

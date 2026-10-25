@@ -150,6 +150,10 @@ export class Sim {
   private nudgeCooldown = 0;
   private rescueOn = true;
   private mods: SimMods = simMods();
+  /** Crossed Wires: the buttons work the other side's flippers (a player, or the bot, swaps hands). */
+  get flippersSwapped(): boolean {
+    return !!this.mods.swapFlippers;
+  }
   private ballClock = BALL_TIMEOUT;
   /** When the current ball was first launched (null until it is). The clock runs for the whole ball, so a Ball Printer cannot keep it alive forever by printing fresh balls. */
   private clockStart: number | null = null;

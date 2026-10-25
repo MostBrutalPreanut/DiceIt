@@ -236,7 +236,7 @@ export const PARTS: Record<PartId, PartDef> = {
   spinner: {
     id: 'spinner', name: 'Spinner', blurb: 'Whee. Faster ball, more whee.', kind: 'spinner', rarity: 'common', tags: ['kicker'], cost: 3, weight: 2,
     shape: { type: 'box', hw: 1.4, hh: 0.3 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 2, per: 'spin', spinMult: 0.01, spinMultCap: 0.75, perLevel: 0.5 },
+    recipe: { points: 2, per: 'spin', spinMult: 0.01, spinMultCap: 1.5, perLevel: 0.5 },
     dials: [{
       id: 'drag', label: 'Drag', min: 0, max: 3, step: 0.25, default: 1,
       tradeoff: 'A heavier spinner pays more per spin, but slows the ball down more.', ends: ['light, pays less', 'heavy, slows the ball'],
@@ -306,9 +306,9 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { points: 12, per: 'hit', variety: 8, perLevel: 3 }, dials: [kickDial(2)],
   },
   trophy: {
-    id: 'trophy', name: 'Trophy Cup', blurb: 'Polish it every round. It never forgets.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
+    id: 'trophy', name: 'Trophy Cup', blurb: 'Polish it every round. It never forgets.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 3,
     shape: { type: 'circle', r: 1.05 }, rotatable: false, kickUnit: 9,
-    recipe: { points: 20, per: 'hit', keep: { per: 0.02, cap: 2 }, perLevel: 5 }, dials: [kickDial(1.5)],
+    recipe: { points: 20, per: 'hit', keep: { per: 0.03, cap: 4 }, perLevel: 5 }, dials: [kickDial(1.5)],
   },
   piggy: {
     id: 'piggy', name: 'Piggy Bank', blurb: 'Feed it coins. Then smash it.', kind: 'target', rarity: 'uncommon', tags: ['target', 'money'], cost: 5, weight: 2,
@@ -318,7 +318,7 @@ export const PARTS: Record<PartId, PartDef> = {
   magnet: {
     id: 'magnet', name: 'Mag-Grab', blurb: 'Grabs the ball, charges up, lets go. Very rude.', kind: 'saucer', rarity: 'uncommon', tags: ['ball', 'guard'], cost: 6, weight: 1,
     shape: { type: 'circle', r: 1.3 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 24, per: 'grab', mult: 0.2, multCap: 1, perLevel: 6 },
+    recipe: { points: 24, per: 'grab', mult: 0.25, multCap: 2, perLevel: 6 },
     dials: [
       { id: 'hold', label: 'Hold', min: 0.2, max: 1.5, step: 0.1, default: 0.5, tradeoff: 'Holding longer pays more, but that ball sits out of play meanwhile.', ends: ['quick, back in play', 'long, pays more'], payoff: (v) => 1 + 0.6 * (v - 0.5), fmt: (v) => `${v.toFixed(1)} s` },
       { ...powerDial('throw'), tradeoff: 'How hard it throws the ball, the way it faces (turn it when you place it).' },
@@ -353,7 +353,7 @@ export const PARTS: Record<PartId, PartDef> = {
   thunder: {
     id: 'thunder', name: 'Thunder Bumper', blurb: 'A big wedge. Every bonk throws the ball up and shakes the Pops awake.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
     shape: { type: 'tri', hw: 1.7, hh: 1.4 }, rotatable: false, kickUnit: 19,
-    recipe: { points: 60, per: 'hit', feeds: { id: 'pop', n: 3 }, mult: 0.05, multCap: 1, perLevel: 15 }, dials: [kickDial(2)],
+    recipe: { points: 60, per: 'hit', feeds: { id: 'pop', n: 3 }, mult: 0.05, multCap: 2, perLevel: 15 }, dials: [kickDial(2)],
   },
   jackpot: {
     id: 'jackpot', name: 'Jackpot Scoop', blurb: 'Every hit fills the pot. Sink it to cash in.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 8, weight: 2,
@@ -364,7 +364,7 @@ export const PARTS: Record<PartId, PartDef> = {
   xlane: {
     id: 'xlane', name: 'X Lane', blurb: 'Roll through it and your Mult multiplies.', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 9, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { xmult: 1.25, xmultCap: 2, cooldown: 3, lightsLane: true }, dials: [],
+    recipe: { xmult: 1.25, xmultCap: 3, cooldown: 3, lightsLane: true }, dials: [],
   },
   duck: {
     id: 'duck', name: 'Duck Gallery', blurb: 'A tin duck paddles back and forth. Knock it over. It gets cross.', kind: 'mover', rarity: 'rare', tags: ['target'], cost: 8, weight: 2,
@@ -377,7 +377,7 @@ export const PARTS: Record<PartId, PartDef> = {
   golden: {
     id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold. Pays in points, Mult and cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 2,
     shape: { type: 'circle', r: 1.5 }, rotatable: false, kickUnit: 15,
-    recipe: { points: 120, per: 'hit', xmult: 1.05, xmultCap: 2, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
+    recipe: { points: 120, per: 'hit', xmult: 1.06, xmultCap: 3, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
   },
   disco: {
     id: 'disco', name: 'Disco Ball', blurb: 'Once a ball: the lamps go wild and the Mult doubles.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
@@ -387,7 +387,7 @@ export const PARTS: Record<PartId, PartDef> = {
   goal: {
     id: 'goal', name: 'Goal!', blurb: 'A tiny football goal with a very serious goalie.', kind: 'goal', rarity: 'legendary', tags: ['target'], cost: 12, weight: 2,
     shape: { type: 'box', hw: 3.4, hh: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 300, per: 'goal', goal: { xmult: 1.5, xmultCap: 3 }, cooldown: 1.5, perLevel: 75 }, dials: [],
+    recipe: { points: 300, per: 'goal', goal: { xmult: 1.5, xmultCap: 4 }, cooldown: 1.5, perLevel: 75 }, dials: [],
     mover: { travel: 1.7, speed: 3, shape: { type: 'box', hw: 0.75, hh: 0.22 }, y: -0.45, restitution: 0.55 },
   },
 

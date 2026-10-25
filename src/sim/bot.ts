@@ -42,6 +42,7 @@ export class Bot {
     }
     input.left = t < this.holdUntil.L;
     input.right = t < this.holdUntil.R;
+    if (sim.flippersSwapped) [input.left, input.right] = [input.right, input.left]; // swap hands, as a player would
     return input;
   }
 }

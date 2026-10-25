@@ -95,7 +95,7 @@ export const BOSS_EVERY = 3;
 const N = {
   sponsor: 2, interestPer: 5, interestCap: 5, coupon: 1, ballHog: 5, toolbox: 2, overshoot: 2, ticket: 8, collector: 1, bond: 1,
   head: 0.5, lucky: 7, luckyX: 3, overclock: 0.5, lampRadius: 2, lampBonus: 0.04, glass: 1.5, combo: 2, spin: 2, spinBoost: 1.5,
-  multiball: 2, lastCall: 2, thriftyPer: 0.01, thriftyCap: 0.5, fanClub: 3, momentum: 0.25, afterglow: 0.1,
+  multiball: 2, lastCall: 2, thriftyPer: 0.01, thriftyCap: 0.5, fanClub: 3, momentum: 0.5, afterglow: 0.15,
   bounce: 0.3, heavyPoints: 0.25, heavyNudge: 0.6, glassGravity: 0.8, glassSpin: 1.5, goldEvery: 10, goldCap: 5, fuse: 20,
   bumper: 1.5, catch: 0.75, target: 2, targetEase: 0.8, lightShow: 1.5, purist: 2, puristTypes: 4, crowd: 0.04, empty: 0.25,
 } as const;
