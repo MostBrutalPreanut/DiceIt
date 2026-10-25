@@ -228,6 +228,7 @@ async function main() {
       $('offers').querySelectorAll<HTMLElement>('.offer').forEach((el, i) => {
         el.classList.add('roll');
         el.style.animationDelay = `${i * 0.09}s`;
+        el.addEventListener('animationend', () => el.classList.remove('roll'), { once: true });
         setTimeout(() => audio.shopRoll(i), i * 90);
       });
     }
@@ -429,6 +430,7 @@ async function main() {
     renderInventory();
     renderSelected();
     renderDecal();
+    updateStepper(); // the Play Round button follows a pick or a skip at once, not on the next frame
   }
 
   // ---- buying: drag an offer, or click it to pick it up, then drop it on the table (it lands on the board) or on

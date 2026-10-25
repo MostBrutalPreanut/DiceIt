@@ -142,6 +142,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
 
   // buying by dragging: an offer dropped on the table lands on the board without going through the toolbox
   await page.evaluate(() => { const g = window.__pinball.game; g.money = 20; g.shop.offers = ['coin', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
+  await page.waitForTimeout(800); // the new shelf rolls down first
   const offer = await (await page.$('.offer[data-slot="0"] .plinth')).boundingBox();
   const spot = await at(12, 22);
   const placedBefore = (await state()).placed;
@@ -158,8 +159,15 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(!(await page.innerText('#selected')).includes('Sell'), 'the fixed Big Boi cannot be sold or moved');
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
+  // a shelf that is still rolling in cannot be grabbed or bought
+  await page.evaluate(() => { const g = window.__pinball.game; g.money = 20; g.shop.offers = ['coin', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('.offer[data-slot="0"]')).pointerEvents) === 'none', 'offers ignore the pointer while they roll in');
+  await page.waitForTimeout(800);
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('.offer[data-slot="0"]')).pointerEvents) !== 'none', 'and take it once they have landed');
+
   // click and drop: click an offer to pick it up, click the table to buy it onto the board; a right-click puts it back unpaid
   await page.evaluate(() => { const g = window.__pinball.game; g.money = 20; g.shop.offers = ['coin', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
+  await page.waitForTimeout(800);
   await page.click('.offer[data-slot="0"] .plinth');
   const spot2 = await at(12, 22);
   await page.mouse.move(spot2.x, spot2.y, { steps: 4 });

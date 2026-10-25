@@ -326,7 +326,7 @@ body.playing #right .fixed { padding-bottom: 14px; }
 body.playing .footer { border-top: none; padding-top: 0; }
 
 /* new stock rolls down onto the shelf, one card after another */
-.offer.roll { animation: rolldown .42s cubic-bezier(.3,1.5,.55,1) both; transform-origin: 50% 0; }
+.offer.roll { animation: rolldown .42s cubic-bezier(.3,1.5,.55,1) both; transform-origin: 50% 0; pointer-events: none; } /* no grabbing or buying until it has landed */
 @keyframes rolldown { from { transform: translateY(-26px) scaleY(.2); opacity: 0; } 60% { opacity: 1; } to { transform: none; opacity: 1; } }
 
 /* the receipt prints: it feeds out of its slot at the start of a round, and each new line feeds out after it */
