@@ -2,7 +2,7 @@
 
 Status: **M0 done; M1 (the machine workshop) mostly built and playable:** a bigger table with a varied launch, twelve part types, per-run part levels, a shop, an inventory, a test lab, undo/redo, layout slots, a heatmap, and scoring you can read. Next: the streamlined between-rounds flow with major upgrades, then a rebalance.
 
-Docs: research [genre-research.md](genre-research.md) · measured results [m0-physics-findings.md](m0-physics-findings.md) · creative parts and real-machine mechanisms [parts-catalog.md](parts-catalog.md) · run flow, upgrades, rebalancing and board variety [run-flow-and-balance.md](run-flow-and-balance.md) · look, themed machines and particles [art-direction.md](art-direction.md). All numbers are starting values to be tuned by simulation and playtests, not commitments.
+Docs: research [genre-research.md](genre-research.md) · measured results [m0-physics-findings.md](m0-physics-findings.md) · creative parts and real-machine mechanisms [parts-catalog.md](parts-catalog.md) · run flow, upgrades, rebalancing and board variety [run-flow-and-balance.md](run-flow-and-balance.md) · look, themed machines and particles [art-direction.md](art-direction.md) · how to build the look [art-implementation-plan.md](art-implementation-plan.md). All numbers are starting values to be tuned by simulation and playtests, not commitments.
 
 ## 0. Decisions so far
 
@@ -23,6 +23,9 @@ Docs: research [genre-research.md](genre-research.md) · measured results [m0-ph
 | **Testing** | A proper test environment: every part, no money limit (built as the Test Lab, §2.3) |
 | **Creative parts** | Many, later, drawing on real machines: lights that upgrade bumpers, moving and changing parts, toys. Research is in parts-catalog.md |
 | **Board** | Improvements and randomness at the start of a run (plan: run-flow-and-balance.md §5) |
+| **Art direction** | **Toybox Diorama** (art-direction.md v0.3, approved): sticker props, theme kits as data, sticker particles, object-style HUD, relic decals on the apron, the machine tilts rather than the camera. Build plan: art-implementation-plan.md |
+| Themes | A player choice, no default machine: Funhouse Factory, Short Order, Castle Crash to start. Looks only |
+| Type | Luckiest Guy (display), Nunito (UI), DotGothic16 (DMD), all SIL OFL |
 | Old Dice It! plan | Deleted (still in git history at `eb84abf`) |
 
 ## 1. Vision and the one rule
@@ -153,7 +156,7 @@ Data: parts + recipes + dials · callouts · Tools: balance bot, stress/fuzz, la
 | **M1** | **Machine Workshop.** Built: bigger table and varied launch, 12 parts, dials, recipes and live values, shop, inventory, sell/store/place, multiball, extra flippers, lamps, lane sets, **part levels and Level Lights, drop-target bank, Test Lab, undo/redo, layout slots, heatmap**. **Still to do:** the end-of-ball Bonus tally, and (moved to the next step) the between-rounds flow with major upgrades | **Mostly done** |
 | **M1.5** | **Streamlined flow and rebalance.** Between-rounds stepper, major upgrades (pick 1 of 3), cabinet pick and seeded board, the cheap pinball parts (lane change, kickback, ball saver, vari-target), the auto-builder and balance table, a real goal curve | **Next** |
 | M2 | Machine depth: **creative parts wave 2** (timed magnet, teleporter pair, moving parts: roving bumper, spinning disc, swinging gate; Fuse Lane, rank ring), wiring spike, Lab (bot estimate of a layout), ~25 parts, the **Rules** column of the upgrades (~25 relics), bosses, missions, balance bot sets the goal curve, difficulty tiers | After M1.5 |
-| M3 | Spectacle (supports the machine): art direction, Chaos meter, shaders, DMD, light shows, adaptive audio, announcer, accessibility. **Creative parts wave 3, part 1:** layers (ramps, orbits), then the upper playfield | |
+| M3 | Spectacle (supports the machine): **art direction per [art-implementation-plan.md](art-implementation-plan.md)** (theme kit, tilt, prop textures, particles, HUD reskin), Chaos meter, shaders, DMD, light shows, adaptive audio, announcer, accessibility. **Creative parts wave 3, part 1:** layers (ramps, orbits), then the upper playfield | |
 | M4 | Content and meta: ~40 parts, ~40 rules, **legendary toys** (the Hand, the Castle, the Head), themed cabinets, collection log, unlocks, tutorial, Steam wrapper | |
 | M5 | Playtest and launch | |
 

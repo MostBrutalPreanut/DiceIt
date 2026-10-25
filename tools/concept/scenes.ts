@@ -12,7 +12,7 @@ import {
 import { ball, drawPart, flipper, glowDisk, type PartState } from './props';
 import { CASTLE, DINER, FACTORY, mat, mix, roleClashes, THEMES, type Theme } from './themes';
 import {
-  arcadeButton, awning, ballTray, card, coinStack, decal, DECALS, emptySlot, faint, fitIcon, goalTube, housing, label, LW, multDial, odometer, offerCard, pill, receipt, text, tile, toolbox, tooltip,
+  arcadeButton, ballTray, card, coinStack, decal, DECALS, emptySlot, faint, fitIcon, goalTube, housing, label, LW, marqueeHeader, multDial, odometer, offerCard, pill, receipt, text, tile, toolbox, tooltip,
 } from './ui';
 
 const OUT = process.argv[2] || 'docs/concept';
@@ -335,7 +335,7 @@ const PW = 320, M = 30, CW = PW - 2 * M;
 
 function hudLeft(t: Theme, x: number, y: number) {
   const o: string[] = [housing(t, x, y, PW, 880)], L = x + M, R = x + PW - M;
-  o.push(text(t, L, y + 70, 'FREE PLAY', 38, { w: 700, fill: t.accent, stroke: t.ink }));
+  o.push(marqueeHeader(t, x, y, PW, 'FREE PLAY'));
   // round and stage: Opener · Main · Boss, the current one lit
   o.push(tile(t, L, y + 88, CW, 40));
   o.push(text(t, L + 14, y + 108, 'ROUND 4', 19, { w: 700, mid: true }));
@@ -365,9 +365,8 @@ function hudLeft(t: Theme, x: number, y: number) {
 
 function hudRight(t: Theme, x: number, y: number) {
   const o: string[] = [housing(t, x, y, PW, 880)], L = x + M, R = x + PW - M;
-  o.push(awning(t, x + 16, y - 34, PW - 32, 8)); // the shop canopy hangs over the housing
-  o.push(text(t, L, y + 70, 'PARTS', 38, { w: 700, fill: t.accent, stroke: t.ink }));
-  o.push(pill(t, R - 116, y + 70 - (0.71 * 38) / 2, 116, 'REROLL  $1', t.paper));
+  o.push(marqueeHeader(t, x, y, PW, 'PARTS'));
+  o.push(pill(t, R - 116, y + 56, 116, 'REROLL  $1', t.paper));
   o.push(tile(t, L, y + 88, CW, 40));
   // money lives with the shop; the coin stack comes first so flying coins land on it without crossing text
   o.push(coinStack(t, L + 30, y + 108, 3) + text(t, L + 58, y + 108, '$6', 22, { w: 700, mid: true }));

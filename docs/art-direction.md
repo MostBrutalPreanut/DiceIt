@@ -7,7 +7,7 @@ What the five style references have in common, how that becomes a look for a pin
 | ![](concept/before-neon.png) | ![](concept/screen-factory.png) |
 | Today: neon placeholder | Concept: *Funhouse Factory* theme, same table, same build |
 
-v0.3 is the art-director polish pass: one layout grid for both panels, three line weights, text centred on measured cap heights, parts centred in their boxes by their drawn bounds, money moved to the shop side, Buy buttons, a real pipe in the factory surround, and an automated colour check that fixed six clashing part colours (rules in §7). Themes are a player choice; there is no default.
+v0.3 is the art-director polish pass: one layout grid for both panels with matching marquee headers, three line weights, text centred on measured cap heights, parts centred in their boxes by their drawn bounds, money moved to the shop side, Buy buttons, no canopy sticking out of the frame, a real pipe in the factory surround, and an automated colour check that fixed six clashing part colours (rules in §7). Themes are a player choice; there is no default.
 
 v0.2 changes from feedback: the HUD panels became objects (a scoreboard machine, a parts counter); a hover tooltip; apron stickers became **relic decals**; livelier Lane Rollover and Level Light; the **goofy type pairing** (Luckiest Guy + Nunito + DotGothic16); slowly drifting backdrops instead of dots; **the machine tilts, not the camera**; a plan for bigger and more parts (§11).
 
@@ -128,6 +128,8 @@ The left and right panels were flat cards: clear, but boring. They are now objec
 
 Both panels are the same width (320 px) on the same grid, so the table sits dead centre; their titles share a baseline, their first tiles share a row, and their last elements end on the same line.
 
+**Both panels open with a marquee header** in the style of the DMD sign: a darker band inside the top of the housing with a row of chasing bulbs and the title (FREE PLAY, PARTS). It replaced a shop canopy that stuck out above the frame and wasted space.
+
 **Left: the scoreboard** (a housing with screws, paper inside)
 - **Round strip:** "ROUND 4" and three stage pills (Open, Main, Boss), the current one lit. No tilted sticker.
 - **Score on odometer drums:** fixed-width digits that roll as points tick, so the number never wobbles. A still frame shows them at rest.
@@ -136,13 +138,13 @@ Both panels are the same width (320 px) on the same grid, so the table sits dead
 - **The ledger as a receipt** printed out of a slot, with dotted leaders and a ball total.
 - **Cash Out:** a big arcade button with its key (TAB).
 
-**Right: the parts counter** (the same housing, a striped canopy hanging over its top edge)
-- **Title row:** "PARTS" on the same baseline as "FREE PLAY", with a Reroll pill.
+**Right: the parts counter** (the same housing and the same marquee header)
+- **Header:** "PARTS" on the same baseline as "FREE PLAY", with the Reroll pill in the band.
 - **Money lives here,** with the shop: a coin stack, the balance, and "+$3 per spare ball". Coins from the table fly onto the stack, which sits first in the row so they never cross text.
 - **Offer cards:** the part standing on a plinth (centred by its drawn bounds and resting on the plinth), the name, the flavour line, the recipe with a bar in the part's colour, and a **Buy button** that greys out when you can't afford it.
 - **Toolbox:** stored parts sit centred in compartments, an empty compartment shows a dashed outline, and the hint says "drag a part in to store it".
 
-**Rules that keep it clear:** information never hides behind decoration (labels in the UI face, values in the display face, one idea per widget); every widget animates only when its value changes; one hot accent per panel (the Cash Out button, the canopy).
+**Rules that keep it clear:** information never hides behind decoration (labels in the UI face, values in the display face, one idea per widget); every widget animates only when its value changes; one hot accent per panel (the Cash Out button, the Buy buttons).
 
 ### Tooltips: what it is, what it pays now, why, how to change it
 

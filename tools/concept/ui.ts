@@ -148,14 +148,20 @@ export function arcadeButton(t: Theme, x: number, y: number, w: number, label: s
     `<rect x="${f(x + w - kw - 14)}" y="${f(cy - 12)}" width="${kw}" height="24" rx="6" fill="${t.paper}" stroke="${t.ink}" stroke-width="${LW.detail}"/>` + text(t, x + w - 14 - kw / 2, cy, key, 13, { w: 800, anchor: 'middle', mid: true });
 }
 
-/** A shop canopy: scalloped stripes hanging from a rail. */
-export function awning(t: Theme, x: number, y: number, w: number, n = 8) {
-  const sw = w / n, o: string[] = [];
+/**
+ * A panel header in the arcade style of the DMD marquee: a darker band across the top of the housing
+ * with a row of chasing bulbs and the title, so nothing sticks out of the frame.
+ */
+export function marqueeHeader(t: Theme, x: number, y: number, w: number, title: string) {
+  const x0 = x + 12, x1 = x + w - 12, y0 = y + 12, y1 = y + 80, r = 14, band = mix(t.rim, t.shadeTint, 0.3);
+  const o: string[] = [`<path d="M${f(x0)} ${f(y1)}V${f(y0 + r)}A${r} ${r} 0 0 1 ${f(x0 + r)} ${f(y0)}H${f(x1 - r)}A${r} ${r} 0 0 1 ${f(x1)} ${f(y0 + r)}V${f(y1)}Z" fill="${band}" stroke="${t.ink}" stroke-width="${LW.widget}" stroke-linejoin="round"/>`];
+  const n = 13;
   for (let i = 0; i < n; i++) {
-    const X = x + i * sw, c = i % 2 ? t.paper : t.accent;
-    o.push(`<path d="M${f(X)} ${f(y)}H${f(X + sw)}V${f(y + 34)}A${f(sw / 2)} ${f(sw / 2)} 0 0 1 ${f(X)} ${f(y + 34)}Z" fill="${c}" stroke="${t.ink}" stroke-width="${LW.widget}" stroke-linejoin="round"/>`);
+    const bx = x0 + 18 + (i * (x1 - x0 - 36)) / (n - 1);
+    o.push(`<circle cx="${f(bx)}" cy="${f(y0 + 11)}" r="4.5" fill="${i % 2 ? t.glow : mix(t.glow, t.shadeTint, 0.45)}" stroke="${t.ink}" stroke-width="${LW.detail}"/>`);
   }
-  return o.join('') + `<rect x="${f(x - 8)}" y="${f(y - 8)}" width="${f(w + 16)}" height="16" rx="8" fill="${t.rim}" stroke="${t.ink}" stroke-width="${LW.frame}"/>`;
+  o.push(text(t, x + 30, y + 56, title, 36, { w: 700, fill: t.paper, stroke: t.ink, mid: true }));
+  return o.join('');
 }
 
 /** A pill button: icon slot on the left, label centred on the cap line. */

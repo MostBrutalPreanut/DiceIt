@@ -8,6 +8,7 @@ A rogue-lite where you **build, tune and rebuild a pinball machine** to hit a sc
 - Creative parts from real machines (with sources): [docs/parts-catalog.md](docs/parts-catalog.md)
 - Run flow, major upgrades, rebalancing, board variety: [docs/run-flow-and-balance.md](docs/run-flow-and-balance.md)
 - Art direction, themed machines, particles, with concept sheets: [docs/art-direction.md](docs/art-direction.md)
+- How to build that look, phase by phase: [docs/art-implementation-plan.md](docs/art-implementation-plan.md)
 
 ## Run it
 
