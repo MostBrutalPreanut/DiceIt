@@ -21,7 +21,8 @@ export class Bot {
     const input: Input = { left: false, right: false, plunge: false, nudge: 0 };
 
     if (sim.awaitingPlunge) {
-      if (this.plungeStart < 0) {
+      // press again if the last press is long over and the plunger is still waiting (a Twin Ball's second ball)
+      if (this.plungeStart < 0 || t - this.plungeStart > this.plungeFor + 0.4) {
         this.plungeStart = t;
         this.plungeFor = this.rng.range(0.75, 1.0);
       }

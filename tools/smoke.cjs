@@ -116,6 +116,21 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   }
   await page.evaluate(() => { window.__pinball.game.toWorkshop(); window.__pinball.refresh(); });
 
+  // the between-rounds flow: a boss was just beaten, so an upgrade is owed before the next round
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  check(await page.isVisible('#stepper') && await page.isVisible('#stepUpgrade'), 'the stepper shows the Upgrade step when one is owed');
+  check(await page.locator('.ucard').count() === 3, 'three upgrade cards are offered');
+  check(await page.isDisabled('#btnStart'), 'Start round is locked while the pick is owed');
+  await page.screenshot({ path: `${out}/smoke-2c-upgrade.png` });
+  await page.click('.ucard[data-pick="0"]');
+  check(!(await page.isDisabled('#btnStart')), 'taking a card unlocks Start round');
+  check(!(await page.isVisible('#upgradeBox')) && (await page.locator('.chip').count()) === 1, 'the offer closes and the run lists the upgrade');
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  const cash = await page.evaluate(() => window.__pinball.game.money);
+  await page.click('#btnSkip');
+  check((await page.evaluate(() => window.__pinball.game.money)) === cash + 4, 'skipping pays $4');
+  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
+
   // a real round with the bot at the controls
   await page.click('#btnStart');
   await page.evaluate(() => window.__pinball.advance(25, 5));

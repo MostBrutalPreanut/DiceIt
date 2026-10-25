@@ -6,6 +6,7 @@ import {
   LANE_WALL_X, MAX_BALL_SPEED, MAX_BALLS, NUDGE_SPEED, NUDGE_TILT, PLUNGE_CHARGE_TIME, PLUNGE_DRIFT,
   PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, SAVER_WINDOW, SUBSTEPS, TABLE_H, TABLE_W, TILT_DECAY, WALL_RESTITUTION,
 } from './constants';
+import { neutralMods, type SimMods } from '../data/mods';
 import { cloneLayout, type Layout } from './layout';
 import { Rng } from './rng';
 import { FLIPPER_PIVOTS, TABLE_POSTS, tableSegments } from './table';
@@ -105,7 +106,14 @@ export interface SimOptions {
   seed?: number;
   /** Safety net: pop a ball back above a flipper if it ever crosses through it. Default on. */
   rescue?: boolean;
+  /** The run's upgrades that change the ball and the physics (neutral if absent). */
+  mods?: Partial<SimMods>;
 }
+
+const simMods = (m?: Partial<SimMods>): SimMods => {
+  const n = neutralMods();
+  return { ballBounce: n.ballBounce, ballGravity: n.ballGravity, nudge: n.nudge, spinBoost: n.spinBoost, twin: n.twin, printerExtra: n.printerExtra, ...m };
+};
 
 const V = (x: number, y: number) => new B.b2Vec2(x, y);
 
@@ -135,6 +143,7 @@ export class Sim {
   private plungeWasHeld = false;
   private nudgeCooldown = 0;
   private rescueOn = true;
+  private mods: SimMods = simMods();
   private sideOn = { L: false, R: false };
   /** Ball Savers already spent on the current ball. */
   private saversUsed = new Set<number>();
@@ -144,6 +153,7 @@ export class Sim {
     this.substeps = opts.substeps ?? SUBSTEPS;
     this.rng = new Rng(opts.seed ?? 1);
     this.rescueOn = opts.rescue ?? true;
+    this.mods = simMods(opts.mods);
 
     const wd = B.b2DefaultWorldDef();
     wd.gravity = V(0, -layout.gravity);
@@ -165,6 +175,7 @@ export class Sim {
     this.substeps = opts.substeps ?? SUBSTEPS;
     this.rng = new Rng(opts.seed ?? 1);
     this.rescueOn = opts.rescue ?? true;
+    this.mods = simMods(opts.mods);
     B.b2World_SetGravity(this.worldId, V(0, -layout.gravity));
     this.build(layout);
   }
@@ -362,6 +373,8 @@ export class Sim {
   /** Put a ball in the plunger lane, ready to launch. */
   spawnBall(): number {
     const id = this.addBall(BALL_SPAWN.x, BALL_SPAWN.y, 0, 0);
+    // a Twin Ball waits right behind the first one; the plunger fires whichever is on top
+    if (this.mods.twin) this.addBall(BALL_SPAWN.x, BALL_SPAWN.y + BALL_R * 2.2, 0, 0);
     this.awaitingPlunge = true;
     this.plungeCharge = 0;
     this.tilted = false;
@@ -391,9 +404,10 @@ export class Sim {
     const sd = B.b2DefaultShapeDef();
     sd.density = 1;
     sd.friction = 0.15;
-    sd.restitution = 0.3;
+    sd.restitution = 0.3 + this.mods.ballBounce;
     sd.userData = { kind: 'ball', id };
     B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), BALL_R));
+    B.b2Body_SetGravityScale(body, this.mods.ballGravity);
     this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0, preSpeed: 0 });
     return id;
   }
@@ -503,7 +517,7 @@ export class Sim {
       for (const b of this.balls) {
         if (b.held) continue;
         const v = B.b2Body_GetLinearVelocity(b.body);
-        B.b2Body_SetLinearVelocity(b.body, V(v.x + input.nudge * NUDGE_SPEED, v.y + 2));
+        B.b2Body_SetLinearVelocity(b.body, V(v.x + input.nudge * NUDGE_SPEED * this.mods.nudge, v.y + 2 * this.mods.nudge));
       }
       this.events.push({ type: 'nudge', t, dir: input.nudge, tilt: this.tiltMeter });
       if (this.tiltMeter >= 1) {
@@ -543,7 +557,7 @@ export class Sim {
 
   private release(b: BallRef) {
     b.held = null;
-    B.b2Body_SetGravityScale(b.body, 1);
+    B.b2Body_SetGravityScale(b.body, this.mods.ballGravity);
   }
 
   /** Fire a caught ball out of its saucer. Like Space Cadet's throw_ball: random angle and speed around the aim. */
@@ -556,7 +570,7 @@ export class Sim {
     this.events.push({ type: 'partRelease', t: this.time, uid: pr.inst.uid, ballId: b.id });
 
     const def = PARTS[pr.inst.def];
-    if (def.recipe.spawn && this.balls.length < MAX_BALLS) {
+    for (let k = 0; k < (def.recipe.spawn ?? 0) + this.mods.printerExtra && this.balls.length < MAX_BALLS; k++) {
       const a2 = pr.inst.angle + this.rng.range(0.3, 0.6) * (this.rng.next() < 0.5 ? -1 : 1);
       const id = this.addBall(pr.inst.x, pr.inst.y, -Math.sin(a2) * s * 0.9, Math.cos(a2) * s * 0.9);
       this.events.push({ type: 'extraBall', t: this.time, uid: pr.inst.uid, ballId: id });
@@ -646,7 +660,7 @@ export class Sim {
       const hit = { type: 'partHit' as const, t: this.time, uid: pr.inst.uid, ballId: br.id, x: pr.inst.x, y: pr.inst.y, speed };
 
       if (def.kind === 'spinner') {
-        const spins = Math.max(1, Math.min(10, Math.round(speed / 10)));
+        const spins = Math.max(1, Math.min(Math.round(10 * this.mods.spinBoost), Math.round((speed / 10) * this.mods.spinBoost)));
         const drag = 1 - 0.08 * dialValue(pr.inst, 'drag');
         B.b2Body_SetLinearVelocity(br.body, V(vel.x * drag, vel.y * drag));
         this.events.push({ ...hit, spins });

@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Text } from 'pixi.js';
-import { dialValue, footprint, LEVEL_TARGETS, PARTS, type PartDef, type PartId, type PartInstance } from '../data/parts';
+import { dialValue, footprint, lampStats, LEVEL_TARGETS, PARTS, type PartDef, type PartId, type PartInstance } from '../data/parts';
 import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
 import { BALL_R, FLIPPER_LENGTH, TABLE_H, TABLE_W } from '../sim/constants';
@@ -215,7 +215,7 @@ export class Renderer {
   }
 
   /** One part's body. `alpha` < 1 is used for the ghost. */
-  private drawPartShape(def: PartDef, x: number, y: number, angle: number, opts: { pulse?: number; lit?: boolean; spin?: number; alpha?: number; inst?: PartInstance; down?: boolean[]; armed?: boolean; left?: number; tier?: number; glow?: number } = {}) {
+  private drawPartShape(def: PartDef, x: number, y: number, angle: number, opts: { pulse?: number; lit?: boolean; spin?: number; alpha?: number; inst?: PartInstance; down?: boolean[]; armed?: boolean; left?: number; tier?: number; glow?: number; reach?: number } = {}) {
     const g = this.g, pulse = opts.pulse ?? 0, a = opts.alpha ?? 1, col = hex(def.color);
     const X = this.X(x), Y = this.Y(y);
     if (def.shape.type === 'circle') {
@@ -233,7 +233,7 @@ export class Renderer {
         g.circle(X, Y, r * 1.5).fill({ color: col, alpha: (opts.lit ? 0.35 : 0.08) * a });
         g.circle(X, Y, r).fill({ color: opts.lit ? col : 0x0a0f24, alpha: a }).stroke({ width: this.s * 0.16, color: col, alpha: a });
       } else if (def.kind === 'lamp') {
-        const rad = (opts.inst ? dialValue(opts.inst, 'radius') : 5) * this.s;
+        const rad = (opts.reach ?? (opts.inst ? dialValue(opts.inst, 'radius') : 5)) * this.s;
         if (opts.lit) g.circle(X, Y, rad).fill({ color: col, alpha: 0.1 + pulse * 0.1 }).stroke({ width: 1.5, color: col, alpha: 0.5 });
         g.circle(X, Y, r * 1.6).fill({ color: col, alpha: (opts.lit ? 0.45 : 0.1) * a });
         g.circle(X, Y, r).fill({ color: opts.lit ? 0xffffff : 0x3a3a1a, alpha: a }).stroke({ width: this.s * 0.14, color: col, alpha: a });
@@ -341,7 +341,8 @@ export class Renderer {
         lt.glow = Math.max(0, lt.glow - dt * 0.7);
         if (lt.glow === 0) this.lastTier.delete(p.uid);
       }
-      this.drawPartShape(def, p.x, p.y, p.angle, { pulse, lit, spin: sp?.angle ?? 0, inst: p, down: banks.get(p.uid), armed: kickbacks.get(p.uid) ?? saver?.armed, left: saver?.left, tier: lt?.tier, glow: lt?.glow });
+      const reach = def.kind === 'lamp' ? lampStats(dialValue(p, 'radius'), game.mods).radius : undefined; // Bright Lamps widen the glow
+      this.drawPartShape(def, p.x, p.y, p.angle, { pulse, lit, reach, spin: sp?.angle ?? 0, inst: p, down: banks.get(p.uid), armed: kickbacks.get(p.uid) ?? saver?.armed, left: saver?.left, tier: lt?.tier, glow: lt?.glow });
       // level pips above the part: one gold dot per level this part type has earned
       const lvl = def.recipe.perLevel ? game.scorer.levelOf(p.def) : 0;
       for (let i = 0; i < lvl; i++) {
@@ -350,7 +351,7 @@ export class Renderer {
       if (st.selectedUid === p.uid) g.circle(this.X(p.x), this.Y(p.y), (footprint(def) + 0.6) * this.s).stroke({ width: 2, color: 0xffffff, alpha: 0.9 });
       else if (st.hoverUid === p.uid) g.circle(this.X(p.x), this.Y(p.y), (footprint(def) + 0.5) * this.s).stroke({ width: 1.5, color: def.color, alpha: 0.8 });
       if (def.kind === 'lamp' && (st.selectedUid === p.uid || st.hoverUid === p.uid)) {
-        g.circle(this.X(p.x), this.Y(p.y), dialValue(p, 'radius') * this.s).stroke({ width: 1.5, color: def.color, alpha: 0.6 });
+        g.circle(this.X(p.x), this.Y(p.y), (reach ?? dialValue(p, 'radius')) * this.s).stroke({ width: 1.5, color: def.color, alpha: 0.6 });
       }
 
       // the part's current value, printed on it
@@ -395,9 +396,20 @@ export class Renderer {
     }
   }
 
+  /** The ball wears its upgrade: gold, steel, glass or rubber pink. */
+  private ballColors(game: Game): { core: number; rim: number } {
+    const m = game.mods;
+    if (m.goldEvery) return { core: 0xffe27a, rim: 0xc99a1e };
+    if (m.pointsFactor > 1) return { core: 0xb8c0d4, rim: 0x6c7690 };
+    if (m.ballGravity < 1) return { core: 0xf2feff, rim: 0x7fe9ff };
+    if (m.ballBounce > 0) return { core: 0xffc2dc, rim: 0xff6fa8 };
+    return { core: 0xe8f4ff, rim: 0x8fb4ff };
+  }
+
   private drawBalls(game: Game) {
     const g = this.g;
     const live = new Set<number>();
+    const wear = this.ballColors(game);
     for (const b of game.sim.ballStates()) {
       live.add(b.id);
       const tr = this.trails.get(b.id) ?? [];
@@ -412,7 +424,7 @@ export class Renderer {
       }
       const x = this.X(b.x), y = this.Y(b.y), r = BALL_R * this.s;
       g.circle(x, y, r * 2).fill({ color: 0xbfeaff, alpha: b.held ? 0.3 : 0.12 });
-      g.circle(x, y, r).fill({ color: 0xe8f4ff }).stroke({ width: 1.5, color: 0x8fb4ff });
+      g.circle(x, y, r).fill({ color: wear.core }).stroke({ width: 1.5, color: wear.rim });
       g.circle(x - r * 0.3, y - r * 0.3, r * 0.3).fill({ color: 0xffffff });
     }
     for (const id of [...this.trails.keys()]) if (!live.has(id)) this.trails.delete(id);

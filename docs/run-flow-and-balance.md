@@ -16,13 +16,13 @@ Plans for the next stretch, written from your direction: *play, buy into the inv
 |---|---|---|
 | Payout | An overlay with line items. | ✅ Keep; show cash and what it can buy. |
 | Shop (buy into inventory) | ✅ 4 offers, reroll, parts go to the inventory and follow the pointer. | Keep. Mark new items **NEW** in the inventory. |
-| **Major upgrade** | Not built. | Pick 1 of 3 after every boss (rounds 3, 6, 9, 12, 15), plus a cabinet pick at run start. §2. |
-| **Install** | ✅ place / drag / rotate / tune / test ball / undo / layout slots. | Upgrades that are physical arrive in the inventory marked NEW, so "install" is literal. |
-| Start | ✅ button in the left panel. | One prominent button, pulses when nothing is left to do. |
+| **Major upgrade** | ✅ Pick 1 of 3 after every boss (rounds 3, 6, 9, 12, 15); skip for $4. The cabinet pick at run start is still to come. §2. |
+| **Install** | ✅ place / drag / rotate / tune / test ball / undo / layout slots. | ✅ Parts from upgrades and the shop arrive in the inventory marked NEW, so "install" is literal. |
+| Start | ✅ the big button at the end of the stepper. | ✅ Locked while a pick is owed; pulses when nothing is left to place. |
 
 Why pick-1-of-3: it is the reward screen Slay the Spire popularised (after a fight you choose one of three cards, or skip). A critic's observation fits our use: one pick sets a direction that every later round feels.
 
-## 2. Major upgrades (not built; the design)
+## 2. Major upgrades (built: 23 of the design's cards; see the plan, §4b)
 
 Three cards, one per column, so the choice is legible and each run is steered toward a different kind of machine:
 
@@ -80,7 +80,7 @@ You asked for improvements to the board and randomness at the start. Space Cadet
 
 1. ✅ Levels, Level Lights, drop-target bank, Test Lab, undo/redo, layout slots, heatmap.
 2. ✅ Kickback, ball saver, vari-target and lane change (the cheap, very-pinball parts; catalog §4).
-3. The **Upgrade** screen and the first ~20 upgrades; the between-rounds stepper.
+3. ✅ The **Upgrade** screen, 23 upgrades and the between-rounds stepper.
 4. The **auto-builder** and the **balance table**; set the real goal curve.
 5. Cabinet picks and the seeded board.
 6. Moving parts, magnets and then layers (ramps), toys.

@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 
 Controls: `Z`/`Shift` left flipper, `/`/`Shift` right flipper, hold `Space` to charge the plunger and release to fire, `←` `→` nudge (too much tilts), `Tab` cash out once the goal is hit, `M` mute.
 
-Workshop (between rounds): buy parts in the shop, click one in your inventory and click the table to place it. Drag a part to move it, drag it onto the inventory panel to take it off the board, `R` (or the mouse wheel) rotates, `Del` stores it, `Space` fires a test ball. Hover any part to see exactly how it scores. Tick **Test Lab** to get every part for free plus lab tools. `Ctrl+Z` / `Ctrl+Y` undo and redo.
+Between rounds one screen does it all: **1 Shop · 2 Upgrade · 3 Install**. After every boss (rounds 3, 6, 9, ...) pick one of three major upgrades or skip for $4; the Start round button is locked until you do. Buy parts in the shop, click one in your inventory and click the table to place it. Drag a part to move it, drag it onto the inventory panel to take it off the board, `R` (or the mouse wheel) rotates, `Del` stores it, `Space` fires a test ball. Hover any part to see exactly how it scores. Tick **Test Lab** to get every part for free plus lab tools. `Ctrl+Z` / `Ctrl+Y` undo and redo.
 
 ## Check it
 

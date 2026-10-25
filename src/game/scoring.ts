@@ -1,4 +1,5 @@
-import { dialFactor, dialValue, lampBonus, LEVEL_TARGETS, MAX_LEVEL, PARTS, tierOf, type PartId, type PartInstance } from '../data/parts';
+import { dialFactor, dialValue, lampStats, LEVEL_TARGETS, modFactor, PARTS, tierOf, type PartId, type PartInstance } from '../data/parts';
+import { neutralMods, type Mods } from '../data/mods';
 import type { SimEvent } from '../sim/sim';
 
 /**
@@ -45,6 +46,9 @@ export interface ScorerOpts {
   levels?: Partial<Record<PartId, number>>;
   /** Called when a Level Light set completes. Returns the new level, or null if already at the cap. */
   onLevelUp?: (id: PartId) => number | null;
+  /** The run's upgrades (neutral if absent). */
+  mods?: Mods;
+  /** Overrides the Mult every ball starts with (default: the mods' `startMult`). */
   baseMult?: number;
 }
 
@@ -61,10 +65,15 @@ export class Scorer {
   private roundLit = new Set<number>();
   private levels: Partial<Record<PartId, number>>;
   private onLevelUp?: (id: PartId) => number | null;
+  private mods: Mods;
+  /** Scoring hits so far this round and this ball (Gold Ball and Lucky Seven count them). */
+  private roundHits = 0;
+  private ballHits = 0;
   readonly baseMult: number;
 
   constructor(public goal: number, private getParts: () => PartInstance[] = () => [], opts: ScorerOpts = {}) {
-    this.baseMult = opts.baseMult ?? 1;
+    this.mods = opts.mods ?? neutralMods();
+    this.baseMult = opts.baseMult ?? this.mods.startMult;
     this.mult = this.baseMult;
     this.levels = opts.levels ?? {};
     this.onLevelUp = opts.onLevelUp;
@@ -81,11 +90,13 @@ export class Scorer {
   /** Called when a round (not a ball) starts: the Level Lights go dark. */
   resetRound() {
     this.roundLit.clear();
+    this.roundHits = 0;
     this.startBall();
   }
 
   startBall() {
     this.mult = this.baseMult;
+    this.ballHits = 0;
     this.hitsByType.clear();
     this.lit.clear();
   }
@@ -103,9 +114,9 @@ export class Scorer {
     let sum = 0, count = 0;
     for (const l of this.placed()) {
       if (PARTS[l.def].kind !== 'lamp' || !this.lit.has(l.uid)) continue;
-      const r = dialValue(l, 'radius');
-      if (Math.hypot(l.x - inst.x, l.y - inst.y) <= r) {
-        sum += lampBonus(r);
+      const lamp = lampStats(dialValue(l, 'radius'), this.mods);
+      if (Math.hypot(l.x - inst.x, l.y - inst.y) <= lamp.radius) {
+        sum += lamp.bonus;
         count++;
       }
     }
@@ -118,13 +129,13 @@ export class Scorer {
     if (!r.points) return null;
     const grown = (r.grow ?? 0) * this.hitsOf(inst.def);
     const lvl = (r.perLevel ?? 0) * this.levelOf(inst.def);
-    return Math.round((r.points + lvl + grown) * spins * tierX * dialFactor(inst) * (1 + this.lampBonusAt(inst).sum));
+    return Math.round((r.points + lvl + grown) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum));
   }
 
   /** The short number drawn on the part itself ("100", "10/spin", "+25%"). */
   label(inst: PartInstance): string | null {
     const def = PARTS[inst.def];
-    if (def.kind === 'lamp') return `+${Math.round(lampBonus(dialValue(inst, 'radius')) * 100)}%`;
+    if (def.kind === 'lamp') return `+${Math.round(lampStats(dialValue(inst, 'radius'), this.mods).bonus * 100)}%`;
     const n = this.baseNow(inst);
     if (n === null) return null;
     const tiers = def.recipe.tiers;
@@ -178,7 +189,8 @@ export class Scorer {
 
     // a drop-target bank with every target down pays its set bonus (the individual hits scored already)
     if (def.kind === 'bank' && ev.bankComplete) {
-      out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', r.setBonus!.points, r.setBonus!.mult, 0, [`${r.setBonus!.points} bank bonus`], 'BANK COMPLETE'));
+      const pts = r.setBonus!.points * this.mods.setFactor;
+      out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, r.setBonus!.mult * this.mods.setFactor, 0, [`${pts} bank bonus`], 'BANK COMPLETE'));
       return out;
     }
 
@@ -194,10 +206,19 @@ export class Scorer {
       if (grown) notes.push(`+${grown} grown`);
       if (tier) notes.push(`x${tier.x} ${tier.name} hit`);
       if (Math.abs(factor - 1) > 0.001) notes.push(`x${Math.round(factor * 100) / 100} dial`);
+      const oc = this.mods.overclock[inst.def] ?? 0;
+      if (oc) notes.push(`+${Math.round(oc * 100)}% overclock`);
+      if (this.mods.pointsFactor !== 1) notes.push(`x${Math.round(this.mods.pointsFactor * 100) / 100} ball`);
       if (lamp.sum) notes.push(`+${Math.round(lamp.sum * 100)}% lamp`);
-      const base = Math.round((r.points + level + grown) * spins * (tier?.x ?? 1) * factor * (1 + lamp.sum));
+      this.roundHits++;
+      this.ballHits++;
+      const lucky = this.mods.luckyEvery > 0 && this.ballHits % this.mods.luckyEvery === 0;
+      if (lucky) notes.push('x2 lucky seven');
+      const gold = this.mods.goldEvery > 0 && this.roundHits % this.mods.goldEvery === 0 ? 1 : 0;
+      if (gold) notes.push('+$1 gold ball');
+      const base = Math.round((r.points + level + grown) * spins * (tier?.x ?? 1) * factor * modFactor(inst.def, this.mods) * (1 + lamp.sum) * (lucky ? 2 : 1));
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
-      const scored = this.award(inst, ev.t, ev.x, ev.y, 'hit', base, r.mult ?? 0, r.money ?? 0, notes, undefined, ev.spins);
+      const scored = this.award(inst, ev.t, ev.x, ev.y, 'hit', base, r.mult ?? 0, (r.money ?? 0) + gold, notes, undefined, ev.spins);
       if (tier) scored.tier = r.tiers!.indexOf(tier);
       out.push(scored);
     }
@@ -227,7 +248,8 @@ export class Scorer {
       const lanes = this.placed().filter((p) => p.def === inst.def);
       if (r.setBonus && lanes.every((l) => this.lit.has(l.uid))) {
         for (const l of lanes) this.lit.delete(l.uid);
-        out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', r.setBonus.points, r.setBonus.mult, 0, [`${r.setBonus.points} set bonus`], 'LANES COMPLETE'));
+        const pts = r.setBonus.points * this.mods.setFactor;
+        out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, r.setBonus.mult * this.mods.setFactor, 0, [`${pts} set bonus`], 'LANES COMPLETE'));
       }
     }
     return out;

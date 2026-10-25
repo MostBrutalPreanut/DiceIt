@@ -4,6 +4,7 @@
  * into plain sentences so "how does this thing score?" can never drift from what it actually does.
  */
 import { SAVER_WINDOW } from '../sim/constants';
+import { neutralMods, type Mods } from './mods';
 
 export type PartId = 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver' | 'vari';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target';
@@ -229,6 +230,8 @@ export interface PartInstance {
   dials: Record<string, number>;
   /** false = in the inventory, off the board. */
   placed: boolean;
+  /** Bought or granted since the round started: the inventory marks it NEW until you place it or start the round. */
+  fresh?: boolean;
 }
 
 export function defaultDials(def: PartDef): Record<string, number> {
@@ -255,8 +258,18 @@ export function lampBonus(radius: number): number {
   return Math.round((0.5 - 0.05 * radius) * 100) / 100;
 }
 
-export function sellPrice(def: PartDef): number {
-  return Math.floor(def.cost / 2);
+/** A lamp's reach and bonus for its Glow dial setting, with the run's Bright Lamps upgrades. */
+export function lampStats(dialRadius: number, mods: Pick<Mods, 'lampRadius' | 'lampBonus'> = neutralMods()): { radius: number; bonus: number } {
+  return { radius: dialRadius + mods.lampRadius, bonus: Math.round((lampBonus(dialRadius) + mods.lampBonus) * 100) / 100 };
+}
+
+/** What the run's upgrades multiply a part's base points by (Overclock for its type, a heavy ball for everything). */
+export function modFactor(id: PartId, mods: Pick<Mods, 'overclock' | 'pointsFactor'> = neutralMods()): number {
+  return (1 + (mods.overclock[id] ?? 0)) * mods.pointsFactor;
+}
+
+export function sellPrice(def: PartDef, rate = 0.5): number {
+  return Math.floor(def.cost * rate);
 }
 
 export const dialValue = (inst: PartInstance, id: string): number =>
@@ -275,21 +288,33 @@ const num = (n: number) => (Math.round(n * 100) / 100).toString();
  * How this part scores, in sentences. Reads the same data the scorer reads, and the instance's dials
  * when given, so the numbers always match what will actually happen.
  */
-export function describe(def: PartDef, inst?: PartInstance, level = 0): DescLine[] {
+export interface DescribeCtx {
+  /** The run's level for this part type. */
+  level?: number;
+  /** The run's upgrades; the numbers in the sentences include them. */
+  mods?: Mods;
+}
+
+export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {}): DescLine[] {
+  const level = ctx.level ?? 0;
+  const mods = ctx.mods ?? neutralMods();
   const r = def.recipe;
   const lines: DescLine[] = [];
-  const factor = inst ? dialFactor(inst) : 1;
+  const factor = (inst ? dialFactor(inst) : 1) * modFactor(def.id, mods);
+  const setPts = r.setBonus ? r.setBonus.points * mods.setFactor : 0, setMult = r.setBonus ? r.setBonus.mult * mods.setFactor : 0;
   const f = (n: number) => num(Math.round(n * factor * 100) / 100);
 
   const lvlBonus = (r.perLevel ?? 0) * level;
   if (r.points) lines.push({ tag: 'score', text: `Scores ${f(r.points + lvlBonus)} per ${r.per ?? 'hit'}, times your Mult.` });
+  const upg = modFactor(def.id, mods);
+  if (r.points && Math.abs(upg - 1) > 0.001) lines.push({ tag: 'level', text: `Your upgrades multiply its base points by ${num(upg)}.` });
   if (r.grow) lines.push({ tag: 'grow', text: `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it).` });
   if (r.perLevel) lines.push({ tag: 'level', text: `Level ${level} of ${MAX_LEVEL}${level ? ` (+${lvlBonus})` : ''}: each level adds +${r.perLevel} per ${r.per ?? 'hit'} for the rest of the run.` });
   if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${num(r.mult)} per ${r.per ?? 'hit'}.` });
   if (r.money) lines.push({ tag: 'money', text: `Pays $${r.money} per ${r.per ?? 'hit'}.` });
   if (def.kind === 'lamp') {
-    const rad = inst ? dialValue(inst, 'radius') : 5;
-    lines.push({ tag: 'lamp', text: `Roll a ball over it to light it for this ball. While lit, every scoring part within ${num(rad)} units scores +${Math.round(lampBonus(rad) * 100)}%.` });
+    const lamp = lampStats(inst ? dialValue(inst, 'radius') : 5, mods);
+    lines.push({ tag: 'lamp', text: `Roll a ball over it to light it for this ball. While lit, every scoring part within ${num(lamp.radius)} units scores +${Math.round(lamp.bonus * 100)}%.` });
   }
   if (r.lights && def.kind === 'rollover') lines.push({ tag: 'note', text: 'Lights up for the rest of this ball.' });
   if (def.id === 'lane') lines.push({ tag: 'note', text: 'Lane change: every time you press a flipper button the lit lanes shift one lane (Z left, / right, wrapping round), so you can steer which lane is still dark.' });
@@ -297,18 +322,21 @@ export function describe(def: PartDef, inst?: PartInstance, level = 0): DescLine
     const stiff = inst ? dialValue(inst, 'stiff') : 1;
     lines.push({ tag: 'note', text: `Pays more for a harder hit: ${r.tiers.map((t) => `x${t.x} ${t.name}${t.from ? ` (${num(t.from * stiff)}+ speed)` : ''}`).join(', ')}.` });
   }
-  if (r.setBonus && def.kind === 'rollover') lines.push({ tag: 'set', text: `Light every Lane Rollover on the board: +${r.setBonus.points} points and +${num(r.setBonus.mult)} Mult, then they reset.` });
-  if (def.kind === 'bank') lines.push({ tag: 'set', text: `Each target you hit drops. Drop all three: +${r.setBonus!.points} points and +${num(r.setBonus!.mult)} Mult, then they pop back up (and every new ball).` });
+  if (r.setBonus && def.kind === 'rollover') lines.push({ tag: 'set', text: `Light every Lane Rollover on the board: +${num(setPts)} points and +${num(setMult)} Mult, then they reset.` });
+  if (def.kind === 'bank') lines.push({ tag: 'set', text: `Each target you hit drops. Drop all three: +${num(setPts)} points and +${num(setMult)} Mult, then they pop back up (and every new ball).` });
   if (r.levelUp) {
     const t = PARTS[LEVEL_TARGETS[Math.round(inst ? dialValue(inst, 'target') : 0)] ?? 'pop'];
     lines.push({ tag: 'level', text: `Roll over it to light it; roll over it again and it goes out. Light every Level Light aimed at ${t.name}s (you need at least two) to level them up for the rest of the run, then the lights reset.` });
   }
-  if (r.spawn) lines.push({ tag: 'spawn', text: 'Prints a second ball when it catches one (up to 4 on the table).' });
+  if (r.spawn) {
+    const n = r.spawn + mods.printerExtra;
+    lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (up to 4 on the table).` });
+  }
   if (def.kind === 'saucer') {
     const hold = inst ? dialValue(inst, 'hold') : 0.6, pw = inst ? dialValue(inst, 'power') : 70;
     lines.push({ tag: 'note', text: `Holds the ball ${num(hold)} s, then fires it out with power ${pw}. Rotate to aim.` });
   }
-  if (def.kind === 'spinner') lines.push({ tag: 'note', text: 'A faster ball spins it more (1 to 10 spins).' });
+  if (def.kind === 'spinner') lines.push({ tag: 'note', text: `A faster ball spins it more (1 to ${Math.round(10 * mods.spinBoost)} spins).` });
   if (def.kind === 'kicker') lines.push({ tag: 'note', text: 'Kicks the ball away from whichever face it hits.' });
   if (def.kind === 'bumper') lines.push({ tag: 'note', text: 'Kicks the ball away from its centre.' });
   if (def.kind === 'flipper') {

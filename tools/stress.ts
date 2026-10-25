@@ -1,3 +1,4 @@
+import type { SimMods } from '../src/data/mods';
 import { DT, FLIPPER_LENGTH, SUBSTEPS, TABLE_H, TABLE_W } from '../src/sim/constants';
 import { Bot } from '../src/sim/bot';
 import type { Layout } from '../src/sim/layout';
@@ -13,6 +14,8 @@ export interface StressConfig {
   seed?: number;
   /** Disable the safety net to measure the raw engine. */
   rescue?: boolean;
+  /** Ball upgrades to fuzz with (a lighter or bouncier ball is a different physics problem). */
+  mods?: Partial<SimMods>;
   /** Called with a per-step trace of the first tunnelled trial. */
   onFirstTunnel?: (trace: string[]) => void;
 }
@@ -38,7 +41,7 @@ export function flipperTunnelTrials(cfg: StressConfig): StressResult {
   for (let i = 0; i < cfg.trials; i++) {
     const side: 'L' | 'R' = rng.next() < 0.5 ? 'L' : 'R';
     const sign = side === 'L' ? 1 : -1;
-    const sim = createSim(EMPTY, { dt: cfg.dt, substeps: cfg.substeps, seed: i, rescue: cfg.rescue ?? true });
+    const sim = createSim(EMPTY, { dt: cfg.dt, substeps: cfg.substeps, seed: i, rescue: cfg.rescue ?? true, mods: cfg.mods });
     const f = sim.flipperStates().find((q) => q.side === side)!;
 
     const lx = rng.range(0.6, FLIPPER_LENGTH - 0.4);
@@ -99,10 +102,10 @@ export interface EscapeResult {
 }
 
 /** Let a bot play many balls on a layout; count anything that leaves the table the wrong way. */
-export function escapeFuzz(layout: Layout, balls: number, dt = DT, substeps = SUBSTEPS): EscapeResult {
+export function escapeFuzz(layout: Layout, balls: number, dt = DT, substeps = SUBSTEPS, mods?: Partial<SimMods>): EscapeResult {
   let escapes = 0, drained = 0, timeouts = 0, searches = 0, seconds = 0, hits = 0;
   for (let i = 0; i < balls; i++) {
-    const sim = createSim(layout, { dt, substeps, seed: i + 1 });
+    const sim = createSim(layout, { dt, substeps, seed: i + 1, mods });
     const bot = new Bot(i + 1, 0.9);
     sim.spawnBall();
     let over = false;
