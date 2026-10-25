@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { makePart, type PartInstance } from '../src/data/parts';
 import type { Layout } from '../src/sim/layout';
+import { Bot } from '../src/sim/bot';
+import { SAVER_WINDOW } from '../src/sim/constants';
+import { starterLayout } from '../src/sim/layout';
 import { createSim, NO_INPUT, type SimEvent } from '../src/sim/sim';
 
 const layoutOf = (...parts: PartInstance[]): Layout => ({ parts, gravity: 50, nextUid: 100 });
@@ -136,6 +139,158 @@ describe('drop-target bank', () => {
     expect(ev.filter((e) => e.type === 'partHit' && e.uid === 1)).toHaveLength(0); // nothing there to hit
     sim.spawnBall();
     expect(sim.bankStates().get(1)).toEqual([false, false, false]);
+  });
+});
+
+describe('kickback', () => {
+  const kickLayout = (angle = 0, power?: number) => {
+    const k = makePart('kickback', 1, 12, 30, true);
+    k.angle = angle;
+    if (power !== undefined) k.dials.power = power;
+    return layoutOf(k);
+  };
+  const kicks = (events: SimEvent[]) => events.filter((e) => e.type === 'partHit' && e.uid === 1 && e.kicked);
+
+  it('boots a ball that rolls over it along its aim, at its power, and scores the kick', () => {
+    const sim = createSim(kickLayout());
+    sim.addBall(12, 33, 0, -20);
+    const ev: SimEvent[] = [];
+    for (let i = 0; i < 40; i++) ev.push(...sim.step(NO_INPUT));
+    expect(kicks(ev)).toHaveLength(1);
+    const b = sim.ballStates()[0];
+    expect(b.vy).toBeGreaterThan(50);
+    expect(Math.abs(b.vx)).toBeLessThan(12);
+  });
+
+  it('fires once per ball: the next ball rolls straight through until a new ball arms it', () => {
+    const sim = createSim(kickLayout());
+    const run = () => {
+      sim.addBall(12, 33, 0, -20);
+      const ev: SimEvent[] = [];
+      for (let i = 0; i < 40; i++) ev.push(...sim.step(NO_INPUT));
+      return kicks(ev).length;
+    };
+    expect(run()).toBe(1);
+    expect(sim.kickbackStates().get(1)).toBe(false);
+    for (let i = 0; i < 240 * 6; i++) sim.step(NO_INPUT); // let both balls drain
+    expect(run()).toBe(0);
+    sim.spawnBall(); // a new ball re-arms it
+    expect(sim.kickbackStates().get(1)).toBe(true);
+    expect(run()).toBe(1);
+  });
+
+  it('rotating it aims the kick, and the Power dial sets how hard', () => {
+    const left = createSim(kickLayout(Math.PI / 2));
+    left.addBall(12, 33, 0, -20);
+    for (let i = 0; i < 30; i++) left.step(NO_INPUT);
+    expect(left.ballStates()[0].vx).toBeLessThan(-50); // angle 90 deg: fired to the left
+
+    const speed = (power: number) => {
+      const sim = createSim(kickLayout(0, power));
+      sim.addBall(12, 33, 0, -20);
+      for (let i = 0; i < 20; i++) sim.step(NO_INPUT);
+      const b = sim.ballStates()[0];
+      return Math.hypot(b.vx, b.vy);
+    };
+    expect(speed(100)).toBeGreaterThan(speed(40) + 30);
+  });
+
+  it('is just a sensor: while it is dark a ball passes through without a bounce', () => {
+    const sim = createSim(kickLayout());
+    sim.addBall(12, 33, 0, -20);
+    for (let i = 0; i < 240 * 5; i++) sim.step(NO_INPUT);
+    sim.addBall(12.2, 33, 0, -10);
+    for (let i = 0; i < 20; i++) sim.step(NO_INPUT);
+    expect(sim.ballStates()[0].vy).toBeLessThan(0); // still falling
+  });
+});
+
+describe('ball saver', () => {
+  const saverAt = (uid: number, x: number) => makePart('saver', uid, x, 30, true);
+  /** Hold the plunger for `charge` seconds, then let go and run until something drains or `seconds` pass. */
+  function plungeAndWatch(sim: ReturnType<typeof createSim>, seconds = 20, charge = 1) {
+    const ev: SimEvent[] = [];
+    for (let i = 0; i < seconds * 240; i++) {
+      const out = sim.step({ ...NO_INPUT, plunge: i < charge * 240 });
+      ev.push(...out);
+      if (out.some((e) => e.type === 'drain' || e.type === 'ballSaved') && i > charge * 240) break;
+    }
+    return ev;
+  }
+
+  it('sends a ball that drains soon after launch back to the plunger, unspent', () => {
+    const sim = createSim(layoutOf(saverAt(1, 12)));
+    sim.spawnBall();
+    const ev = plungeAndWatch(sim);
+    expect(ev.filter((e) => e.type === 'ballSaved')).toHaveLength(1);
+    expect(ev.filter((e) => e.type === 'drain')).toHaveLength(0);
+    expect(sim.ballCount).toBe(1);
+    expect(sim.awaitingPlunge).toBe(true);
+    const b = sim.ballStates()[0];
+    expect(b.inLane).toBe(true);
+    expect(sim.saverStates().get(1)!.armed).toBe(false);
+  });
+
+  it('saves one drain per saver per ball: the second drain is real, and a new ball re-arms it', () => {
+    const sim = createSim(layoutOf(saverAt(1, 12)));
+    sim.spawnBall();
+    expect(plungeAndWatch(sim).some((e) => e.type === 'ballSaved')).toBe(true);
+    const again = plungeAndWatch(sim);
+    expect(again.some((e) => e.type === 'ballSaved')).toBe(false);
+    expect(again.some((e) => e.type === 'drain')).toBe(true);
+    sim.spawnBall();
+    expect(sim.saverStates().get(1)!.armed).toBe(true);
+    expect(plungeAndWatch(sim).some((e) => e.type === 'ballSaved')).toBe(true);
+  });
+
+  it('two savers save two drains', () => {
+    const sim = createSim(layoutOf(saverAt(1, 8), saverAt(2, 16)));
+    sim.spawnBall();
+    let saves = 0, drains = 0;
+    for (let k = 0; k < 4 && drains === 0; k++) {
+      const ev = plungeAndWatch(sim);
+      saves += ev.filter((e) => e.type === 'ballSaved').length;
+      drains += ev.filter((e) => e.type === 'drain').length;
+    }
+    expect(saves).toBe(2);
+    expect(drains).toBe(1);
+  });
+
+  it('does nothing without a saver, and never saves a ball that was not launched by the plunger', () => {
+    const none = createSim(layoutOf());
+    none.spawnBall();
+    expect(plungeAndWatch(none).some((e) => e.type === 'drain')).toBe(true);
+    const placed = createSim(layoutOf(saverAt(1, 12)));
+    placed.addBall(12, 20, 0, -10); // a test ball, not a plunged one
+    const ev: SimEvent[] = [];
+    for (let i = 0; i < 240 * 3; i++) ev.push(...placed.step(NO_INPUT));
+    expect(ev.some((e) => e.type === 'ballSaved')).toBe(false);
+    expect(ev.some((e) => e.type === 'drain')).toBe(true);
+  });
+
+  it('only saves inside its window, and no save is ever late (bot, several seeds)', () => {
+    let lateDrains = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const layout = starterLayout();
+      layout.parts.push(saverAt(50, 12));
+      const sim = createSim(layout, { seed });
+      const bot = new Bot(seed, 0.9);
+      sim.spawnBall();
+      let launchedAt = 0, saves = 0, drained = false;
+      for (let i = 0; i < 240 * 150 && !drained; i++) {
+        for (const e of sim.step(bot.decide(sim))) {
+          if (e.type === 'launch') launchedAt = e.t;
+          if (e.type === 'ballSaved') { saves++; expect(e.t - launchedAt).toBeLessThanOrEqual(SAVER_WINDOW + 0.01); }
+          if (e.type === 'drain' && e.reason === 'drain') {
+            drained = true;
+            // an unsaved drain means the window was over, or the one saver was already spent
+            expect(e.t - launchedAt > SAVER_WINDOW || saves >= 1).toBe(true);
+            if (saves === 0) lateDrains++;
+          }
+        }
+      }
+    }
+    expect(lateDrains).toBeGreaterThan(0); // at least one ball outlived the window, so the expiry was really exercised
   });
 });
 

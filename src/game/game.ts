@@ -319,6 +319,7 @@ export class Game {
     if (this.sim.ballCount === 0) {
       this.scorer = this.newScorer(Infinity);
       this.scorer.resetRound();
+      this.sim.rearm();
     }
     const rng = new Rng(this.seed++ * 31 + n);
     for (let i = 0; i < n && this.sim.ballCount < Math.max(MAX_BALLS, 12); i++) {

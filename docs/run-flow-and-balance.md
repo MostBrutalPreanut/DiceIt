@@ -28,7 +28,7 @@ Three cards, one per column, so the choice is legible and each run is steered to
 
 | Column | What it changes | Examples (all numbers are first guesses) |
 |---|---|---|
-| **Board** | The table and the round rules | **Ball Saver** (first drain each round returns the ball) · **Extra Ball** (4 balls per round) · **Kickbacks** (two outlane launchers, delivered as parts to install) · **Magic Post** (rises between the flippers once per ball) · **Wider Build Area** (+4 units of room) · **Upper Flippers** (two Extra Flippers to install) · **Interest** ($1 per $4 held) · **Bonus-X** (end-of-ball multiplier +1) |
+| **Board** | The table and the round rules | **Ball Saver** (a free Ball Saver part in your inventory; the part itself is built, see the parts table in the plan) · **Extra Ball** (4 balls per round) · **Kickbacks** (two outlane launchers, delivered as parts to install) · **Magic Post** (rises between the flippers once per ball) · **Wider Build Area** (+4 units of room) · **Upper Flippers** (two Extra Flippers to install) · **Interest** ($1 per $4 held) · **Bonus-X** (end-of-ball multiplier +1) |
 | **Balls** | The ball itself, for the whole round | **Rubber** (bouncier) · **Heavy** (hard to nudge, hits harder) · **Glass** (fast and light, more spins) · **Gold** (+$1 per 10 part hits) · **Magnetic** (saucers catch it more easily) · **Twin** (balls come in pairs) |
 | **Parts** | Levels and special parts | **Level up** a part type · **Overclock** (+50% base on one type) · **Lamps glow +2 and pay +10%** · **Printer prints two** · **Lanes pay a double set bonus** · a **legendary part** to install (the Hand, the Castle) |
 
@@ -79,7 +79,7 @@ You asked for improvements to the board and randomness at the start. Space Cadet
 ## 6. Order of work
 
 1. ✅ Levels, Level Lights, drop-target bank, Test Lab, undo/redo, layout slots, heatmap.
-2. Lane change, kickback, ball saver, vari-target (the cheap, very-pinball parts; catalog §4).
+2. ▶ Kickback ✅ and ball saver ✅ (both built as parts); lane change and vari-target still to do (the cheap, very-pinball parts; catalog §4).
 3. The **Upgrade** screen and the first ~20 upgrades; the between-rounds stepper.
 4. The **auto-builder** and the **balance table**; set the real goal curve.
 5. Cabinet picks and the seeded board.

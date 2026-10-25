@@ -230,3 +230,15 @@ describe('levels, Level Lights and drop-target banks', () => {
     expect(done[0].multAfter).toBeCloseTo(1.3);
   });
 });
+
+describe('Kickback and Ball Saver', () => {
+  it('a kick pays 150 times Mult and explains itself; the saver scores nothing', () => {
+    const { s, parts } = setup([makePart('kickback', 10, 10, 30, true), makePart('saver', 11, 14, 30, true)]);
+    const kick = s.consume(hit(10, { kicked: true }))[0];
+    expect(kick.base).toBe(150);
+    expect(kick.notes).toEqual(['150 base']);
+    expect(s.label(parts.find((p) => p.uid === 10)!)).toBe('150');
+    expect(s.consume({ type: 'ballSaved', t: 0, uid: 11, ballId: 2 })).toEqual([]);
+    expect(s.label(parts.find((p) => p.uid === 11)!)).toBeNull();
+  });
+});

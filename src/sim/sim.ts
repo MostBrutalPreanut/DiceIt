@@ -4,7 +4,7 @@ import {
   BALL_R, BALL_SEARCH_AFTER, BALL_SPAWN, BALL_TIMEOUT, DT, FLIPPER_LENGTH, FLIPPER_REST,
   FLIPPER_SPEED_DOWN, FLIPPER_SPEED_UP, FLIPPER_TORQUE, FLIPPER_UP, LANE_FLOOR_Y, LANE_TOP_Y,
   LANE_WALL_X, MAX_BALL_SPEED, MAX_BALLS, NUDGE_SPEED, NUDGE_TILT, PLUNGE_CHARGE_TIME, PLUNGE_DRIFT,
-  PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, SUBSTEPS, TABLE_H, TABLE_W, TILT_DECAY, WALL_RESTITUTION,
+  PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, SAVER_WINDOW, SUBSTEPS, TABLE_H, TABLE_W, TILT_DECAY, WALL_RESTITUTION,
 } from './constants';
 import { cloneLayout, type Layout } from './layout';
 import { Rng } from './rng';
@@ -21,9 +21,10 @@ export const NO_INPUT: Input = { left: false, right: false, plunge: false, nudge
 
 /** Physical things that happened. Scoring and presentation both consume this stream; neither feeds back. */
 export type SimEvent =
-  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean }
+  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean }
   | { type: 'partRelease'; t: number; uid: number; ballId: number }
   | { type: 'extraBall'; t: number; uid: number; ballId: number }
+  | { type: 'ballSaved'; t: number; uid: number; ballId: number }
   | { type: 'launch'; t: number; ballId: number; power: number }
   | { type: 'drain'; t: number; ballId: number; reason: 'drain' | 'timeout' }
   | { type: 'ballSpawn'; t: number; ballId: number }
@@ -61,6 +62,8 @@ interface BallRef {
   slowTime: number;
   prevLocal: Map<number, Local>;
   held: { uid: number; until: number } | null;
+  /** Sim time until which a drain of this ball is saved (set when the plunger launches it; 0 = not saveable). */
+  saveUntil: number;
 }
 interface FlipperRef {
   fid: number;
@@ -85,6 +88,8 @@ interface PartRef {
   body: any;
   flipper?: FlipperRef;
   bank?: BankState;
+  /** Kickbacks only: ready to fire. Re-armed with every new ball. */
+  armed?: boolean;
 }
 
 /** The three drop targets of a bank, as offsets along the part's long axis. */
@@ -129,6 +134,8 @@ export class Sim {
   private nudgeCooldown = 0;
   private rescueOn = true;
   private sideOn = { L: false, R: false };
+  /** Ball Savers already spent on the current ball. */
+  private saversUsed = new Set<number>();
 
   constructor(layout: Layout, opts: SimOptions = {}) {
     this.dt = opts.dt ?? DT;
@@ -173,6 +180,7 @@ export class Sim {
     this.nextFlipperId = 1;
     this.rescues = 0;
     this.sideOn = { L: false, R: false };
+    this.saversUsed.clear();
     this.buildTable();
     this.flippers.push(
       this.buildFlipper('L', FLIPPER_PIVOTS.L.x, FLIPPER_PIVOTS.L.y),
@@ -282,14 +290,19 @@ export class Sim {
       this.raiseBank(ref);
       return;
     }
+    if (def.kind === 'saver') {
+      // an insert in the playfield: it has a place on the board, but no collision
+      this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body });
+      return;
+    }
     const sd = B.b2DefaultShapeDef();
     sd.friction = 0.1;
     sd.restitution = def.kind === 'deflector' ? 0.6 : def.kind === 'kicker' ? 0.3 : 0.45;
-    sd.isSensor = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'saucer' || def.kind === 'lamp';
+    sd.isSensor = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'saucer' || def.kind === 'lamp' || def.kind === 'kickback';
     sd.userData = { kind: 'part', uid: inst.uid };
     if (def.shape.type === 'circle') B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), def.shape.r));
     else B.b2CreatePolygonShape(body, sd, B.b2MakeBox(def.shape.hw, def.shape.hh));
-    this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body });
+    this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body, armed: def.kind === 'kickback' ? true : undefined });
   }
 
   /** (Re)create the physical targets of a bank, all standing. */
@@ -325,6 +338,7 @@ export class Sim {
   removePart(uid: number) {
     const p = this.parts.get(uid);
     if (!p) return;
+    this.saversUsed.delete(uid);
     for (const b of this.balls) if (b.held?.uid === uid) this.release(b);
     if (p.flipper) this.flippers = this.flippers.filter((f) => f !== p.flipper);
     B.b2DestroyBody(p.body);
@@ -351,8 +365,15 @@ export class Sim {
     this.tilted = false;
     this.tiltMeter = 0;
     for (const p of this.parts.values()) if (p.bank && p.bank.down.some(Boolean)) this.resetBank(p);
+    this.rearm();
     this.events.push({ type: 'ballSpawn', t: this.time, ballId: id });
     return id;
+  }
+
+  /** A new ball: every Kickback is armed again and every Ball Saver is ready. */
+  rearm() {
+    this.saversUsed.clear();
+    for (const p of this.parts.values()) if (p.armed === false) p.armed = true;
   }
 
   /** Test hook / multiball: drop a ball anywhere with a velocity. */
@@ -371,7 +392,7 @@ export class Sim {
     sd.restitution = 0.3;
     sd.userData = { kind: 'ball', id };
     B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), BALL_R));
-    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null });
+    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0 });
     return id;
   }
 
@@ -396,6 +417,27 @@ export class Sim {
       const p = B.b2Body_GetPosition(f.body);
       return { x: p.x, y: p.y, angle: B.b2RevoluteJoint_GetAngle(f.joint), side: f.side, pivotX: f.pivotX, pivotY: f.pivotY, uid: f.uid };
     });
+  }
+
+  /** Kickbacks that are armed, keyed by part uid (for drawing). */
+  kickbackStates(): Map<number, boolean> {
+    const m = new Map<number, boolean>();
+    for (const [uid, p] of this.parts) if (p.armed !== undefined) m.set(uid, p.armed);
+    return m;
+  }
+
+  /**
+   * Ball Savers, keyed by part uid (for drawing): `armed` until it has saved a ball this ball, and
+   * `left`, the fraction of the save window still open (1 while the ball waits to be launched).
+   */
+  saverStates(): Map<number, { armed: boolean; left: number }> {
+    let until = 0;
+    for (const b of this.balls) until = Math.max(until, b.saveUntil);
+    const idle = this.awaitingPlunge || this.balls.length === 0;
+    const left = idle ? 1 : Math.max(0, Math.min(1, (until - this.time) / SAVER_WINDOW));
+    const m = new Map<number, { armed: boolean; left: number }>();
+    for (const [uid, p] of this.parts) if (PARTS[p.inst.def].kind === 'saver') m.set(uid, { armed: !this.saversUsed.has(uid), left });
+    return m;
   }
 
   /** The balls currently held by saucers, keyed by part uid (for drawing). */
@@ -441,6 +483,7 @@ export class Sim {
           // like Space Cadet's plunger: the shot is never exactly the charge you gave it
           const boosted = power * (1 + this.rng.range(0, PLUNGE_NOISE));
           B.b2Body_SetLinearVelocity(ball.body, V(this.rng.range(-PLUNGE_DRIFT, PLUNGE_DRIFT), boosted));
+          ball.saveUntil = this.armedSaver() ? t + SAVER_WINDOW : 0;
           this.events.push({ type: 'launch', t, ballId: ball.id, power });
           this.awaitingPlunge = false;
         }
@@ -603,6 +646,14 @@ export class Sim {
         B.b2Body_SetLinearVelocity(br.body, V(0, 0));
         B.b2Body_SetGravityScale(br.body, 0);
         this.events.push({ ...hit, caught: true });
+      } else if (def.kind === 'kickback') {
+        if (!pr.armed) continue;
+        // like the saucer's throw: never exactly the same shot twice
+        pr.armed = false;
+        const a = pr.inst.angle + this.rng.range(-0.08, 0.08);
+        const s = dialValue(pr.inst, 'power') * (1 + this.rng.range(-0.05, 0.05));
+        B.b2Body_SetLinearVelocity(br.body, V(-Math.sin(a) * s, Math.cos(a) * s));
+        this.events.push({ ...hit, kicked: true });
       } else if (def.kind === 'rollover' || def.kind === 'lamp') {
         this.events.push(hit);
       }
@@ -624,6 +675,7 @@ export class Sim {
       // a ball that leaves the table any other way is a bug; treat it as a drain so a run can't soft-lock
       else if (p.x < -1 || p.x > TABLE_W + 1 || p.y > TABLE_H + 2) reason = 'drain';
 
+      if (reason === 'drain' && this.trySave(b)) continue;
       if (reason) {
         B.b2DestroyBody(b.body);
         this.balls = this.balls.filter((x) => x !== b);
@@ -652,6 +704,28 @@ export class Sim {
         b.slowTime = 0;
       }
     }
+  }
+
+  /** A placed Ball Saver that has not saved a ball yet this ball. */
+  private armedSaver(): PartRef | undefined {
+    for (const p of this.parts.values()) if (PARTS[p.inst.def].kind === 'saver' && !this.saversUsed.has(p.inst.uid)) return p;
+    return undefined;
+  }
+
+  /** Shoot again: a ball that drains inside its save window goes back to the plunger lane, unspent. */
+  private trySave(b: BallRef): boolean {
+    if (this.tilted || b.saveUntil < this.time) return false;
+    const saver = this.armedSaver();
+    if (!saver) return false;
+    this.saversUsed.add(saver.inst.uid);
+    B.b2DestroyBody(b.body);
+    this.balls = this.balls.filter((x) => x !== b);
+    const id = this.addBall(BALL_SPAWN.x, BALL_SPAWN.y, 0, 0);
+    this.awaitingPlunge = true;
+    this.plungeCharge = 0;
+    this.plungeWasHeld = true; // require a fresh press
+    this.events.push({ type: 'ballSaved', t: this.time, uid: saver.inst.uid, ballId: id });
+    return true;
   }
 
   /**

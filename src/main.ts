@@ -451,6 +451,13 @@ async function main() {
       case 'ballSearch': sayKey('search'); break;
       case 'rescue': sayKey('rescue'); break;
       case 'extraBall': sayKey('printed'); renderer.onBigMoment(); audio.goal(); break;
+      case 'ballSaved': {
+        const saver = game.part(ev.uid);
+        if (saver) renderer.onSaved(saver.x, saver.y);
+        sayKey('saved'); renderer.onBigMoment(); audio.goal();
+        break;
+      }
+      case 'partHit': if (ev.kicked) { audio.launch(70); sayKey('kicked'); } break;
       default: break;
     }
   };

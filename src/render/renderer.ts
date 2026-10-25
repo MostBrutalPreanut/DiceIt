@@ -102,6 +102,15 @@ export class Renderer {
     return parts.join('  ');
   }
 
+  /** A Ball Saver just returned a ball: burst of lime sparks and a shout where it sits. */
+  onSaved(x: number, y: number) {
+    for (let i = 0; i < 28 && this.particles.length < MAX_PARTICLES; i++) {
+      const a = Math.random() * Math.PI * 2, v = 5 + Math.random() * 14;
+      this.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 0.4 + Math.random() * 0.5, color: PARTS.saver.color, size: 0.1 + Math.random() * 0.16 });
+    }
+    this.popup('SHOOT AGAIN!', '', x, y + 1.6, PARTS.saver.color, 18);
+  }
+
   onTilt() { this.trauma = 1; }
   onBigMoment() { this.trauma = Math.min(1, this.trauma + 0.5); }
 
@@ -203,7 +212,7 @@ export class Renderer {
   }
 
   /** One part's body. `alpha` < 1 is used for the ghost. */
-  private drawPartShape(def: PartDef, x: number, y: number, angle: number, opts: { pulse?: number; lit?: boolean; spin?: number; alpha?: number; inst?: PartInstance; down?: boolean[] } = {}) {
+  private drawPartShape(def: PartDef, x: number, y: number, angle: number, opts: { pulse?: number; lit?: boolean; spin?: number; alpha?: number; inst?: PartInstance; down?: boolean[]; armed?: boolean; left?: number } = {}) {
     const g = this.g, pulse = opts.pulse ?? 0, a = opts.alpha ?? 1, col = hex(def.color);
     const X = this.X(x), Y = this.Y(y);
     if (def.shape.type === 'circle') {
@@ -235,6 +244,31 @@ export class Renderer {
         g.poly([this.X(tip.x), this.Y(tip.y), this.X(l.x), this.Y(l.y), this.X(rr.x), this.Y(rr.y)]).fill({ color: col, alpha: 0.9 * a });
       } else if (def.kind === 'flipper') {
         g.circle(X, Y, r).stroke({ width: 1.5, color: col, alpha: 0.35 * a });
+      } else if (def.kind === 'kickback') {
+        // a ring with a chevron along the aim: bright while armed, dark once it has fired this ball
+        const on = opts.armed ?? true;
+        g.circle(X, Y, r * 1.45).fill({ color: col, alpha: (on ? 0.16 : 0.03) * a + pulse * 0.25 });
+        g.circle(X, Y, r).fill({ color: 0x050d1c, alpha: a }).stroke({ width: this.s * 0.2, color: col, alpha: (on ? 1 : 0.3) * a });
+        const dx = -Math.sin(angle), dy = Math.cos(angle), px = -dy, py = dx; // aim and its perpendicular
+        const R = def.shape.r;
+        for (const back of [0.15, -0.35]) {
+          const tip = { x: x + dx * (R * 0.7 + back), y: y + dy * (R * 0.7 + back) };
+          const l = { x: tip.x - dx * R * 0.55 + px * R * 0.5, y: tip.y - dy * R * 0.55 + py * R * 0.5 };
+          const rr = { x: tip.x - dx * R * 0.55 - px * R * 0.5, y: tip.y - dy * R * 0.55 - py * R * 0.5 };
+          g.moveTo(this.X(l.x), this.Y(l.y)).lineTo(this.X(tip.x), this.Y(tip.y)).lineTo(this.X(rr.x), this.Y(rr.y))
+            .stroke({ width: this.s * 0.17, color: col, alpha: (on ? 0.95 : 0.25) * a, cap: 'round', join: 'round' });
+        }
+      } else if (def.kind === 'saver') {
+        // a SHOOT AGAIN insert: lit while a save is ready, with a ring that drains as the window closes
+        const ready = (opts.armed ?? true) && (opts.left ?? 1) > 0;
+        g.circle(X, Y, r * 1.7).fill({ color: col, alpha: (ready ? 0.22 : 0.04) * a });
+        g.circle(X, Y, r).fill({ color: ready ? col : 0x1b2a0c, alpha: (ready ? 0.9 : 1) * a }).stroke({ width: this.s * 0.14, color: col, alpha: a });
+        const left = opts.armed === false ? 0 : (opts.left ?? 1);
+        if (left > 0) {
+          const R = r * 1.55, a0 = -Math.PI / 2;
+          g.moveTo(X + Math.cos(a0) * R, Y + Math.sin(a0) * R).arc(X, Y, R, a0, a0 + Math.PI * 2 * left)
+            .stroke({ width: this.s * 0.16, color: 0xffffff, alpha: 0.85 * a, cap: 'round' });
+        }
       }
       return;
     }
@@ -273,6 +307,8 @@ export class Renderer {
     const live = new Set<number>();
     const font = Math.max(9, this.s * 0.8);
     const banks = game.sim.bankStates();
+    const kickbacks = game.sim.kickbackStates();
+    const savers = game.sim.saverStates();
     for (const p of game.placed) {
       let def = PARTS[p.def];
       // a Level Light wears the colour of the part type it upgrades
@@ -287,7 +323,8 @@ export class Renderer {
         if (sp.speed < 0.05) this.spin.delete(p.uid);
       }
       const lit = game.scorer.isLit(p.uid);
-      this.drawPartShape(def, p.x, p.y, p.angle, { pulse, lit, spin: sp?.angle ?? 0, inst: p, down: banks.get(p.uid) });
+      const saver = savers.get(p.uid);
+      this.drawPartShape(def, p.x, p.y, p.angle, { pulse, lit, spin: sp?.angle ?? 0, inst: p, down: banks.get(p.uid), armed: kickbacks.get(p.uid) ?? saver?.armed, left: saver?.left });
       // level pips above the part: one gold dot per level this part type has earned
       const lvl = def.recipe.perLevel ? game.scorer.levelOf(p.def) : 0;
       for (let i = 0; i < lvl; i++) {
@@ -300,7 +337,7 @@ export class Renderer {
       }
 
       // the part's current value, printed on it
-      const text = game.scorer.label(p);
+      const text = def.kind === 'saver' ? 'SAVE' : game.scorer.label(p);
       let t = this.partLabels.get(p.uid);
       if (text) {
         if (!t) {
@@ -311,7 +348,7 @@ export class Renderer {
         }
         if (t.text !== text) t.text = text;
         t.style.fontSize = font;
-        const below = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker';
+        const below = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'saver';
         t.position.set(this.X(p.x), this.Y(p.y) + (below ? this.s * (footprint(def) + 0.9) : 0));
         t.visible = true;
       } else if (t) t.visible = false;

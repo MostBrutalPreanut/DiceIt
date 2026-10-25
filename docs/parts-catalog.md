@@ -62,8 +62,8 @@ Full Tilt! Pinball shipped three tables: **Space Cadet**, **Skulduggery** and **
 |---|---|---|
 | Pop bumper, slingshot | | ✅ |
 | Saucer / scoop / kickout | Catch, score, return. | ✅ (Ball Printer) |
-| **Kickback** | A launcher in an outlane that sends the ball back into play (once, then it must be re-armed by a shot). | ▶ S |
-| **Ball saver** | Returns a drained ball for a limited time. | ▶ S, also a board upgrade |
+| **Kickback** | A launcher in an outlane that sends the ball back into play (once, then it must be re-armed by a shot). | ✅ built as a one-shot sensor launcher: armed every ball, fires along its aim at its Power dial, pays 150. Our table has no outlanes (the rails run straight into the flippers), so it works as a side-lane rescue or a booster wherever you aim it |
+| **Ball saver** | Returns a drained ball for a limited time. | ✅ built as a part: 8 s after each launch, one drain per Ball Saver on the board returns the ball to the plunger. Still to come: the "Ball Saver" board upgrade can simply grant one into the inventory, and an assist can lengthen the window |
 | **Magic post** | A post that rises between the flippers to block the centre drain. | ▶ S-M |
 | **Magna-save** | A magnet that pulls an outlane-bound ball back to the inlane when you press a button. | 💡 M |
 | **Magnet** | A pulsed field that holds or bends the ball (Dragon's Keep activates magnets with armour and spells). | ▶ M (timed, never held forever, so it cannot stall) |
@@ -124,7 +124,7 @@ From the museum and the Atlas Obscura pinball listings (via search):
 ## 4. A priority order (value for the machine ÷ effort)
 
 1. **Lane change** (flippers rotate the lit lane) and **vari-targets**: tiny, very pinball, give skill a role in the build.
-2. **Kickback, ball saver, magic post**: board-improvement parts that also work as major upgrades.
+2. **Kickback ✅, ball saver ✅, magic post**: board-improvement parts that also work as major upgrades.
 3. **Standup and bash targets, captive ball**: cheap variety.
 4. **Magnet (timed)** and **teleporter pair**: they change the ball's path the way the best real parts do.
 5. **Roving bumper, spinning disc, swinging gate**: moving parts (kinematic).

@@ -3,8 +3,10 @@
  * the recipe, the renderer reads color, and the UI reads `describe()`, which turns the same recipe
  * into plain sentences so "how does this thing score?" can never drift from what it actually does.
  */
-export type PartId = 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank';
-export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank';
+import { SAVER_WINDOW } from '../sim/constants';
+
+export type PartId = 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver';
+export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver';
 
 /** Part types can be levelled up for the rest of the run (Space Cadet's bumper upgrades). */
 export const MAX_LEVEL = 5;
@@ -162,6 +164,19 @@ export const PARTS: Record<PartId, PartDef> = {
     id: 'deflector', name: 'Deflector', blurb: 'A bouncy bar. Scores nothing, steers everything.', kind: 'deflector', color: 0x8b95c9, cost: 1, weight: 2,
     shape: { type: 'box', hw: 2.2, hh: 0.28 }, rotatable: true, kickUnit: 0, recipe: {}, dials: [],
   },
+  kickback: {
+    id: 'kickback', name: 'Kickback', blurb: 'Roll over it and it boots the ball right back. Once per ball.', kind: 'kickback', color: 0x4d8bff, cost: 4, weight: 2,
+    shape: { type: 'circle', r: 1.1 }, rotatable: true, kickUnit: 0,
+    recipe: { points: 150, per: 'kick' },
+    dials: [{
+      id: 'power', label: 'Power', min: 30, max: 110, step: 5, default: 70,
+      tradeoff: 'Decides where the ball lands. Rotate the part to aim it.', fmt: (v) => String(v),
+    }],
+  },
+  saver: {
+    id: 'saver', name: 'Ball Saver', blurb: 'Shoot again! If you drain early, the machine pretends it never happened.', kind: 'saver', color: 0xb6ff5c, cost: 5, weight: 1,
+    shape: { type: 'circle', r: 0.8 }, rotatable: false, kickUnit: 0, recipe: {}, dials: [],
+  },
 };
 
 export const PART_IDS = Object.keys(PARTS) as PartId[];
@@ -260,6 +275,13 @@ export function describe(def: PartDef, inst?: PartInstance, level = 0): DescLine
     lines.push({ tag: 'note', text: `A flipper worked by the ${side >= 0.5 ? 'Right (/)' : 'Left (Z)'} button. Scores nothing itself.` });
   }
   if (def.kind === 'deflector') lines.push({ tag: 'note', text: 'Scores nothing. A bouncy bar that bends the ball\'s path.' });
+  if (def.kind === 'kickback') {
+    const pw = inst ? dialValue(inst, 'power') : 70;
+    lines.push({ tag: 'note', text: `Armed at the start of every ball. The first time a ball rolls over it, it fires the ball out with power ${pw} and goes dark until the next ball. Rotate to aim.` });
+  }
+  if (def.kind === 'saver') {
+    lines.push({ tag: 'note', text: `Scores nothing. For ${SAVER_WINDOW} s after you launch a ball, a drain sends it back to the plunger instead, and the ball is not spent. Each Ball Saver on the board saves one drain per ball.` });
+  }
 
   for (const d of def.dials) {
     if (!d.payoff) continue;

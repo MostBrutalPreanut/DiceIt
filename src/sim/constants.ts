@@ -49,3 +49,6 @@ export const TILT_DECAY = 0.3;
 
 /** Balls on the table at once (the Ball Printer stops printing here). */
 export const MAX_BALLS = 4;
+
+/** Seconds after a launch during which a Ball Saver returns a drained ball to the plunger lane. */
+export const SAVER_WINDOW = 8;

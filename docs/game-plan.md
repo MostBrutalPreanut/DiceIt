@@ -1,6 +1,6 @@
 # Free Play (working title): game plan v0.4
 
-Status: **M0 done; M1 (the machine workshop) mostly built and playable:** a bigger table with a varied launch, twelve part types, per-run part levels, a shop, an inventory, a test lab, undo/redo, layout slots, a heatmap, and scoring you can read. Next: the streamlined between-rounds flow with major upgrades, then a rebalance.
+Status: **M0 done; M1 (the machine workshop) mostly built and playable:** a bigger table with a varied launch, fourteen part types, per-run part levels, a shop, an inventory, a test lab, undo/redo, layout slots, a heatmap, and scoring you can read. **M1.5 has started:** the Kickback and the Ball Saver are in. Next: lane change and vari-target, then the streamlined between-rounds flow with major upgrades, then a rebalance.
 
 Docs: research [genre-research.md](genre-research.md) · measured results [m0-physics-findings.md](m0-physics-findings.md) · creative parts and real-machine mechanisms [parts-catalog.md](parts-catalog.md) · run flow, upgrades, rebalancing and board variety [run-flow-and-balance.md](run-flow-and-balance.md). All numbers are starting values to be tuned by simulation and playtests, not commitments.
 
@@ -82,9 +82,9 @@ The player must always be able to answer "what does this thing do, and what did 
 
 Patterns for a *machine*, still to be validated: charge → release, sequences, banks and lanes, geometry flow, ball state, variance control through multiball, and wiring parts together.
 
-## 4. Parts (twelve built)
+## 4. Parts (fourteen built)
 
-Each has a footprint, behaviors and dials with a trade-off shown on the part. Costs: Pop $3, Cha-Ching $4, Big Boi $6, Slingshot $4, Spinner $4, Lane $3, Ball Printer $7, Extra Flipper $8, Lamp $5, Deflector $1, Level Light $5, Drop-Target Bank $5.
+Each has a footprint, behaviors and dials with a trade-off shown on the part. Costs: Pop $3, Cha-Ching $4, Big Boi $6, Slingshot $4, Spinner $4, Lane $3, Ball Printer $7, Extra Flipper $8, Lamp $5, Deflector $1, Level Light $5, Drop-Target Bank $5, Kickback $4, Ball Saver $5.
 
 | Part | What it does | Dial |
 |---|---|---|
@@ -100,8 +100,10 @@ Each has a footprint, behaviors and dials with a trade-off shown on the part. Co
 | Deflector | Scores nothing; a bouncy bar that steers the ball | rotates |
 | **Level Light** | The Space Cadet bumper upgrade: roll over it to light it, again and it goes out. Light every Level Light aimed at one part type (at least two) and that type **levels up for the rest of the run** (max 5; each level adds base points, shown as gold pips on the part). Lights stay lit all round. | aim: Pop / Cha-Ching / Big Boi / Slingshot |
 | **Drop-Target Bank** | Three targets that really drop when hit (60 each); all three: +300 and +0.3 Mult, then they pop back up (and on every new ball) | rotates |
+| **Kickback** | A one-shot launcher: armed at the start of every ball; the first time a ball rolls over it, it fires the ball out along its aim and pays 150 (then it is dark until the next ball). Roll a ball over it and it is a rescue shot from a side lane; aim it up the table and it is a booster | Power (30 to 110); rotates to aim |
+| **Ball Saver** | A "shoot again" insert. For 8 s after you launch a ball, a drain sends the ball back to the plunger lane unspent (the Mult and growth carry over). **Each Ball Saver on the board saves one drain per ball**, so two give two saves. Scores nothing. Its ring drains as the window closes and it goes dark once used | none (stack them) |
 
-**Next parts, in priority order** (full list with sources and effort in [parts-catalog.md](parts-catalog.md)): lane change (flipper buttons shift the lit lane), vari-target, kickback, ball saver, magic post, magnet, teleporter pair, moving parts (roving bumper, spinning disc, swinging gate), then ramps and layers, an upper playfield, and the big toys. The old "rule cards" are now the **Rules** column of the major upgrades.
+**Next parts, in priority order** (full list with sources and effort in [parts-catalog.md](parts-catalog.md)): lane change (flipper buttons shift the lit lane), vari-target, magic post, magnet, teleporter pair, moving parts (roving bumper, spinning disc, swinging gate), then ramps and layers, an upper playfield, and the big toys. The old "rule cards" are now the **Rules** column of the major upgrades.
 
 ## 5. The table and the launch
 
@@ -143,7 +145,7 @@ Data: parts + recipes + dials · callouts · Tools: balance bot, stress/fuzz, la
 ```
 
 - Part recipes drive three things from one source: the scorer, the description text, and the labels on the board.
-- 83 headless tests plus a browser smoke test cover scoring math, the economy, each part's physics, determinism, tunnelling, escapes, and the launch spread.
+- 96 headless tests plus a browser smoke test cover scoring math, the economy, each part's physics, determinism, tunnelling, escapes, and the launch spread.
 
 ## 9. Roadmap
 
@@ -151,7 +153,7 @@ Data: parts + recipes + dials · callouts · Tools: balance bot, stress/fuzz, la
 |---|---|---|
 | **M0** | Feel spike: physics, flippers, plunger, nudge/tilt, scoring ledger, rounds | **Done** |
 | **M1** | **Machine Workshop.** Built: bigger table and varied launch, 12 parts, dials, recipes and live values, shop, inventory, sell/store/place, multiball, extra flippers, lamps, lane sets, **part levels and Level Lights, drop-target bank, Test Lab, undo/redo, layout slots, heatmap**. **Still to do:** the end-of-ball Bonus tally, and (moved to the next step) the between-rounds flow with major upgrades | **Mostly done** |
-| **M1.5** | **Streamlined flow and rebalance.** Between-rounds stepper, major upgrades (pick 1 of 3), cabinet pick and seeded board, the cheap pinball parts (lane change, kickback, ball saver, vari-target), the auto-builder and balance table, a real goal curve | **Next** |
+| **M1.5** | **Streamlined flow and rebalance.** Between-rounds stepper, major upgrades (pick 1 of 3), cabinet pick and seeded board, the cheap pinball parts (**kickback and ball saver built**; lane change and vari-target still to do), the auto-builder and balance table, a real goal curve | **In progress** |
 | M2 | Machine depth: **creative parts wave 2** (timed magnet, teleporter pair, moving parts: roving bumper, spinning disc, swinging gate; Fuse Lane, rank ring), wiring spike, Lab (bot estimate of a layout), ~25 parts, the **Rules** column of the upgrades (~25 relics), bosses, missions, balance bot sets the goal curve, difficulty tiers | After M1.5 |
 | M3 | Spectacle (supports the machine): art direction, Chaos meter, shaders, DMD, light shows, adaptive audio, announcer, accessibility. **Creative parts wave 3, part 1:** layers (ramps, orbits), then the upper playfield | |
 | M4 | Content and meta: ~40 parts, ~40 rules, **legendary toys** (the Hand, the Castle, the Head), themed cabinets, collection log, unlocks, tutorial, Steam wrapper | |
