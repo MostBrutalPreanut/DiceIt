@@ -18,8 +18,10 @@ export interface Mods {
   unusedBallPay: number;
   /** $ off every part in the shop (a part never costs less than $1). */
   couponOff: number;
-  /** Fraction of the price refunded when you sell a part. */
+  /** Fraction of the price refunded when a part the toolbox has no room for is sold. */
   sellRate: number;
+  /** Moving and removing parts costs nothing (Free Hands). */
+  freeMoves: boolean;
   shopSlots: number;
   toolboxSlots: number;
   /** Shop offers that can be locked for the next round at once. */
@@ -122,7 +124,7 @@ export interface Mods {
 
 export function neutralMods(): Mods {
   return {
-    ballsPerRound: 3, interestPer: 0, interestCap: 0, roundBonus: 0, unusedBallPay: 3, couponOff: 0, sellRate: 0.5, shopSlots: 4,
+    ballsPerRound: 3, interestPer: 0, interestCap: 0, roundBonus: 0, unusedBallPay: 3, couponOff: 0, sellRate: 0.5, freeMoves: false, shopSlots: 4,
     toolboxSlots: 4, locks: 1, freeRerolls: 0, overshootFactor: 1, bossBonus: 0, perTypePay: 0, perDecalPay: 0, bargain: false, payCut: 0,
     ballBounce: 0, ballGravity: 1, nudge: 1, spinBoost: 1, twin: false, printerExtra: 0, kickFactor: 1, extraSaves: 0, kickbackCooldown: 1,
     ballClock: 60, swapFlippers: false, magnet: null,

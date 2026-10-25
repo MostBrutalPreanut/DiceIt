@@ -64,7 +64,7 @@ async function main() {
   let hover: number | null = null;
   let hoverDecal: number | null = null;
   let selectedDecal: number | null = null;
-  let dragging: { uid: number; dx: number; dy: number; moved: boolean } | null = null;
+  let dragging: { uid: number; dx: number; dy: number; moved: boolean; warned?: boolean } | null = null;
   let dragFromInventory = false;
   /** An offer being dragged out of the shop (slot null: the Test Lab catalog). */
   let shopDrag: { id: PartId; slot: number | null; x0: number; y0: number; moving: boolean; carry: boolean; el: HTMLElement } | null = null;
@@ -175,7 +175,7 @@ async function main() {
     const row = inst ? game.scorer.ledger.get(inst.uid) : undefined;
     tip.innerHTML = partCard(def, inst, { ...ctxFor(def, inst), scorer: live ? game.scorer : undefined, mult: game.scorer.mult }, {
       stats: live ? statsLine(row) : undefined,
-      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? 'drag to move · R rotate · Del to toolbox' : 'in the workshop: drag, R rotate, Del to toolbox') : inst ? 'click it, then the table' : 'drag it onto the table, or Buy to put it in the toolbox',
+      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? `drag to move${inst && game.moveFee(inst) ? ` ($${game.moveFee(inst)}, once a visit)` : ''} · R rotate · Del to toolbox` : 'in the workshop: drag, R rotate, Del to toolbox') : inst ? 'click it, then the table' : 'drag it onto the table, or Buy to put it in the toolbox',
     });
     tip.hidden = false;
     placeTip(cx, cy);
@@ -288,15 +288,8 @@ async function main() {
     sell.hidden = !held || !game.editable;
     $('inventoryBox').classList.toggle('selling', !sell.hidden);
     if (held) {
-      sell.textContent = `SELL $${game.sandbox ? 0 : game.sellValue(PARTS[held.def])}`;
-      sell.onclick = () => {
-        const refund = game.sell(held.uid);
-        selected = armed = null;
-        audio.remove();
-        say(refund ? `SOLD FOR $${refund}. NO REFUNDS ON FEELINGS` : 'SOLD. THE LAB GIVES NOTHING BACK');
-        persist();
-        refreshWorkshop();
-      };
+      sell.textContent = removeLabel(held).toUpperCase();
+      sell.onclick = () => removePart(held);
     }
     for (const el of $('inventory').querySelectorAll<HTMLElement>('.item[data-uid]')) {
       const part = game.part(Number(el.dataset.uid))!;
@@ -334,7 +327,7 @@ async function main() {
       ${inst.fixed ? '<div class="hint">Part of every machine: it stays where it is.</div>' : `<div class="btnrow">
         ${def.rotatable ? '<button id="btnRotL">⟲ 15°</button><button id="btnRotR">15° ⟳</button>' : ''}
         ${inst.placed ? '<button id="btnStore">To toolbox</button>' : ''}
-        <button id="btnSell">Sell $${game.sellValue(def)}</button>
+        <button id="btnSell">${removeLabel(inst)}</button>
       </div>`}`;
     for (const input of card.querySelectorAll<HTMLInputElement>('input[data-dial]')) {
       for (const ev of ['pointerdown', 'keydown'] as const) input.addEventListener(ev, () => game.checkpoint());
@@ -361,15 +354,7 @@ async function main() {
     const rot = (dir: number) => { game.rotate(inst.uid, dir * (Math.PI / 12)); persist(); };
     if (def.rotatable) { $('btnRotL').onclick = () => rot(1); $('btnRotR').onclick = () => rot(-1); }
     if (inst.placed) $('btnStore').onclick = () => storeSelected();
-    $('btnSell').onclick = () => {
-      const refund = game.sell(inst.uid);
-      selected = armed = null;
-      audio.remove();
-      sayKey('sell');
-      if (refund) say(`SOLD FOR $${refund}. NO REFUNDS ON FEELINGS`);
-      persist();
-      refreshWorkshop();
-    };
+    $('btnSell').onclick = () => removePart(inst);
   }
 
   /** The decal clicked on the apron: what it does, and (between rounds) the Peel button. */
@@ -395,8 +380,26 @@ async function main() {
     return out.join('<br>') || 'Not hit yet.';
   };
 
+  /** The remove button: a part bought this visit goes back for what it cost; any other costs the scrap fee. */
+  function removeLabel(inst: PartInstance) {
+    const v = game.removeValue(inst);
+    return v > 0 ? `Return +$${v}` : v < 0 ? `Scrap −$${-v}` : 'Remove';
+  }
+
+  function removePart(inst: PartInstance) {
+    const value = game.sell(inst.uid);
+    if (value === null) { say(`SCRAPPING IT COSTS $${-game.removeValue(inst)}`); return; }
+    selected = armed = null;
+    audio.remove();
+    say(value > 0 ? `RETURNED FOR $${value}` : value < 0 ? `SCRAPPED FOR $${-value}. NO REFUNDS ON FEELINGS` : 'REMOVED');
+    persist();
+    refreshWorkshop();
+  }
+
   function storeSelected() {
     if (selected == null || !game.editable) return;
+    const inst = game.part(selected);
+    if (inst?.placed && game.moveFee(inst) > game.money) { say(`MOVING IT COSTS $${game.moveFee(inst)}`); return; }
     const sold = game.store(selected);
     if (sold !== null) selected = null;
     audio.remove();
@@ -627,6 +630,8 @@ async function main() {
       $('inventoryBox').classList.toggle('drop', e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom);
     }
     if (dragging && game.editable) {
+      const dp = game.part(dragging.uid);
+      if (!dragging.moved && dp && game.moveFee(dp) > game.money && !dragging.warned) { dragging.warned = true; say(`MOVING IT COSTS $${game.moveFee(dp)}`); }
       if (game.place(dragging.uid, pointer.x + dragging.dx, pointer.y + dragging.dy, !dragging.moved)) {
         dragging.moved = true;
         const box = $('inventoryBox');

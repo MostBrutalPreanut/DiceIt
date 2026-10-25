@@ -34,6 +34,12 @@ export const START_MONEY = 6;
 export const SHOP_SLOTS = 4;
 /** The toolbox holds this many parts off the board (Big Toolbox adds more); anything stored in a full toolbox is sold for its sell price. */
 export const TOOLBOX_SLOTS = 4;
+/**
+ * Handling a part that has played a round costs money: moving it (on the table or into the toolbox) costs `move`,
+ * once a visit, and removing it for good costs `scrap`. A part bought this visit moves freely and goes back for
+ * what it cost.
+ */
+export const UPKEEP = { move: 1, scrap: 1 } as const;
 /** The Tune-up: the first level costs `base`, every level after `step` more. */
 export const TUNE = { base: 2, step: 2 } as const;
 
@@ -353,7 +359,7 @@ export class Game {
 
   startRound() {
     if (!this.canStart) return;
-    for (const p of this.layout.parts) delete p.fresh; // anything bought or granted is no longer new
+    for (const p of this.layout.parts) { delete p.fresh; delete p.loose; delete p.paid; } // anything bought is no longer new, and moving it costs from now on
     const boss = this.boss;
     this.mods = boss?.decalsOffUntilHalf && !this.fixedMods ? this.roundMods(false) : this.roundMods();
     this.resetSim();
@@ -745,17 +751,19 @@ export class Game {
     this.checkpoint();
     if (!this.sandbox) this.money -= cost;
     this.sold(slot);
-    const pack = this.makePack(id);
+    const pack = this.makePack(id, cost);
     for (const inst of pack) { inst.fresh = true; this.layout.parts.push(inst); }
     return pack[0];
   }
 
   /** One shop offer's worth of parts: a pack's pieces know they belong together. */
-  private makePack(id: PartId): PartInstance[] {
+  private makePack(id: PartId, cost: number): PartInstance[] {
     const n = PARTS[id].pack ?? 1, first = this.layout.nextUid;
-    return Array.from({ length: n }, () => {
+    return Array.from({ length: n }, (_, i) => {
       const inst = makePart(id, this.layout.nextUid++);
       if (n > 1) inst.group = first;
+      inst.loose = true;
+      inst.paid = Math.floor(cost / n) + (i < cost % n ? 1 : 0); // the pieces' refunds add up to the price
       return inst;
     });
   }
@@ -791,7 +799,7 @@ export class Game {
     this.checkpoint();
     if (!this.sandbox) this.money -= cost;
     this.sold(slot);
-    const pack = this.makePack(id);
+    const pack = this.makePack(id, cost);
     pack.forEach((inst, i) => {
       const at = spots[i];
       if (at) Object.assign(inst, { x: at.x, y: at.y, placed: true });
@@ -850,16 +858,39 @@ export class Game {
     return true;
   }
 
-  sell(uid: number): number {
+  /** What moving this part costs right now (0 if it was bought this visit, its move is paid, or moves are free). */
+  moveFee(p: PartInstance): number {
+    return this.sandbox || p.loose || this.mods.freeMoves ? 0 : UPKEEP.move;
+  }
+
+  /** What removing this part does to your money: a part bought this visit goes back for what it cost; any other costs the scrap fee. */
+  removeValue(p: PartInstance): number {
+    if (this.sandbox) return 0;
+    if (p.loose) return p.paid ?? 0;
+    return this.mods.freeMoves ? 0 : -UPKEEP.scrap;
+  }
+
+  /** Pay a part's move fee (once a visit). False if you cannot pay it. */
+  private payMove(p: PartInstance): boolean {
+    const fee = this.moveFee(p);
+    if (fee > this.money) return false;
+    this.money -= fee;
+    if (!this.sandbox) p.loose = true;
+    return true;
+  }
+
+  /** Remove a part for good. Returns the change in money (a refund, or minus the scrap fee); null if it cannot be removed. */
+  sell(uid: number): number | null {
     const p = this.part(uid);
-    if (!this.editable || !p || p.fixed) return 0;
+    if (!this.editable || !p || p.fixed) return null;
+    const value = this.removeValue(p);
+    if (-value > this.money) return null;
     this.checkpoint();
     this.clearHeat();
-    const refund = this.sandbox ? 0 : this.sellValue(PARTS[p.def]);
-    this.money += refund;
+    this.money += value;
     this.layout.parts = this.layout.parts.filter((q) => q.uid !== uid);
     this.sim.removePart(uid);
-    return refund;
+    return value;
   }
 
   // ---- workshop edits (applied live to the running sim) -----------------------------------
@@ -868,7 +899,10 @@ export class Game {
   place(uid: number, x: number, y: number, checkpoint = false): boolean {
     const p = this.part(uid);
     if (!this.editable || !p || p.fixed || !canPlace(this.layout, p.def, x, y, uid)) return false;
+    const moving = p.placed && (p.x !== x || p.y !== y);
+    if (moving && this.moveFee(p) > this.money) return false;
     if (checkpoint) this.checkpoint();
+    if (moving) this.payMove(p);
     this.clearHeat();
     p.x = x;
     p.y = y;
@@ -884,8 +918,9 @@ export class Game {
    */
   store(uid: number): number | null {
     const p = this.part(uid);
-    if (!this.editable || !p || !p.placed || p.fixed) return null;
+    if (!this.editable || !p || !p.placed || p.fixed || this.moveFee(p) > this.money) return null;
     this.checkpoint();
+    this.payMove(p);
     this.clearHeat();
     if (this.toolboxFull) return this.sellOverflow(p);
     p.placed = false;

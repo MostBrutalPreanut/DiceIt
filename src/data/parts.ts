@@ -441,6 +441,12 @@ export interface PartInstance {
   group?: number;
   /** Trophy Cup: the Mult it has kept so far this run. */
   polish?: number;
+  /**
+   * Free to move until the next round: bought in this visit to the workshop, or its move already paid. `paid`
+   * is what it cost, refunded if it goes back before a round is played with it.
+   */
+  loose?: boolean;
+  paid?: number;
 }
 
 export function defaultDials(def: PartDef): Record<string, number> {
