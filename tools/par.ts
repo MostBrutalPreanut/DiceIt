@@ -86,6 +86,33 @@ export function quantile(xs: number[], p: number): number {
   return s[lo] + (s[hi] - s[lo]) * (i - lo);
 }
 
+/**
+ * Fit log(y) = a + b n + c n^2 through (n = 1..y.length, y) by least squares and return the fitted values.
+ * Per-round goals measured from a handful of par runs are noisy; the escalation they describe is smooth.
+ */
+export function fitLogQuadratic(y: number[]): number[] {
+  const n = y.length;
+  if (n < 3) return [...y];
+  const ly = y.map((v) => Math.log(Math.max(1, v)));
+  // normal equations for [1, x, x^2], x centred and scaled for conditioning
+  const xs = y.map((_, i) => (i - (n - 1) / 2) / ((n - 1) / 2));
+  const S = (p: number) => xs.reduce((a, x) => a + x ** p, 0);
+  const T = (p: number) => xs.reduce((a, x, i) => a + x ** p * ly[i], 0);
+  const A = [[S(0), S(1), S(2), T(0)], [S(1), S(2), S(3), T(1)], [S(2), S(3), S(4), T(2)]];
+  for (let c = 0; c < 3; c++) {
+    let p = c;
+    for (let r = c + 1; r < 3; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+    [A[c], A[p]] = [A[p], A[c]];
+    for (let r = 0; r < 3; r++) {
+      if (r === c) continue;
+      const f = A[r][c] / A[c][c];
+      for (let k = c; k < 4; k++) A[r][k] -= f * A[c][k];
+    }
+  }
+  const [a, b, c] = [A[0][3] / A[0][0], A[1][3] / A[1][1], A[2][3] / A[2][2]];
+  return xs.map((x) => Math.exp(a + b * x + c * x * x));
+}
+
 /** The share of rounds a par machine is allowed to fail in round `n` of `rounds`: easy at first, then more than par can give. */
 export function failRate(n: number, rounds: number, start: number, end: number): number {
   return rounds <= 1 ? start : start + ((end - start) * (n - 1)) / (rounds - 1);

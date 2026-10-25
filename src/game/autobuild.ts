@@ -75,13 +75,14 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 
 /**
  * The auto-builder maximises this: half the mean round total and half the mean of the worse half of rounds
- * (a machine that clears a goal reliably beats one that is lucky now and then), discounted 10% for every
- * ball search per round (a trap).
+ * (a machine that clears a goal reliably beats one that is lucky now and then), discounted 3% for every
+ * ball search per round. A search means a ball sat still for 3.5 s: usually a pile of balls resting at a
+ * flipper's pivot in multiball, sometimes a real trap, and either way time the machine is not scoring.
  */
 export function objective(samples: RoundSample[]): number {
   const totals = samples.map((s) => s.cumulative[s.cumulative.length - 1] ?? 0).sort((a, b) => a - b);
   const worse = totals.slice(0, Math.max(1, Math.ceil(totals.length / 2)));
-  return (0.5 * mean(totals) + 0.5 * mean(worse)) * Math.pow(0.9, mean(samples.map((s) => s.searches)));
+  return (0.5 * mean(totals) + 0.5 * mean(worse)) * Math.pow(0.97, mean(samples.map((s) => s.searches)));
 }
 
 export interface BuildOptions {

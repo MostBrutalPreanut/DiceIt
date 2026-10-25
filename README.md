@@ -31,6 +31,8 @@ npm run balance           # the balance table: par machines play whole runs, the
 npm run balance -- --quick     # a rough look in a couple of minutes
 npm run balance -- --write     # also regenerate src/data/goals.ts, the goal for every round
 npm run balance -- --verify --seed-base=10   # judge fresh par machines against the goals now in the game
+npm run balance -- --cache=par.json          # keep the par runs, so a report can be re-read without the long run
+npx vite-node tools/explain.ts report.json 6  # replay one measured round and see where its score came from
 npm run clears            # the old quick check: how often the starter machine clears round 1
 npx vite-node tools/launch-spread.ts   # where do launched balls land?
 ```

@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { GOAL_GROWTH, GOALS } from '../src/data/goals';
 import { niceGoal, payoutFor } from '../src/game/game';
-import { clearBall, failRate, goalCandidate, quantile, type ParOptions, type ParRound, type ParRun } from './par';
+import { clearBall, failRate, fitLogQuadratic, goalCandidate, quantile, type ParOptions, type ParRound, type ParRun } from './par';
 
 /**
  * The balance table. Several par players (see par.ts) each play a whole run's worth of rounds in their own
@@ -13,6 +13,7 @@ import { clearBall, failRate, goalCandidate, quantile, type ParOptions, type Par
  *   npm run balance -- --quick           a rough look in a couple of minutes
  *   npm run balance -- --write           also write src/data/goals.ts
  *   npm run balance -- --verify          judge the par machines against the goals now in src/data/goals.ts
+ *   --cache=file   save the par runs there, and reuse them next time (so the report can be re-read without a 20 minute run)
  *   options: --seed-base=0 --runs=4 --rounds=15 --measure=30 --skill=0.6 --eval=2 --steps=10 --tries=4 --fail-start=0.1 --fail-end=0.4
  */
 const args = new Map(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => { const [k, v] = a.slice(2).split('='); return [k, v ?? 'true']; }));
@@ -53,17 +54,26 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 async function main() {
   const t0 = Date.now();
   console.error(`${runs} par runs x ${opts.rounds} rounds, bot skill ${opts.skill}, ${opts.measure} measured rounds each${verify ? ' (verify against src/data/goals.ts)' : ''}`);
-  const results = await Promise.all(Array.from({ length: runs }, (_, i) => runWorker(seedBase + i + 1)));
+  const cache = args.get('cache');
+  let results: ParRun[];
+  if (cache && existsSync(cache)) {
+    results = JSON.parse(readFileSync(cache, 'utf8'));
+    console.error(`reusing ${cache}`);
+  } else {
+    results = await Promise.all(Array.from({ length: runs }, (_, i) => runWorker(seedBase + i + 1)));
+    if (cache) writeFileSync(cache, JSON.stringify(results));
+  }
   const rounds = (n: number): ParRound[] => results.map((r) => r.rounds[n - 1]);
 
   // ---- the goals -----------------------------------------------------------------------------------
-  // the goal that a pooled par machine fails the target share of the time, never flat or falling
+  // the score that a pooled par machine fails the target share of the time, round by round: noisy, because four
+  // par runs differ in luck. The goal is a smooth curve through them (log-quadratic), never growing less than 12% a round.
+  const raw = Array.from({ length: opts.rounds }, (_, i) => goalCandidate(rounds(i + 1).flatMap((r) => r.samples), rounds(i + 1)[0].ballsPerRound, failRate(i + 1, opts.rounds, opts.failStart, opts.failEnd)));
+  const smooth = fitLogQuadratic(raw);
   const goals: number[] = [];
   let floor = 0;
-  for (let n = 1; n <= opts.rounds; n++) {
-    const pooled = rounds(n).flatMap((r) => r.samples);
-    const cand = goalCandidate(pooled, rounds(n)[0].ballsPerRound, failRate(n, opts.rounds, opts.failStart, opts.failEnd));
-    floor = Math.max(cand, floor * 1.12);
+  for (const g of smooth) {
+    floor = Math.max(g, floor * 1.12);
     goals.push(niceGoal(floor));
   }
   const judged = verify ? GOALS : goals;
@@ -88,7 +98,7 @@ async function main() {
   }
 
   console.log(`\nGOALS  (the full round's score that a par machine fails ${pct(opts.failStart)} of the time in round 1, rising to ${pct(opts.failEnd)} in round ${opts.rounds}; pooled over runs)`);
-  console.log(' rnd   fail target   par measure (min-max over runs)      goal   clears with a ball to spare   clears on the last ball   fails   growth');
+  console.log(' rnd   fail target   par measure (min-max over runs)   smoothed goal   clears with a ball to spare   clears on the last ball   fails   growth');
   let prev = 0;
   for (let n = 1; n <= opts.rounds; n++) {
     const rs = rounds(n);
@@ -98,7 +108,7 @@ async function main() {
     const B = rs[0].ballsPerRound;
     const ks = S.map((s) => clearBall(s, judged[n - 1]));
     const spare = ks.filter((x) => x > 0 && x < B).length / ks.length, last = ks.filter((x) => x === B).length / ks.length, fail = ks.filter((x) => x === 0).length / ks.length;
-    console.log(`${pad(n, 4)}   ${pad(pct(target), 11)}   ${pad(k(median(cands)), 6)} (${k(Math.min(...cands))}-${k(Math.max(...cands))})`.padEnd(58) + `${pad(judged[n - 1], 8)}   ${pad(pct(spare), 12)}               ${pad(pct(last), 10)}        ${pad(pct(fail), 5)}   ${prev ? 'x' + (judged[n - 1] / prev).toFixed(2) : ''}`);
+    console.log(`${pad(n, 4)}   ${pad(pct(target), 11)}   ${pad(k(raw[n - 1]), 6)} (${k(Math.min(...cands))}-${k(Math.max(...cands))})`.padEnd(58) + `${pad(judged[n - 1], 11)}   ${pad(pct(spare), 12)}               ${pad(pct(last), 10)}        ${pad(pct(fail), 5)}   ${prev ? 'x' + (judged[n - 1] / prev).toFixed(2) : ''}`);
     prev = judged[n - 1];
   }
 

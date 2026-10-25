@@ -37,13 +37,24 @@ let ball = 1, ballStart = 0, topMult = 1;
 const hits: Record<string, number> = {}, points: Record<string, number> = {};
 const big: { t: number; def: PartId; points: number; mult: number; notes: string }[] = [];
 const endReasons: string[] = [];
+const searches: string[] = [];
 const report = () => {
   const top = Object.entries(points).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([d, p]) => `${d} ${Math.round(p).toLocaleString()} (${hits[d]} hits)`).join(', ');
   console.log(`ball ${ball}: ${(g.sim.time - ballStart).toFixed(0)} s, score now ${Math.round(g.scorer.score).toLocaleString()}, top Mult ${topMult.toFixed(1)}; ${top}; ended by ${endReasons.pop() ?? '?'}`);
 };
 for (let i = 0; g.mode === 'round' && i < 240 * 60 * 30; i++) {
   const res = g.step(bot.decide(g.sim));
-  for (const e of res.sim) if (e.type === 'drain') endReasons.push(e.reason);
+  for (const e of res.sim) {
+    if (e.type === 'drain') endReasons.push(e.reason);
+    if (e.type === 'ballSearch') {
+      // a ball that has not moved for 3.5 s: where is it, and what is it touching?
+      const b = g.sim.ballStates().find((q) => q.id === e.ballId);
+      if (b) {
+        const near = g.placed.map((p) => ({ p, d: Math.hypot(p.x - b.x, p.y - b.y) })).sort((a, c) => a.d - c.d)[0];
+        searches.push(`t=${e.t.toFixed(0)}s ball at (${b.x.toFixed(1)}, ${b.y.toFixed(1)}), nearest part ${near ? `${near.p.def}@${near.p.x},${near.p.y} (${near.d.toFixed(1)} away)` : 'none'}`);
+      }
+    }
+  }
   for (const s of res.score) {
     hits[s.def] = (hits[s.def] ?? 0) + 1;
     points[s.def] = (points[s.def] ?? 0) + s.points;
@@ -56,5 +67,7 @@ for (let i = 0; g.mode === 'round' && i < 240 * 60 * 30; i++) {
     for (const k of Object.keys(hits)) { delete hits[k]; delete points[k]; }
   }
 }
+console.log(`ball searches: ${searches.length}`);
+for (const s of searches.slice(0, 10)) console.log('  ' + s);
 console.log('biggest single events:');
 for (const e of big.sort((a, b) => b.points - a.points).slice(0, 8)) console.log(`  t=${e.t.toFixed(1)}s ${PARTS[e.def].name}: +${Math.round(e.points).toLocaleString()} at x${e.mult.toFixed(1)} Mult   [${e.notes}]`);

@@ -1,6 +1,6 @@
-# Free Play (working title): game plan v0.5
+# Free Play (working title): game plan v0.6
 
-Status: **M0 done; M1 (the machine workshop) mostly built and playable:** a bigger table with a varied launch, fifteen part types, per-run part levels, a shop, an inventory, a test lab, undo/redo, layout slots, a heatmap, and scoring you can read. **M1.5 is half done:** the cheap pinball parts (Kickback, Ball Saver, Vari-Target, lane change) and the between-rounds flow with 23 major upgrades are in. Next: the auto-builder and balance table that set a real goal curve, then cabinet picks and the seeded board.
+Status: **M0 done; M1 (the machine workshop) mostly built and playable:** a bigger table with a varied launch, fifteen part types, per-run part levels, a shop, an inventory, a test lab, undo/redo, layout slots, a heatmap, and scoring you can read. **M1.5 is mostly done:** the cheap pinball parts (Kickback, Ball Saver, Vari-Target, lane change), the between-rounds flow with 23 major upgrades, and the auto-builder and balance table with a first-pass goal curve (provisional on purpose: playtests and many more parts come first). Next: cabinet picks and the seeded board, then more parts.
 
 Docs: research [genre-research.md](genre-research.md) · measured results [m0-physics-findings.md](m0-physics-findings.md) · creative parts and real-machine mechanisms [parts-catalog.md](parts-catalog.md) · run flow, upgrades, rebalancing and board variety [run-flow-and-balance.md](run-flow-and-balance.md). All numbers are starting values to be tuned by simulation and playtests, not commitments.
 
@@ -80,7 +80,8 @@ The player must always be able to answer "what does this thing do, and what did 
 - **Live scoring (the rush).** Every event adds `points × Mult` immediately, with a popup sized by magnitude. Mult starts each ball at 1 and is raised by parts (Big Boi, a completed Lane set).
 - **Per-part rules in the recipe, all data:** base points, `grow` (+points per hit of this part type this ball), `+Mult`, `+$`, lights, a set bonus, extra balls. A lit **Lamp** gives every scoring part inside its glow +25% (a wider glow gives a smaller bonus).
 - **Goal reached mid-ball:** the ball keeps playing and the extra points become Overshoot; Cash Out ends the round at once.
-- **A ball ends when the last ball drains** (the Ball Printer makes multiball).
+- **A ball ends when the last ball drains** (the Ball Printer makes multiball), **or when its 60 s clock runs out**: one clock per ball from its first launch, however many balls it turns into, shown as a bar in the HUD.
+- **Everything that compounds has a limit.** The auto-builder found a machine that scored 36.8 million in one ball (a Ball Printer chain kept the ball alive over ten minutes while Pop growth, Mult and coins grew without end), so every source that feeds on itself is capped, in the part data and in the sentence on the part: Pop growth **+100** a ball · Big Boi **+3 Mult** a ball · lane and drop-target sets **5** a ball · Cha-Ching and Gold Ball **$5** a round each · a Ball Printer prints **4** balls a ball. A maxed hit still scores; it says so (`Mult maxed for this ball`). The limits are the first thing to tune if the balance table shows a part dominating.
 - **Not built yet:** the end-of-ball Bonus tally and Bonus-X.
 
 Patterns for a *machine*, still to be validated: charge → release, sequences, banks and lanes, geometry flow, ball state, variance control through multiball, and wiring parts together.
@@ -91,18 +92,18 @@ Each has a footprint, behaviors and dials with a trade-off shown on the part. Co
 
 | Part | What it does | Dial |
 |---|---|---|
-| Pop Bumper | 100 per hit; +5 for every Pop hit this ball | Kick ↔ payout |
-| Cha-Ching Bumper | 40 per hit and $1 | Kick ↔ payout |
-| Big Boi | 250 per hit and +0.1 Mult | Kick ↔ payout |
+| Pop Bumper | 100 per hit; +5 for every Pop hit this ball, up to +100 | Kick ↔ payout |
+| Cha-Ching Bumper | 40 per hit and $1, up to $5 a round | Kick ↔ payout |
+| Big Boi | 250 per hit and +0.1 Mult, up to +3 a ball | Kick ↔ payout |
 | Slingshot | 30 per hit; snaps the ball off whichever face it hits | Kick ↔ payout; rotates |
 | Spinner | 10 per spin; faster balls spin more (1 to 10) | Drag ↔ payout; rotates |
-| Lane Rollover | 50 per roll; light them all: +200 and +0.5 Mult, then reset. **Lane change:** each flipper press shifts the lit lanes one place (Z left, / right, wrapping), so you can steer which lane is still dark. Shifting never completes a set | none |
-| Ball Printer | Catches a ball, holds it, scores 200, fires it out and prints a second ball (max 4) | Hold ↔ payout; eject power; rotates to aim |
+| Lane Rollover | 50 per roll; light them all (at least two lanes): +200 and +0.5 Mult, then reset, at most 5 times a ball. **Lane change:** each flipper press shifts the lit lanes one place (Z left, / right, wrapping), so you can steer which lane is still dark. Shifting never completes a set | none |
+| Ball Printer | Catches a ball, holds it, scores 200, fires it out and prints a second ball (at most 4 printed in a ball, 4 on the table) | Hold ↔ payout; eject power; rotates to aim |
 | Extra Flipper | A real flipper worked by the Left or Right button | which button |
 | Lamp | Light it by rolling over it; lit, it gives parts within its glow +25% | glow radius ↔ bonus |
 | Deflector | Scores nothing; a bouncy bar that steers the ball | rotates |
 | **Level Light** | The Space Cadet bumper upgrade: roll over it to light it, again and it goes out. Light every Level Light aimed at one part type (at least two) and that type **levels up for the rest of the run** (max 5; each level adds base points, shown as gold pips on the part). Lights stay lit all round. | aim: Pop / Cha-Ching / Big Boi / Slingshot |
-| **Drop-Target Bank** | Three targets that really drop when hit (60 each); all three: +300 and +0.3 Mult, then they pop back up (and on every new ball) | rotates |
+| **Drop-Target Bank** | Three targets that really drop when hit (60 each); all three: +300 and +0.3 Mult, then they pop back up (and on every new ball); at most 5 sets a ball | rotates |
 | **Kickback** | A one-shot launcher: armed at the start of every ball; the first time a ball rolls over it, it fires the ball out along its aim and pays 150 (then it is dark until the next ball). Roll a ball over it and it is a rescue shot from a side lane; aim it up the table and it is a booster | Power (30 to 110); rotates to aim |
 | **Vari-Target** | A solid standup that bounces the ball back and pays 40 times a tier set by how hard it was hit: x1 soft, x2 firm (speed 12+), x4 hard (28+), x8 smash (50+). The plate lights one segment per tier | Stiffness 0.5 to 2: thresholds scale up and payout rises, or the reverse; rotates |
 | **Ball Saver** | A "shoot again" insert. For 8 s after you launch a ball, a drain sends the ball back to the plunger lane unspent (the Mult and growth carry over). **Each Ball Saver on the board saves one drain per ball**, so two give two saves. Scores nothing. Its ring drains as the window closes and it goes dark once used | none (stack them) |
@@ -144,7 +145,7 @@ Result: the busiest landing bin is 23% (was 89%), 74% of launches touch a part (
 ## 7. Support systems (subordinate to the machine)
 
 - **Controls:** Z and / (or Shift) flippers, Space to plunge, arrows to nudge (too much = tilt), Tab to cash out, R to rotate, Delete to store. On-screen buttons for touch. **Assists** (auto-plunge, flipper assist, longer ball save) are planned.
-- **Anti-stall:** ball search after 3.5 s of stillness and a 90 s ball clock. Skilled bots can still keep a ball alive for the whole clock on a sparse table, so balls should end sooner (more drain pressure).
+- **Anti-stall:** ball search after 3.5 s of stillness and a 60 s ball clock per ball (it was 90 s per body, which a Ball Printer chain defeated). Median bot balls last 35 to 50 s, so the clock mostly bites late, which keeps rounds near 2.5 minutes. More drain pressure (outlanes, slingshots) would shorten balls without a clock.
 - **Presentation supports readability.** Pitch climbs with Mult. Effects come from the event stream. A Chaos meter, shaders, light shows and adaptive music are M3.
 - **Accessibility:** Calm mode (no strobing), reduced shake, colour-blind-safe colours plus shapes, rebinding, one-handed mode. Planned.
 
@@ -162,7 +163,7 @@ Data: parts + recipes + dials · callouts · Tools: balance bot, stress/fuzz, la
 ```
 
 - Part recipes drive three things from one source: the scorer, the description text, and the labels on the board.
-- 167 headless tests plus a browser smoke test cover scoring math, the economy, each part's physics, determinism, tunnelling, escapes, and the launch spread.
+- 200 headless tests plus a browser smoke test cover scoring math, the economy, each part's physics, determinism, tunnelling, escapes, and the launch spread.
 
 ## 9. Roadmap
 
@@ -170,7 +171,7 @@ Data: parts + recipes + dials · callouts · Tools: balance bot, stress/fuzz, la
 |---|---|---|
 | **M0** | Feel spike: physics, flippers, plunger, nudge/tilt, scoring ledger, rounds | **Done** |
 | **M1** | **Machine Workshop.** Built: bigger table and varied launch, 12 parts, dials, recipes and live values, shop, inventory, sell/store/place, multiball, extra flippers, lamps, lane sets, **part levels and Level Lights, drop-target bank, Test Lab, undo/redo, layout slots, heatmap**. **Still to do:** the end-of-ball Bonus tally, and (moved to the next step) the between-rounds flow with major upgrades | **Mostly done** |
-| **M1.5** | **Streamlined flow and rebalance.** Between-rounds stepper, major upgrades (pick 1 of 3), cabinet pick and seeded board, the cheap pinball parts (**built**), the auto-builder and balance table, a real goal curve | **Stepper and 23 upgrades built; auto-builder, goal curve and cabinet picks next** |
+| **M1.5** | **Streamlined flow and rebalance.** Between-rounds stepper, major upgrades (pick 1 of 3), cabinet pick and seeded board, the cheap pinball parts (**built**), the auto-builder and balance table (**built**), a goal curve (**first pass, provisional**) | **Parts, stepper, 23 upgrades, auto-builder and goal table built; cabinet picks and seeded board next** |
 | M2 | Machine depth: **creative parts wave 2** (timed magnet, teleporter pair, moving parts: roving bumper, spinning disc, swinging gate; Fuse Lane, rank ring), wiring spike, Lab (bot estimate of a layout), ~25 parts, the **Rules** column of the upgrades (~25 relics), bosses, missions, balance bot sets the goal curve, difficulty tiers | After M1.5 |
 | M3 | Spectacle (supports the machine): art direction, Chaos meter, shaders, DMD, light shows, adaptive audio, announcer, accessibility. **Creative parts wave 3, part 1:** layers (ramps, orbits), then the upper playfield | |
 | M4 | Content and meta: ~40 parts, ~40 rules, **legendary toys** (the Hand, the Castle, the Head), themed cabinets, collection log, unlocks, tutorial, Steam wrapper | |
@@ -188,6 +189,7 @@ Creative parts come in waves (priorities and sources in [parts-catalog.md](parts
 | Unreadable scoring | Recipes, live values, per-hit math, ledger; keep the number of rules per part small |
 | **Tuning becomes a spreadsheet chore** | Few, legible trade-offs per dial; the Lab is gated or lossy; reward experimenting |
 | Crowded niche | Table-as-build, tunability, goofy tone; early public demo with a hero GIF |
+| **Runaway compounding** (a part that feeds on itself) | Every compounding source has a cap or limit in its recipe; the auto-builder hunts for exploits (`npm run balance`, `tools/explain.ts`); a saved runaway machine is a regression test. New parts that grow, multiply or pay should ship with a limit |
 | Thin content | Data-driven parts; minimum catalog before Early Access |
 | Scope creep | The support test (§1) |
 
@@ -195,7 +197,7 @@ Creative parts come in waves (priorities and sources in [parts-catalog.md](parts
 
 | # | Question | My default |
 |---|---|---|
-| 1 | How hard should round 1 be? A bot with the starter machine clears it first ball 40% of the time. | Lower the goal after you have played it |
+| 1 | How hard should round 1 be? Round 1's goal is now 4,000 (a par machine fails it 10% of the time). | Judge it in human playtests; the bot is not a person |
 | 2 | Should **wiring** (parts signalling each other) be core or a spike? | Spike in M2, promote if it reads well |
 | 3 | The **Lab** (simulated estimate of your layout): ship, gate, or skip? | Ship it, limited uses, lossy bot |
 | 4 | Selling refunds half. Is that right, or should it refund in full so experimenting is free? | Half, with free moving and storing |

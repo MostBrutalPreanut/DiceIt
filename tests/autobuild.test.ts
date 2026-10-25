@@ -33,10 +33,10 @@ describe('playing rounds with the bot', () => {
     expect(playRounds(m, { rounds: 1, seed: 2, skill: 0.6 })[0].cumulative).toHaveLength(4);
   });
 
-  it('scores a machine by half its mean round and half its worse rounds, and a trap (ball searches) costs 10% each', () => {
+  it('scores a machine by half its mean round and half its worse rounds, and a ball search costs 3% each', () => {
     expect(objective([sample(1000), sample(3000)])).toBe(1500); // (2000 + 1000) / 2
     expect(objective([sample(2000), sample(2000)])).toBe(2000); // a steady machine beats a streaky one with the same mean
-    expect(objective([sample(1000, 1), sample(3000, 1)])).toBeCloseTo(1350);
+    expect(objective([sample(1000, 1), sample(3000, 1)])).toBeCloseTo(1455);
     expect(objective([])).toBe(0);
   });
 });

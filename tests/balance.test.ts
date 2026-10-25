@@ -4,7 +4,7 @@ import { neutralMods } from '../src/data/mods';
 import { PARTS, type PartId } from '../src/data/parts';
 import type { RoundSample } from '../src/game/autobuild';
 import { Game, goalFor, niceGoal, payoutFor } from '../src/game/game';
-import { clearBall, failRate, goalCandidate, parPick, parShop, PART_CAP, PART_VALUE, quantile, runPar, UPGRADE_PRIORITY } from '../tools/par';
+import { clearBall, failRate, fitLogQuadratic, goalCandidate, parPick, parShop, PART_CAP, PART_VALUE, quantile, runPar, UPGRADE_PRIORITY } from '../tools/par';
 import { UPGRADE_IDS } from '../src/data/upgrades';
 
 const round = (total: number): RoundSample => ({ cumulative: [total / 3, (total * 2) / 3, total], coins: [0, 0, 0], seconds: 100, searches: 0, points: {} });
@@ -42,6 +42,18 @@ describe('balance statistics', () => {
     expect(clearBall(s, 301)).toBe(2);
     expect(clearBall(s, 900)).toBe(3);
     expect(clearBall(s, 901)).toBe(0);
+  });
+
+  it('a log-quadratic fit recovers an exact curve and calms a noisy one', () => {
+    const exact = Array.from({ length: 15 }, (_, i) => Math.exp(8 + 0.4 * (i + 1) - 0.01 * (i + 1) ** 2));
+    fitLogQuadratic(exact).forEach((f, i) => expect(f / exact[i]).toBeCloseTo(1, 4));
+    const noisy = exact.map((v, i) => v * (i % 2 ? 1.35 : 0.75));
+    const smooth = fitLogQuadratic(noisy);
+    const off = (xs: number[]) => Math.max(...xs.map((v, i) => Math.abs(Math.log(v / exact[i])))); // how far from the true curve
+    expect(off(noisy)).toBeGreaterThan(0.28);
+    expect(off(smooth)).toBeLessThan(off(noisy) / 3);
+    expect(smooth).toHaveLength(15);
+    expect(fitLogQuadratic([5, 9])).toEqual([5, 9]); // too few points to fit
   });
 
   it('goals read to two significant figures', () => {
