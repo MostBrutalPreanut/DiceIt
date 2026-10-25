@@ -2,7 +2,7 @@
 
 Status: **M0 done; M1 (the machine workshop) mostly built and playable:** a bigger table with a varied launch, twelve part types, per-run part levels, a shop, an inventory, a test lab, undo/redo, layout slots, a heatmap, and scoring you can read. Next: the streamlined between-rounds flow with major upgrades, then a rebalance.
 
-Docs: research [genre-research.md](genre-research.md) · measured results [m0-physics-findings.md](m0-physics-findings.md) · creative parts and real-machine mechanisms [parts-catalog.md](parts-catalog.md) · run flow, upgrades, rebalancing and board variety [run-flow-and-balance.md](run-flow-and-balance.md). All numbers are starting values to be tuned by simulation and playtests, not commitments.
+Docs: research [genre-research.md](genre-research.md) · measured results [m0-physics-findings.md](m0-physics-findings.md) · creative parts and real-machine mechanisms [parts-catalog.md](parts-catalog.md) · run flow, upgrades, rebalancing and board variety [run-flow-and-balance.md](run-flow-and-balance.md) · look, themed machines and particles [art-direction.md](art-direction.md). All numbers are starting values to be tuned by simulation and playtests, not commitments.
 
 ## 0. Decisions so far
 
