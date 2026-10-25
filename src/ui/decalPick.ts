@@ -278,7 +278,7 @@ export class DecalPicker {
     const slot = g.decals.length;
     const stick = () => {
       if (!g.chooseDecal(i)) return false;
-      if (!this.hook('decalStick', DECALS[offer.id].rarity)) { a.place(); a.goal(); }
+      if (!this.hook('decalPick')) { a.place(); a.goal(); }
       this.host.say(`${DECALS[offer.id].name.toUpperCase()} STUCK ON THE APRON`);
       this.host.changed();
       return true;
@@ -440,7 +440,7 @@ export class DecalPicker {
     this.timers = [];
   }
 
-  /** An optional sound the audio module may grow (decalReveal, decalPeel, decalStick, decalSkip): true if it played. */
+  /** An optional sound the audio module may grow (decalReveal, decalPeel, decalPick, decalSkip): true if it played. */
   private hook(name: string, ...args: unknown[]): boolean {
     const f = (this.host.audio as unknown as Record<string, unknown>)[name];
     if (typeof f !== 'function') return false;
