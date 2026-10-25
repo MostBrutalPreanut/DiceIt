@@ -152,10 +152,12 @@ Data: parts + recipes + dials · callouts · Tools: balance bot, stress/fuzz, la
 | **M0** | Feel spike: physics, flippers, plunger, nudge/tilt, scoring ledger, rounds | **Done** |
 | **M1** | **Machine Workshop.** Built: bigger table and varied launch, 12 parts, dials, recipes and live values, shop, inventory, sell/store/place, multiball, extra flippers, lamps, lane sets, **part levels and Level Lights, drop-target bank, Test Lab, undo/redo, layout slots, heatmap**. **Still to do:** the end-of-ball Bonus tally, and (moved to the next step) the between-rounds flow with major upgrades | **Mostly done** |
 | **M1.5** | **Streamlined flow and rebalance.** Between-rounds stepper, major upgrades (pick 1 of 3), cabinet pick and seeded board, the cheap pinball parts (lane change, kickback, ball saver, vari-target), the auto-builder and balance table, a real goal curve | **Next** |
-| M2 | Machine depth: wiring spike, Lab (bot estimate of a layout), ~25 parts, ~25 rules, bosses, missions, balance bot sets the goal curve, difficulty tiers | Next |
-| M3 | Spectacle (supports the machine): art direction, Chaos meter, shaders, DMD, light shows, adaptive audio, announcer, accessibility | |
-| M4 | Content and meta: ~40 parts, ~40 rules, collection log, unlocks, tutorial, Steam wrapper | |
+| M2 | Machine depth: **creative parts wave 2** (timed magnet, teleporter pair, moving parts: roving bumper, spinning disc, swinging gate; Fuse Lane, rank ring), wiring spike, Lab (bot estimate of a layout), ~25 parts, the **Rules** column of the upgrades (~25 relics), bosses, missions, balance bot sets the goal curve, difficulty tiers | After M1.5 |
+| M3 | Spectacle (supports the machine): art direction, Chaos meter, shaders, DMD, light shows, adaptive audio, announcer, accessibility. **Creative parts wave 3, part 1:** layers (ramps, orbits), then the upper playfield | |
+| M4 | Content and meta: ~40 parts, ~40 rules, **legendary toys** (the Hand, the Castle, the Head), themed cabinets, collection log, unlocks, tutorial, Steam wrapper | |
 | M5 | Playtest and launch | |
+
+Creative parts come in waves (priorities and sources in [parts-catalog.md](parts-catalog.md) §4): **wave 1** (M1.5) lane change, vari-target, standup and bash targets, kickback, ball saver, magic post; **wave 2** (M2) magnets, teleporters, moving parts, progress lights; **wave 3** (M3 to M4) ramps and layers, an upper playfield, toys. Each wave is data rows plus a little sim work, so the catalog can keep growing without changing the engine.
 
 ## 10. Risks
 
