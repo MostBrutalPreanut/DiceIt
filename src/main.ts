@@ -1,8 +1,8 @@
 import './style.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { dialValue, footprint, PARTS, sellPrice, type PartInstance } from './data/parts';
+import { dialValue, footprint, PART_IDS, PARTS, sellPrice, type PartInstance } from './data/parts';
 import { AudioFx } from './audio';
-import { Game, goalFor, parseRun, type GameEvent, type Payout } from './game/game';
+import { Game, goalFor, parseRun, type Arrangement, type GameEvent, type Payout } from './game/game';
 import type { ScoreEvent } from './game/scoring';
 import { Renderer, type DrawState } from './render/renderer';
 import { DT } from './sim/constants';
@@ -13,6 +13,7 @@ import { css, descHtml, dot, fmt, tipHtml } from './ui/html';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORE = 'pinball-roguelite.run.v2';
+const SLOTS = 'pinball-roguelite.slots.v1';
 
 async function main() {
   const game = new Game();
@@ -34,12 +35,12 @@ async function main() {
   let armed: number | null = null;
   let selected: number | null = null;
   let hover: number | null = null;
-  let dragging: { uid: number; dx: number; dy: number } | null = null;
+  let dragging: { uid: number; dx: number; dy: number; moved: boolean } | null = null;
   let dragFromInventory = false;
   let pointer: { x: number; y: number } | null = null;
   let ledgerTimer = 0;
   let lastMultBand = 1;
-  const drawState: DrawState = { ghost: null, selectedUid: null, hoverUid: null };
+  const drawState: DrawState = { ghost: null, selectedUid: null, hoverUid: null, showHeat: false };
 
   const say = (text: string) => {
     const el = $('dmdText');
@@ -52,8 +53,43 @@ async function main() {
   say('INSERT COIN');
 
   // ---- workshop panels: shop, inventory, selected part ---------------------------------------------
+  /** Test Lab: every part in the game, free, instead of 4 rotating offers. */
+  function renderCatalog() {
+    $('shopMoney').textContent = '∞';
+    ($('btnReroll') as HTMLButtonElement).hidden = true;
+    const box = $('offers');
+    box.className = 'catalog';
+    box.innerHTML = PART_IDS.map((id) => {
+      const def = PARTS[id];
+      return `<div class="offer" data-id="${id}"><div class="top">${dot(def)}<span class="name">${def.name}</span><span class="cost">free</span>
+        <button data-add="${id}">Add</button></div><div class="hint">${def.blurb}</div>${descHtml(def, undefined, game.levels[id] ?? 0)}</div>`;
+    }).join('');
+    box.querySelectorAll<HTMLElement>('.offer').forEach((el) => {
+      const def = PARTS[el.dataset.id as keyof typeof PARTS];
+      el.onmouseenter = (e) => showDefTip(def, undefined, e.clientX, e.clientY);
+      el.onmousemove = (e) => placeTip(e.clientX, e.clientY);
+      el.onmouseleave = () => { $('tip').hidden = true; };
+    });
+    for (const b of box.querySelectorAll<HTMLButtonElement>('button[data-add]')) {
+      b.onclick = () => {
+        audio.unlock();
+        const part = game.grant(b.dataset.add as keyof typeof PARTS);
+        if (!part) return;
+        armed = part.uid;
+        selected = part.uid;
+        audio.place();
+        sayKey('buy');
+        persist();
+        refreshWorkshop();
+      };
+    }
+  }
+
   function renderShop() {
-    $('shopMoney').textContent = game.sandbox ? '∞' : `$${game.money}`;
+    if (game.sandbox) { renderCatalog(); return; }
+    $('offers').className = '';
+    ($('btnReroll') as HTMLButtonElement).hidden = false;
+    $('shopMoney').textContent = `$${game.money}`;
     const rb = $('btnReroll') as HTMLButtonElement;
     rb.textContent = game.rerollCost ? `Reroll $${game.rerollCost}` : 'Reroll (free)';
     rb.disabled = !game.canAfford(game.rerollCost);
@@ -121,7 +157,7 @@ async function main() {
     card.innerHTML = `
       <h3>${dot(def)}${def.name} <span class="hint" style="margin-left:auto">${inst.placed ? 'on the board' : 'in inventory'}</span></h3>
       <div class="blurb">${def.blurb}</div>
-      ${descHtml(def, inst)}
+      ${descHtml(def, inst, game.levels[def.id] ?? 0)}
       ${def.dials.map((d) => `<div class="dial"><div class="row2"><span>${d.label}</span><b id="dv-${d.id}">${d.fmt ? d.fmt(dialValue(inst, d.id)) : dialValue(inst, d.id)}</b></div>
         <input data-dial="${d.id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${dialValue(inst, d.id)}" /><div class="hint">${d.tradeoff}</div></div>`).join('')}
       <div class="live" id="selLive">${liveText(inst)}</div>
@@ -131,12 +167,13 @@ async function main() {
         <button id="btnSell">Sell $${sellPrice(def)}</button>
       </div>`;
     for (const input of card.querySelectorAll<HTMLInputElement>('input[data-dial]')) {
+      for (const ev of ['pointerdown', 'keydown'] as const) input.addEventListener(ev, () => game.checkpoint());
       input.oninput = () => {
         const d = def.dials.find((x) => x.id === input.dataset.dial)!;
         game.setDial(inst.uid, d.id, Number(input.value));
         $(`dv-${d.id}`).textContent = d.fmt ? d.fmt(Number(input.value)) : input.value;
         // the recipe text follows the dial
-        card.querySelector('.desc')!.outerHTML = descHtml(def, inst);
+        card.querySelector('.desc')!.outerHTML = descHtml(def, inst, game.levels[def.id] ?? 0);
         persist();
       };
     }
@@ -195,7 +232,7 @@ async function main() {
     const p = renderer.toSim(e.clientX, e.clientY);
     pointer = p;
     if (armed !== null) {
-      if (game.place(armed, p.x, p.y)) {
+      if (game.place(armed, p.x, p.y, true)) {
         selected = armed;
         armed = null;
         audio.place();
@@ -206,7 +243,7 @@ async function main() {
       const hit = hitPart(p.x, p.y);
       if (hit) {
         selected = hit.uid;
-        dragging = { uid: hit.uid, dx: hit.x - p.x, dy: hit.y - p.y };
+        dragging = { uid: hit.uid, dx: hit.x - p.x, dy: hit.y - p.y, moved: false };
         canvas.setPointerCapture(e.pointerId);
       } else selected = null;
     }
@@ -216,7 +253,8 @@ async function main() {
     pointer = renderer.toSim(e.clientX, e.clientY);
     hover = hitPart(pointer.x, pointer.y)?.uid ?? null;
     if (dragging && game.editable) {
-      if (game.place(dragging.uid, pointer.x + dragging.dx, pointer.y + dragging.dy)) {
+      if (game.place(dragging.uid, pointer.x + dragging.dx, pointer.y + dragging.dy, !dragging.moved)) {
+        dragging.moved = true;
         const box = $('inventoryBox');
         const r = box.getBoundingClientRect();
         box.classList.toggle('drop', e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
@@ -249,7 +287,7 @@ async function main() {
     dragFromInventory = false;
     if (e.target === canvas) {
       const p = renderer.toSim(e.clientX, e.clientY);
-      if (game.place(armed, p.x, p.y)) {
+      if (game.place(armed, p.x, p.y, true)) {
         selected = armed;
         armed = null;
         audio.place();
@@ -269,7 +307,7 @@ async function main() {
   /** The full recipe of a part, shown while hovering a shop offer or an inventory item. */
   function showDefTip(def: (typeof PARTS)[keyof typeof PARTS], inst: PartInstance | undefined, cx: number, cy: number) {
     const tip = $('tip');
-    tip.innerHTML = `<h4>${dot(def)}${def.name}</h4><div class="hint">${def.blurb}</div>${descHtml(def, inst)}`;
+    tip.innerHTML = `<h4>${dot(def)}${def.name}</h4><div class="hint">${def.blurb}</div>${descHtml(def, inst, game.levels[def.id] ?? 0)}`;
     tip.hidden = false;
     placeTip(cx, cy);
   }
@@ -278,7 +316,7 @@ async function main() {
     const tip = $('tip');
     const inst = hover != null && !dragging ? game.part(hover) : undefined;
     if (!inst) { tip.hidden = true; return; }
-    tip.innerHTML = tipHtml(inst, { label: game.scorer.label(inst), row: game.scorer.ledger.get(inst.uid) });
+    tip.innerHTML = tipHtml(inst, { label: game.scorer.label(inst), row: game.scorer.ledger.get(inst.uid), level: game.scorer.levelOf(inst.def) });
     tip.hidden = false;
     const w = tip.offsetWidth, h = tip.offsetHeight;
     tip.style.left = `${Math.min(cx + 16, innerWidth - w - 8)}px`;
@@ -291,6 +329,11 @@ async function main() {
     const t = e.target as HTMLElement;
     if (t.tagName === 'INPUT') return;
     audio.unlock();
+    if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyZ' || e.code === 'KeyY')) {
+      e.preventDefault();
+      if (e.code === 'KeyY' || e.shiftKey) doRedo(); else doUndo();
+      return;
+    }
     if (GAME_KEYS.has(e.code)) e.preventDefault();
     if (e.repeat) return;
     keys.add(e.code);
@@ -337,11 +380,65 @@ async function main() {
   $('btnReroll').onclick = () => { if (game.reroll()) { sayKey('reroll'); persist(); } else sayKey('broke'); refreshWorkshop(); };
   const sandbox = $('sandbox') as HTMLInputElement;
   sandbox.checked = game.sandbox;
-  sandbox.onchange = () => { game.sandbox = sandbox.checked; persist(); refreshWorkshop(); };
+  sandbox.onchange = () => { game.sandbox = sandbox.checked; persist(); refreshWorkshop(); say(sandbox.checked ? 'TEST LAB OPEN. NOTHING HERE COUNTS' : 'BACK TO REAL MONEY'); };
   const gravity = $('gravity') as HTMLInputElement;
   gravity.value = String(game.layout.gravity);
   $('gravVal').textContent = gravity.value;
+  for (const ev of ['pointerdown', 'keydown'] as const) gravity.addEventListener(ev, () => game.checkpoint());
   gravity.oninput = () => { game.setGravity(Number(gravity.value)); $('gravVal').textContent = gravity.value; persist(); };
+
+  // ---- undo / redo, layout slots, heatmap, lab tools ------------------------------------------------
+  const afterHistory = () => {
+    if (selected != null && !game.part(selected)) selected = null;
+    if (armed != null && !game.part(armed)) armed = null;
+    gravity.value = String(game.layout.gravity);
+    $('gravVal').textContent = gravity.value;
+    persist();
+    refreshWorkshop();
+  };
+  function doUndo() { if (game.undo()) { say('UNDONE. TIME IS A FLAT CIRCLE'); afterHistory(); } }
+  function doRedo() { if (game.redo()) { say('REDONE. BOLD'); afterHistory(); } }
+  $('btnUndo').onclick = doUndo;
+  $('btnRedo').onclick = doRedo;
+
+  const heat = $('heat') as HTMLInputElement;
+  heat.onchange = () => { drawState.showHeat = heat.checked; };
+  $('btnHeatClear').onclick = () => game.clearHeat();
+
+  const readSlots = (): (Arrangement | null)[] => {
+    try { const v = JSON.parse(localStorage.getItem(SLOTS) ?? 'null'); if (Array.isArray(v)) return [v[0] ?? null, v[1] ?? null, v[2] ?? null]; } catch { /* ignore */ }
+    return [null, null, null];
+  };
+  function renderSlots() {
+    const slots = readSlots();
+    $('slots').innerHTML = slots.map((sl, i) => `<div class="slot"><span>Layout ${i + 1}: ${sl ? sl.parts.length + ' parts' : 'empty'}</span>
+      <button data-save="${i}">Save</button><button data-load="${i}" ${sl ? '' : 'disabled'}>Load</button></div>`).join('');
+    for (const b of $('slots').querySelectorAll<HTMLButtonElement>('button[data-save]')) {
+      b.onclick = () => {
+        const all = readSlots();
+        all[Number(b.dataset.save)] = game.arrangement();
+        try { localStorage.setItem(SLOTS, JSON.stringify(all)); } catch { /* ignore */ }
+        $('slotMsg').textContent = `Saved layout ${Number(b.dataset.save) + 1}.`;
+        renderSlots();
+      };
+    }
+    for (const b of $('slots').querySelectorAll<HTMLButtonElement>('button[data-load]')) {
+      b.onclick = () => {
+        const sl = readSlots()[Number(b.dataset.load)];
+        if (!sl) return;
+        const r = game.applyArrangement(sl);
+        $('slotMsg').textContent = `Placed ${r.placed} part${r.placed === 1 ? '' : 's'}${r.missing ? `; ${r.missing} missing (you do not own them, or they no longer fit)` : ''}.`;
+        afterHistory();
+      };
+    }
+  }
+  renderSlots();
+
+  $('labBalls4').onclick = () => { audio.unlock(); game.labBalls(4); };
+  $('labBalls12').onclick = () => { audio.unlock(); game.labBalls(12); };
+  $('labClear').onclick = () => { game.clearBoard(); afterHistory(); };
+  $('labLevelUp').onclick = () => { game.levelAll(1); afterHistory(); };
+  $('labLevelDown').onclick = () => { game.levelAll(-1); afterHistory(); };
 
   // ---- game event handling -----------------------------------------------------------------------------------
   const onSimEvent = (ev: SimEvent) => {
@@ -359,7 +456,7 @@ async function main() {
   };
   const onScore = (s: ScoreEvent) => {
     renderer.onScore(s);
-    if (s.kind === 'bonus') { audio.goal(); sayKey('lanes'); }
+    if (s.kind === 'bonus') { audio.goal(); say(s.label ?? 'BONUS!'); renderer.onBigMoment(); }
     else if (s.kind === 'light') audio.place();
     else audio.bumper(s.multAfter, PARTS[s.def].recipe.money !== undefined);
     const band = Math.floor(s.multAfter);
@@ -395,7 +492,7 @@ async function main() {
   function updateHud(dt: number) {
     const sc = game.scorer;
     const inRound = game.mode === 'round' || game.mode === 'roundEnd' || game.mode === 'runOver';
-    $('modeBadge').textContent = game.mode === 'workshop' ? 'WORKSHOP' : `ROUND ${game.round}`;
+    $('modeBadge').textContent = game.mode === 'workshop' ? (game.sandbox ? 'WORKSHOP · TEST LAB' : 'WORKSHOP') : `ROUND ${game.round}`;
     $('score').textContent = fmt(sc.score);
     $('mult').textContent = `×${sc.mult.toFixed(2)}`;
     $('mult').classList.toggle('hot', sc.mult >= 2);
@@ -409,6 +506,9 @@ async function main() {
     ($('btnStart') as HTMLButtonElement).hidden = game.mode !== 'workshop';
     ($('btnCash') as HTMLButtonElement).hidden = !(game.mode === 'round' && sc.goalReached);
     $('workshop').hidden = game.mode !== 'workshop';
+    ($('btnUndo') as HTMLButtonElement).disabled = !game.canUndo;
+    ($('btnRedo') as HTMLButtonElement).disabled = !game.canRedo;
+    $('labTools').hidden = !game.sandbox;
 
     ledgerTimer += dt;
     if (ledgerTimer > 0.12) {

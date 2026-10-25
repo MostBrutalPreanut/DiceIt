@@ -121,6 +121,66 @@ describe('shop, inventory and money', () => {
   });
 });
 
+describe('levels', () => {
+  it('a test ball in the workshop cannot level up your machine, a real round can', () => {
+    const g = new Game();
+    g.sandbox = true;
+    for (const [i, x] of [6, 10, 14].entries()) {
+      g.shop.offers = ['uplight', null, null, null];
+      const p = g.buy(0)!;
+      expect(g.place(p.uid, x, 30 + i * 0)).toBe(true);
+    }
+    const lights = g.placed.filter((p) => p.def === 'uplight');
+    const hit = (uid: number) => ({ type: 'partHit' as const, t: 0, uid, ballId: 1, x: 0, y: 0, speed: 10 });
+    g.testBall();
+    for (const l of lights) g.scorer.consume(hit(l.uid));
+    expect(g.scorer.levelOf('pop')).toBe(1); // the throwaway copy levelled up...
+    expect(g.levels.pop ?? 0).toBe(0); // ...but the run did not
+
+    g.startRound();
+    for (const l of lights) g.scorer.consume(hit(l.uid));
+    expect(g.levels.pop).toBe(1);
+    expect(g.scorer.levelOf('pop')).toBe(1);
+  });
+
+  it('levels survive a save and load, stop at the cap, and reset on a new run', () => {
+    const g = new Game();
+    for (let i = 0; i < 7; i++) g.levelUp('mega');
+    expect(g.levels.mega).toBe(5);
+    expect(g.levelUp('mega')).toBeNull();
+    const copy = new Game();
+    copy.load(JSON.parse(JSON.stringify(g.save())));
+    expect(copy.levels.mega).toBe(5);
+    copy.newRun();
+    expect(copy.levels).toEqual({});
+  });
+});
+
+describe('Level Lights end to end (the Space Cadet bumper upgrade)', () => {
+  it('rolling balls over every light levels the bumpers up for the rest of the run, and the lights go out', () => {
+    const g = new Game();
+    g.sandbox = true;
+    for (const x of [6, 10, 14]) {
+      g.shop.offers = ['uplight', null, null, null];
+      g.place(g.buy(0)!.uid, x, 30); // aimed at Pop Bumpers by default
+    }
+    g.startRound();
+    // launch the real ball so the round is live, then rain a ball over each light
+    for (let i = 0; i < 240 * 1.2; i++) g.step({ left: false, right: false, plunge: i < 230, nudge: 0 });
+    for (const x of [6, 10, 14]) g.sim.addBall(x, 34, 0, -25);
+    const labels: string[] = [];
+    for (let i = 0; i < 240 * 2 && (g.levels.pop ?? 0) === 0; i++) {
+      for (const e of g.step({ left: false, right: false, plunge: false, nudge: 0 }).score) if (e.label) labels.push(e.label);
+    }
+    expect(g.levels.pop).toBe(1);
+    expect(labels).toContain('POP BUMPERS LEVEL 1!');
+    expect(g.placed.filter((p) => p.def === 'uplight').some((p) => g.scorer.isLit(p.uid))).toBe(false);
+    // the level now shows on the part and in what it pays
+    const pop = g.placed.find((p) => p.def === 'pop')!;
+    expect(g.scorer.label(pop)).toBe('110'); // 100 + 10 for level 1 (no hits yet this ball... or +5 per grown hit)
+  });
+});
+
 describe('a round with several balls on the table', () => {
   it('the ball only ends when the LAST ball drains', () => {
     const g = new Game();

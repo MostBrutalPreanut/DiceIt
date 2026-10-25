@@ -1,6 +1,6 @@
 import { Application, Container, Graphics, Text } from 'pixi.js';
-import { dialValue, footprint, PARTS, type PartDef, type PartId, type PartInstance } from '../data/parts';
-import type { Game } from '../game/game';
+import { dialValue, footprint, LEVEL_TARGETS, PARTS, type PartDef, type PartId, type PartInstance } from '../data/parts';
+import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
 import { BALL_R, FLIPPER_LENGTH, TABLE_H, TABLE_W } from '../sim/constants';
 import { TABLE_POSTS, tableOutline, tableSegments } from '../sim/table';
@@ -10,6 +10,7 @@ export interface DrawState {
   ghost: { def: PartId; x: number; y: number; angle: number; valid: boolean } | null;
   selectedUid: number | null;
   hoverUid: number | null;
+  showHeat: boolean;
 }
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: number; size: number }
@@ -136,6 +137,7 @@ export class Renderer {
     this.world.position.set((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
 
     this.drawTable(game);
+    if (st.showHeat) this.drawHeat(game);
     if (game.mode === 'workshop') this.drawGrid();
     this.drawParts(game, dt, st);
     this.drawFlippers(game, st);
@@ -166,6 +168,25 @@ export class Renderer {
     if (game.sim.tilted) g.rect(this.X(0), this.Y(TABLE_H), this.s * TABLE_W, this.s * TABLE_H).fill({ color: 0xff2040, alpha: 0.12 });
   }
 
+  /** Where the balls spent their time since the layout last changed: blue is a visit, red is a hotspot. */
+  private drawHeat(game: Game) {
+    const g = this.g;
+    let max = 0;
+    for (const v of game.heat) if (v > max) max = v;
+    if (max <= 0) return;
+    const ramp = [0x2a46ff, 0x4dfcff, 0xffd23f, 0xff4f4f];
+    for (let y = 0; y < HEAT_H; y++) for (let x = 0; x < HEAT_W; x++) {
+      const v = game.heat[y * HEAT_W + x];
+      if (v < max * 0.003) continue;
+      const t = Math.sqrt(v / max);
+      const f = t * (ramp.length - 1), i = Math.min(ramp.length - 2, Math.floor(f)), k = f - i;
+      const c1 = ramp[i], c2 = ramp[i + 1];
+      const lerp = (sh: number) => Math.round(((c1 >> sh) & 255) * (1 - k) + ((c2 >> sh) & 255) * k);
+      const color = (lerp(16) << 16) | (lerp(8) << 8) | lerp(0);
+      g.rect(this.X(x), this.Y(y + 1), this.s + 0.5, this.s + 0.5).fill({ color, alpha: 0.12 + 0.5 * t });
+    }
+  }
+
   private drawGrid() {
     const g = this.g;
     for (let x = 3; x <= 21; x += 1) for (let y = 15; y <= 48; y += 1) g.circle(this.X(x), this.Y(y), 1).fill({ color: 0x6070c0, alpha: 0.3 });
@@ -182,7 +203,7 @@ export class Renderer {
   }
 
   /** One part's body. `alpha` < 1 is used for the ghost. */
-  private drawPartShape(def: PartDef, x: number, y: number, angle: number, opts: { pulse?: number; lit?: boolean; spin?: number; alpha?: number; inst?: PartInstance } = {}) {
+  private drawPartShape(def: PartDef, x: number, y: number, angle: number, opts: { pulse?: number; lit?: boolean; spin?: number; alpha?: number; inst?: PartInstance; down?: boolean[] } = {}) {
     const g = this.g, pulse = opts.pulse ?? 0, a = opts.alpha ?? 1, col = hex(def.color);
     const X = this.X(x), Y = this.Y(y);
     if (def.shape.type === 'circle') {
@@ -223,6 +244,17 @@ export class Renderer {
       const squash = 0.25 + 0.75 * Math.abs(Math.cos(opts.spin ?? 0));
       g.poly(this.boxPts(x, y, hw, hh * 1.6, angle)).fill({ color: col, alpha: 0.08 * a });
       g.poly(this.boxPts(x, y, hw, hh * squash, angle)).fill({ color: col, alpha: (0.5 + pulse * 0.5) * a }).stroke({ width: 1.5, color: col, alpha: a });
+    } else if (def.kind === 'bank') {
+      // three targets along the part's long axis; a target that is down shows only as a faint outline
+      const c = Math.cos(angle), sn = Math.sin(angle);
+      for (let i = 0; i < 3; i++) {
+        const off = (i - 1) * 1.75;
+        const cx = x + c * off, cy = y + sn * off;
+        const isDown = opts.down?.[i] ?? false;
+        const pts = this.boxPts(cx, cy, 0.8, 0.38, angle, pulse * 0.12);
+        if (isDown) g.poly(pts).stroke({ width: 1, color: col, alpha: 0.35 * a });
+        else g.poly(pts).fill({ color: col, alpha: (0.55 + pulse * 0.45) * a }).stroke({ width: this.s * 0.14, color: 0xffffff, alpha: 0.7 * a, join: 'round' });
+      }
     } else if (def.kind === 'deflector') {
       g.poly(this.boxPts(x, y, hw, hh, angle)).fill({ color: 0x1a2250, alpha: a }).stroke({ width: this.s * 0.2, color: col, alpha: a, join: 'round' });
     } else {
@@ -240,8 +272,11 @@ export class Renderer {
     const g = this.g;
     const live = new Set<number>();
     const font = Math.max(9, this.s * 0.8);
+    const banks = game.sim.bankStates();
     for (const p of game.placed) {
-      const def = PARTS[p.def];
+      let def = PARTS[p.def];
+      // a Level Light wears the colour of the part type it upgrades
+      if (def.recipe.levelUp) def = { ...def, color: PARTS[LEVEL_TARGETS[Math.round(dialValue(p, 'target'))] ?? 'pop'].color };
       live.add(p.uid);
       const pulse = this.pulses.get(p.uid) ?? 0;
       if (pulse > 0) this.pulses.set(p.uid, Math.max(0, pulse - dt * 4.5));
@@ -252,7 +287,12 @@ export class Renderer {
         if (sp.speed < 0.05) this.spin.delete(p.uid);
       }
       const lit = game.scorer.isLit(p.uid);
-      this.drawPartShape(def, p.x, p.y, p.angle, { pulse, lit, spin: sp?.angle ?? 0, inst: p });
+      this.drawPartShape(def, p.x, p.y, p.angle, { pulse, lit, spin: sp?.angle ?? 0, inst: p, down: banks.get(p.uid) });
+      // level pips above the part: one gold dot per level this part type has earned
+      const lvl = def.recipe.perLevel ? game.scorer.levelOf(p.def) : 0;
+      for (let i = 0; i < lvl; i++) {
+        g.circle(this.X(p.x + (i - (lvl - 1) / 2) * 0.55), this.Y(p.y + footprint(def) + 0.55), this.s * 0.16).fill({ color: 0xffd23f }).stroke({ width: 1, color: 0x000000, alpha: 0.6 });
+      }
       if (st.selectedUid === p.uid) g.circle(this.X(p.x), this.Y(p.y), (footprint(def) + 0.6) * this.s).stroke({ width: 2, color: 0xffffff, alpha: 0.9 });
       else if (st.hoverUid === p.uid) g.circle(this.X(p.x), this.Y(p.y), (footprint(def) + 0.5) * this.s).stroke({ width: 1.5, color: def.color, alpha: 0.8 });
       if (def.kind === 'lamp' && (st.selectedUid === p.uid || st.hoverUid === p.uid)) {

@@ -21,7 +21,7 @@ export const NO_INPUT: Input = { left: false, right: false, plunge: false, nudge
 
 /** Physical things that happened. Scoring and presentation both consume this stream; neither feeds back. */
 export type SimEvent =
-  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean }
+  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean }
   | { type: 'partRelease'; t: number; uid: number; ballId: number }
   | { type: 'extraBall'; t: number; uid: number; ballId: number }
   | { type: 'launch'; t: number; ballId: number; power: number }
@@ -73,11 +73,24 @@ interface FlipperRef {
   on: boolean;
   uid?: number;
 }
+interface BankState {
+  shapes: any[];
+  /** true = that target is knocked down */
+  down: boolean[];
+  /** tick at which the whole bank pops back up, once all three are down */
+  resetAt: number | null;
+}
 interface PartRef {
   inst: PartInstance;
   body: any;
   flipper?: FlipperRef;
+  bank?: BankState;
 }
+
+/** The three drop targets of a bank, as offsets along the part's long axis. */
+const BANK_OFFSETS = [-1.75, 0, 1.75];
+const BANK_HALF = { hw: 0.8, hh: 0.38 };
+const BANK_RESET_AFTER = 0.8;
 
 export interface SimOptions {
   dt?: number;
@@ -262,6 +275,13 @@ export class Sim {
     bd.position = V(inst.x, inst.y);
     bd.rotation = B.b2MakeRot(inst.angle);
     const body = B.b2CreateBody(this.worldId, bd);
+
+    if (def.kind === 'bank') {
+      const ref: PartRef = { inst: { ...inst, dials: { ...inst.dials } }, body, bank: { shapes: [], down: [false, false, false], resetAt: null } };
+      this.parts.set(inst.uid, ref);
+      this.raiseBank(ref);
+      return;
+    }
     const sd = B.b2DefaultShapeDef();
     sd.friction = 0.1;
     sd.restitution = def.kind === 'deflector' ? 0.6 : def.kind === 'kicker' ? 0.3 : 0.45;
@@ -270,6 +290,36 @@ export class Sim {
     if (def.shape.type === 'circle') B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), def.shape.r));
     else B.b2CreatePolygonShape(body, sd, B.b2MakeBox(def.shape.hw, def.shape.hh));
     this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body });
+  }
+
+  /** (Re)create the physical targets of a bank, all standing. */
+  private raiseBank(ref: PartRef) {
+    const bank = ref.bank!;
+    bank.shapes = [];
+    for (let i = 0; i < BANK_OFFSETS.length; i++) {
+      const sd = B.b2DefaultShapeDef();
+      sd.friction = 0.1;
+      sd.restitution = 0.4;
+      sd.userData = { kind: 'part', uid: ref.inst.uid, index: i };
+      const poly = B.b2MakeOffsetBox(BANK_HALF.hw, BANK_HALF.hh, V(BANK_OFFSETS[i], 0), 0);
+      bank.shapes.push(B.b2CreatePolygonShape(ref.body, sd, poly));
+    }
+    bank.down = [false, false, false];
+    bank.resetAt = null;
+  }
+
+  private resetBank(ref: PartRef) {
+    for (let i = 0; i < ref.bank!.shapes.length; i++) if (ref.bank!.down[i]) { /* already destroyed */ }
+    // destroyed shapes are gone; raise only the missing ones by rebuilding the whole set
+    for (let i = 0; i < ref.bank!.shapes.length; i++) if (!ref.bank!.down[i]) B.b2DestroyShape(ref.bank!.shapes[i]);
+    this.raiseBank(ref);
+  }
+
+  /** Which targets of each bank are down, for drawing. */
+  bankStates(): Map<number, boolean[]> {
+    const m = new Map<number, boolean[]>();
+    for (const [uid, p] of this.parts) if (p.bank) m.set(uid, [...p.bank.down]);
+    return m;
   }
 
   removePart(uid: number) {
@@ -300,6 +350,7 @@ export class Sim {
     this.plungeCharge = 0;
     this.tilted = false;
     this.tiltMeter = 0;
+    for (const p of this.parts.values()) if (p.bank && p.bank.down.some(Boolean)) this.resetBank(p);
     this.events.push({ type: 'ballSpawn', t: this.time, ballId: id });
     return id;
   }
@@ -426,6 +477,8 @@ export class Sim {
       if (this.tick >= b.held.until) this.eject(b, pr);
     }
 
+    for (const p of this.parts.values()) if (p.bank?.resetAt != null && this.tick >= p.bank.resetAt) this.resetBank(p);
+
     B.b2World_Step(this.worldId, this.dt, this.substeps);
 
     this.processContacts();
@@ -463,10 +516,13 @@ export class Sim {
 
   private processContacts() {
     const ev = B.b2World_GetContactEvents(this.worldId);
+    // read everything first: a drop target destroys its shape, which invalidates later events on it
+    const pairs: { a: any; b: any }[] = [];
     for (let i = 0; i < ev.beginCount; i++) {
       const e = ev.beginEvents[i];
-      const a = B.b2Shape_GetUserData(e.shapeIdA);
-      const b = B.b2Shape_GetUserData(e.shapeIdB);
+      pairs.push({ a: B.b2Shape_GetUserData(e.shapeIdA), b: B.b2Shape_GetUserData(e.shapeIdB) });
+    }
+    for (const { a, b } of pairs) {
       const ball = a?.kind === 'ball' ? a : b?.kind === 'ball' ? b : null;
       const part = a?.kind === 'part' ? a : b?.kind === 'part' ? b : null;
       if (!ball || !part) continue;
@@ -474,6 +530,22 @@ export class Sim {
       const br = this.balls.find((x) => x.id === ball.id);
       if (!pr || !br) continue;
       const def = PARTS[pr.inst.def];
+
+      if (def.kind === 'bank' && pr.bank && part.index !== undefined) {
+        if (pr.bank.down[part.index]) continue;
+        B.b2DestroyShape(pr.bank.shapes[part.index]);
+        pr.bank.down[part.index] = true;
+        const vel = B.b2Body_GetLinearVelocity(br.body);
+        const c = Math.cos(pr.inst.angle), s = Math.sin(pr.inst.angle);
+        const off = BANK_OFFSETS[part.index];
+        const hit = { type: 'partHit' as const, t: this.time, uid: pr.inst.uid, ballId: br.id, x: pr.inst.x + c * off, y: pr.inst.y + s * off, speed: Math.hypot(vel.x, vel.y) };
+        this.events.push({ ...hit, index: part.index });
+        if (pr.bank.down.every(Boolean)) {
+          pr.bank.resetAt = this.tick + Math.round(BANK_RESET_AFTER / this.dt);
+          this.events.push({ ...hit, bankComplete: true });
+        }
+        continue;
+      }
       if (def.kind !== 'bumper' && def.kind !== 'kicker') continue;
 
       const bp = B.b2Body_GetPosition(br.body);

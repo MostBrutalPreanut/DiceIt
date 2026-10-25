@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, lampBonus, PARTS, type PartId, type PartInstance } from '../data/parts';
+import { dialFactor, dialValue, lampBonus, LEVEL_TARGETS, MAX_LEVEL, PARTS, type PartId, type PartInstance } from '../data/parts';
 import type { SimEvent } from '../sim/sim';
 
 /**
@@ -38,6 +38,14 @@ export interface LedgerRow {
  * Points x Mult with full attribution. Pure logic: no physics, no rendering, so the rules can be
  * unit-tested and balanced headless. `getParts` returns every part the player owns.
  */
+export interface ScorerOpts {
+  /** Per-run level of each part type. Mutated by `onLevelUp`'s owner, read here. */
+  levels?: Partial<Record<PartId, number>>;
+  /** Called when a Level Light set completes. Returns the new level, or null if already at the cap. */
+  onLevelUp?: (id: PartId) => number | null;
+  baseMult?: number;
+}
+
 export class Scorer {
   score = 0;
   mult: number;
@@ -47,13 +55,31 @@ export class Scorer {
   /** Per-ball state: hits of each part type, and which lights are lit. */
   private hitsByType = new Map<PartId, number>();
   private lit = new Set<number>();
+  /** Level Lights stay lit for the whole round, not just one ball. */
+  private roundLit = new Set<number>();
+  private levels: Partial<Record<PartId, number>>;
+  private onLevelUp?: (id: PartId) => number | null;
+  readonly baseMult: number;
 
-  constructor(public goal: number, private getParts: () => PartInstance[] = () => [], public baseMult = 1) {
-    this.mult = baseMult;
+  constructor(public goal: number, private getParts: () => PartInstance[] = () => [], opts: ScorerOpts = {}) {
+    this.baseMult = opts.baseMult ?? 1;
+    this.mult = this.baseMult;
+    this.levels = opts.levels ?? {};
+    this.onLevelUp = opts.onLevelUp;
+  }
+
+  levelOf(id: PartId) {
+    return this.levels[id] ?? 0;
   }
 
   private placed() {
     return this.getParts().filter((p) => p.placed);
+  }
+
+  /** Called when a round (not a ball) starts: the Level Lights go dark. */
+  resetRound() {
+    this.roundLit.clear();
+    this.startBall();
   }
 
   startBall() {
@@ -63,7 +89,7 @@ export class Scorer {
   }
 
   isLit(uid: number) {
-    return this.lit.has(uid);
+    return this.lit.has(uid) || this.roundLit.has(uid);
   }
 
   hitsOf(id: PartId) {
@@ -89,7 +115,8 @@ export class Scorer {
     const r = PARTS[inst.def].recipe;
     if (!r.points) return null;
     const grown = (r.grow ?? 0) * this.hitsOf(inst.def);
-    return Math.round((r.points + grown) * spins * dialFactor(inst) * (1 + this.lampBonusAt(inst).sum));
+    const lvl = (r.perLevel ?? 0) * this.levelOf(inst.def);
+    return Math.round((r.points + lvl + grown) * spins * dialFactor(inst) * (1 + this.lampBonusAt(inst).sum));
   }
 
   /** The short number drawn on the part itself ("100", "10/spin", "+25%"). */
@@ -140,18 +167,45 @@ export class Scorer {
       return out;
     }
 
+    // a drop-target bank with every target down pays its set bonus (the individual hits scored already)
+    if (def.kind === 'bank' && ev.bankComplete) {
+      out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', r.setBonus!.points, r.setBonus!.mult, 0, [`${r.setBonus!.points} bank bonus`], 'BANK COMPLETE'));
+      return out;
+    }
+
     if (r.points) {
       const spins = ev.spins ?? 1;
       const grown = (r.grow ?? 0) * this.hitsOf(inst.def);
+      const level = (r.perLevel ?? 0) * this.levelOf(inst.def);
       const factor = dialFactor(inst);
       const lamp = this.lampBonusAt(inst);
       const notes = [`${r.points}${spins > 1 ? ` x${spins} spins` : ''} base`];
+      if (level) notes.push(`+${level} level`);
       if (grown) notes.push(`+${grown} grown`);
       if (Math.abs(factor - 1) > 0.001) notes.push(`x${Math.round(factor * 100) / 100} dial`);
       if (lamp.sum) notes.push(`+${Math.round(lamp.sum * 100)}% lamp`);
-      const base = Math.round((r.points + grown) * spins * factor * (1 + lamp.sum));
+      const base = Math.round((r.points + level + grown) * spins * factor * (1 + lamp.sum));
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
       out.push(this.award(inst, ev.t, ev.x, ev.y, 'hit', base, r.mult ?? 0, r.money ?? 0, notes, undefined, ev.spins));
+    }
+
+    // Level Lights (Space Cadet's bumper upgrade lanes): each pass toggles the light; when every light
+    // aimed at one part type is lit, that type levels up for the rest of the run and the lights reset
+    if (r.levelUp) {
+      const target = LEVEL_TARGETS[Math.round(dialValue(inst, 'target'))] ?? 'pop';
+      const wasLit = this.roundLit.has(inst.uid);
+      if (wasLit) this.roundLit.delete(inst.uid);
+      else {
+        this.roundLit.add(inst.uid);
+        const group = this.placed().filter((p) => p.def === inst.def && (LEVEL_TARGETS[Math.round(dialValue(p, 'target'))] ?? 'pop') === target);
+        // a set needs at least two lights, as in Space Cadet (three): one light would level up every other pass
+        if (group.length >= 2 && group.every((l) => this.roundLit.has(l.uid))) {
+          for (const l of group) this.roundLit.delete(l.uid);
+          const lvl = this.onLevelUp ? this.onLevelUp(target) : null;
+          const name = PARTS[target].name.toUpperCase();
+          out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [], lvl === null ? `${name}S ARE MAXED OUT` : `${name}S LEVEL ${lvl}!`));
+        }
+      }
     }
 
     // lane rollovers: light up, and a complete set pays a bonus and resets

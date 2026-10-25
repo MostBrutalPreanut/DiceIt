@@ -106,6 +106,39 @@ describe('each part type does its job in the physics', () => {
   });
 });
 
+describe('drop-target bank', () => {
+  const bankLayout = () => layoutOf(makePart('bank', 1, 12, 30, true));
+  const dropOn = (sim: ReturnType<typeof createSim>, xs: number[]) => {
+    for (const x of xs) sim.addBall(x, 33.2, 0, -20);
+  };
+
+  it('each target drops when hit, the last one pays a bank bonus, and they pop back up', () => {
+    const sim = createSim(bankLayout());
+    dropOn(sim, [10.25, 12, 13.75]);
+    const ev: SimEvent[] = [];
+    for (let i = 0; i < 240 * 0.5; i++) ev.push(...sim.step(NO_INPUT));
+    const hits = ev.filter((e) => e.type === 'partHit' && e.uid === 1 && e.index !== undefined) as Extract<SimEvent, { type: 'partHit' }>[];
+    expect(hits.map((h) => h.index).sort()).toEqual([0, 1, 2]);
+    expect(ev.filter((e) => e.type === 'partHit' && e.bankComplete)).toHaveLength(1);
+    expect(sim.bankStates().get(1)).toEqual([true, true, true]);
+    for (let i = 0; i < 240 * 1.2; i++) sim.step(NO_INPUT); // 0.8 s later they are back
+    expect(sim.bankStates().get(1)).toEqual([false, false, false]);
+  });
+
+  it('a knocked-down target lets the next ball fall straight through; a new ball restores the bank', () => {
+    const sim = createSim(bankLayout());
+    dropOn(sim, [12]);
+    for (let i = 0; i < 120; i++) sim.step(NO_INPUT);
+    expect(sim.bankStates().get(1)![1]).toBe(true);
+    const ev: SimEvent[] = [];
+    sim.addBall(12, 33.2, 0, -20);
+    for (let i = 0; i < 60; i++) ev.push(...sim.step(NO_INPUT));
+    expect(ev.filter((e) => e.type === 'partHit' && e.uid === 1)).toHaveLength(0); // nothing there to hit
+    sim.spawnBall();
+    expect(sim.bankStates().get(1)).toEqual([false, false, false]);
+  });
+});
+
 describe('multiball and the plunger lane', () => {
   it('balls that come to rest in the lane re-arm the plunger even when other balls are in play', () => {
     const sim = createSim(layoutOf());

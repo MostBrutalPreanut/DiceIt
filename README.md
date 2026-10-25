@@ -4,7 +4,9 @@ A rogue-lite where you **build, tune and rebuild a pinball machine** to hit a sc
 
 - Plan: [docs/game-plan.md](docs/game-plan.md)
 - Genre research and sources: [docs/genre-research.md](docs/genre-research.md)
-- What the M0 physics spike measured: [docs/m0-physics-findings.md](docs/m0-physics-findings.md)
+- What the physics spike measured: [docs/m0-physics-findings.md](docs/m0-physics-findings.md)
+- Creative parts from real machines (with sources): [docs/parts-catalog.md](docs/parts-catalog.md)
+- Run flow, major upgrades, rebalancing, board variety: [docs/run-flow-and-balance.md](docs/run-flow-and-balance.md)
 
 ## Run it
 
@@ -15,7 +17,7 @@ npm run dev        # http://localhost:5173
 
 Controls: `Z`/`Shift` left flipper, `/`/`Shift` right flipper, hold `Space` to charge the plunger and release to fire, `←` `→` nudge (too much tilts), `Tab` cash out once the goal is hit, `M` mute.
 
-Workshop (between rounds): buy parts in the shop, click one in your inventory and click the table to place it. Drag a part to move it, drag it onto the inventory panel to take it off the board, `R` (or the mouse wheel) rotates, `Del` stores it, `Space` fires a test ball. Hover any part to see exactly how it scores. Tick **Sandbox** to make the shop free.
+Workshop (between rounds): buy parts in the shop, click one in your inventory and click the table to place it. Drag a part to move it, drag it onto the inventory panel to take it off the board, `R` (or the mouse wheel) rotates, `Del` stores it, `Space` fires a test ball. Hover any part to see exactly how it scores. Tick **Test Lab** to get every part for free plus lab tools. `Ctrl+Z` / `Ctrl+Y` undo and redo.
 
 ## Check it
 

@@ -86,6 +86,8 @@ Prompted by the feedback that every launch took the same path. Source: the [k4zm
 - **Randomness lives only at the points that put the ball into play.** The plunger launches with `boost = RandFloat() * Boost * 0.1 + Boost` (always up to 10% stronger than the charge says, via a normal collision), and `TBall::throw_ball` rotates a ball's direction by a random angle and randomizes its speed, used by kickouts and launchers. Everything after that is deterministic: variety comes from the ball's path crossing bumpers and gates, not from noisy collisions.
 - Other details: the plunger pulls back in steps every 25 ms up to a boost of 100; at most 20 balls exist at once and 3 per game; a ball already sitting in the lane delays the next feed by 1 s; tilt locks the flippers; score multipliers are {1, 2, 3, 5, 10}.
 
+More on Space Cadet's bumper upgrades (three lit lanes upgrade a bumper type, max three times, colours change) and on the other Full Tilt! tables (Skulduggery, Dragon's Keep) is in [parts-catalog.md](parts-catalog.md).
+
 **What we took from it:** our launch was deterministic by geometry, which is why 89% of balls went down the left wall. We now (1) boost the launch by a random 0–10%, (2) eject saucer balls with a random angle and speed, and (3) put the first bumpers where the ball arrives. Details and numbers are in [m0-physics-findings.md](m0-physics-findings.md).
 
 ## 7. Sources

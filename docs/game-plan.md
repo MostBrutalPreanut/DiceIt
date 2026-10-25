@@ -1,6 +1,8 @@
-# Free Play (working title): game plan v0.3
+# Free Play (working title): game plan v0.4
 
-Status: **M0 (feel spike) done. First slice of M1 (the machine workshop) built and playable:** a bigger table with a varied launch, ten part types, a shop, an inventory, and scoring you can read. Research and sources: [genre-research.md](genre-research.md). Measured results: [m0-physics-findings.md](m0-physics-findings.md). All numbers are starting values to be tuned by simulation and playtests, not commitments.
+Status: **M0 done; M1 (the machine workshop) mostly built and playable:** a bigger table with a varied launch, twelve part types, per-run part levels, a shop, an inventory, a test lab, undo/redo, layout slots, a heatmap, and scoring you can read. Next: the streamlined between-rounds flow with major upgrades, then a rebalance.
+
+Docs: research [genre-research.md](genre-research.md) · measured results [m0-physics-findings.md](m0-physics-findings.md) · creative parts and real-machine mechanisms [parts-catalog.md](parts-catalog.md) · run flow, upgrades, rebalancing and board variety [run-flow-and-balance.md](run-flow-and-balance.md). All numbers are starting values to be tuned by simulation and playtests, not commitments.
 
 ## 0. Decisions so far
 
@@ -16,6 +18,11 @@ Status: **M0 (feel spike) done. First slice of M1 (the machine workshop) built a
 | Scoring must be legible | Every part says how it scores (recipe, live value, math on every hit) |
 | Camera | Fixed view of the whole table. No follow camera. |
 | Launch | Must vary: the ball should land in different spots, not funnel down one wall |
+| Game feel | "Pretty fun now." Next: rebalance the levels after the new flow is in |
+| **Run flow** | **Play → buy (into the inventory) → every few rounds choose 1 of 3 major upgrades (board, balls, parts...) → install → start round.** One streamlined between-rounds screen (plan: run-flow-and-balance.md §1-2) |
+| **Testing** | A proper test environment: every part, no money limit (built as the Test Lab, §2.3) |
+| **Creative parts** | Many, later, drawing on real machines: lights that upgrade bumpers, moving and changing parts, toys. Research is in parts-catalog.md |
+| **Board** | Improvements and randomness at the start of a run (plan: run-flow-and-balance.md §5) |
 | Old Dice It! plan | Deleted (still in git history at `eb84abf`) |
 
 ## 1. Vision and the one rule
@@ -49,8 +56,13 @@ Pillars: the table is the build · tunable, not just placeable · readable chaos
 - **Money comes from rounds** (and some parts, like the Cha-Ching Bumper) and **buys parts in the shop**. The shop shows 4 offers per round; reroll costs $1, then $2, and so on.
 - **A bought part goes to your inventory** and follows your pointer until you click the table. **You can move any placed part by dragging it, rotate it, tune its dials, or drag it onto the inventory panel to take it off the board.** Selling refunds half the price.
 - **Between rounds you can change anything, freely.** There is no cost to moving or tuning, only to buying. **During a round the machine is locked** (flippers and nudge only).
-- A free **Test Ball** runs in the workshop, with its own throwaway ledger, while you edit.
-- A **Sandbox** switch makes the shop free, for exploring the catalog.
+- A free **Test Ball** runs in the workshop, with its own throwaway ledger, while you edit. A test ball can never level up your real machine.
+- **Undo / redo** (Ctrl+Z, Ctrl+Y) covers purchases (money included), sales, placing, storing, rotating and dial changes.
+- **Three layout slots** save an arrangement and re-lay it out on the parts you own (the lab creates any that are missing).
+- A **heatmap** shows where the balls really went since the layout last changed, so you can see a dead zone or a hotspot.
+
+### 2.3 The Test Lab (built)
+The *Test Lab* checkbox replaces the shop with the **whole catalog, free**, shows ∞ money, and adds lab tools (drop 4 or 12 balls, clear the board, levels ±1). Nothing counts. Details and next steps in run-flow-and-balance.md §3.
 
 ### 2.2 Making scoring readable (built)
 The player must always be able to answer "what does this thing do, and what did it just do?":
@@ -70,9 +82,9 @@ The player must always be able to answer "what does this thing do, and what did 
 
 Patterns for a *machine*, still to be validated: charge → release, sequences, banks and lanes, geometry flow, ball state, variance control through multiball, and wiring parts together.
 
-## 4. Parts (ten built)
+## 4. Parts (twelve built)
 
-Each has a footprint, behaviors and dials with a trade-off shown on the part. Costs: Pop $3, Cha-Ching $4, Big Boi $6, Slingshot $4, Spinner $4, Lane $3, Ball Printer $7, Extra Flipper $8, Lamp $5, Deflector $1.
+Each has a footprint, behaviors and dials with a trade-off shown on the part. Costs: Pop $3, Cha-Ching $4, Big Boi $6, Slingshot $4, Spinner $4, Lane $3, Ball Printer $7, Extra Flipper $8, Lamp $5, Deflector $1, Level Light $5, Drop-Target Bank $5.
 
 | Part | What it does | Dial |
 |---|---|---|
@@ -86,8 +98,10 @@ Each has a footprint, behaviors and dials with a trade-off shown on the part. Co
 | Extra Flipper | A real flipper worked by the Left or Right button | which button |
 | Lamp | Light it by rolling over it; lit, it gives parts within its glow +25% | glow radius ↔ bonus |
 | Deflector | Scores nothing; a bouncy bar that steers the ball | rotates |
+| **Level Light** | The Space Cadet bumper upgrade: roll over it to light it, again and it goes out. Light every Level Light aimed at one part type (at least two) and that type **levels up for the rest of the run** (max 5; each level adds base points, shown as gold pips on the part). Lights stay lit all round. | aim: Pop / Cha-Ching / Big Boi / Slingshot |
+| **Drop-Target Bank** | Three targets that really drop when hit (60 each); all three: +300 and +0.3 Mult, then they pop back up (and on every new ball) | rotates |
 
-**Next parts to consider:** drop-target bank, standup target, magnet, ramp, kickback, one-way gate, rule cards (ordered, joker-like), then wiring parts to each other.
+**Next parts, in priority order** (full list with sources and effort in [parts-catalog.md](parts-catalog.md)): lane change (flipper buttons shift the lit lane), vari-target, kickback, ball saver, magic post, magnet, teleporter pair, moving parts (roving bumper, spinning disc, swinging gate), then ramps and layers, an upper playfield, and the big toys. The old "rule cards" are now the **Rules** column of the major upgrades.
 
 ## 5. The table and the launch
 
@@ -129,14 +143,15 @@ Data: parts + recipes + dials · callouts · Tools: balance bot, stress/fuzz, la
 ```
 
 - Part recipes drive three things from one source: the scorer, the description text, and the labels on the board.
-- 59 headless tests plus a browser smoke test cover scoring math, the economy, each part's physics, determinism, tunnelling, escapes, and the launch spread.
+- 83 headless tests plus a browser smoke test cover scoring math, the economy, each part's physics, determinism, tunnelling, escapes, and the launch spread.
 
 ## 9. Roadmap
 
 | # | Milestone | Status |
 |---|---|---|
 | **M0** | Feel spike: physics, flippers, plunger, nudge/tilt, scoring ledger, rounds | **Done** |
-| **M1** | **Machine Workshop.** Built: bigger table and varied launch, 10 parts, dials, recipes and live values, shop, inventory, sell/store/place, multiball, extra flippers, lamps and lane sets. **Still to do:** undo/redo and saved layouts, ball heatmap and per-ball history, end-of-ball Bonus tally, rule cards, a few more parts (drop-target bank, magnet, ramp), tuning the goal curve | **In progress** |
+| **M1** | **Machine Workshop.** Built: bigger table and varied launch, 12 parts, dials, recipes and live values, shop, inventory, sell/store/place, multiball, extra flippers, lamps, lane sets, **part levels and Level Lights, drop-target bank, Test Lab, undo/redo, layout slots, heatmap**. **Still to do:** the end-of-ball Bonus tally, and (moved to the next step) the between-rounds flow with major upgrades | **Mostly done** |
+| **M1.5** | **Streamlined flow and rebalance.** Between-rounds stepper, major upgrades (pick 1 of 3), cabinet pick and seeded board, the cheap pinball parts (lane change, kickback, ball saver, vari-target), the auto-builder and balance table, a real goal curve | **Next** |
 | M2 | Machine depth: wiring spike, Lab (bot estimate of a layout), ~25 parts, ~25 rules, bosses, missions, balance bot sets the goal curve, difficulty tiers | Next |
 | M3 | Spectacle (supports the machine): art direction, Chaos meter, shaders, DMD, light shows, adaptive audio, announcer, accessibility | |
 | M4 | Content and meta: ~40 parts, ~40 rules, collection log, unlocks, tutorial, Steam wrapper | |
@@ -164,3 +179,5 @@ Data: parts + recipes + dials · callouts · Tools: balance bot, stress/fuzz, la
 | 3 | The **Lab** (simulated estimate of your layout): ship, gate, or skip? | Ship it, limited uses, lossy bot |
 | 4 | Selling refunds half. Is that right, or should it refund in full so experimenting is free? | Half, with free moving and storing |
 | 5 | Name | Ride "Free Play" until M3 |
+| 6 | Major upgrades come after every boss (rounds 3, 6, 9, 12, 15). Right cadence? Should skipping pay money? | Yes to both; tune after playing |
+| 7 | Level Lights need at least two per type (as Space Cadet's three). Should the lights also decay ("wear")? | No decay for now; add Fuse Lane later |

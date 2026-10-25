@@ -138,3 +138,95 @@ describe('attribution', () => {
     expect(s.goalReached).toBe(true);
   });
 });
+
+describe('levels, Level Lights and drop-target banks', () => {
+  const lights = (target = 0) => {
+    const a = makePart('uplight', 20, 6, 30, true);
+    const b = makePart('uplight', 21, 10, 30, true);
+    const c = makePart('uplight', 22, 14, 30, true);
+    for (const l of [a, b, c]) l.dials.target = target;
+    return [a, b, c];
+  };
+
+  it('a levelled part type scores more, and says why', () => {
+    const parts = [...starterLayout().parts];
+    const s = new Scorer(1e9, () => parts, { levels: { pop: 2 } });
+    s.startBall();
+    const e = s.consume(hit(1))[0];
+    expect(e.base).toBe(120); // 100 + 2 levels x 10
+    expect(e.notes).toContain('+20 level');
+    expect(s.label(parts[0])).toBe('125'); // next hit: 100 + 20 level + 5 grown from the hit just made
+  });
+
+  it('a Level Light toggles: lit on the first pass, out on the second', () => {
+    const [a, b] = lights();
+    const parts = [...starterLayout().parts, a, b];
+    const s = new Scorer(1e9, () => parts);
+    s.consume(hit(20));
+    expect(s.isLit(20)).toBe(true);
+    s.consume(hit(20));
+    expect(s.isLit(20)).toBe(false);
+  });
+
+  it('lighting every light aimed at a type levels it up once, then the lights reset', () => {
+    const ls = lights();
+    const parts = [...starterLayout().parts, ...ls];
+    const calls: string[] = [];
+    const s = new Scorer(1e9, () => parts, { onLevelUp: (id) => { calls.push(id); return 1; } });
+    s.consume(hit(20));
+    s.consume(hit(21));
+    expect(calls).toEqual([]);
+    const done = s.consume(hit(22));
+    expect(calls).toEqual(['pop']);
+    expect(done.find((e) => e.kind === 'bonus')!.label).toBe('POP BUMPERS LEVEL 1!');
+    expect([20, 21, 22].some((u) => s.isLit(u))).toBe(false);
+  });
+
+  it('lights stay lit across balls within a round, but go dark on a new round', () => {
+    const ls = lights();
+    const parts = [...starterLayout().parts, ...ls];
+    const s = new Scorer(1e9, () => parts);
+    s.consume(hit(20));
+    s.startBall();
+    expect(s.isLit(20)).toBe(true);
+    s.resetRound();
+    expect(s.isLit(20)).toBe(false);
+  });
+
+  it('a single Level Light can never level anything up, and different targets complete separately', () => {
+    const [a, b, c] = lights();
+    const calls: string[] = [];
+    const solo = new Scorer(1e9, () => [...starterLayout().parts, a], { onLevelUp: (id) => { calls.push(id); return 1; } });
+    solo.consume(hit(20));
+    expect(calls).toEqual([]);
+    b.dials.target = 1; // aimed at Cha-Ching
+    c.dials.target = 1;
+    const mixed = new Scorer(1e9, () => [...starterLayout().parts, a, b, c], { onLevelUp: (id) => { calls.push(id); return 1; } });
+    mixed.consume(hit(20)); // the only light aimed at pop: still not a set
+    mixed.consume(hit(21));
+    mixed.consume(hit(22));
+    expect(calls).toEqual(['coin']);
+  });
+
+  it('reports a maxed-out type instead of levelling past the cap', () => {
+    const ls = lights();
+    const s = new Scorer(1e9, () => [...starterLayout().parts, ...ls], { onLevelUp: () => null });
+    s.consume(hit(20));
+    s.consume(hit(21));
+    expect(s.consume(hit(22)).find((e) => e.kind === 'bonus')!.label).toContain('MAXED');
+  });
+
+  it('a drop-target bank scores each target, then a bonus when all three are down', () => {
+    const bank = makePart('bank', 30, 12, 30, true);
+    const parts = [...starterLayout().parts, bank];
+    const s = new Scorer(1e9, () => parts);
+    expect(s.consume(hit(30, { index: 0 }))[0].base).toBe(60);
+    s.consume(hit(30, { index: 1 }));
+    const last = s.consume(hit(30, { index: 2 }));
+    expect(last).toHaveLength(1);
+    const done = s.consume(hit(30, { bankComplete: true }));
+    expect(done[0].label).toBe('BANK COMPLETE');
+    expect(done[0].base).toBe(300);
+    expect(done[0].multAfter).toBeCloseTo(1.3);
+  });
+});
