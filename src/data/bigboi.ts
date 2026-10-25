@@ -4,7 +4,7 @@ import { PARTS } from './parts';
 /**
  * Every machine has exactly one Big Boi, fixed in the middle of the table, and he is not for sale. What he does
  * depends on the machine you picked for the run: each one pulls a run towards a different kind of build.
- *  - Funhouse Factory's Foreman is a Mult engine: hit him a lot.
+ *  - Funhouse Factory's Foreman raises the Mult with every hit: hit him a lot.
  *  - Short Order's Cook calls orders: he lights one part type you own, and that type pays triple. A focused table
  *    (few types, many of each) fills his orders fast; a table of one-offs rarely does.
  *  - Castle Crash's Dragon wears armour: knock it all off and he pays a jackpot and multiplies your Mult. Aim at
@@ -18,7 +18,7 @@ export interface BigBoiDef {
   machine: MachineId;
   /** "Big Boi the Foreman" */
   title: string;
-  /** The ability's name, as a chip on his card. */
+  /** The ability's name, as a chip on his card ('' when his plain recipe says it all). */
   ability: string;
   blurb: string;
   recipe: Recipe;
@@ -31,8 +31,8 @@ export const DRAGON = { armour: 5, regrow: 2, jackpotX: 10, xmult: 1.5, maxSlays
 
 export const BIG_BOIS: Record<BigBoiId, BigBoiDef> = {
   foreman: {
-    id: 'foreman', machine: 'factory', title: 'Big Boi the Foreman', ability: 'Overtime',
-    blurb: 'Heavy, rude, hard to miss. Every bonk speeds up the line.',
+    id: 'foreman', machine: 'factory', title: 'Big Boi the Foreman', ability: '',
+    blurb: 'Heavy, rude, hard to miss.',
     recipe: { points: 250, per: 'hit', mult: 0.15, multCap: 3, perLevel: 25 },
   },
   cook: {

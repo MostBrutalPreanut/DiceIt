@@ -479,7 +479,8 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.points && Math.abs(upg - 1) > 0.001) lines.push({ tag: 'level', text: `Your decals multiply its points by ${num(upg)}.` });
   if (r.grow) lines.push({ tag: 'grow', text: `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it)${r.growCap ? `, up to +${num(r.growCap * factor)}` : ''}.` });
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
-  if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${r.per ?? 'hit'}${r.multCap ? `, up to +${mg(r.multCap)} a ball from all ${def.name}s` : ''}.` });
+  const fromAll = def.id === 'mega' ? '' : ` from all ${def.name}s`; // there is only ever one Big Boi
+  if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${r.per ?? 'hit'}${r.multCap ? `, up to +${mg(r.multCap)} a ball${fromAll}` : ''}.` });
   if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${r.per ?? 'hit'}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
   if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Doubles your Mult (×${xg(r.xmult)}) the first time a ball rolls over it each ball.` });
   if (r.spinMult) lines.push({ tag: 'mult', text: `Every spin raises your Mult by +${mg(r.spinMult * mods.spinMult)}, up to +${mg((r.spinMultCap ?? 0) * mods.spinMult)} a ball from all Spinners.` });
@@ -543,7 +544,7 @@ function bigBoiLines(machine: MachineId | undefined, factor: number, mods: Mods)
   const b = bigBoiOf(machine);
   const xg = (x: number) => num(1 + (x - 1) * mods.multGain);
   switch (b.id) {
-    case 'foreman': return [{ tag: 'note', text: 'Overtime: the Foreman is the Mult engine of the Funhouse Factory. Every machine has one Big Boi; he is not for sale.' }];
+    case 'foreman': return [];
     case 'cook': return [
       { tag: 'combo', text: `Order Up! He calls an order: one part type on your table (it glows). Hits on that type pay ×${ORDER.x}. Every ${ORDER.serves} order hits serve it: +${num(ORDER.mult * mods.multGain)} Mult (up to +${num(ORDER.multCap * mods.multGain)} a ball) and a new order. Hit him to change the order.` },
       { tag: 'note', text: 'A focused table (few types, many of each) fills orders fastest.' },

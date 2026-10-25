@@ -12,7 +12,7 @@ each machine's Big Boi pulls the run towards a different build:
 
 | Machine | Big Boi | Ability | Builds it rewards |
 |---|---|---|---|
-| Funhouse Factory | the Foreman | **Overtime**: 250 a hit and +0.15 Mult a hit (up to +3 a ball) | anything that hits him a lot: a Mult engine |
+| Funhouse Factory | the Foreman | 250 a hit and +0.15 Mult a hit (up to +3 a ball; the limit is to be raised in balancing) | anything that hits him a lot |
 | Short Order | the Cook | **Order Up!**: 150 a hit. He calls an order (one part type on your table, it glows); that type pays ×3; three order hits serve it (+0.25 Mult, up to +2 a ball) and he calls a new one. Hit him to change the order | focused tables: few types, many of each. A table of one-offs rarely fills an order |
 | Castle Crash | the Dragon | **Siege**: 200 a hit and 5 armour plates; knock the last one off and he is slain: a 10× jackpot and your Mult ×1.5; the armour grows back 2 plates thicker (2 slays a ball) | aiming: deflectors and kickbacks pointed at the middle |
 

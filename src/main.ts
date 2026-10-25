@@ -121,7 +121,7 @@ async function main() {
     for (const cap of ['cashCap', 'startCap']) $(cap).innerHTML = `<img alt="" src="${iconURL('button', 64, 48)}">`;
     ballsKey = '';
     const bb = BIG_BOIS[BIG_BOI_FOR[t.id]];
-    $('themeRow').innerHTML = `<div class="machineInfo" style="background:${t.bg};color:${t.ink}"><b>${t.tagline}</b><span>${bb.title}: ${bb.ability}</span><span class="hint">The machine is picked for each run. Start a new run to change it.</span></div>`;
+    $('themeRow').innerHTML = `<div class="machineInfo" style="background:${t.bg};color:${t.ink}"><b>${t.tagline}</b><span>${bb.title}${bb.ability ? `: ${bb.ability}` : ''}</span><span class="hint">The machine is picked for each run. Start a new run to change it.</span></div>`;
     upgradeKey = '';
     refreshWorkshop();
   }
@@ -139,14 +139,14 @@ async function main() {
     applyTheme(t);
     persist();
     const bb = BIG_BOIS[BIG_BOI_FOR[t.id]];
-    say(`${t.tagline}. ${bb.title.toUpperCase()}. ${bb.ability.toUpperCase()}`);
+    say(`${t.tagline}. ${bb.title.toUpperCase()}${bb.ability ? `. ${bb.ability.toUpperCase()}` : ''}`);
   }
   function showThemePicker() {
     const box = $('themePick');
     const cancel = hasRun ? '<button class="pickcancel" id="btnPickCancel">Keep playing this run</button>' : '';
     box.innerHTML = `<div class="pickbox"><h2>Pick your machine</h2><div class="hint">Each machine has its own look and its own Big Boi in the middle of the table, and he decides what kind of build pays best. The machine stays for the whole run.</div>
       <div class="cabs">${THEMES.map((t) => { const bb = BIG_BOIS[BIG_BOI_FOR[t.id]]; return `<button class="cab" data-theme="${t.id}" style="background:${t.bg};color:${t.ink}">
-        <img alt="" src="${iconURL('mega', 160, 120, t)}"><b>${t.tagline}</b><span class="bb">${bb.title}</span><span class="ab"><em>${bb.ability}</em> ${bb.blurb}</span><span class="go">Play this machine</span></button>`; }).join('')}</div>${cancel}</div>`;
+        <img alt="" src="${iconURL('mega', 160, 120, t)}"><b>${t.tagline}</b><span class="bb">${bb.title}</span><span class="ab">${bb.ability ? `<em>${bb.ability}</em> ` : ''}${bb.blurb}</span><span class="go">Play this machine</span></button>`; }).join('')}</div>${cancel}</div>`;
     box.hidden = false;
     for (const b of box.querySelectorAll<HTMLButtonElement>('.cab')) b.onclick = () => pickTheme(b.dataset.theme!);
     if (hasRun) $('btnPickCancel').onclick = () => { box.hidden = true; };

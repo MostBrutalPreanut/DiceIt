@@ -39,7 +39,7 @@ export const levelText = (level: number) => (level >= MAX_LEVEL ? 'MAX LVL' : le
 function head(def: PartDef, level: number, machine?: MachineId) {
   const lv = def.recipe.perLevel ? levelText(level) : '';
   const name = def.id === 'mega' ? bigBoiOf(machine).title : def.name;
-  const kind = def.id === 'mega' ? bigBoiOf(machine).ability : KIND[def.kind];
+  const kind = def.id === 'mega' ? bigBoiOf(machine).ability || KIND[def.kind] : KIND[def.kind];
   return `<div class="head"><h4>${name}</h4><span class="kind">${kind}</span>${lv ? `<span class="lvl">${lv}</span>` : ''}</div>`;
 }
 
