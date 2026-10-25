@@ -908,15 +908,15 @@ async function main() {
       case 'tilt': audio.tilt(); renderer.onTilt(); sayKey('tilt'); renderer.bigBoiMood('sad', 3); break;
       case 'ballSearch': sayKey('search'); break;
       case 'rescue': sayKey('rescue'); break;
-      case 'extraBall': sayKey('printed'); renderer.onBigMoment(); audio.goal(); renderer.bigBoiMood('shocked', 1.6); break;
-      case 'partRelease': { const p = game.part(ev.uid); if (p) renderer.onRelease(p.x, p.y); break; }
+      case 'extraBall': sayKey('printed'); renderer.onBigMoment(); audio.printed(); renderer.bigBoiMood('shocked', 1.6); break;
+      case 'partRelease': { const p = game.part(ev.uid); if (p) { renderer.onRelease(p.x, p.y); audio.release(p.def); } break; }
       case 'ballSaved': {
         const saver = game.part(ev.uid);
         if (saver) renderer.onSaved(saver.x, saver.y);
         sayKey('saved'); renderer.onBigMoment(); audio.saved();
         break;
       }
-      case 'partHit': if (ev.kicked) { audio.launch(70); sayKey('kicked'); } break;
+      case 'partHit': { const p = game.part(ev.uid); if (p) audio.contact(p.def, ev); if (ev.kicked) sayKey('kicked'); break; }
       default: break;
     }
   };
@@ -944,8 +944,8 @@ async function main() {
       }
     }
     // every part has its own voice; a set or a level-up gets a fanfare and a shocked Big Boi
-    if (s.kind === 'bonus') { audio.bonus(); say(s.label ?? 'BONUS!'); renderer.onBigMoment(); renderer.bigBoiMood('shocked', 1.6); }
-    else audio.hit(s.def, s.multAfter, { spins: s.spins, tier: s.tier, points: s.points });
+    if (s.kind === 'bonus') { audio.bonus(s.def, s.label, game.placed.some((p) => p.def === 'strip')); say(s.label ?? 'BONUS!'); renderer.onBigMoment(); renderer.bigBoiMood('shocked', 1.6); }
+    else audio.hit(s.def, s.multAfter, s);
     // while you play, the display flashes every hit
     if (s.kind === 'hit' && game.mode === 'round') renderer.pop(`+${fmt(s.points)}`);
     const band = Math.floor(s.multAfter);
