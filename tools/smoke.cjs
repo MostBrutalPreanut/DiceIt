@@ -19,14 +19,18 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForSelector('canvas');
+  // there is no default machine: the first visit asks for a theme
+  await page.waitForSelector('#themePick .cab');
+  check(await page.locator('#themePick .cab').count() === 3, 'the first visit offers three machines to pick from');
+  await page.click('#themePick .cab[data-theme="factory"]');
+  check(await page.isHidden('#themePick'), 'picking a machine closes the picker');
+  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.theme.v1')) === 'factory', 'the theme choice is saved');
   await page.evaluate(() => window.__pinball.freeze(true));
+  await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/smoke-1-workshop.png` });
 
-  const box = await (await page.$('canvas')).boundingBox();
-  const at = (x, y) => {
-    const sc = Math.max(4, Math.min((box.width - 16) / 26, (box.height - 16) / 52));
-    return { x: box.x + (box.width - 26 * sc) / 2 + x * sc, y: box.y + (box.height - 52 * sc) / 2 + (52 - y) * sc };
-  };
+  // sim -> screen goes through the projection and the machine's tilt, so ask the game where a point is
+  const at = (x, y) => page.evaluate(([px, py]) => window.__pinball.toScreen(px, py), [x, y]);
   const state = () => page.evaluate(() => { const g = window.__pinball.game; return { placed: g.placed.length, inv: g.inventory.length, money: g.money, offers: g.shop.offers.filter(Boolean).length }; });
 
   // real shop: buy the first affordable offer, place it, then undo and redo both steps
@@ -35,7 +39,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.click('button[data-buy]:not([disabled])');
   s = await state();
   check(s.inv === 1 && s.money < 6, 'buying puts the part in the inventory and costs money');
-  const p = at(12, 28);
+  const p = await at(12, 28);
   await page.mouse.move(p.x, p.y);
   await page.mouse.click(p.x, p.y);
   s = await state();
@@ -78,7 +82,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(adds >= 12, `the lab catalog lists every part (${adds})`);
   check(await page.isVisible('#labTools'), 'the lab tools appear');
   await page.click('button[data-add="bank"]');
-  const bank = at(12, 33);
+  const bank = await at(12, 33);
   await page.mouse.move(bank.x, bank.y);
   await page.mouse.click(bank.x, bank.y);
   const hasBank = await page.evaluate(() => window.__pinball.game.placed.some((q) => q.def === 'bank'));
@@ -100,12 +104,30 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.uncheck('#sandbox');
 
   // hover a starter bumper: the tooltip explains its recipe
-  const pop = at(17, 44.5);
+  const pop = await at(17, 44.5);
   await page.mouse.move(pop.x, pop.y);
   await page.mouse.move(pop.x + 2, pop.y + 2);
   check(await page.isVisible('#tip'), 'hovering a part shows its tooltip');
   const tip = await page.innerText('#tip');
   check(tip.includes('Pop Bumper') && tip.includes('100') && tip.includes('+5'), 'the Pop Bumper tooltip says "100" and "+5"');
+  check(/Next hit pays \d+/i.test(tip) && /your Mult/i.test(tip), 'the tooltip leads with the next-hit number and its math chips');
+  await page.mouse.move(5, 5);
+
+  // relic decals: earn one from a Rules card, read it on the apron, peel it off
+  await page.evaluate(() => { const g = window.__pinball.game; g.pending = [{ id: 'sponsor' }, { id: 'headStart' }]; window.__pinball.refresh(); });
+  check(await page.locator('.ucard.c-rules .decalimg').count() === 1, 'a Rules card shows the decal it would stick on');
+  await page.click('.ucard[data-pick="1"]');
+  check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'taking the Rules card sticks a decal on the apron');
+  await page.evaluate(() => window.__pinball.renderer.draw(window.__pinball.game, 0.016, { ghost: null, selectedUid: null, hoverUid: null, showHeat: false }));
+  const slot = await page.evaluate(() => window.__pinball.toScreen(2.6, 6.6, 0.5));
+  await page.mouse.move(slot.x, slot.y);
+  await page.mouse.move(slot.x + 1, slot.y + 1);
+  check((await page.innerText('#tip')).includes('Head Start'), 'hovering the decal reads its rule');
+  await page.mouse.click(slot.x + 1, slot.y + 1);
+  check(await page.isVisible('#btnPeel'), 'clicking a decal between rounds offers to peel it');
+  await page.click('#btnPeel');
+  check(await page.evaluate(() => window.__pinball.game.decals.length) === 0, 'peeling removes the decal and its rule');
+  await page.mouse.move(5, 5);
   await page.screenshot({ path: `${out}/smoke-2-placed.png` });
 
   // physics cost in the browser's JS engine
@@ -131,13 +153,36 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check((await page.evaluate(() => window.__pinball.game.money)) === cash + 4, 'skipping pays $4');
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
-  // a real round with the bot at the controls
+  // a real round with the bot at the controls: the machine tips towards you while the ball is live
   await page.click('#btnStart');
   await page.evaluate(() => window.__pinball.advance(25, 5));
   await page.screenshot({ path: `${out}/smoke-3-round.png` });
-  const st = await page.evaluate(() => { const g = window.__pinball.game; return { mode: g.mode, score: Math.round(g.scorer.score), rows: g.scorer.ledgerRows().length }; });
+  const st = await page.evaluate(() => { const g = window.__pinball.game; return { mode: g.mode, score: Math.round(g.scorer.score), rows: g.scorer.ledgerRows().length, k: window.__pinball.renderer.view.k }; });
   console.log('after 25s of bot play:', JSON.stringify(st));
   check(st.score > 0 && st.rows > 0, 'the bot scored and the ledger attributes it');
+  check(st.mode !== 'round' || Math.abs(st.k - 0.86) < 0.011, `the machine is tipped to 0.86 in play (k ${st.k})`);
+  check(await page.locator('#ledger tbody tr').count() > 0, 'the receipt prints the ledger');
+  const ms = await page.evaluate(() => window.__pinball.probe(60));
+  console.log(`renderer: ${ms.toFixed(2)} ms per frame (CPU side, software GL)`);
+  if (ms > 12) fail(`drawing a frame costs too much (${ms.toFixed(1)} ms)`);
+
+  // visual snapshots: the workshop and a frozen play frame in every theme
+  const shots = [];
+  for (const theme of ['factory', 'diner', 'castle']) {
+    await page.evaluate((t) => { const d = window.__pinball; d.theme(t); d.game.newRun(); d.refresh(); }, theme);
+    await page.evaluate(() => window.__pinball.advance(0.5, 1));
+    await page.screenshot({ path: `${out}/snap-${theme}-workshop.png` });
+    const k0 = await page.evaluate(() => window.__pinball.renderer.view.k);
+    check(k0 === 1, `${theme}: the workshop lies flat (k ${k0})`);
+    await page.click('#btnStart');
+    await page.evaluate(() => window.__pinball.advance(8, 7));
+    const buf = await page.screenshot({ path: `${out}/snap-${theme}-play.png`, clip: await (await page.$('#stage')).boundingBox() });
+    shots.push(buf.toString('base64').length);
+    const bg = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim());
+    check(/^#[0-9a-f]{6}$/.test(bg), `${theme}: the panels take the theme's tokens (${bg})`);
+  }
+  check(new Set(shots).size === 3, 'the three themes render differently');
+  await page.evaluate(() => { const d = window.__pinball; d.theme('factory'); d.game.newRun(); d.refresh(); });
 
   if (errors.length) fail('console errors:\n' + errors.join('\n'));
   else console.log('ok: no console errors');

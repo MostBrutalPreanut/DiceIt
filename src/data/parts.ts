@@ -1,7 +1,8 @@
 /**
  * Content as data: every part is a row here. The sim reads shape, kind and kick, the scorer reads
- * the recipe, the renderer reads color, and the UI reads `describe()`, which turns the same recipe
- * into plain sentences so "how does this thing score?" can never drift from what it actually does.
+ * the recipe, the renderer reads shape and kind (every colour comes from the theme), and the UI reads
+ * `describe()`, which turns the same recipe into plain sentences so "how does this thing score?" can
+ * never drift from what it actually does.
  */
 import { SAVER_WINDOW } from '../sim/constants';
 import { neutralMods, type Mods } from './mods';
@@ -23,6 +24,8 @@ export interface DialDef {
   default: number;
   /** One plain sentence: what you gain and what you give up. */
   tradeoff: string;
+  /** The trade-off in a few words at each end of the dial (the tooltip's dial row). */
+  ends: [string, string];
   /** Multiplier this dial puts on the part's points, if any. */
   payoff?: (v: number) => number;
   fmt?: (v: number) => string;
@@ -93,7 +96,6 @@ export interface PartDef {
   name: string;
   blurb: string;
   kind: PartKind;
-  color: number;
   cost: number;
   /** Relative chance of appearing in the shop. */
   weight: number;
@@ -105,8 +107,8 @@ export interface PartDef {
   dials: DialDef[];
 }
 
-const kickDial = (def: number, tradeoff = 'A harder kick sends the ball farther, but pays less.'): DialDef => ({
-  id: 'kick', label: 'Kick', min: 0, max: 4, step: 0.25, default: def, tradeoff,
+const kickDial = (def: number, tradeoff = 'A harder kick sends the ball farther, but pays less.', ends: [string, string] = ['soft kick, more points', 'hard kick, fewer']): DialDef => ({
+  id: 'kick', label: 'Kick', min: 0, max: 4, step: 0.25, default: def, tradeoff, ends,
   // neutral at the default, so the numbers printed in the recipe are the numbers you get
   payoff: (v) => 1 + 0.25 * (def - v),
   fmt: (v) => v.toFixed(2),
@@ -114,114 +116,114 @@ const kickDial = (def: number, tradeoff = 'A harder kick sends the ball farther,
 
 export const PARTS: Record<PartId, PartDef> = {
   pop: {
-    id: 'pop', name: 'Pop Bumper', blurb: 'Classic. Goes pop.', kind: 'bumper', color: 0xff4fa3, cost: 3, weight: 3,
+    id: 'pop', name: 'Pop Bumper', blurb: 'Classic. Goes pop.', kind: 'bumper', cost: 3, weight: 3,
     shape: { type: 'circle', r: 1.2 }, rotatable: false, kickUnit: 14,
     recipe: { points: 100, per: 'hit', grow: 5, growCap: 100, perLevel: 10 }, dials: [kickDial(2)],
   },
   coin: {
-    id: 'coin', name: 'Cha-Ching Bumper', blurb: 'Pays $1 per bonk. Tips in points.', kind: 'bumper', color: 0xffd23f, cost: 4, weight: 2,
+    id: 'coin', name: 'Cha-Ching Bumper', blurb: 'Pays $1 per bonk. Tips in points.', kind: 'bumper', cost: 4, weight: 2,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 12,
     recipe: { points: 40, per: 'hit', money: 1, moneyCap: 5, perLevel: 8 }, dials: [kickDial(2)],
   },
   mega: {
-    id: 'mega', name: 'Big Boi', blurb: 'Heavy, rude, hard to miss.', kind: 'bumper', color: 0x5ee7ff, cost: 6, weight: 2,
+    id: 'mega', name: 'Big Boi', blurb: 'Heavy, rude, hard to miss.', kind: 'bumper', cost: 6, weight: 2,
     shape: { type: 'circle', r: 1.9 }, rotatable: false, kickUnit: 18,
     recipe: { points: 250, per: 'hit', mult: 0.1, multCap: 3, perLevel: 25 }, dials: [kickDial(1.5)],
   },
   sling: {
-    id: 'sling', name: 'Slingshot', blurb: 'A rubber band with opinions.', kind: 'kicker', color: 0xff8a3d, cost: 4, weight: 2,
+    id: 'sling', name: 'Slingshot', blurb: 'A rubber band with opinions.', kind: 'kicker', cost: 4, weight: 2,
     shape: { type: 'box', hw: 1.7, hh: 0.4 }, rotatable: true, kickUnit: 16,
-    recipe: { points: 30, per: 'hit', perLevel: 10 }, dials: [kickDial(3, 'A harder snap throws the ball across the table, but pays less.')],
+    recipe: { points: 30, per: 'hit', perLevel: 10 }, dials: [kickDial(3, 'A harder snap throws the ball across the table, but pays less.', ['soft snap, more points', 'hard snap, fewer'])],
   },
   spinner: {
-    id: 'spinner', name: 'Spinner', blurb: 'Whee. Faster ball, more whee.', kind: 'spinner', color: 0x62f08a, cost: 4, weight: 2,
+    id: 'spinner', name: 'Spinner', blurb: 'Whee. Faster ball, more whee.', kind: 'spinner', cost: 4, weight: 2,
     shape: { type: 'box', hw: 1.4, hh: 0.3 }, rotatable: true, kickUnit: 0,
     recipe: { points: 10, per: 'spin', perLevel: 3 },
     dials: [{
       id: 'drag', label: 'Drag', min: 0, max: 3, step: 0.25, default: 1,
-      tradeoff: 'A heavier spinner pays more per spin, but slows the ball down more.',
+      tradeoff: 'A heavier spinner pays more per spin, but slows the ball down more.', ends: ['light, pays less', 'heavy, slows the ball'],
       payoff: (v) => 1 + 0.25 * v, fmt: (v) => v.toFixed(2),
     }],
   },
   lane: {
-    id: 'lane', name: 'Lane Rollover', blurb: 'Roll over it. It lights up. Cheap thrills.', kind: 'rollover', color: 0x9fe8ff, cost: 3, weight: 3,
+    id: 'lane', name: 'Lane Rollover', blurb: 'Roll over it. It lights up. Cheap thrills.', kind: 'rollover', cost: 3, weight: 3,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
     recipe: { points: 50, per: 'roll-over', lights: true, setBonus: { points: 200, mult: 0.5 }, setCap: 5, perLevel: 10 }, dials: [],
   },
   printer: {
-    id: 'printer', name: 'Ball Printer', blurb: 'Eats one ball. Prints two. Allegedly legal.', kind: 'saucer', color: 0xb67dff, cost: 7, weight: 1,
+    id: 'printer', name: 'Ball Printer', blurb: 'Eats one ball. Prints two. Allegedly legal.', kind: 'saucer', cost: 7, weight: 1,
     shape: { type: 'circle', r: 1.1 }, rotatable: true, kickUnit: 0,
     recipe: { points: 200, per: 'ball caught', spawn: 1, printCap: 4, perLevel: 50 },
     dials: [
       {
         id: 'hold', label: 'Hold', min: 0.2, max: 2, step: 0.1, default: 0.6,
-        tradeoff: 'Holding longer pays more, but that ball sits out of play meanwhile.',
+        tradeoff: 'Holding longer pays more, but that ball sits out of play meanwhile.', ends: ['quick, back in play', 'long, pays more'],
         payoff: (v) => 1 + 0.5 * (v - 0.6), fmt: (v) => `${v.toFixed(1)} s`,
       },
       {
         id: 'power', label: 'Eject power', min: 30, max: 110, step: 5, default: 70,
-        tradeoff: 'Decides where the ball lands. Rotate the part to aim it.', fmt: (v) => String(v),
+        tradeoff: 'Decides where the ball lands. Rotate the part to aim it.', ends: ['gentle eject', 'strong eject'], fmt: (v) => String(v),
       },
     ],
   },
   flipper: {
-    id: 'flipper', name: 'Extra Flipper', blurb: 'Because two hands were never enough.', kind: 'flipper', color: 0xffb02e, cost: 8, weight: 1,
+    id: 'flipper', name: 'Extra Flipper', blurb: 'Because two hands were never enough.', kind: 'flipper', cost: 8, weight: 1,
     shape: { type: 'circle', r: 2.6 }, rotatable: false, kickUnit: 0,
     recipe: {},
     dials: [{
       id: 'side', label: 'Button', min: 0, max: 1, step: 1, default: 0,
-      tradeoff: 'Which flipper button works it. Left (Z) or Right (/).', fmt: (v) => (v >= 0.5 ? 'Right' : 'Left'),
+      tradeoff: 'Which flipper button works it. Left (Z) or Right (/).', ends: ['Left (Z)', 'Right (/)'], fmt: (v) => (v >= 0.5 ? 'Right' : 'Left'),
     }],
   },
   lamp: {
-    id: 'lamp', name: 'Lamp', blurb: 'Light it up and the neighbours score more.', kind: 'lamp', color: 0xfff176, cost: 5, weight: 2,
+    id: 'lamp', name: 'Lamp', blurb: 'Light it up and the neighbours score more.', kind: 'lamp', cost: 5, weight: 2,
     shape: { type: 'circle', r: 0.8 }, rotatable: false, kickUnit: 0,
     recipe: { lights: true },
     dials: [{
       id: 'radius', label: 'Glow radius', min: 3, max: 8, step: 0.5, default: 5,
-      tradeoff: 'A wider glow reaches more parts, but gives each a smaller bonus.', fmt: (v) => `${v.toFixed(1)}`,
+      tradeoff: 'A wider glow reaches more parts, but gives each a smaller bonus.', ends: ['tight, bigger bonus', 'wide, smaller bonus'], fmt: (v) => `${v.toFixed(1)}`,
     }],
   },
   uplight: {
-    id: 'uplight', name: 'Level Light', blurb: 'Light them all and your bumpers level up. Hit one twice and it goes out.', kind: 'rollover', color: 0xffffff, cost: 5, weight: 2,
+    id: 'uplight', name: 'Level Light', blurb: 'Light them all and your bumpers level up. Hit one twice and it goes out.', kind: 'rollover', cost: 5, weight: 2,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
     recipe: { points: 10, per: 'pass', levelUp: true },
     dials: [{
       id: 'target', label: 'Levels up', min: 0, max: LEVEL_TARGETS.length - 1, step: 1, default: 0,
-      tradeoff: 'Which part type this light upgrades. Lights aimed at different types complete separately.',
+      tradeoff: 'Which part type this light upgrades. Lights aimed at different types complete separately.', ends: ['Pop Bumpers', 'Slingshots'],
       fmt: (v) => PARTS[LEVEL_TARGETS[Math.round(v)] ?? 'pop'].name,
     }],
   },
   bank: {
-    id: 'bank', name: 'Drop-Target Bank', blurb: 'Three targets. They go down. They come back. Everyone is happy.', kind: 'bank', color: 0xff5d6c, cost: 5, weight: 2,
+    id: 'bank', name: 'Drop-Target Bank', blurb: 'Three targets. They go down. They come back. Everyone is happy.', kind: 'bank', cost: 5, weight: 2,
     shape: { type: 'box', hw: 2.6, hh: 0.45 }, rotatable: true, kickUnit: 0,
     recipe: { points: 60, per: 'target', setBonus: { points: 300, mult: 0.3 }, setCap: 5, perLevel: 10 }, dials: [],
   },
   vari: {
-    id: 'vari', name: 'Vari-Target', blurb: 'Tap it, get peanuts. Smash it, get paid.', kind: 'target', color: 0x1fe0c0, cost: 4, weight: 2,
+    id: 'vari', name: 'Vari-Target', blurb: 'Tap it, get peanuts. Smash it, get paid.', kind: 'target', cost: 4, weight: 2,
     shape: { type: 'box', hw: 1.3, hh: 0.35 }, rotatable: true, kickUnit: 0,
     recipe: { points: 40, per: 'hit', tiers: VARI_TIERS },
     dials: [{
       id: 'stiff', label: 'Stiffness', min: 0.5, max: 2, step: 0.25, default: 1,
-      tradeoff: 'A stiffer target needs a harder hit for every tier, but pays more once you get there.',
+      tradeoff: 'A stiffer target needs a harder hit for every tier, but pays more once you get there.', ends: ['soft, easy tiers', 'stiff, pays more'],
       payoff: (v) => 1 + 0.5 * (v - 1), fmt: (v) => v.toFixed(2),
     }],
   },
   deflector: {
-    id: 'deflector', name: 'Deflector', blurb: 'A bouncy bar. Scores nothing, steers everything.', kind: 'deflector', color: 0x8b95c9, cost: 1, weight: 2,
+    id: 'deflector', name: 'Deflector', blurb: 'A bouncy bar. Scores nothing, steers everything.', kind: 'deflector', cost: 1, weight: 2,
     shape: { type: 'box', hw: 2.2, hh: 0.28 }, rotatable: true, kickUnit: 0, recipe: {}, dials: [],
   },
   kickback: {
-    id: 'kickback', name: 'Kickback', blurb: 'Roll over it and it boots the ball right back. Once per ball.', kind: 'kickback', color: 0x4d8bff, cost: 4, weight: 2,
+    id: 'kickback', name: 'Kickback', blurb: 'Roll over it and it boots the ball right back. Once per ball.', kind: 'kickback', cost: 4, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: true, kickUnit: 0,
     recipe: { points: 150, per: 'kick' },
     dials: [{
       id: 'power', label: 'Power', min: 30, max: 110, step: 5, default: 70,
-      tradeoff: 'Decides where the ball lands. Rotate the part to aim it.', fmt: (v) => String(v),
+      tradeoff: 'Decides where the ball lands. Rotate the part to aim it.', ends: ['gentle kick', 'strong kick'], fmt: (v) => String(v),
     }],
   },
   saver: {
-    id: 'saver', name: 'Ball Saver', blurb: 'Shoot again! If you drain early, the machine pretends it never happened.', kind: 'saver', color: 0xb6ff5c, cost: 5, weight: 1,
+    id: 'saver', name: 'Ball Saver', blurb: 'Shoot again! If you drain early, the machine pretends it never happened.', kind: 'saver', cost: 5, weight: 1,
     shape: { type: 'circle', r: 0.8 }, rotatable: false, kickUnit: 0, recipe: {}, dials: [],
   },
 };

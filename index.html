@@ -6,141 +6,170 @@
   <title>Free Play</title>
 </head>
 <body>
+  <div id="backdrop" aria-hidden="true"></div>
   <div id="app">
-    <aside id="left" class="panel">
-      <h1>FREE PLAY <small>working title · M1 workshop</small></h1>
-      <div id="modeBadge" class="badge">WORKSHOP</div>
+    <aside id="left" class="panel housing">
+      <i class="screw tl"></i><i class="screw tr"></i><i class="screw bl"></i><i class="screw br"></i>
+      <div class="inner">
+        <header class="marquee"><span class="bulbs"></span><h1 class="disp">FREE PLAY</h1><span id="modeBadge" class="badge">WORKSHOP</span></header>
+        <div class="scroll">
+          <div class="tile roundstrip">
+            <b class="disp">ROUND <span id="round">1</span></b>
+            <span class="stages"><i id="stage0">OPEN</i><i id="stage1">MAIN</i><i id="stage2">BOSS</i></span>
+          </div>
 
-      <div class="scorebox">
-        <div class="label">SCORE</div>
-        <div id="score" class="big">0</div>
-        <div class="goalbar"><div id="goalFill"></div></div>
-        <div class="goalrow"><span>GOAL <b id="goal">—</b></span><span>ROUND <b id="round">1</b></span></div>
+          <div class="lbl">Score</div>
+          <div id="score" class="odo" data-tip="score"></div>
+          <div class="goalrow" data-tip="goal"><span class="lbl">Goal <b id="goal" class="num">—</b></span><span class="lbl" id="toGo"></span></div>
+          <div class="tube" data-tip="goal"><div id="goalFill"></div><span class="badge-flag"><svg viewBox="0 0 34 34"><circle cx="17" cy="17" r="15.5" /><path class="pole" d="M12 25V8" /><path class="flag" d="M13 8L25 12L13 16Z" /></svg></span></div>
+
+          <div class="instruments">
+            <div class="tile inst" id="multTile" data-tip="mult">
+              <div class="lbl">Mult</div>
+              <div id="multDial"></div>
+              <div id="mult" class="disp val">×1.00</div>
+            </div>
+            <div class="tile inst" id="ballsTile" data-tip="balls">
+              <div class="lbl">Balls</div>
+              <div id="ballTray" class="tray"></div>
+              <div id="balls" class="disp val">3 LEFT</div>
+            </div>
+          </div>
+
+          <div class="gauges">
+            <div class="gauge" data-tip="tilt"><span class="lbl">Tilt</span><div class="bar"><div id="tiltFill"></div></div></div>
+            <div class="gauge" id="clockBox" data-tip="clock"><span class="lbl">Clock <b id="clockSec" class="num"></b></span><div class="bar"><div id="clockFill"></div></div></div>
+          </div>
+
+          <div id="upgradesBox" hidden>
+            <div class="lbl">Upgrades <span class="hint">hover for what each does</span></div>
+            <div id="upgradeChips"></div>
+          </div>
+
+          <section id="ledgerBox" class="receipt-wrap" data-tip="ledger">
+            <div class="slot"></div>
+            <div class="receipt">
+              <div class="lbl center">This round</div>
+              <table id="ledger"><tbody></tbody></table>
+              <div id="ledgerEmpty" class="hint center">Roll a ball. Every point is attributed here.</div>
+              <div class="rtotal"><span>ROUND TOTAL</span><b id="ledgerTotal" class="disp">0</b></div>
+            </div>
+            <svg class="zig" viewBox="0 0 160 8" preserveAspectRatio="none"><path d="M0 0H160V0L150 8L140 0L130 8L120 0L110 8L100 0L90 8L80 0L70 8L60 0L50 8L40 0L30 8L20 0L10 8L0 0Z" /></svg>
+          </section>
+
+          <div id="actions">
+            <button id="btnCash" class="arcade" hidden disabled><span class="cap" id="cashCap"></span><span class="disp">CASH OUT</span><kbd>TAB</kbd></button>
+          </div>
+
+          <details class="help">
+            <summary>Controls</summary>
+            <ul>
+              <li>Click the table once so the keyboard works.</li>
+              <li><kbd>Z</kbd>/<kbd>Shift</kbd> left flipper · <kbd>/</kbd>/<kbd>Shift</kbd> right</li>
+              <li>Hold <kbd>Space</kbd> to charge the plunger, release to fire</li>
+              <li><kbd>←</kbd> <kbd>→</kbd> nudge (too much = TILT)</li>
+              <li><kbd>Tab</kbd> cash out once the goal is hit</li>
+              <li>Workshop: buy parts, click one in your toolbox, click the table. Drag parts to move them, or drag them onto the toolbox to take them off the board. <kbd>R</kbd> rotates, <kbd>Del</kbd> stores. <kbd>Space</kbd> fires a test ball.</li>
+              <li>Click a decal on the apron to read it, or peel it off between rounds.</li>
+              <li><kbd>M</kbd> mute</li>
+            </ul>
+          </details>
+        </div>
       </div>
-
-      <div class="stats">
-        <div><div class="label">MULT</div><div id="mult" class="stat">×1.00</div></div>
-        <div><div class="label">BALLS</div><div id="balls" class="stat">●●●</div></div>
-        <div><div class="label">MONEY</div><div id="money" class="stat">$0</div></div>
-      </div>
-      <div class="formula">Every hit scores <b>points × Mult</b>. Hover any part to see its recipe; the number on it is what it pays right now.</div>
-
-      <div class="label">TILT</div>
-      <div class="tiltbar"><div id="tiltFill"></div></div>
-      <div id="clockBox"><div class="label">BALL CLOCK <b id="clockSec"></b></div>
-        <div class="tiltbar"><div id="clockFill"></div></div></div>
-
-      <div id="upgradesBox" hidden>
-        <div class="label">UPGRADES <span class="hint" style="letter-spacing:0">hover for what each does</span></div>
-        <div id="upgradeChips"></div>
-      </div>
-
-      <div id="actions">
-        <button id="btnCash" hidden>Cash out (Tab)</button>
-      </div>
-
-      <details open class="help">
-        <summary>Controls</summary>
-        <ul>
-          <li>Click the table once so the keyboard works.</li>
-          <li><kbd>Z</kbd>/<kbd>Shift</kbd> left flipper · <kbd>/</kbd>/<kbd>Shift</kbd> right</li>
-          <li>Hold <kbd>Space</kbd> to charge the plunger, release to fire</li>
-          <li><kbd>←</kbd> <kbd>→</kbd> nudge (too much = TILT)</li>
-          <li><kbd>Tab</kbd> cash out once the goal is hit</li>
-          <li>Workshop: buy parts, click one in your inventory, click the table. Drag parts to move them, or drag them onto the inventory to take them off the board. <kbd>R</kbd> rotates, <kbd>Del</kbd> stores. <kbd>Space</kbd> fires a test ball.</li>
-          <li><kbd>M</kbd> mute</li>
-        </ul>
-      </details>
     </aside>
 
     <main id="center">
-      <div id="dmd"><span id="dmdText">INSERT COIN</span></div>
+      <div id="dmd"><span class="bulbs top"></span><div class="screen"><span id="dmdText">INSERT COIN</span></div><span class="bulbs bottom"></span></div>
       <div id="stepper" hidden>
         <ol>
           <li id="stepShop" class="step"><b>1</b><span>Shop</span><i id="stepShopNote"></i></li>
           <li id="stepUpgrade" class="step" hidden><b>2</b><span>Upgrade</span><i id="stepUpgradeNote"></i></li>
           <li id="stepInstall" class="step"><b>3</b><span>Install</span><i id="stepInstallNote"></i></li>
         </ol>
-        <button id="btnStart" class="primary">Start round</button>
+        <button id="btnStart" class="primary disp">Start round</button>
       </div>
       <div id="stage"></div>
       <div id="overlay" hidden></div>
       <div id="touch" aria-label="Touch controls">
-        <button data-key="KeyZ">LEFT</button>
-        <button data-key="Space">PLUNGE</button>
-        <button data-key="Slash">RIGHT</button>
+        <button data-key="KeyZ" class="disp">LEFT</button>
+        <button data-key="Space" class="disp">PLUNGE</button>
+        <button data-key="Slash" class="disp">RIGHT</button>
       </div>
     </main>
 
-    <aside id="right" class="panel">
-      <section id="workshop">
-        <div id="invWrap">
-          <h2>Inventory <small>owned, off the board. Drag a part here to store it.</small></h2>
-          <div id="inventoryBox">
-            <div id="inventory"></div>
-            <div id="inventoryHint" class="hint">Empty.</div>
+    <aside id="right" class="panel housing">
+      <i class="screw tl"></i><i class="screw tr"></i><i class="screw bl"></i><i class="screw br"></i>
+      <div class="inner">
+        <header class="marquee"><span class="bulbs"></span><h2 class="disp">PARTS</h2><button id="btnReroll" class="pill">Reroll</button></header>
+        <div class="fixed">
+          <div class="tile moneyrow" data-tip="money"><span id="coinStack" class="coins"><i></i><i></i><i></i></span><b id="shopMoney" class="disp">$0</b><span id="moneyTick" class="tick"></span><span class="hint" id="spareNote">+$3 per spare ball</span></div>
+          <div id="invWrap">
+            <div class="lbl">Toolbox <span class="hint">drag a part in to store it</span></div>
+            <div id="inventoryBox" class="toolbox">
+              <div id="inventory"></div>
+              <div id="inventoryHint" class="hint">Empty. Buy a part, or drag one off the table to store it.</div>
+            </div>
           </div>
         </div>
-
-        <div id="upgradeBox" class="card" hidden></div>
-
-        <div id="selected" class="card" hidden></div>
-
-        <h2>Shop <small>buy parts, then place them</small></h2>
-        <div class="shophead">
-          <span>Cash <b id="shopMoney">$0</b></span>
-          <button id="btnReroll">Reroll</button>
+        <div class="scroll">
+          <section id="workshop">
+            <div id="upgradeBox" class="card" hidden></div>
+            <div id="decalCard" class="card" hidden></div>
+            <div id="selected" class="card" hidden></div>
+          </section>
+          <section id="shopBox">
+            <div class="lbl">Shop <span class="hint" id="shopNote">buy parts, then place them</span></div>
+            <div id="offers"></div>
+            <label class="check"><input id="sandbox" type="checkbox" /> Test Lab: every part, free, nothing counts</label>
+          </section>
+          <section id="machineBox">
+            <div class="lbl">Machine</div>
+            <div class="card">
+              <div class="lbl">Theme</div>
+              <div id="themeRow" class="themes"></div>
+              <label class="check"><input id="calm" type="checkbox" /> Calm mode: no shake, drift or twinkles, half the particles</label>
+              <label>Table tilt (gravity) <b id="gravVal" class="num">50</b>
+                <input id="gravity" type="range" min="30" max="80" step="1" value="50" />
+              </label>
+              <div class="hint">Steeper table: faster ball, more drains, harder to cradle.</div>
+              <div class="btnrow">
+                <button id="btnUndo" title="Ctrl+Z">Undo</button>
+                <button id="btnRedo" title="Ctrl+Y">Redo</button>
+              </div>
+              <label class="check"><input id="heat" type="checkbox" /> Heatmap: where the balls went
+                <button id="btnHeatClear" class="mini">clear</button></label>
+              <div class="lbl">Layout slots</div>
+              <div id="slots"></div>
+              <div id="slotMsg" class="hint"></div>
+            </div>
+            <div id="labTools" class="card" hidden>
+              <h3 class="disp">Test Lab</h3>
+              <div class="hint">Every part is free and nothing here counts. The catalog replaces the shop.</div>
+              <div class="btnrow">
+                <button id="labBalls4">Drop 4 balls</button>
+                <button id="labBalls12">Drop 12 balls</button>
+                <button id="labClear">Clear board</button>
+                <button id="labLevelUp">Levels +1</button>
+                <button id="labLevelDown">Levels −1</button>
+              </div>
+              <div class="row">
+                <select id="labUpgrade" aria-label="Upgrade to take"></select>
+                <button id="labTake" class="mini">Take</button>
+                <button id="labDrop" class="mini">Clear all</button>
+              </div>
+              <div class="hint">Takes any major upgrade for free (the offer rules do not apply here).</div>
+            </div>
+            <div class="row">
+              <button id="btnTest">Test ball (Space)</button>
+              <button id="btnReset">New run</button>
+            </div>
+          </section>
         </div>
-        <div id="offers"></div>
-        <label class="check"><input id="sandbox" type="checkbox" /> Test Lab: every part, free, nothing counts</label>
-
-        <h2>Machine</h2>
-        <div class="card">
-          <label>Table tilt (gravity) <b id="gravVal">50</b>
-            <input id="gravity" type="range" min="30" max="80" step="1" value="50" />
-          </label>
-          <div class="hint">Steeper table: faster ball, more drains, harder to cradle.</div>
-          <div class="btnrow">
-            <button id="btnUndo" title="Ctrl+Z">Undo</button>
-            <button id="btnRedo" title="Ctrl+Y">Redo</button>
-          </div>
-          <label class="check"><input id="heat" type="checkbox" /> Heatmap: where the balls went
-            <button id="btnHeatClear" style="margin-left:auto;padding:2px 8px">clear</button></label>
-          <div class="label" style="margin-top:6px">LAYOUT SLOTS</div>
-          <div id="slots"></div>
-          <div id="slotMsg" class="hint"></div>
-        </div>
-        <div id="labTools" class="card" hidden>
-          <h3 style="margin:0 0 6px">Test Lab</h3>
-          <div class="hint">Every part is free and nothing here counts. The catalog replaces the shop.</div>
-          <div class="btnrow">
-            <button id="labBalls4">Drop 4 balls</button>
-            <button id="labBalls12">Drop 12 balls</button>
-            <button id="labClear">Clear board</button>
-            <button id="labLevelUp">Levels +1</button>
-            <button id="labLevelDown">Levels −1</button>
-          </div>
-          <div class="row" style="margin-top:8px">
-            <select id="labUpgrade" aria-label="Upgrade to take"></select>
-            <button id="labTake" style="flex:none">Take</button>
-            <button id="labDrop" style="flex:none">Clear all</button>
-          </div>
-          <div class="hint">Takes any major upgrade for free (the offer rules do not apply here).</div>
-        </div>
-        <div class="row">
-          <button id="btnTest">Test ball (Space)</button>
-          <button id="btnReset">New run</button>
-        </div>
-      </section>
-
-      <section id="ledgerBox">
-        <h2>Ledger <small>where every point came from</small></h2>
-        <table id="ledger"><thead><tr><th>Part</th><th>Hits</th><th>Points</th><th></th></tr></thead><tbody></tbody></table>
-        <div id="ledgerEmpty" class="hint">Roll a ball. Every point is attributed here.</div>
-      </section>
+      </div>
     </aside>
   </div>
   <div id="tip" hidden></div>
+  <div id="themePick" hidden></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

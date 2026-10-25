@@ -1,9 +1,13 @@
-import { Application, Container, Graphics, Text } from 'pixi.js';
-import { dialValue, footprint, lampStats, LEVEL_TARGETS, PARTS, type PartDef, type PartId, type PartInstance } from '../data/parts';
+import { Application, Container, Graphics, Rectangle, Sprite, Texture, type Text } from 'pixi.js';
+import { dialValue, footprint, lampStats, LEVEL_TARGETS, PARTS, type PartId, type PartInstance } from '../data/parts';
 import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
-import { BALL_R, FLIPPER_LENGTH, TABLE_H, TABLE_W } from '../sim/constants';
-import { TABLE_POSTS, tableOutline, tableSegments } from '../sim/table';
+import { BALL_R, BUILD_AREA, TABLE_W } from '../sim/constants';
+import { flat, label, P, Prop, ribbon, unP, type Pt, type View } from './draw';
+import { Particles } from './particles';
+import { ballShadow, drawBall, drawFlipper, drawPart, groundRing, stateKey, type BallWear, type PartState } from './props';
+import { APRON_Z, arrowInserts, buildMachine, DECAL_SLOT_POS, decalSprite, RIM, type StuckDecal } from './scene';
+import { BALL_WEAR, mat, mix, num, roleFill, type Theme } from './theme';
 
 export interface DrawState {
   /** A part following the pointer, about to be placed. */
@@ -11,456 +15,684 @@ export interface DrawState {
   selectedUid: number | null;
   hoverUid: number | null;
   showHeat: boolean;
+  /** The decal slot under the pointer, if any. */
+  hoverDecal?: number | null;
 }
 
-interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: number; size: number }
-interface Popup { box: Container; x: number; y: number; y0: number; life: number; max: number }
+/** How far the machine is tipped towards you (art-direction §3): flat to build, tipped to play, hard on TILT. */
+export const TIP = { workshop: 1, play: 0.86, tilt: 0.8 } as const;
+/** k is quantised so the baked textures can be shared between frames of the tip animation. */
+const K_STEP = 0.02;
+const quantK = (k: number) => Math.round(k / K_STEP) * K_STEP;
+/** Height scale follows the tip: low when flat (the footprint is the collision), taller once tipped. */
+const kzFor = (k: number) => 0.3 + 0.3 * Math.min(1, Math.max(0, (1 - k) / (1 - TIP.play)));
 
-const WALL = 0x4dfcff;
-const MAX_PARTICLES = 600;
-const MAX_POPUPS = 16;
-const hex = (n: number) => n;
+interface Baked { tex: Texture; ax: number; ay: number }
+interface PartView { sprite: Sprite }
+interface Tag { c: Container; g: Graphics; txt: Text; text: string; pips: number }
 
 /** Draws the latest sim state. It reads the sim and never writes to it. */
 export class Renderer {
   app = new Application();
-  private world = new Container();
-  private g = new Graphics();
-  private fx = new Graphics();
-  private labels = new Container();
-  private popLayer = new Container();
-  private s = 1; // pixels per sim unit
-  private ox = 0;
-  private oy = 0;
-  private particles: Particle[] = [];
-  private popups: Popup[] = [];
+  theme: Theme;
+  calm = false;
+  private world = new Container(); // screen shake
+  private machine = new Container(); // nudge shove and lean, the machine's own transform
+  private staticSprite = new Sprite();
+  private floorFx = new Graphics();
+  private glowLayer = new Container();
+  private partLayer = new Container();
+  private ballG = new Graphics();
+  private tagLayer = new Container();
+  private topG = new Graphics();
+  private tiltLayer = new Container();
+  particles!: Particles;
+  private glowTex!: Texture;
+  private glowPool: Sprite[] = [];
+  private glowUsed = 0;
+  private w = 0;
+  private h = 0;
+  /** The view at the current tip. */
+  view: View = { S: 10, ox: 0, oy: 0, k: 1, kz: 0.3, shx: 0, lw: 1.4 };
+  private k = 1;
+  private cache = new Map<string, Baked>();
+  private statics = new Map<string, { tex: Texture; x: number; y: number }>();
+  private staticKey = '';
+  private decalKey = '';
+  private parts = new Map<number, PartView>();
+  private flippers = new Map<string, Graphics>();
+  private plungerG = new Graphics();
+  private tags = new Map<number, Tag>();
   private pulses = new Map<number, number>();
-  /** Vari-targets: the tier of the last hit, shown by how many segments light up. */
   private lastTier = new Map<number, { tier: number; glow: number }>();
   private spin = new Map<number, { angle: number; speed: number }>();
   private trails = new Map<number, { x: number; y: number }[]>();
-  private partLabels = new Map<number, Text>();
   private trauma = 0;
-  private segs = tableSegments();
-  private outline = tableOutline();
+  /** The nudge spring: sideways offset (sim units) and its velocity; plus a rattle timer for tilt warnings. */
+  private shove = 0;
+  private shoveV = 0;
+  private rattle = 0;
+  private time = 0;
+  private twinkleClock = 0;
+  private tiltStamp: Container | null = null;
+
+  constructor(theme: Theme) { this.theme = theme; }
 
   async init(host: HTMLElement) {
     await this.app.init({
-      background: '#070b18',
+      backgroundAlpha: 0,
       resizeTo: host,
       antialias: true,
       resolution: Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true,
     });
     host.appendChild(this.app.canvas);
-    this.world.addChild(this.g, this.fx, this.labels, this.popLayer);
-    this.app.stage.addChild(this.world);
+    this.partLayer.sortableChildren = true;
+    this.particles = new Particles(this.app.renderer, this.theme);
+    this.machine.addChild(this.staticSprite, this.glowLayer, this.floorFx, this.partLayer, this.ballG, this.particles.layer, this.tagLayer, this.topG);
+    this.world.addChild(this.machine);
+    this.app.stage.addChild(this.world, this.tiltLayer);
+    this.glowTex = makeGlowTexture();
+    this.partLayer.addChild(this.plungerG);
     this.layout();
     new ResizeObserver(() => this.layout()).observe(host);
   }
 
-  private layout() {
-    const w = this.app.screen.width, h = this.app.screen.height;
-    const pad = 8;
-    this.s = Math.max(4, Math.min((w - pad * 2) / TABLE_W, (h - pad * 2) / TABLE_H));
-    this.ox = (w - TABLE_W * this.s) / 2;
-    this.oy = (h - TABLE_H * this.s) / 2;
+  setTheme(t: Theme) {
+    this.theme = t;
+    this.flush();
+    this.particles.bake(t);
+    for (const tag of this.tags.values()) tag.c.destroy({ children: true });
+    this.tags.clear();
   }
 
-  private X(x: number) { return this.ox + x * this.s; }
-  private Y(y: number) { return this.oy + (TABLE_H - y) * this.s; }
+  setCalm(on: boolean) {
+    this.calm = on;
+    this.particles.calm = on;
+  }
 
-  /** Pointer position (client px) -> sim units. */
+  /** Drop every baked texture (theme change, resize). */
+  private flush() {
+    for (const b of this.cache.values()) b.tex.destroy(true);
+    this.cache.clear();
+    for (const s of this.statics.values()) s.tex.destroy(true);
+    this.statics.clear();
+    this.staticKey = '';
+  }
+
+  private layout() {
+    const w = this.app.screen.width, h = this.app.screen.height;
+    if (w === this.w && h === this.h) return;
+    this.w = w; this.h = h;
+    // fit the machine (rim and a little air) at its tallest, flat; the surround may crop on narrow screens
+    const S = Math.max(4, Math.min((w - 12) / (RIM.hw * 2 + 1.2), (h - 16) / (RIM.hh * 2 + 2.6)));
+    this.view.S = S;
+    this.view.lw = Math.max(1, S * 0.14);
+    this.flush();
+    this.applyK(this.k);
+  }
+
+  private applyK(k: number) {
+    const v = this.view;
+    v.k = k;
+    v.kz = kzFor(k);
+    v.ox = this.w / 2 - RIM.cx * v.S;
+    v.oy = this.h / 2 + RIM.cy * k * v.S;
+    // the machine leans and shoves about its bottom centre
+    const [px, py] = P(v, RIM.cx, RIM.cy - RIM.hh);
+    this.machine.pivot.set(px, py);
+    this.machine.position.set(px, py);
+  }
+
+  /** Pointer position (client px) -> sim units, through the machine's transform and the tip. */
   toSim(clientX: number, clientY: number) {
     const r = this.app.canvas.getBoundingClientRect();
-    return { x: (clientX - r.left - this.ox) / this.s, y: TABLE_H - (clientY - r.top - this.oy) / this.s };
+    const local = this.machine.toLocal({ x: clientX - r.left, y: clientY - r.top });
+    const [x, y] = unP(this.view, local.x, local.y);
+    return { x, y };
+  }
+
+  /** Sim point (with height) -> client px, for the HTML overlay effects and the smoke test. */
+  toClient(x: number, y: number, z = 0) {
+    const r = this.app.canvas.getBoundingClientRect();
+    const [sx, sy] = P(this.view, x, y, z);
+    const g = this.machine.toGlobal({ x: sx, y: sy });
+    return { x: r.left + g.x, y: r.top + g.y };
+  }
+
+  /** The decal slot under a client point (null if none). */
+  decalAt(clientX: number, clientY: number): number | null {
+    const r = this.app.canvas.getBoundingClientRect();
+    const local = this.machine.toLocal({ x: clientX - r.left, y: clientY - r.top });
+    for (let i = 0; i < DECAL_SLOT_POS.length; i++) {
+      const [X, Y] = P(this.view, DECAL_SLOT_POS[i][0], DECAL_SLOT_POS[i][1], APRON_Z);
+      if (Math.hypot(local.x - X, (local.y - Y) / this.view.k) < this.view.S * 1.3) return i;
+    }
+    return null;
   }
 
   // ---- reactions to sim events ---------------------------------------------------
 
   onScore(ev: ScoreEvent) {
+    const t = this.theme, def = PARTS[ev.def], color = roleFill(t, ev.def);
     this.pulses.set(ev.uid, 1);
     if (ev.tier !== undefined) this.lastTier.set(ev.uid, { tier: ev.tier, glow: 1 });
-    const def = PARTS[ev.def];
     if (ev.spins) {
       const sp = this.spin.get(ev.uid) ?? { angle: 0, speed: 0 };
       sp.speed = Math.min(40, sp.speed + ev.spins * 6);
       this.spin.set(ev.uid, sp);
     }
     const mag = Math.log10(Math.max(10, ev.points));
-    const n = Math.min(26, 6 + Math.round(mag * 5));
-    for (let i = 0; i < n && this.particles.length < MAX_PARTICLES; i++) {
-      const a = Math.random() * Math.PI * 2, v = 6 + Math.random() * 16;
-      this.particles.push({ x: ev.x, y: ev.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 0.35 + Math.random() * 0.4, color: def.color, size: 0.08 + Math.random() * 0.14 });
+    if (ev.kind === 'hit') {
+      if (def.kind === 'bumper' || def.kind === 'kicker' || def.kind === 'target') this.particles.hit(ev.def, ev.x, ev.y, ev.points, 0.8 + mag * 0.12);
+      else this.particles.debris(ev.x, ev.y, 3, 0.8);
+      if (def.kind === 'bank') this.particles.puff(ev.x, ev.y, 0.2, 1);
+      if (def.kind === 'saucer') this.particles.smokeAt(ev.x, ev.y + 0.2, 1.7);
+      if (def.kind === 'kickback') this.particles.smokeAt(ev.x, ev.y, 0.4, 0.7);
+      if (!this.calm) this.trauma = Math.min(1, this.trauma + 0.1 + mag * 0.03);
     }
-    if (ev.kind === 'hit') this.trauma = Math.min(1, this.trauma + 0.1 + mag * 0.03);
-    if (ev.label) this.popup(ev.label, ev.kind === 'bonus' ? `+${ev.base}  ×${ev.multBefore.toFixed(2)}` : '', ev.x, ev.y + 1.6, def.color, 16);
-    else this.popup(`+${ev.points}`, this.mathLine(ev), ev.x, ev.y + 1.2, def.color, 15 + mag * 5);
+    if (ev.kind === 'bonus') for (let i = 0; i < 4; i++) this.particles.sparkle(ev.x + (Math.random() - 0.5) * 3, ev.y + (Math.random() - 0.5) * 2, 1 + Math.random(), 1.2, i % 2 === 0);
+    if (ev.label) this.particles.sticker(ev.label, ev.kind === 'bonus' && ev.base ? `+${ev.base} ×${ev.multBefore.toFixed(2)}` : '', color, ev.x, ev.y, 2.2, 1.05);
+    else this.particles.sticker(`+${ev.points}`, this.mathLine(ev), color, ev.x, ev.y, 1.6, 0.7 + mag * 0.12);
   }
 
   /** "100 +5 grown ×1.30": exactly how the points were made. */
   private mathLine(ev: ScoreEvent): string {
     const parts = ev.notes.map((n) => n.replace(' base', ''));
-    if (Math.abs(ev.multBefore - 1) > 0.001) parts.push(`×${ev.multBefore.toFixed(2)} Mult`);
-    return parts.join('  ');
+    if (Math.abs(ev.multBefore - 1) > 0.001) parts.push(`×${ev.multBefore.toFixed(2)}`);
+    return parts.join(' ');
   }
 
-  /** A Ball Saver just returned a ball: burst of lime sparks and a shout where it sits. */
+  /** A Ball Saver just returned a ball: sparkles and a shout where it sits. */
   onSaved(x: number, y: number) {
-    for (let i = 0; i < 28 && this.particles.length < MAX_PARTICLES; i++) {
-      const a = Math.random() * Math.PI * 2, v = 5 + Math.random() * 14;
-      this.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: 0.4 + Math.random() * 0.5, color: PARTS.saver.color, size: 0.1 + Math.random() * 0.16 });
-    }
-    this.popup('SHOOT AGAIN!', '', x, y + 1.6, PARTS.saver.color, 18);
+    for (let i = 0; i < 6; i++) this.particles.sparkle(x + (Math.random() - 0.5) * 3, y + (Math.random() - 0.5) * 2, 0.5 + Math.random(), 1.1, i % 2 === 1);
+    this.particles.sticker('SHOOT AGAIN!', '', roleFill(this.theme, 'saver'), x, y, 1.8, 1.05);
   }
 
-  onTilt() { this.trauma = 1; }
-  onBigMoment() { this.trauma = Math.min(1, this.trauma + 0.5); }
+  onRelease(x: number, y: number) { this.particles.puff(x, y, 0.6, 1.2); this.particles.smokeAt(x, y + 0.2, 1.6); }
+  onTilt() { if (!this.calm) this.trauma = 1; this.particles.smokeAt(13, 20, 1, 1.4); }
+  onBigMoment() { if (!this.calm) this.trauma = Math.min(1, this.trauma + 0.5); }
+  /** A nudge shoves the cabinet sideways on a damped spring; near the tilt limit it rattles too. */
+  onNudge(dir: number, tilt: number) {
+    if (this.calm) return;
+    this.shoveV += dir * 9;
+    if (tilt > 0.55) this.rattle = 0.35;
+  }
 
-  private popup(main: string, sub: string, x: number, y: number, color: number, size: number) {
-    if (this.popups.length >= MAX_POPUPS) this.popups.shift()!.box.destroy({ children: true });
-    const box = new Container();
-    const t = new Text({ text: main, style: { fontFamily: 'ui-monospace, Menlo, monospace', fontSize: size, fontWeight: '800', fill: color, stroke: { color: 0x000000, width: 4 } } });
-    t.anchor.set(0.5, 1);
-    box.addChild(t);
-    if (sub) {
-      const u = new Text({ text: sub, style: { fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, fontWeight: '600', fill: 0xe8ecff, stroke: { color: 0x000000, width: 3 } } });
-      u.anchor.set(0.5, 0);
-      u.y = 1;
-      box.addChild(u);
+  // ---- baking ----------------------------------------------------------------------
+
+  /** A part drawn once per theme x view x state into a texture; the anchor is its base point on the floor. */
+  private baked(id: PartId, angle: number, st: PartState): Baked {
+    const ab = PARTS[id].rotatable ? Math.round((angle * 180) / Math.PI / 5) * 5 : 0;
+    const key = `${id}|${ab}|${this.view.k.toFixed(2)}|${stateKey(st)}`;
+    let b = this.cache.get(key);
+    if (b) return b;
+    const v: View = { ...this.view, ox: 0, oy: 0 };
+    const c = drawPart(v, this.theme, id, 0, 0, (ab * Math.PI) / 180, st);
+    const bounds = c.getLocalBounds();
+    const pad = 2;
+    const frame = new Rectangle(Math.floor(bounds.x) - pad, Math.floor(bounds.y) - pad, Math.ceil(bounds.width) + pad * 2, Math.ceil(bounds.height) + pad * 2);
+    const tex = this.app.renderer.generateTexture({ target: c, frame, resolution: this.app.renderer.resolution, antialias: true });
+    c.destroy({ children: true });
+    b = { tex, ax: -frame.x / frame.width, ay: -frame.y / frame.height };
+    this.cache.set(key, b);
+    return b;
+  }
+
+  /** The machine's fixed layers at the current tip, kept for the tips we visit most. */
+  private updateStatic(game: Game) {
+    const decals: (StuckDecal | null)[] = [0, 1, 2, 3].map((i) => {
+      const p = game.decals[i];
+      return p ? { look: game.decalLook(p.id)!, rarity: game.decalRarity(p.id) } : null;
+    });
+    const dk = JSON.stringify(decals.map((d) => d && [d.look.shape, d.look.icon, d.rarity]));
+    if (dk !== this.decalKey) {
+      this.decalKey = dk;
+      for (const s of this.statics.values()) s.tex.destroy(true);
+      this.statics.clear();
+      this.staticKey = '';
     }
-    // events that land together stack upwards instead of printing on top of each other
-    let stack = 0;
-    for (const p of this.popups) if (p.life < 0.6 && Math.hypot(p.x - x, p.y0 - y) < 3) stack++;
-    this.popLayer.addChild(box);
-    this.popups.push({ box, x, y: y + stack * 1.5, y0: y, life: 0, max: 1.3 });
+    const key = this.view.k.toFixed(2);
+    if (key === this.staticKey) return;
+    this.staticKey = key;
+    let s = this.statics.get(key);
+    if (!s) {
+      const v: View = { ...this.view };
+      const c = buildMachine(v, this.theme, decals);
+      const frame = new Rectangle(0, 0, Math.ceil(this.w), Math.ceil(this.h));
+      const tex = this.app.renderer.generateTexture({ target: c, frame, resolution: this.app.renderer.resolution, antialias: true });
+      c.destroy({ children: true });
+      s = { tex, x: 0, y: 0 };
+      this.statics.set(key, s);
+      // keep the flat and the tipped view, and whatever we are passing through now
+      const keep = new Set([TIP.workshop.toFixed(2), TIP.play.toFixed(2), key]);
+      for (const [k2, s2] of this.statics) if (!keep.has(k2)) { s2.tex.destroy(true); this.statics.delete(k2); }
+    }
+    this.staticSprite.texture = s.tex;
   }
 
   // ---- frame -------------------------------------------------------------------------
 
   draw(game: Game, dt: number, st: DrawState) {
-    const g = this.g, fx = this.fx;
-    g.clear();
-    fx.clear();
+    this.time += dt;
+    // the tip eases towards its target over ~0.4 s
+    const target = game.sim.tilted ? TIP.tilt : game.mode === 'round' ? TIP.play : TIP.workshop;
+    const step = dt / 0.4 * (TIP.workshop - TIP.play);
+    this.k = Math.abs(target - this.k) <= step ? target : this.k + Math.sign(target - this.k) * step;
+    // the part cache is bounded; it is only ever emptied between frames, never while sprites are being assigned
+    if (this.cache.size > 1600) { for (const c of this.cache.values()) c.tex.destroy(true); this.cache.clear(); }
+    const qk = quantK(this.k);
+    if (Math.abs(qk - this.view.k) > 1e-6) this.applyK(qk);
+    this.updateStatic(game);
 
-    // screen shake (trauma model: shake grows with trauma squared)
+    // screen shake (trauma model) and the nudge spring
     this.trauma = Math.max(0, this.trauma - dt * 1.8);
-    const shake = this.trauma * this.trauma * 9;
+    const shake = this.calm ? 0 : this.trauma * this.trauma * 9;
     this.world.position.set((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    const K = 140, C = 13;
+    this.shoveV += (-K * this.shove - C * this.shoveV) * dt;
+    this.shove += this.shoveV * dt;
+    this.rattle = Math.max(0, this.rattle - dt);
+    const rat = this.rattle > 0 ? (Math.random() - 0.5) * 3 : 0;
+    const tiltLean = game.sim.tilted ? -0.06 : 0;
+    this.machine.position.x = this.machine.pivot.x + this.shove * this.view.S * 0.5 + rat;
+    this.machine.rotation = this.shove * 0.035 + tiltLean + rat * 0.002;
 
-    this.drawTable(game);
+    this.glowUsed = 0;
+    const fx = this.floorFx;
+    fx.clear();
+    this.topG.clear();
     if (st.showHeat) this.drawHeat(game);
     if (game.mode === 'workshop') this.drawGrid();
+    // the arrow inserts crawl up the middle (frozen in Calm mode and dark on TILT)
+    arrowInserts(fx, this.view, this.theme, game.sim.tilted ? -1 : this.calm ? 0 : Math.floor(this.time * 3) % 3);
     this.drawParts(game, dt, st);
-    this.drawFlippers(game, st);
+    this.drawFlippers(game);
+    this.drawPlunger(game);
     this.drawBalls(game);
-    this.drawGauge(game);
-    this.drawFx(dt);
+    for (let i = this.glowUsed; i < this.glowPool.length; i++) this.glowPool[i].visible = false;
+    this.particles.update(dt, this.view);
+    this.drawTilt(game);
   }
 
-  private drawTable(game: Game) {
-    const g = this.g;
-    const pts: number[] = [this.X(0), this.Y(0)];
-    for (const [x, y] of this.outline) pts.push(this.X(x), this.Y(y));
-    pts.push(this.X(TABLE_W), this.Y(0));
-    g.poly(pts).fill({ color: 0x0b1233 });
-
-    // faint concentric rings as playfield art
-    const cx = this.X(12), cy = this.Y(28);
-    for (let i = 1; i <= 5; i++) g.circle(cx, cy, this.s * (3 + i * 3.6)).stroke({ width: 1, color: 0x1a2860, alpha: 0.55 - i * 0.07 });
-    // drain label
-    g.rect(this.X(9.2), this.Y(3.2), this.s * 5.6, this.s * 0.12).fill({ color: 0xff5d6c, alpha: 0.5 });
-
-    // neon walls: wide soft stroke then a bright core
-    for (const pass of [{ w: 0.9, a: 0.14 }, { w: 0.45, a: 0.3 }, { w: 0.16, a: 1 }]) {
-      for (const sg of this.segs) g.moveTo(this.X(sg.x1), this.Y(sg.y1)).lineTo(this.X(sg.x2), this.Y(sg.y2));
-      g.stroke({ width: Math.max(1, pass.w * this.s), color: WALL, alpha: pass.a, cap: 'round', join: 'round' });
-    }
-    for (const q of TABLE_POSTS) g.circle(this.X(q.x), this.Y(q.y), q.r * this.s).fill({ color: 0x0a0f24 }).stroke({ width: 2, color: WALL });
-    if (game.sim.tilted) g.rect(this.X(0), this.Y(TABLE_H), this.s * TABLE_W, this.s * TABLE_H).fill({ color: 0xff2040, alpha: 0.12 });
+  private glow(x: number, y: number, r: number, color: string, alpha: number) {
+    let s = this.glowPool[this.glowUsed];
+    if (!s) { s = new Sprite(this.glowTex); s.anchor.set(0.5); this.glowLayer.addChild(s); this.glowPool.push(s); }
+    this.glowUsed++;
+    const [X, Y] = P(this.view, x, y);
+    s.visible = true;
+    s.position.set(X, Y);
+    s.tint = num(color);
+    s.alpha = alpha;
+    s.width = r * 2 * this.view.S;
+    s.height = r * 2 * this.view.S * this.view.k;
   }
 
-  /** Where the balls spent their time since the layout last changed: blue is a visit, red is a hotspot. */
+  /** Where the balls spent their time since the layout last changed: cool is a visit, hot is a hotspot. */
   private drawHeat(game: Game) {
-    const g = this.g;
+    const g = this.floorFx, t = this.theme, v = this.view;
     let max = 0;
-    for (const v of game.heat) if (v > max) max = v;
+    for (const val of game.heat) if (val > max) max = val;
     if (max <= 0) return;
-    const ramp = [0x2a46ff, 0x4dfcff, 0xffd23f, 0xff4f4f];
+    const ramp = [t.role.lane, t.role.pop, t.role.coin, t.accent];
     for (let y = 0; y < HEAT_H; y++) for (let x = 0; x < HEAT_W; x++) {
-      const v = game.heat[y * HEAT_W + x];
-      if (v < max * 0.003) continue;
-      const t = Math.sqrt(v / max);
-      const f = t * (ramp.length - 1), i = Math.min(ramp.length - 2, Math.floor(f)), k = f - i;
-      const c1 = ramp[i], c2 = ramp[i + 1];
-      const lerp = (sh: number) => Math.round(((c1 >> sh) & 255) * (1 - k) + ((c2 >> sh) & 255) * k);
-      const color = (lerp(16) << 16) | (lerp(8) << 8) | lerp(0);
-      g.rect(this.X(x), this.Y(y + 1), this.s + 0.5, this.s + 0.5).fill({ color, alpha: 0.12 + 0.5 * t });
+      const val = game.heat[y * HEAT_W + x];
+      if (val < max * 0.003) continue;
+      const u = Math.sqrt(val / max);
+      const f = u * (ramp.length - 1), i = Math.min(ramp.length - 2, Math.floor(f));
+      const color = mix(ramp[i], ramp[i + 1], f - i);
+      g.poly(flat([P(v, x, y), P(v, x + 1, y), P(v, x + 1, y + 1), P(v, x, y + 1)])).fill({ color, alpha: 0.15 + 0.5 * u });
     }
   }
 
+  /** The workshop's placement grid over the build area, and the protected zone below it shaded. */
   private drawGrid() {
-    const g = this.g;
-    for (let x = 3; x <= 21; x += 1) for (let y = 15; y <= 48; y += 1) g.circle(this.X(x), this.Y(y), 1).fill({ color: 0x6070c0, alpha: 0.3 });
-    g.rect(this.X(0), this.Y(14), this.s * 24, this.s * 14).fill({ color: 0xff5d6c, alpha: 0.05 });
+    const g = this.floorFx, v = this.view, t = this.theme;
+    g.poly(flat([P(v, 0, 0), P(v, TABLE_W - 2, 0), P(v, TABLE_W - 2, BUILD_AREA.y0), P(v, 0, BUILD_AREA.y0)])).fill({ color: t.shadeTint, alpha: 0.07 });
+    for (let x = BUILD_AREA.x0 + 1; x <= BUILD_AREA.x1 - 1; x += 1) for (let y = BUILD_AREA.y0; y <= BUILD_AREA.y1; y += 1) {
+      const [X, Y] = P(v, x, y);
+      g.circle(X, Y, Math.max(1, v.S * 0.07)).fill({ color: t.ink, alpha: 0.28 });
+    }
   }
 
-  /** Corner points of a box part, rotated, in screen space. */
-  private boxPts(x: number, y: number, hw: number, hh: number, angle: number, grow = 0): number[] {
-    const c = Math.cos(angle), s = Math.sin(angle), out: number[] = [];
-    for (const [lx, ly] of [[-hw - grow, -hh - grow], [hw + grow, -hh - grow], [hw + grow, hh + grow], [-hw - grow, hh + grow]]) {
-      out.push(this.X(x + lx * c - ly * s), this.Y(y + lx * s + ly * c));
-    }
-    return out;
-  }
-
-  /** One part's body. `alpha` < 1 is used for the ghost. */
-  private drawPartShape(def: PartDef, x: number, y: number, angle: number, opts: { pulse?: number; lit?: boolean; spin?: number; alpha?: number; inst?: PartInstance; down?: boolean[]; armed?: boolean; left?: number; tier?: number; glow?: number; reach?: number } = {}) {
-    const g = this.g, pulse = opts.pulse ?? 0, a = opts.alpha ?? 1, col = hex(def.color);
-    const X = this.X(x), Y = this.Y(y);
-    if (def.shape.type === 'circle') {
-      const r = def.shape.r * (1 + pulse * 0.22) * this.s;
-      if (def.kind === 'bumper') {
-        g.circle(X, Y, r * 1.55).fill({ color: col, alpha: (0.1 + pulse * 0.3) * a });
-        g.circle(X, Y, r).fill({ color: 0x0a0f24, alpha: a }).stroke({ width: this.s * 0.22, color: col, alpha: a });
-        g.circle(X, Y, r * 0.55).fill({ color: col, alpha: (0.3 + pulse * 0.7) * a });
-        const ticks = Math.round((opts.inst ? dialValue(opts.inst, 'kick') : 2) * 2);
-        for (let i = 0; i < ticks; i++) {
-          const t = -Math.PI / 2 + (i / 8) * Math.PI * 2;
-          g.circle(X + Math.cos(t) * r * 0.82, Y + Math.sin(t) * r * 0.82, this.s * 0.07).fill({ color: 0xffffff, alpha: 0.8 * a });
-        }
-      } else if (def.kind === 'rollover') {
-        g.circle(X, Y, r * 1.5).fill({ color: col, alpha: (opts.lit ? 0.35 : 0.08) * a });
-        g.circle(X, Y, r).fill({ color: opts.lit ? col : 0x0a0f24, alpha: a }).stroke({ width: this.s * 0.16, color: col, alpha: a });
-      } else if (def.kind === 'lamp') {
-        const rad = (opts.reach ?? (opts.inst ? dialValue(opts.inst, 'radius') : 5)) * this.s;
-        if (opts.lit) g.circle(X, Y, rad).fill({ color: col, alpha: 0.1 + pulse * 0.1 }).stroke({ width: 1.5, color: col, alpha: 0.5 });
-        g.circle(X, Y, r * 1.6).fill({ color: col, alpha: (opts.lit ? 0.45 : 0.1) * a });
-        g.circle(X, Y, r).fill({ color: opts.lit ? 0xffffff : 0x3a3a1a, alpha: a }).stroke({ width: this.s * 0.14, color: col, alpha: a });
-      } else if (def.kind === 'saucer') {
-        g.circle(X, Y, r * 1.35).fill({ color: col, alpha: (0.12 + pulse * 0.3) * a });
-        g.circle(X, Y, r).fill({ color: 0x05030c, alpha: a }).stroke({ width: this.s * 0.2, color: col, alpha: a });
-        // arrow showing where the ball will be fired
-        const tip = { x: x - Math.sin(angle) * (def.shape.r + 1.3), y: y + Math.cos(angle) * (def.shape.r + 1.3) };
-        const l = { x: x - Math.sin(angle + 0.5) * (def.shape.r + 0.3), y: y + Math.cos(angle + 0.5) * (def.shape.r + 0.3) };
-        const rr = { x: x - Math.sin(angle - 0.5) * (def.shape.r + 0.3), y: y + Math.cos(angle - 0.5) * (def.shape.r + 0.3) };
-        g.poly([this.X(tip.x), this.Y(tip.y), this.X(l.x), this.Y(l.y), this.X(rr.x), this.Y(rr.y)]).fill({ color: col, alpha: 0.9 * a });
-      } else if (def.kind === 'flipper') {
-        g.circle(X, Y, r).stroke({ width: 1.5, color: col, alpha: 0.35 * a });
-      } else if (def.kind === 'kickback') {
-        // a ring with a chevron along the aim: bright while armed, dark once it has fired this ball
-        const on = opts.armed ?? true;
-        g.circle(X, Y, r * 1.45).fill({ color: col, alpha: (on ? 0.16 : 0.03) * a + pulse * 0.25 });
-        g.circle(X, Y, r).fill({ color: 0x050d1c, alpha: a }).stroke({ width: this.s * 0.2, color: col, alpha: (on ? 1 : 0.3) * a });
-        const dx = -Math.sin(angle), dy = Math.cos(angle), px = -dy, py = dx; // aim and its perpendicular
-        const R = def.shape.r;
-        for (const back of [0.15, -0.35]) {
-          const tip = { x: x + dx * (R * 0.7 + back), y: y + dy * (R * 0.7 + back) };
-          const l = { x: tip.x - dx * R * 0.55 + px * R * 0.5, y: tip.y - dy * R * 0.55 + py * R * 0.5 };
-          const rr = { x: tip.x - dx * R * 0.55 - px * R * 0.5, y: tip.y - dy * R * 0.55 - py * R * 0.5 };
-          g.moveTo(this.X(l.x), this.Y(l.y)).lineTo(this.X(tip.x), this.Y(tip.y)).lineTo(this.X(rr.x), this.Y(rr.y))
-            .stroke({ width: this.s * 0.17, color: col, alpha: (on ? 0.95 : 0.25) * a, cap: 'round', join: 'round' });
-        }
-      } else if (def.kind === 'saver') {
-        // a SHOOT AGAIN insert: lit while a save is ready, with a ring that drains as the window closes
-        const ready = (opts.armed ?? true) && (opts.left ?? 1) > 0;
-        g.circle(X, Y, r * 1.7).fill({ color: col, alpha: (ready ? 0.22 : 0.04) * a });
-        g.circle(X, Y, r).fill({ color: ready ? col : 0x1b2a0c, alpha: (ready ? 0.9 : 1) * a }).stroke({ width: this.s * 0.14, color: col, alpha: a });
-        const left = opts.armed === false ? 0 : (opts.left ?? 1);
-        if (left > 0) {
-          const R = r * 1.55, a0 = -Math.PI / 2;
-          g.moveTo(X + Math.cos(a0) * R, Y + Math.sin(a0) * R).arc(X, Y, R, a0, a0 + Math.PI * 2 * left)
-            .stroke({ width: this.s * 0.16, color: 0xffffff, alpha: 0.85 * a, cap: 'round' });
-        }
-      }
-      return;
-    }
-    // box parts
-    const { hw, hh } = def.shape;
-    if (def.kind === 'spinner') {
-      const squash = 0.25 + 0.75 * Math.abs(Math.cos(opts.spin ?? 0));
-      g.poly(this.boxPts(x, y, hw, hh * 1.6, angle)).fill({ color: col, alpha: 0.08 * a });
-      g.poly(this.boxPts(x, y, hw, hh * squash, angle)).fill({ color: col, alpha: (0.5 + pulse * 0.5) * a }).stroke({ width: 1.5, color: col, alpha: a });
-    } else if (def.kind === 'bank') {
-      // three targets along the part's long axis; a target that is down shows only as a faint outline
-      const c = Math.cos(angle), sn = Math.sin(angle);
-      for (let i = 0; i < 3; i++) {
-        const off = (i - 1) * 1.75;
-        const cx = x + c * off, cy = y + sn * off;
-        const isDown = opts.down?.[i] ?? false;
-        const pts = this.boxPts(cx, cy, 0.8, 0.38, angle, pulse * 0.12);
-        if (isDown) g.poly(pts).stroke({ width: 1, color: col, alpha: 0.35 * a });
-        else g.poly(pts).fill({ color: col, alpha: (0.55 + pulse * 0.45) * a }).stroke({ width: this.s * 0.14, color: 0xffffff, alpha: 0.7 * a, join: 'round' });
-      }
-    } else if (def.kind === 'target') {
-      // a plate in four segments, one per tier: the segments up to the last hit's tier glow
-      const c = Math.cos(angle), sn = Math.sin(angle), n = def.recipe.tiers?.length ?? 4, seg = hw / (n / 2);
-      g.poly(this.boxPts(x, y, hw, hh * 1.7, angle)).fill({ color: 0x07241f, alpha: a }).stroke({ width: this.s * 0.16, color: col, alpha: a, join: 'round' });
-      for (let i = 0; i < n; i++) {
-        const off = -hw + seg * (i + 0.5);
-        const on = (opts.tier ?? -1) >= i;
-        g.poly(this.boxPts(x + c * off, y + sn * off, seg * 0.42, hh * 0.85, angle)).fill({ color: col, alpha: (0.22 + (on ? 0.78 * (opts.glow ?? 0) : 0)) * a });
-      }
-    } else if (def.kind === 'deflector') {
-      g.poly(this.boxPts(x, y, hw, hh, angle)).fill({ color: 0x1a2250, alpha: a }).stroke({ width: this.s * 0.2, color: col, alpha: a, join: 'round' });
-    } else {
-      g.poly(this.boxPts(x, y, hw, hh, angle, pulse * 0.2)).fill({ color: 0x1a0f08, alpha: a }).stroke({ width: this.s * 0.22, color: col, alpha: a, join: 'round' });
-      // chevrons along the kicking face
-      for (let i = -1; i <= 1; i++) {
-        const c = Math.cos(angle), sn = Math.sin(angle);
-        const cx = x + c * i * hw * 0.5, cy = y + sn * i * hw * 0.5;
-        g.circle(this.X(cx), this.Y(cy), this.s * 0.12).fill({ color: col, alpha: (0.5 + pulse * 0.5) * a });
-      }
+  private partState(game: Game, p: PartInstance, lanes: Map<number, string>, banks: Map<number, boolean[]>, kick: Map<number, boolean>, savers: Map<number, { armed: boolean; left: number }>, heldNear: (x: number, y: number) => boolean): PartState {
+    const tilted = game.sim.tilted;
+    const lit = !tilted && game.scorer.isLit(p.uid);
+    const pulse = this.pulses.get(p.uid) ?? 0;
+    switch (p.def) {
+      case 'pop': case 'coin': case 'mega': case 'sling': return { hit: pulse > 0.35 };
+      case 'lane': return { lit, letter: lanes.get(p.uid) };
+      case 'uplight': return { lit, target: LEVEL_TARGETS[Math.round(dialValue(p, 'target'))] ?? 'pop' };
+      case 'lamp': return { lit };
+      case 'bank': return { down: banks.get(p.uid) ?? [false, false, false] };
+      case 'spinner': { const sp = this.spin.get(p.uid); return { spin: sp ? Math.floor((sp.angle / (Math.PI / 8)) % 8 + 8) % 8 : 0 }; }
+      case 'vari': { const lt = this.lastTier.get(p.uid); return { seg: lt && lt.glow > 0.2 ? lt.tier + 1 : 0 }; }
+      case 'kickback': return { armed: !tilted && (kick.get(p.uid) ?? true) };
+      case 'saver': { const s = savers.get(p.uid); return { armed: !tilted && (s ? s.armed && s.left > 0 : true) }; }
+      case 'printer': return { busy: heldNear(p.x, p.y) };
+      default: return {};
     }
   }
 
   private drawParts(game: Game, dt: number, st: DrawState) {
-    const g = this.g;
-    const live = new Set<number>();
-    const font = Math.max(9, this.s * 0.8);
+    const t = this.theme, v = this.view, fx = this.floorFx;
+    const seen = new Set<number>();
     const banks = game.sim.bankStates();
-    const kickbacks = game.sim.kickbackStates();
+    const kick = game.sim.kickbackStates();
     const savers = game.sim.saverStates();
+    const held = game.sim.ballStates().filter((b) => b.held);
+    const heldNear = (x: number, y: number) => held.some((b) => Math.hypot(b.x - x, b.y - y) < 1.8);
+    // the lanes spell the theme's word, left to right
+    const lanes = new Map<number, string>();
+    game.placed.filter((p) => p.def === 'lane').sort((a, b) => a.x - b.x || a.y - b.y).forEach((p, i) => lanes.set(p.uid, t.laneWord[i % t.laneWord.length]));
+    const tilted = game.sim.tilted;
+    this.twinkleClock -= dt;
+    const twinkle = this.twinkleClock <= 0;
+    if (twinkle) this.twinkleClock = 0.45;
+
     for (const p of game.placed) {
-      let def = PARTS[p.def];
-      // a Level Light wears the colour of the part type it upgrades
-      if (def.recipe.levelUp) def = { ...def, color: PARTS[LEVEL_TARGETS[Math.round(dialValue(p, 'target'))] ?? 'pop'].color };
-      live.add(p.uid);
-      const pulse = this.pulses.get(p.uid) ?? 0;
-      if (pulse > 0) this.pulses.set(p.uid, Math.max(0, pulse - dt * 4.5));
+      seen.add(p.uid);
+      const def = PARTS[p.def];
+      let pulse = this.pulses.get(p.uid) ?? 0;
+      if (pulse > 0) { pulse = Math.max(0, pulse - dt * 4.5); this.pulses.set(p.uid, pulse); }
       const sp = this.spin.get(p.uid);
       if (sp) {
         sp.angle += sp.speed * dt;
         sp.speed *= Math.exp(-dt * 2.2);
         if (sp.speed < 0.05) this.spin.delete(p.uid);
       }
-      const lit = game.scorer.isLit(p.uid);
-      const saver = savers.get(p.uid);
       const lt = this.lastTier.get(p.uid);
-      if (lt) {
-        lt.glow = Math.max(0, lt.glow - dt * 0.7);
-        if (lt.glow === 0) this.lastTier.delete(p.uid);
+      if (lt) { lt.glow = Math.max(0, lt.glow - dt * 0.7); if (lt.glow === 0) this.lastTier.delete(p.uid); }
+      const ps = this.partState(game, p, lanes, banks, kick, savers, heldNear);
+      // glows live on the floor, under every part: lamps, lit inserts, armed kickbacks, a ready saver
+      const r = footprint(def);
+      if (!tilted) {
+        if (p.def === 'lamp' && ps.lit) this.glow(p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, 0.5);
+        if (p.def === 'lane' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.lane, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.7, p.y + 0.5, 0.3, 0.7, false, true); }
+        if (p.def === 'uplight' && ps.lit) this.glow(p.x, p.y, r * 2.3, t.role[ps.target ?? 'pop'], 0.7);
+        if (p.def === 'kickback' && ps.armed) this.glow(p.x, p.y, r * 1.7, t.role.kickback, 0.45);
+        if (p.def === 'saver' && ps.armed) this.glow(p.x, p.y, r * 2, t.role.saver, 0.55);
       }
-      const reach = def.kind === 'lamp' ? lampStats(dialValue(p, 'radius'), game.mods).radius : undefined; // Bright Lamps widen the glow
-      this.drawPartShape(def, p.x, p.y, p.angle, { pulse, lit, reach, spin: sp?.angle ?? 0, inst: p, down: banks.get(p.uid), armed: kickbacks.get(p.uid) ?? saver?.armed, left: saver?.left, tier: lt?.tier, glow: lt?.glow });
-      // level pips above the part: one gold dot per level this part type has earned
-      const lvl = def.recipe.perLevel ? game.scorer.levelOf(p.def) : 0;
-      for (let i = 0; i < lvl; i++) {
-        g.circle(this.X(p.x + (i - (lvl - 1) / 2) * 0.55), this.Y(p.y + footprint(def) + 0.55), this.s * 0.16).fill({ color: 0xffd23f }).stroke({ width: 1, color: 0x000000, alpha: 0.6 });
-      }
-      if (st.selectedUid === p.uid) g.circle(this.X(p.x), this.Y(p.y), (footprint(def) + 0.6) * this.s).stroke({ width: 2, color: 0xffffff, alpha: 0.9 });
-      else if (st.hoverUid === p.uid) g.circle(this.X(p.x), this.Y(p.y), (footprint(def) + 0.5) * this.s).stroke({ width: 1.5, color: def.color, alpha: 0.8 });
-      if (def.kind === 'lamp' && (st.selectedUid === p.uid || st.hoverUid === p.uid)) {
-        g.circle(this.X(p.x), this.Y(p.y), (reach ?? dialValue(p, 'radius')) * this.s).stroke({ width: 1.5, color: def.color, alpha: 0.6 });
-      }
-
-      // the part's current value, printed on it
-      const text = def.kind === 'saver' ? 'SAVE' : game.scorer.label(p);
-      let t = this.partLabels.get(p.uid);
-      if (text) {
-        if (!t) {
-          t = new Text({ text, style: { fontFamily: 'ui-monospace, Menlo, monospace', fontSize: font, fontWeight: '800', fill: 0xffffff, stroke: { color: 0x000000, width: 3 } } });
-          t.anchor.set(0.5);
-          this.labels.addChild(t);
-          this.partLabels.set(p.uid, t);
+      if (p.def === 'saver') {
+        const s = savers.get(p.uid);
+        const left = s ? (s.armed ? s.left : 0) : 0;
+        if (left > 0 && left < 1) { // the window closing, as a ring that drains
+          const pts = Array.from({ length: 33 }, (_, i): Pt => { const a = Math.PI / 2 - (i / 32) * Math.PI * 2 * left; return P(v, p.x + Math.cos(a) * r * 1.35, p.y + Math.sin(a) * r * 1.35); });
+          fx.moveTo(pts[0][0], pts[0][1]);
+          for (const q of pts.slice(1)) fx.lineTo(q[0], q[1]);
+          fx.stroke({ width: v.lw * 1.1, color: t.ink, cap: 'round' });
         }
-        if (t.text !== text) t.text = text;
-        t.style.fontSize = font;
-        const below = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'saver' || def.kind === 'target';
-        t.position.set(this.X(p.x), this.Y(p.y) + (below ? this.s * (footprint(def) + 0.9) : 0));
-        t.visible = true;
-      } else if (t) t.visible = false;
+      }
+      if (pulse > 0.05 && (def.kind === 'bumper' || def.kind === 'kicker')) groundRing(fx, v, t, p.x, p.y, r * (1.1 + (1 - pulse) * 0.7), roleFill(t, p.def), v.lw * 1.6 * pulse + 0.5, Math.min(1, pulse * 2));
+
+      const b = this.baked(p.def, p.angle, ps);
+      let pv = this.parts.get(p.uid);
+      if (!pv) {
+        pv = { sprite: new Sprite() };
+        this.partLayer.addChild(pv.sprite);
+        this.parts.set(p.uid, pv);
+      }
+      if (pv.sprite.texture !== b.tex) { pv.sprite.texture = b.tex; pv.sprite.anchor.set(b.ax, b.ay); }
+      const [X, Y] = P(v, p.x, p.y);
+      pv.sprite.position.set(X, Y);
+      pv.sprite.zIndex = -p.y * 100;
+      pv.sprite.alpha = 1;
+      pv.sprite.tint = 0xffffff;
+      // a hit squashes a bumper for a moment (presentation only)
+      const sq = def.kind === 'bumper' ? pulse * 0.12 : 0;
+      pv.sprite.scale.set(1 + sq, 1 - sq);
+
+      // selection: a dashed paper ring; hover: a ring in the part's colour
+      if (st.selectedUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.6, t.paper, v.lw * 1.4, t.ink);
+      else if (st.hoverUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.5, roleFill(t, p.def), v.lw * 1.1);
+      if (def.kind === 'lamp' && (st.selectedUid === p.uid || st.hoverUid === p.uid)) {
+        dashedRing(fx, v, p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, v.lw, t.ink);
+      }
+      this.drawTag(game, p);
     }
-    for (const [uid, t] of this.partLabels) if (!live.has(uid)) { t.destroy(); this.partLabels.delete(uid); }
+    // the dotted link from the hovered part to every lamp that boosts it
+    const hov = st.hoverUid != null ? game.part(st.hoverUid) : undefined;
+    if (hov && hov.placed && PARTS[hov.def].recipe.points) {
+      for (const l of game.placed) {
+        if (l.def !== 'lamp') continue;
+        const reach = lampStats(dialValue(l, 'radius'), game.mods).radius;
+        if (Math.hypot(l.x - hov.x, l.y - hov.y) > reach) continue;
+        dottedLine(this.topG, P(v, hov.x, hov.y, 1.1), P(v, l.x, l.y, 1.95), game.scorer.isLit(l.uid) ? t.ink : mix(t.ink, t.paper, 0.5), v.lw);
+      }
+    }
+    if (st.ghost) seen.add(-1);
+    for (const [uid, pv] of this.parts) if (!seen.has(uid)) { pv.sprite.destroy(); this.parts.delete(uid); }
+    for (const [uid, tag] of this.tags) if (!seen.has(uid)) { tag.c.destroy({ children: true }); this.tags.delete(uid); }
 
     if (st.ghost) {
       const def = PARTS[st.ghost.def];
-      const c = st.ghost.valid ? def.color : 0xff5d6c;
-      this.drawPartShape({ ...def, color: c }, st.ghost.x, st.ghost.y, st.ghost.angle, { alpha: 0.55 });
-      g.circle(this.X(st.ghost.x), this.Y(st.ghost.y), footprint(def) * this.s).stroke({ width: 1, color: c, alpha: 0.5 });
+      const b = this.baked(st.ghost.def, st.ghost.angle, st.ghost.def === 'lane' ? { letter: t.laneWord[0] } : {});
+      let pv = this.parts.get(-1);
+      if (!pv) { pv = { sprite: new Sprite() }; this.partLayer.addChild(pv.sprite); this.parts.set(-1, pv); }
+      pv.sprite.texture = b.tex;
+      pv.sprite.anchor.set(b.ax, b.ay);
+      const [X, Y] = P(v, st.ghost.x, st.ghost.y);
+      pv.sprite.position.set(X, Y);
+      pv.sprite.zIndex = 100000;
+      pv.sprite.alpha = 0.6;
+      pv.sprite.scale.set(1);
+      pv.sprite.tint = st.ghost.valid ? 0xffffff : num(mix(t.accent, '#ffffff', 0.25));
+      dashedRing(fx, v, st.ghost.x, st.ghost.y, footprint(def), st.ghost.valid ? t.ink : t.accent, v.lw);
+    } else {
+      const pv = this.parts.get(-1);
+      if (pv) { pv.sprite.destroy(); this.parts.delete(-1); }
     }
   }
 
-  private drawFlippers(game: Game, st: DrawState) {
-    const g = this.g;
-    for (const f of game.sim.flipperStates()) {
-      const sign = f.side === 'L' ? 1 : -1;
-      const c = Math.cos(f.angle), s = Math.sin(f.angle);
-      const local = [[0, -0.5], [sign * FLIPPER_LENGTH, -0.28], [sign * FLIPPER_LENGTH, 0.28], [0, 0.5]];
-      const pts: number[] = [];
-      for (const [lx, ly] of local) pts.push(this.X(f.x + c * lx - s * ly), this.Y(f.y + s * lx + c * ly));
-      const extra = f.uid !== undefined;
-      g.poly(pts).fill({ color: extra ? 0xffc85a : 0xffb02e }).stroke({ width: this.s * 0.28, color: 0xffd98a, join: 'round' });
-      g.circle(this.X(f.x), this.Y(f.y), this.s * 0.28).fill({ color: 0x3a2308 });
-      if (extra && st.selectedUid === f.uid) g.circle(this.X(f.x), this.Y(f.y), 2.6 * this.s).stroke({ width: 2, color: 0xffffff, alpha: 0.9 });
+  /** The live value printed on a part: a paper sticker, a hair rotated, with its level pips under it. */
+  private drawTag(game: Game, p: PartInstance) {
+    const t = this.theme, v = this.view, def = PARTS[p.def];
+    const text = def.kind === 'saver' || def.kind === 'flipper' || def.kind === 'deflector' ? null : game.scorer.label(p);
+    const lvl = def.recipe.perLevel ? game.scorer.levelOf(p.def) : 0;
+    let tag = this.tags.get(p.uid);
+    if (!text) { if (tag) tag.c.visible = false; return; }
+    const fs = Math.max(9, v.S * 0.62);
+    if (!tag) {
+      const c = new Container(), g = new Graphics(), txt = label(text, fs, t.ink);
+      c.addChild(g, txt);
+      c.rotation = (-4 * Math.PI) / 180;
+      this.tagLayer.addChild(c);
+      tag = { c, g, txt, text: '', pips: -1 };
+      this.tags.set(p.uid, tag);
     }
+    if (tag.text !== text || tag.pips !== lvl || tag.txt.style.fontSize !== fs) {
+      tag.text = text; tag.pips = lvl;
+      tag.txt.text = text;
+      tag.txt.style.fontSize = fs;
+      const w = tag.txt.width + fs * 0.9, h = fs * 1.35;
+      tag.g.clear();
+      tag.g.roundRect(-w / 2, -h / 2, w, h, h / 2).fill(t.paper).stroke({ width: v.lw * 0.7, color: t.ink });
+      for (let i = 0; i < lvl; i++) tag.g.circle((i - (lvl - 1) / 2) * fs * 0.62, h / 2 + fs * 0.42, fs * 0.24).fill(t.role.coin).stroke({ width: Math.max(1, v.lw * 0.45), color: t.ink });
+    }
+    tag.c.visible = true;
+    const floorTag = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'target' || def.kind === 'bank';
+    const z = p.def === 'mega' ? 2.05 : p.def === 'printer' ? 1.75 : p.def === 'pop' && t.popMotif === 'cone' ? 1.6 : 0.95;
+    const [X, Y] = floorTag ? P(v, p.x, p.y - footprint(def) - 0.75, 0) : P(v, p.x, p.y, z);
+    tag.c.position.set(X, Y);
+  }
+
+  private drawFlippers(game: Game) {
+    const seen = new Set<string>();
+    for (const f of game.sim.flipperStates()) {
+      const key = f.uid === undefined ? f.side : `u${f.uid}`;
+      seen.add(key);
+      let g = this.flippers.get(key);
+      if (!g) { g = new Graphics(); this.partLayer.addChild(g); this.flippers.set(key, g); }
+      g.clear();
+      drawFlipper(g, this.view, this.theme, f.x, f.y, f.angle, f.side === 'L' ? 1 : -1);
+      g.zIndex = -f.y * 100 + 1;
+    }
+    for (const [k, g] of this.flippers) if (!seen.has(k)) { g.destroy(); this.flippers.delete(k); }
+  }
+
+  /** The plunger rod pulls back as you charge, with a paper gauge beside the lane. */
+  private drawPlunger(game: Game) {
+    const g = this.plungerG, v = this.view, t = this.theme;
+    g.clear();
+    g.zIndex = -1.4 * 100;
+    const c = game.sim.awaitingPlunge ? game.sim.plungeCharge : 0;
+    const rod = new Prop(v, t);
+    rod.cyl(25, 1.4 - c * 0.9, 0.42, 0, 0.5, mat(t, t.accent), { n: 20 });
+    rod.draw(g);
+    if (!game.sim.awaitingPlunge) return;
+    const x0 = 25, y0 = 2.6, y1 = 11;
+    const a = P(v, x0, y0, 0.8), b = P(v, x0, y1, 0.8), w = v.S * 0.55;
+    g.roundRect(a[0] - w / 2, b[1], w, a[1] - b[1], w / 2).fill(mix(t.paper, t.shadeTint, 0.12)).stroke({ width: v.lw * 0.8, color: t.ink });
+    const fill = (a[1] - b[1] - 4) * c;
+    if (fill > 1) g.roundRect(a[0] - w / 2 + 2, a[1] - 2 - fill, w - 4, fill, (w - 4) / 2).fill(c > 0.4 ? t.role.saver : t.role.coin);
+    const m = P(v, x0, y0 + (y1 - y0) * 0.3, 0.8);
+    g.moveTo(m[0] - w * 0.8, m[1]).lineTo(m[0] + w * 0.8, m[1]).stroke({ width: v.lw * 0.8, color: t.ink });
   }
 
   /** The ball wears its upgrade: gold, steel, glass or rubber pink. */
-  private ballColors(game: Game): { core: number; rim: number } {
+  private ballWear(game: Game): BallWear {
     const m = game.mods;
-    if (m.goldEvery) return { core: 0xffe27a, rim: 0xc99a1e };
-    if (m.pointsFactor > 1) return { core: 0xb8c0d4, rim: 0x6c7690 };
-    if (m.ballGravity < 1) return { core: 0xf2feff, rim: 0x7fe9ff };
-    if (m.ballBounce > 0) return { core: 0xffc2dc, rim: 0xff6fa8 };
-    return { core: 0xe8f4ff, rim: 0x8fb4ff };
+    if (m.goldEvery) return BALL_WEAR.gold;
+    if (m.pointsFactor > 1) return BALL_WEAR.steel;
+    if (m.ballGravity < 1) return BALL_WEAR.glass;
+    if (m.ballBounce > 0) return BALL_WEAR.rubber;
+    return BALL_WEAR.plain;
   }
 
   private drawBalls(game: Game) {
-    const g = this.g;
+    const g = this.ballG, v = this.view, t = this.theme;
+    g.clear();
     const live = new Set<number>();
-    const wear = this.ballColors(game);
+    const wear = this.ballWear(game);
     for (const b of game.sim.ballStates()) {
       live.add(b.id);
       const tr = this.trails.get(b.id) ?? [];
       tr.push({ x: b.x, y: b.y });
-      if (tr.length > 26) tr.shift();
+      if (tr.length > 14) tr.shift();
       this.trails.set(b.id, tr);
+      ballShadow(this.floorFx, v, t, b.x, b.y);
       const speed = Math.hypot(b.vx, b.vy);
-      if (!b.held) for (let i = 1; i < tr.length; i++) {
-        const k = i / tr.length;
-        g.moveTo(this.X(tr[i - 1].x), this.Y(tr[i - 1].y)).lineTo(this.X(tr[i].x), this.Y(tr[i].y))
-          .stroke({ width: this.s * BALL_R * 1.6 * k, color: 0x9fe8ff, alpha: Math.min(0.5, speed / 160) * k, cap: 'round' });
-      }
-      const x = this.X(b.x), y = this.Y(b.y), r = BALL_R * this.s;
-      g.circle(x, y, r * 2).fill({ color: 0xbfeaff, alpha: b.held ? 0.3 : 0.12 });
-      g.circle(x, y, r).fill({ color: wear.core }).stroke({ width: 1.5, color: wear.rim });
-      g.circle(x - r * 0.3, y - r * 0.3, r * 0.3).fill({ color: 0xffffff });
+      // a fast ball leaves a tapered paper ribbon (air: soft, no outline)
+      if (!b.held && speed > 18 && tr.length > 3) ribbon(g, tr.map((q) => P(v, q.x, q.y, BALL_R)), v.S * 0.08, v.S * BALL_R * 1.7, t.paper, Math.min(0.75, (speed - 18) / 60));
     }
+    for (const b of game.sim.ballStates()) drawBall(g, v, t, b.x, b.y, wear);
     for (const id of [...this.trails.keys()]) if (!live.has(id)) this.trails.delete(id);
   }
 
-  private drawGauge(game: Game) {
-    if (!game.sim.awaitingPlunge) return;
-    const g = this.g, c = game.sim.plungeCharge;
-    const x = this.X(25), y0 = this.Y(2), h = this.s * 9;
-    g.roundRect(x - this.s * 0.35, y0 - h, this.s * 0.7, h, 4).fill({ color: 0x0a0f24, alpha: 0.9 }).stroke({ width: 1, color: 0x4dfcff });
-    g.roundRect(x - this.s * 0.25, y0 - h * c, this.s * 0.5, h * c, 3).fill({ color: c > 0.4 ? 0x62f08a : 0xffd23f });
-    // the line past which a plunge reaches the playfield
-    g.moveTo(x - this.s * 0.5, y0 - h * 0.3).lineTo(x + this.s * 0.5, y0 - h * 0.3).stroke({ width: 2, color: 0xffffff });
+  /** TILT: every lamp goes out, the field dims, and a stamp says so. */
+  private drawTilt(game: Game) {
+    const on = game.sim.tilted;
+    if (on && !this.tiltStamp) {
+      const t = this.theme, c = new Container(), g = new Graphics();
+      g.roundRect(-110, -44, 220, 88, 14).stroke({ width: 9, color: t.accent });
+      c.addChild(g, label('TILT', 72, t.accent));
+      c.rotation = (-12 * Math.PI) / 180;
+      this.tiltLayer.addChild(c);
+      this.tiltStamp = c;
+    }
+    if (!on && this.tiltStamp) { this.tiltStamp.destroy({ children: true }); this.tiltStamp = null; }
+    if (on) {
+      const v = this.view;
+      const rim = [P(v, RIM.cx - RIM.hw, RIM.cy - RIM.hh), P(v, RIM.cx + RIM.hw, RIM.cy - RIM.hh), P(v, RIM.cx + RIM.hw, RIM.cy + RIM.hh), P(v, RIM.cx - RIM.hw, RIM.cy + RIM.hh)];
+      this.topG.poly(flat(rim)).fill({ color: mix(this.theme.ink, '#000000', 0.4), alpha: 0.38 });
+      this.tiltStamp!.position.set(this.w / 2, this.h * 0.45);
+      this.tiltStamp!.scale.set(Math.min(1, this.w / 320));
+    }
   }
 
-  private drawFx(dt: number) {
-    const fx = this.fx;
-    for (const p of this.particles) {
-      p.life += dt;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.vy -= 22 * dt;
-      const k = 1 - p.life / p.max;
-      if (k > 0) fx.circle(this.X(p.x), this.Y(p.y), p.size * this.s * (0.4 + k)).fill({ color: p.color, alpha: k });
-    }
-    this.particles = this.particles.filter((p) => p.life < p.max);
-
-    for (const pop of this.popups) {
-      pop.life += dt;
-      const k = pop.life / pop.max;
-      pop.box.position.set(this.X(pop.x), this.Y(pop.y) - Math.min(1, k * 2) * this.s * 1.6);
-      pop.box.alpha = Math.min(1, 2.2 * (1 - k));
-    }
-    this.popups = this.popups.filter((p) => {
-      if (p.life >= p.max) { p.box.destroy({ children: true }); return false; }
-      return true;
-    });
+  /** Frame-cost probe for the smoke test: ms spent in draw() over n frames of the current state. */
+  probe(game: Game, st: DrawState, n = 60) {
+    const t0 = performance.now();
+    for (let i = 0; i < n; i++) this.draw(game, 1 / 60, st);
+    return (performance.now() - t0) / n;
   }
+
+  /** Bakes a part (or the ball) fitted and centred in a w x h box by its drawn bounds, for the HTML panels. */
+  icon(id: PartId | 'ball' | 'button', w: number, h: number, opts: { k?: number; st?: PartState; scale?: number; theme?: Theme } = {}): HTMLCanvasElement {
+    const t = opts.theme ?? this.theme, k = opts.k ?? 0.62;
+    const v: View = { S: 10, ox: 0, oy: 0, k, kz: 0.6, shx: 0, lw: 2.2 };
+    const make = (S: number) => {
+      const vv = { ...v, S, lw: 2.2 };
+      if (id === 'ball') { const g = new Graphics(); drawBall(g, vv, t, 0, 0, BALL_WEAR.plain); const c = new Container(); c.addChild(g); return c; }
+      if (id === 'button') return drawButton(vv, t);
+      if (id === 'flipper') { const g = new Graphics(); drawFlipper(g, vv, t, 0, 0, -0.49, 1); const c = new Container(); c.addChild(g); return c; }
+      const a = id === 'sling' ? -0.55 : id === 'spinner' ? 0.3 : id === 'deflector' ? 0.4 : id === 'bank' ? 0.15 : id === 'vari' ? 0.2 : id === 'kickback' ? -0.5 : id === 'printer' ? 0.3 : 0;
+      return drawPart(vv, t, id, 0, 0, a, { lit: true, letter: t.laneWord[0], target: 'pop', down: [false, false, true], armed: true, seg: 2, ...(opts.st ?? {}) });
+    };
+    const probe = make(10);
+    const b0 = probe.getLocalBounds();
+    probe.destroy({ children: true });
+    const S = Math.min(w / b0.width, h / b0.height) * 10 * (opts.scale ?? 1);
+    const c = make(S);
+    const b = c.getLocalBounds();
+    const res = 2;
+    const holder = new Container();
+    holder.addChild(c);
+    c.position.set(w / 2 - (b.x + b.width / 2), h / 2 - (b.y + b.height / 2));
+    return this.toCanvas(holder, w, h, res);
+  }
+
+  /** A relic decal as it looks on the apron (flat, not squashed), for the upgrade cards. */
+  decalIcon(look: StuckDecal['look'], rarity: StuckDecal['rarity'], size: number): HTMLCanvasElement {
+    const holder = new Container();
+    holder.addChild(decalSprite(this.theme, { look, rarity }, size / 2, size / 2, size * 0.33, 1, -6));
+    return this.toCanvas(holder, size, size, 2);
+  }
+
+  private toCanvas(holder: Container, w: number, h: number, res: number): HTMLCanvasElement {
+    const tex = this.app.renderer.generateTexture({ target: holder, frame: new Rectangle(0, 0, w, h), resolution: res, antialias: true });
+    const canvas = this.app.renderer.extract.canvas(tex) as HTMLCanvasElement;
+    tex.destroy(true);
+    holder.destroy({ children: true });
+    return canvas;
+  }
+}
+
+/** A big arcade push button on a plate (the Cash Out button's cap). */
+function drawButton(v: View, t: Theme) {
+  const c = new Container(), g = new Graphics();
+  c.addChild(g);
+  const p = new Prop(v, t);
+  p.cyl(0, 0, 1.15, 0, 0.25, mat(t, t.metal));
+  p.cyl(0, 0, 0.9, 0.25, 0.55, mat(t, t.accent));
+  p.draw(g);
+  return c;
+}
+
+/** A dashed ellipse on the floor round a part (selection, hover, lamp reach). */
+function dashedRing(g: Graphics, v: View, x: number, y: number, r: number, color: string, w: number, under?: string) {
+  const n = Math.max(12, Math.round(r * 5));
+  for (const [width, col] of (under ? [[w + v.lw * 1.2, under], [w, color]] : [[w, color]]) as [number, string][]) {
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2, a1 = a0 + ((Math.PI * 2) / n) * 0.55;
+      const p0 = P(v, x + Math.cos(a0) * r, y + Math.sin(a0) * r, 0.03), p1 = P(v, x + Math.cos((a0 + a1) / 2) * r, y + Math.sin((a0 + a1) / 2) * r, 0.03), p2 = P(v, x + Math.cos(a1) * r, y + Math.sin(a1) * r, 0.03);
+      g.moveTo(p0[0], p0[1]).lineTo(p1[0], p1[1]).lineTo(p2[0], p2[1]);
+    }
+    g.stroke({ width, color: col, cap: 'round' });
+  }
+}
+
+/** The dotted link between a part and the part that boosts it. */
+function dottedLine(g: Graphics, a: Pt, b: Pt, color: string, lw: number) {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(2, Math.floor(len / (lw * 4)));
+  const bend = Math.min(40, len * 0.2);
+  for (let i = 0; i <= n; i++) {
+    const u = i / n, k = 1 - u;
+    const cx = (a[0] + b[0]) / 2, cy = Math.min(a[1], b[1]) - bend;
+    g.circle(k * k * a[0] + 2 * k * u * cx + u * u * b[0], k * k * a[1] + 2 * k * u * cy + u * u * b[1], lw * 0.75).fill(color);
+  }
+}
+
+/** One soft white radial gradient, tinted per glow: the only soft light on the table. */
+function makeGlowTexture(): Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d')!;
+  const gr = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.7, 'rgba(255,255,255,0.35)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gr;
+  ctx.fillRect(0, 0, 128, 128);
+  return Texture.from(c);
 }

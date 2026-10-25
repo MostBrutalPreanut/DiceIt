@@ -1,6 +1,7 @@
 import { makePart, MAX_LEVEL, PARTS, PART_IDS, sellPrice, type PartDef, type PartId, type PartInstance } from '../data/parts';
 import { neutralMods, type Mods, type SimMods } from '../data/mods';
-import { BOSS_EVERY, computeMods, rollUpgradeOffers, SKIP_PAY, UPGRADES, type UpgradePick, type RunView, type UpgradeApi, type UpgradeId, type UpgradeOffer } from '../data/upgrades';
+import { BOSS_EVERY, computeMods, rollUpgradeOffers, SKIP_PAY, UPGRADES, type Rarity, type UpgradePick, type RunView, type UpgradeApi, type UpgradeId, type UpgradeOffer } from '../data/upgrades';
+import { DECAL_SLOTS, DECALS, type DecalLook } from '../data/decals';
 import { canPlace, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
 import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
 import { GOALS, GOAL_GROWTH } from '../data/goals';
@@ -249,10 +250,51 @@ export class Game {
     return offers;
   }
 
+  // ---- relic decals: the Rules column, stuck on the apron ----------------------------------------------
+
+  /** The Rules picks the run has stuck on the apron, in slot order (at most DECAL_SLOTS). */
+  get decals(): UpgradePick[] {
+    return this.picks.filter((p) => UPGRADES[p.id].column === 'rules');
+  }
+
+  decalLook(id: UpgradeId): DecalLook | undefined {
+    return DECALS[id];
+  }
+
+  decalRarity(id: UpgradeId): Rarity {
+    return UPGRADES[id].rarity;
+  }
+
+  /** A Rules upgrade needs a free apron slot; the others can always be taken. */
+  canStick(id: UpgradeId): boolean {
+    return UPGRADES[id].column !== 'rules' || this.decals.length < DECAL_SLOTS;
+  }
+
+  /** Whether the pending card at `index` can be taken right now (a Rules card needs a free slot: peel one first). */
+  canTake(index: number): boolean {
+    const offer = this.pending?.[index];
+    return !!offer && this.editable && this.canStick(offer.id);
+  }
+
+  /**
+   * Peel a decal off the apron between rounds. A peeled decal is gone: its rule stops at once (the run's mods
+   * are rebuilt without it) and the slot is free for the next Rules pick.
+   */
+  peel(slot: number): boolean {
+    const d = this.decals[slot];
+    if (!d || !this.editable) return false;
+    this.checkpoint();
+    const i = this.picks.indexOf(d);
+    this.picks.splice(i, 1);
+    this.mods = computeMods(this.picks);
+    this.toWorkshop();
+    return true;
+  }
+
   /** Take one of the three pending upgrades. Parts it grants arrive in the inventory marked NEW. */
   chooseUpgrade(index: number): boolean {
     const offer = this.pending?.[index];
-    if (!offer || !this.editable) return false;
+    if (!offer || !this.editable || !this.canStick(offer.id)) return false;
     this.checkpoint();
     const pick: UpgradePick = { id: offer.id, target: offer.target };
     this.pending = null;
@@ -266,7 +308,7 @@ export class Game {
     if (!this.editable || !this.sandbox) return false;
     const def = UPGRADES[id];
     const target = def.targets ? def.targets(this.view())[0] : undefined;
-    if (def.targets && !target) return false;
+    if ((def.targets && !target) || !this.canStick(id)) return false;
     this.checkpoint();
     this.applyPick({ id, target });
     return true;

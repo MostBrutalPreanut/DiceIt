@@ -165,8 +165,9 @@ export function parShop(g: Game): { bought: { id: PartId; price: number }[]; rer
 /** The index of the offered card the par player takes. */
 export function parPick(g: Game): number {
   const offers = g.pending ?? [];
-  let best = 0, bestRank = Infinity;
+  let best = Math.max(0, offers.findIndex((_, i) => g.canTake(i))), bestRank = Infinity;
   offers.forEach((o, i) => {
+    if (!g.canTake(i)) return; // a Rules card with the apron full
     const rank = UPGRADE_PRIORITY.indexOf(o.id);
     if (rank >= 0 && rank < bestRank) { best = i; bestRank = rank; }
   });

@@ -17,9 +17,11 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
+On first launch you pick a machine (Funhouse Factory, Short Order or Castle Crash); themes change looks only, and you can switch under **Machine**, where **Calm mode** also lives.
+
 Controls: `Z`/`Shift` left flipper, `/`/`Shift` right flipper, hold `Space` to charge the plunger and release to fire, `←` `→` nudge (too much tilts), `Tab` cash out once the goal is hit, `M` mute.
 
-Between rounds one screen does it all: **1 Shop · 2 Upgrade · 3 Install**. After every boss (rounds 3, 6, 9, ...) pick one of three major upgrades or skip for $4; the Start round button is locked until you do. Buy parts in the shop, click one in your inventory and click the table to place it. Drag a part to move it, drag it onto the inventory panel to take it off the board, `R` (or the mouse wheel) rotates, `Del` stores it, `Space` fires a test ball. Hover any part to see exactly how it scores. Tick **Test Lab** to get every part for free plus lab tools. `Ctrl+Z` / `Ctrl+Y` undo and redo.
+Between rounds one screen does it all: **1 Shop · 2 Upgrade · 3 Install**. After every boss (rounds 3, 6, 9, ...) pick one of three major upgrades or skip for $4; the Start round button is locked until you do. Buy parts in the shop, click one in your inventory and click the table to place it. Drag a part to move it, drag it onto the inventory panel to take it off the board, `R` (or the mouse wheel) rotates, `Del` stores it, `Space` fires a test ball. Hover any part to see exactly how it scores. Rules upgrades are relic decals stuck on the apron (four slots); click one between rounds to peel it off. Tick **Test Lab** to get every part for free plus lab tools. `Ctrl+Z` / `Ctrl+Y` undo and redo.
 
 ## Check it
 
@@ -38,6 +40,7 @@ npx vite-node tools/explain.ts report.json 6  # replay one measured round and se
 npm run clears            # the old quick check: how often the starter machine clears round 1
 npx vite-node tools/launch-spread.ts   # where do launched balls land?
 npm run concept           # re-render the concept sheets in docs/concept from the real table and parts
+# prop lab (dev page): every part in every theme and state, with its footprint: http://localhost:5173/lab.html
 ```
 
 ## Layout
@@ -47,7 +50,8 @@ src/sim/      deterministic Box2D simulation (runs headless in Node); nothing ab
 src/game/     scoring (points × Mult, recipes, ledger), the run state (shop, inventory, rounds, upgrades) and the auto-builder
 src/data/     content as data: parts (recipes, dials, descriptions), upgrades, the goal table, announcer lines
 src/ui/       small HTML builders for the cards and tooltips
-src/render/   PixiJS renderer (reads the sim, never writes it)
+src/render/   PixiJS renderer (reads the sim, never writes it): theme kits, projection, baked props, particles, the HUD overlay
+src/assets/   bundled fonts (Luckiest Guy, Nunito, DotGothic16) with their licences
 tools/        stress/fuzz runners, the par player and balance table, browser smoke test
 tests/        vitest
 ```

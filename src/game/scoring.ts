@@ -130,7 +130,7 @@ export class Scorer {
   }
 
   /** Sum of the bonuses of every lit lamp whose glow reaches this part. */
-  private lampBonusAt(inst: PartInstance): { sum: number; count: number } {
+  lampBonusAt(inst: PartInstance): { sum: number; count: number } {
     let sum = 0, count = 0;
     for (const l of this.placed()) {
       if (PARTS[l.def].kind !== 'lamp' || !this.lit.has(l.uid)) continue;
