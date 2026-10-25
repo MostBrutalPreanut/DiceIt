@@ -77,7 +77,7 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       // dome: a stack of rings hulled together reads as a soft bun / boulder / boss
       const domePts = [0, 0.3, 0.55, 0.78, 0.92, 1].flatMap((u) => ring(x, y, r * 0.86 * Math.cos((u * Math.PI) / 2), 28).map(([a, b]) => P(v, a, b, 1.12 + u * 0.75)));
       p.face(hull(domePts), skin.base);
-      p.face(ring(x - r * 0.25, y + r * 0.2, r * 0.32, 20).map(([a, b]) => P(v, a, b, 1.75)), skin.light, { line: 0, sil: false });
+      p.face(ring(x - r * 0.4, y + r * 0.02, r * 0.26, 20).map(([a, b]) => P(v, a, b, 1.55)), skin.light, { line: 0, sil: false });
       face(p, v, t, x, y - r * 0.82, 0.78, r, st.mood ?? (st.hit ? 'oof' : 'happy'), st.follow);
       break;
     }

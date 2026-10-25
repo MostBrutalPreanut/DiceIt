@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { describe as describePart, makePart, PART_IDS, PARTS, rarityWeight, RARITY_FROM, SHOP_IDS, type PartId } from '../src/data/parts';
-import { BIG_BOIS, DRAGON, ORDER, defOn } from '../src/data/bigboi';
+import { BIG_BOIS, DRAGON, defOn } from '../src/data/bigboi';
 import { Game, rollOffers } from '../src/game/game';
 import { Scorer } from '../src/game/scoring';
 import { Rng } from '../src/sim/rng';
@@ -232,25 +232,30 @@ describe('Big Boi depends on the machine', () => {
     expect(s.mult).toBeCloseTo(1.15);
   });
 
-  it('the Cook calls an order: that type pays triple, three hits serve it for +Mult', () => {
+  it('the Cook calls an order when he is hit: one part lights up, its next hit pays triple, then it goes dark', () => {
     const s = scorer(table(), { machine: 'diner', seed: 3 });
-    expect(s.order).toBe('pop'); // the only other type on the table
-    expect(s.consume(hit(1))[0].base).toBe(300);
-    s.consume(hit(2));
-    const served = s.consume(hit(1));
-    expect(served.map((e) => e.label).at(-1)).toMatch(/ORDER UP/);
-    expect(s.mult).toBeCloseTo(1 + ORDER.mult);
-    expect(s.consume(hit(10))[0].base).toBe(150); // the Cook pays his own points and changes the order
+    expect(s.order).toBeNull(); // no order until he is hit
+    expect(s.consume(hit(10))[0].base).toBe(150);
+    const lit = s.order!;
+    expect([1, 2]).toContain(lit);
+    const other = lit === 1 ? 2 : 1;
+    expect(s.consume(hit(other))[0].base).toBe(100); // the other Pop is not the order
+    expect(s.consume(hit(lit))[0].base).toBe(315); // (100 + 5 grown) x3
+    expect(s.order).toBeNull();
+    expect(s.consume(hit(lit))[0].base).toBe(110); // once only
+    expect(s.mult).toBe(1); // no Mult from orders
   });
 
-  it('the Dragon is slain when his armour is gone: a jackpot and x1.5 Mult, then thicker armour', () => {
+  it('the Dragon loses a plate a hit; when the last goes he pays 2,000, and the armour grows back one plate thicker', () => {
     const s = scorer(table(), { machine: 'castle' });
     const events: ReturnType<typeof s.consume> = [];
     for (let i = 0; i < DRAGON.armour; i++) events.push(...s.consume(hit(10)));
-    const slay = events.find((e) => e.label === 'DRAGON SLAIN!')!;
-    expect(slay.base).toBe(200 * DRAGON.jackpotX);
-    expect(s.mult).toBeCloseTo(1.5);
-    expect(s.armour).toBe(DRAGON.armour + DRAGON.regrow);
+    const broke = events.find((e) => e.label === 'ARMOUR BROKEN!')!;
+    expect(broke.base).toBe(2000);
+    expect(s.mult).toBe(1);
+    expect(s.armour).toBe(DRAGON.armour + 1);
+    for (let i = 0; i < 30; i++) s.consume(hit(10)); // no limit a ball
+    expect(s.slays).toBeGreaterThanOrEqual(4);
   });
 
   it('a run remembers its machine through a save, and a new run can pick another', () => {

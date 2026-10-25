@@ -459,8 +459,8 @@ export class Renderer {
         if (p.def === 'saver' && ps.armed) this.glow(p.x, p.y, r * 2, t.role.saver, 0.55);
         if ((p.def === 'xlane' || p.def === 'disco') && ps.lit) this.glow(p.x, p.y, r * 2, t.role[p.def], 0.6);
         if (p.def === 'golden') this.glow(p.x, p.y, r * 1.8, t.role.golden, 0.35);
-        // the Cook's order: every part of the ordered type glows
-        if (game.scorer.order === p.def) {
+        // the Cook's order: the one part he lit glows until it is hit
+        if (game.scorer.order === p.uid) {
           this.glow(p.x, p.y, r * 2.2, t.accent, 0.55 + 0.25 * Math.sin(this.time * 6));
           dashedRing(fx, v, p.x, p.y, r + 0.45, t.accent, v.lw * 1.3, t.ink);
         }

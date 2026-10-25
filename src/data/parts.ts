@@ -25,8 +25,8 @@ export const RARITY_NAMES: Record<Rarity, string> = { common: 'Common', uncommon
  * What a part is, for the decals that care: Bumper Car pays every bumper more, Target Practice every target...
  * A part can carry several tags. Shown on every card, so a build can be read at a glance.
  */
-export type PartTag = 'bumper' | 'target' | 'light' | 'kicker' | 'ball' | 'guard' | 'money';
-export const TAG_NAMES: Record<PartTag, string> = { bumper: 'Bumper', target: 'Target', light: 'Light', kicker: 'Kicker', ball: 'Ball', guard: 'Guard', money: 'Money' };
+export type PartTag = 'bigboi' | 'bumper' | 'target' | 'light' | 'kicker' | 'ball' | 'guard' | 'money';
+export const TAG_NAMES: Record<PartTag, string> = { bigboi: 'Big Boi', bumper: 'Bumper', target: 'Target', light: 'Light', kicker: 'Kicker', ball: 'Ball', guard: 'Guard', money: 'Money' };
 
 /** Part levels (Space Cadet's bumper upgrades): Level Lights and decals raise them, for the rest of the run. */
 export const MAX_LEVEL = 5;
@@ -333,7 +333,7 @@ export const PARTS: Record<PartId, PartDef> = {
 
   // ---- not for sale: every machine has one Big Boi in the middle, and what he does depends on the machine ----
   mega: {
-    id: 'mega', name: 'Big Boi', blurb: 'Heavy, rude, hard to miss.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 6, weight: 0,
+    id: 'mega', name: 'Big Boi', blurb: 'Heavy, rude, hard to miss.', kind: 'bumper', rarity: 'legendary', tags: ['bigboi', 'bumper'], cost: 6, weight: 0,
     shape: { type: 'circle', r: 1.9 }, rotatable: false, kickUnit: 18,
     recipe: { points: 250, per: 'hit', mult: 0.15, multCap: 3, perLevel: 25 }, dials: [kickDial(1.5)],
   },
@@ -486,7 +486,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.spinMult) lines.push({ tag: 'mult', text: `Every spin raises your Mult by +${mg(r.spinMult * mods.spinMult)}, up to +${mg((r.spinMultCap ?? 0) * mods.spinMult)} a ball from all Spinners.` });
   if (r.money && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.money} per ${r.per ?? 'hit'}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
   if (r.moneyEvery && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $1 every ${r.moneyEvery.n} hits, up to $${r.moneyEvery.cap} a round.` });
-  if (r.variety) lines.push({ tag: 'grow', text: `+${f(r.variety)} for every different part type this ball has hit (up to +${f(r.varietyCap ?? 0)}): a varied table rings loudest.` });
+  if (r.variety) lines.push({ tag: 'grow', text: `+${f(r.variety)} for every different part type this ball has hit (up to +${f(r.varietyCap ?? 0)}).` });
   if (r.jackpot) lines.push({ tag: 'set', text: `The pot: +${f(r.jackpot.per)} for every scoring hit this ball (up to +${f(r.jackpot.cap)}). Sink the ball in it to cash the pot, then it starts again.` });
   if (r.piggy) lines.push({ tag: 'money', text: `Every hit drops $1 in the piggy (it holds $${r.piggy.cap}). Smash it (speed ${num(30 * mods.tierEase)}+) to break it: it pays ${r.piggy.x}× what it holds. Whatever is left in it at the end of a round is lost.` });
   if (r.hot) {
@@ -499,7 +499,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     if (r.onLight) lines.push({ tag: 'mult', text: `Lighting it pays ${f(r.onLight.points)} points and +${mg(r.onLight.mult)} Mult.` });
   }
   if (r.lights && def.kind === 'rollover') lines.push({ tag: 'note', text: 'Lights up for the rest of this ball.' });
-  if (def.id === 'lane') lines.push({ tag: 'note', text: 'Lane change: each flipper press shifts the lit lanes one lane (← left, → right), so you can steer the dark one.' });
+  if (def.id === 'lane') lines.push({ tag: 'note', text: 'Lane change: each flipper press shifts the lit lanes one lane (← left, → right).' });
   if (r.tiers && def.id === 'vari') {
     const stiff = (inst ? dialValue(inst, 'stiff') : 1) * mods.tierEase;
     lines.push({ tag: 'note', text: `Pays more for a harder hit: ${r.tiers.map((t) => `x${t.x} ${t.name}${t.from ? ` (${num(t.from * stiff)}+ speed)` : ''}`).join(', ')}.` });
@@ -542,16 +542,14 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
 /** Big Boi's ability, in sentences. */
 function bigBoiLines(machine: MachineId | undefined, factor: number, mods: Mods): DescLine[] {
   const b = bigBoiOf(machine);
-  const xg = (x: number) => num(1 + (x - 1) * mods.multGain);
+  void mods;
   switch (b.id) {
     case 'foreman': return [];
     case 'cook': return [
-      { tag: 'combo', text: `Order Up! He calls an order: one part type on your table (it glows). Hits on that type pay ×${ORDER.x}. Every ${ORDER.serves} order hits serve it: +${num(ORDER.mult * mods.multGain)} Mult (up to +${num(ORDER.multCap * mods.multGain)} a ball) and a new order. Hit him to change the order.` },
-      { tag: 'note', text: 'A focused table (few types, many of each) fills orders fastest.' },
+      { tag: 'combo', text: `Every hit calls an order: one part on your table lights up. Its next hit pays ×${ORDER.x}, then the light goes out.` },
     ];
     case 'dragon': return [
-      { tag: 'combo', text: `Siege: he wears ${DRAGON.armour} armour plates. Every hit knocks one off; knock off the last and he is slain: ${num(Math.round(b.recipe.points! * DRAGON.jackpotX * factor))}-point jackpot and your Mult ×${xg(DRAGON.xmult)}. His armour grows back ${DRAGON.regrow} plates thicker each time (at most ${DRAGON.maxSlays} slays a ball).` },
-      { tag: 'note', text: 'Aim at him: deflectors and kickbacks that point at the middle pay off here.' },
+      { tag: 'combo', text: `Wears ${DRAGON.armour} armour plates, and every hit knocks one off. When the last one goes: ${num(Math.round(b.recipe.points! * DRAGON.jackpotX * factor))} points. Then the armour grows back ${DRAGON.regrow} plate thicker.` },
     ];
   }
 }

@@ -111,10 +111,9 @@ export class Scorer {
   baseMult: number;
   readonly machine: MachineId;
   readonly bigBoi: BigBoiId;
-  /** The Cook's order: the part type that pays triple, and how many hits it has had. */
-  order: PartId | null = null;
-  orderHits = 0;
-  /** The Dragon's armour plates left, and how often he was slain this ball. */
+  /** The Cook's order: the one part (by uid) whose next hit pays triple. */
+  order: number | null = null;
+  /** The Dragon's armour plates left, and how often it was knocked off this ball. */
   armour: number = DRAGON.armour;
   slays = 0;
   /** Part types a boss has switched off. */
@@ -201,8 +200,7 @@ export class Scorer {
     this.potFrom.clear();
     this.armour = DRAGON.armour;
     this.slays = 0;
-    this.orderHits = 0;
-    this.order = this.bigBoi === 'cook' ? this.pickOrder(null) : null;
+    this.order = null;
     if (this.opts.jam === 'randomEachBall') {
       this.jammed.clear();
       const types = [...new Set(this.placed().filter((p) => !p.fixed && this.recipe(p.def).points).map((p) => p.def))].sort();
@@ -210,11 +208,11 @@ export class Scorer {
     }
   }
 
-  /** The Cook calls an order: a scoring part type on the table other than himself (and not the same one again). */
-  private pickOrder(not: PartId | null): PartId | null {
-    const types = [...new Set(this.placed().filter((p) => p.def !== 'mega' && this.recipe(p.def).points && !this.jammed.has(p.def)).map((p) => p.def))].sort();
-    const pool = types.length > 1 ? types.filter((t) => t !== not) : types;
-    return pool.length ? pool[Math.floor(this.rng.next() * pool.length)] : null;
+  /** The Cook calls an order: one scoring part on the table other than himself (and not the one already lit). */
+  private pickOrder(not: number | null): number | null {
+    const parts = this.placed().filter((p) => p.def !== 'mega' && this.recipe(p.def).points && !this.jammed.has(p.def)).sort((a, b) => a.uid - b.uid);
+    const pool = parts.length > 1 ? parts.filter((p) => p.uid !== not) : parts;
+    return pool.length ? pool[Math.floor(this.rng.next() * pool.length)].uid : null;
   }
 
   isLit(uid: number) {
@@ -288,7 +286,7 @@ export class Scorer {
     const grown = grownPoints(r, this.hitsOf(inst.def));
     const lvl = (r.perLevel ?? 0) * this.effLevel(inst.def);
     const variety = r.variety ? Math.min(r.varietyCap ?? Infinity, r.variety * this.variety) : 0;
-    const order = this.order === inst.def ? ORDER.x : 1;
+    const order = this.order === inst.uid ? ORDER.x : 1;
     return Math.round((r.points + lvl + grown + variety + this.potOf(inst)) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * order);
   }
 
@@ -442,8 +440,8 @@ export class Scorer {
       const hotBonus = hot && hot.until >= ev.t ? hot.bonus : 0;
       if (hot) this.hot.delete(ev.ballId);
       if (hotBonus) notes.push(`+${Math.round(hotBonus * 100)}% hot shot`);
-      const order = this.order === inst.def ? ORDER.x : 1;
-      if (order > 1) notes.push(`x${order} order`);
+      const order = this.order === inst.uid ? ORDER.x : 1;
+      if (order > 1) { notes.push(`x${order} order`); this.order = null; }
       const situ = this.situational();
       notes.push(...situ.notes);
       // money
@@ -486,8 +484,7 @@ export class Scorer {
       out.push(scored);
       // this hit makes the ball hot for its next one
       if (r.hot && (r.hotTier === undefined || (tier && r.tiers!.indexOf(tier) >= r.hotTier))) this.hot.set(ev.ballId, { until: ev.t + HOT_WINDOW, bonus: r.hot * m.hotFactor });
-      // the Cook's order is served; the Dragon loses a plate
-      if (order > 1 && ++this.orderHits >= ORDER.serves) out.push(this.serveOrder(inst, ev));
+      // the Cook calls a new order; the Dragon loses a plate
       if (inst.def === 'mega') out.push(...this.bigBoiHit(inst, ev));
     }
 
@@ -542,23 +539,13 @@ export class Scorer {
     if (dark) this.lit.add(dark.uid);
   }
 
-  private serveOrder(inst: PartInstance, ev: { t: number; x: number; y: number }): ScoreEvent {
-    const mega = this.placed().find((p) => p.def === 'mega') ?? inst;
-    this.orderHits = 0;
-    const gain = this.gain(this.take(this.multPaid, 'order', ORDER.mult, ORDER.multCap));
-    this.order = this.pickOrder(this.order);
-    const next = this.order ? PARTS[this.order].name.toUpperCase() : 'NOTHING';
-    return this.award(mega, ev.t, mega.x, mega.y, 'bonus', 0, gain, 0, [], `ORDER UP! NEXT: ${next}`);
-  }
-
-  /** Big Boi's own ability on a hit: the Cook changes the order, the Dragon loses a plate. */
+  /** Big Boi's own ability on a hit: the Cook calls an order, the Dragon loses a plate. */
   private bigBoiHit(inst: PartInstance, ev: { t: number; x: number; y: number }): ScoreEvent[] {
     if (this.bigBoi === 'cook') {
       this.order = this.pickOrder(this.order);
-      this.orderHits = 0;
       return [];
     }
-    if (this.bigBoi !== 'dragon' || this.slays >= DRAGON.maxSlays) return [];
+    if (this.bigBoi !== 'dragon') return [];
     this.armour = Math.max(0, this.armour - 1);
     if (this.armour > 0) return [];
     this.slays++;
@@ -566,7 +553,7 @@ export class Scorer {
     const r = this.recipe('mega'), m = this.mods;
     const situ = this.situational();
     const pts = Math.round((r.points! + (r.perLevel ?? 0) * this.effLevel('mega')) * DRAGON.jackpotX * modFactor('mega', m) * situ.x);
-    return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, 0, 0, [`${pts} dragon jackpot`, ...situ.notes], 'DRAGON SLAIN!', undefined, this.gainX(DRAGON.xmult))];
+    return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, 0, 0, [`${pts} armour broken`, ...situ.notes], 'ARMOUR BROKEN!')];
   }
 
   /**

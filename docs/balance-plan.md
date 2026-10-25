@@ -10,11 +10,13 @@ The machine is picked at the start of every run and stays for it (no more theme 
 the look **and** the one Big Boi in the middle of the table. Big Boi is never for sale, cannot be moved, and
 each machine's Big Boi pulls the run towards a different build:
 
-| Machine | Big Boi | Ability | Builds it rewards |
-|---|---|---|---|
-| Funhouse Factory | the Foreman | 250 a hit and +0.15 Mult a hit (up to +3 a ball; the limit is to be raised in balancing) | anything that hits him a lot |
-| Short Order | the Cook | **Order Up!**: 150 a hit. He calls an order (one part type on your table, it glows); that type pays ×3; three order hits serve it (+0.25 Mult, up to +2 a ball) and he calls a new one. Hit him to change the order | focused tables: few types, many of each. A table of one-offs rarely fills an order |
-| Castle Crash | the Dragon | **Siege**: 200 a hit and 5 armour plates; knock the last one off and he is slain: a 10× jackpot and your Mult ×1.5; the armour grows back 2 plates thicker (2 slays a ball) | aiming: deflectors and kickbacks pointed at the middle |
+| Machine | Big Boi | What he does |
+|---|---|---|
+| Funhouse Factory | The Foreman | 250 a hit and +0.15 Mult a hit (up to +3 a ball; the limit is to be raised in balancing) |
+| Short Order | The Cook | 150 a hit. **Order Up!** Every hit calls an order: one part on the table lights up, and its next hit pays ×3, then the light goes out |
+| Castle Crash | The Dragon | 200 a hit. **Siege**: 5 armour plates, and every hit knocks one off; when the last goes he pays 2,000 points, and the armour grows back one plate thicker |
+
+"Big Boi" is a tag on all three. Cards carry no strategy tips: they say what a part does, and nothing about how to use it.
 
 ## 2. Part rarities
 

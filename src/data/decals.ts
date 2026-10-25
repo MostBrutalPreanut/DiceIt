@@ -168,11 +168,11 @@ export const DECALS: Record<DecalId, DecalDef> = {
     mods: (m) => { m.bigBoiX *= N.fanClub; }, look: { shape: 'shield', color: C.purple, icon: 'duck' } },
 
   // ---- Ball: the ball and the table ----
-  rubber: { id: 'rubber', name: 'Rubber Ball', kind: 'ball', rarity: 'common', text: () => 'A bouncy ball: it rebounds harder off walls, parts and flippers, so it stays lively but is harder to cradle.',
+  rubber: { id: 'rubber', name: 'Rubber Ball', kind: 'ball', rarity: 'common', text: () => 'The ball rebounds harder off walls, parts and flippers.',
     mods: (m) => { m.ballBounce += N.bounce; }, look: { shape: 'circle', color: C.pink, glyph: 'BNC' } },
   heavy: { id: 'heavy', name: 'Heavy Ball', kind: 'ball', rarity: 'uncommon', excludes: ['glass'], text: () => `Every hit pays ${pct(N.heavyPoints)} more, but your nudges are ${pct(1 - N.heavyNudge)} weaker.`,
     mods: (m) => { m.pointsFactor *= 1 + N.heavyPoints; m.nudge *= N.heavyNudge; }, look: { shape: 'hex', color: C.grey, glyph: 'TON' } },
-  glass: { id: 'glass', name: 'Glass Ball', kind: 'ball', rarity: 'uncommon', excludes: ['heavy'], text: () => `A light ball: it falls ${pct(1 - N.glassGravity)} slower, so it hangs in the air, and spinners spin ${pct(N.glassSpin - 1)} more.`,
+  glass: { id: 'glass', name: 'Glass Ball', kind: 'ball', rarity: 'uncommon', excludes: ['heavy'], text: () => `The ball falls ${pct(1 - N.glassGravity)} slower, and spinners spin ${pct(N.glassSpin - 1)} more.`,
     mods: (m) => { m.ballGravity *= N.glassGravity; m.spinBoost *= N.glassSpin; }, look: { shape: 'circle', color: C.blue, glyph: 'G' } },
   gold: { id: 'gold', name: 'Gold Ball', kind: 'ball', rarity: 'common', text: () => `Every ${N.goldEvery}th scoring hit of a round pays $1, up to $${N.goldCap} a round.`,
     mods: (m) => { m.goldEvery = N.goldEvery; m.goldCap = N.goldCap; }, look: { shape: 'star', color: C.gold, glyph: '$' } },
