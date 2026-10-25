@@ -1,0 +1,204 @@
+/* The boss's prize: a reward reveal over a dimmed page (src/ui/decalPick.ts). Sticker cards in the Toybox
+   Diorama style: ink outlines, flat fills, hard drop shadows; rarity is the foil round each card
+   (common paper, uncommon green, rare blue, legendary gold with a holo shimmer). */
+#upgradeBox.dp-root { --cast: color-mix(in srgb, var(--ink) 75%, transparent); position: fixed; inset: 0; z-index: 40; display: flex; overflow: hidden auto; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: none; color: var(--ink); transform: none; width: auto; max-height: none; -webkit-tap-highlight-color: transparent; }
+#upgradeBox.dp-root[hidden] { display: none; }
+.dp-root.dp-closing { opacity: 0; transition: opacity .22s ease-out; }
+
+.dp-dim { position: fixed; inset: 0; background: radial-gradient(ellipse 65% 60% at 50% 45%, color-mix(in srgb, var(--ink) 68%, transparent), color-mix(in srgb, var(--ink) 93%, transparent)); }
+.dp-rays { position: fixed; left: 50%; top: 40%; width: 180vmax; height: 180vmax; margin: -90vmax 0 0 -90vmax; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--glow) 20%, transparent) 0deg 7.5deg, transparent 7.5deg 15deg);
+  -webkit-mask-image: radial-gradient(circle, #000 4%, transparent 30%); mask-image: radial-gradient(circle, #000 4%, transparent 30%);
+  animation: dp-spin 70s linear infinite; }
+
+.dp-stage { position: relative; margin: auto; width: 100%; max-width: 1000px; display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 22px 16px 26px; }
+
+/* ---- the header: BOSS BEATEN! stamped in, the boss's name on a ribbon ---- */
+.dp-head { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.dp-stars i { position: absolute; width: 30px; height: 30px; background: var(--glow); border: 0; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); filter: drop-shadow(0 3px 0 var(--ink)); animation: dp-twinkle 1.8s steps(6) infinite; }
+.dp-stars i:nth-child(1) { left: -6%; top: 6%; } .dp-stars i:nth-child(2) { left: 2%; top: 58%; width: 20px; height: 20px; animation-delay: -.7s; background: var(--paper); }
+.dp-stars i:nth-child(3) { right: -6%; top: 0; width: 26px; height: 26px; animation-delay: -1.1s; } .dp-stars i:nth-child(4) { right: 0; top: 52%; width: 18px; height: 18px; animation-delay: -.4s; background: var(--accent); }
+.dp-stars i:nth-child(5) { left: 47%; top: -26px; width: 18px; height: 18px; animation-delay: -1.4s; background: var(--paper); }
+.dp-title { margin: 0; font-size: clamp(44px, 6.2vw, 80px); line-height: .95; color: var(--glow); -webkit-text-stroke: 10px var(--ink); paint-order: stroke fill; text-shadow: 0 8px 0 var(--ink); rotate: -3deg; letter-spacing: .02em; white-space: nowrap; }
+.dp-banner { position: relative; z-index: 0; margin-top: 14px; padding: 9px 30px 5px; font-size: clamp(18px, 2vw, 25px); line-height: 1; color: var(--paper); background: var(--accent); border: var(--lw-frame) solid var(--ink); border-radius: 6px; box-shadow: 0 5px 0 var(--ink); rotate: 1.5deg; letter-spacing: .03em; white-space: nowrap; }
+.dp-banner::before, .dp-banner::after { content: ''; position: absolute; z-index: -1; top: 9px; width: 34px; height: 100%; background: color-mix(in srgb, var(--accent) 65%, var(--ink)); border: var(--lw-frame) solid var(--ink); }
+.dp-banner::before { left: -24px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 32% 50%); }
+.dp-banner::after { right: -24px; clip-path: polygon(0 0, 100% 0, 68% 50%, 100% 100%, 0 100%); }
+.dp-sub { margin: 14px 0 0; font: 700 15px/1.3 var(--ui); color: var(--paper); text-shadow: 0 2px 0 var(--ink); }
+
+/* ---- the cards: a button holding a lift (hover), holding a flip (the reveal) with a back and a face ---- */
+.dp-cards { display: flex; justify-content: center; align-items: stretch; gap: 22px; }
+.dp-card { --rc: var(--paper-dim); --foil: linear-gradient(160deg, #ffffff, var(--paper)); --kc: var(--paper);
+  position: relative; display: block; width: min(266px, calc((100vw - 92px) / 3)); padding: 0; margin: 0; border: 0; border-radius: 22px; background: none; text-align: left; color: var(--ink); font: inherit; cursor: pointer; outline: none; -webkit-user-select: none; user-select: none; }
+/* the page's plain button look (paper, a darker hover, faded when disabled) does not apply to the cards */
+#upgradeBox .dp-card, #upgradeBox .dp-card:hover { background: none; }
+#upgradeBox .dp-card:disabled { opacity: 1; }
+#upgradeBox .dp-skip:hover { background: var(--paper); }
+#upgradeBox .dp-peel:hover, #upgradeBox .dp-dock button:hover { background: var(--accent); filter: brightness(1.08); }
+.dp-lift { display: block; height: 100%; transition: transform .24s cubic-bezier(.3,1.5,.5,1); }
+.dp-flip { position: relative; display: block; height: 100%; transform-style: preserve-3d; }
+.dp-face, .dp-back { -webkit-backface-visibility: hidden; backface-visibility: hidden; border-radius: 22px; border: var(--lw-frame) solid var(--ink); }
+.dp-face { position: relative; display: flex; flex-direction: column; height: 100%; padding: 7px; background: var(--foil); background-size: 250% 250%; box-shadow: var(--sh, 6px 7px 0) var(--cast), var(--gl, 0 0 0 0 transparent); transition: box-shadow .24s; }
+.dp-back { position: absolute; inset: 0; transform: rotateY(180deg); display: grid; place-items: center; align-content: center; gap: 10px; background: repeating-linear-gradient(-45deg, var(--rim) 0 16px, var(--band) 16px 32px); box-shadow: 6px 7px 0 var(--cast); }
+.dp-backmark { display: grid; place-items: center; width: 120px; height: 120px; padding-top: 16px; border-radius: 50%; background: var(--accent); border: var(--lw-frame) solid var(--ink); box-shadow: 0 6px 0 var(--ink); font-size: 86px; line-height: 1; color: var(--glow); -webkit-text-stroke: 7px var(--ink); paint-order: stroke fill; }
+.dp-backtag { font: 800 12px var(--ui); letter-spacing: .3em; color: var(--paper); background: var(--ink); padding: 3px 10px 3px 14px; border-radius: 99px; }
+
+.dp-art { position: relative; display: grid; place-items: center; height: 176px; overflow: hidden; border: var(--lw-widget) solid var(--ink); border-radius: 15px 15px 0 0; background: color-mix(in srgb, var(--dc) 45%, var(--paper)); }
+.dp-burst { position: absolute; inset: -45%; background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--dc) 62%, var(--paper)) 0deg 10deg, color-mix(in srgb, var(--rc) 80%, var(--paper)) 10deg 20deg); animation: dp-spin 40s linear infinite; }
+.dp-img { position: relative; width: 168px; height: 168px; filter: drop-shadow(3px 5px 0 color-mix(in srgb, var(--ink) 30%, transparent)); transition: opacity .2s, filter .2s; pointer-events: none; }
+.dp-img.dp-peeled { opacity: .3; filter: grayscale(1) brightness(1.5); }
+.dp-key { position: absolute; top: 8px; left: 8px; display: grid; place-items: center; width: 28px; height: 28px; padding-top: 3px; font: 400 17px/1 var(--display); background: var(--paper); border: var(--lw-widget) solid var(--ink); border-radius: 8px; box-shadow: 0 3px 0 var(--ink); }
+.dp-kind { position: absolute; top: 9px; right: 8px; font: 800 11px/1.5 var(--ui); letter-spacing: .12em; text-transform: uppercase; padding: 1px 9px; border-radius: 99px; border: var(--lw-detail) solid var(--ink); background: var(--kc); }
+.dp-card.k-cash { --kc: var(--coin); } .dp-card.k-score { --kc: color-mix(in srgb, var(--role-pop-fill) 55%, var(--paper)); } .dp-card.k-ball { --kc: var(--metal); } .dp-card.k-build { --kc: color-mix(in srgb, var(--accent) 50%, var(--paper)); }
+
+.dp-body { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 9px; background: var(--paper); border: var(--lw-widget) solid var(--ink); border-top: 0; border-radius: 0 0 15px 15px; }
+.dp-name { font-size: 25px; line-height: 1.02; padding-top: 2px; }
+.dp-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; }
+.dp-card .rar { font-size: 10.5px; padding: 1px 8px; }
+.dp-target { display: inline-flex; align-items: center; gap: 5px; font: 800 11px/1.45 var(--ui); padding: 0 8px 0 3px; border-radius: 99px; border: var(--lw-detail) solid var(--ink); background: var(--chip); }
+.dp-target i { width: 12px; height: 12px; border-radius: 50%; border: var(--lw-detail) solid var(--ink); }
+.dp-txt { flex: 1; font: 600 14px/1.38 var(--ui); }
+.dp-foot { font: 700 11.5px/1.3 var(--ui); color: var(--faint); border-top: var(--lw-detail) dashed var(--paper-dim); padding-top: 7px; }
+.dp-foot b { color: var(--ink); }
+.dp-again { display: none; color: var(--accent); font-weight: 800; }
+.dp-touch .dp-card.is-sel .dp-again { display: block; }
+
+/* the hover glare follows the pointer; uncommon and up get a sweep of shine as they turn over */
+.dp-glare { position: absolute; inset: 0; border-radius: 19px; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .2s;
+  background: radial-gradient(circle at var(--mx, 35%) var(--my, 25%), rgba(255,255,255,.42), rgba(255,255,255,0) 55%); }
+.dp-card.is-sel .dp-glare { opacity: 1; }
+.dp-glare::after { content: ''; position: absolute; top: -20%; bottom: -20%; width: 34%; left: -60%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.75) 50%, transparent); transform: skewX(-14deg); }
+.dp-card:not(.r-common) .dp-glare { opacity: 1; background: none; }
+.dp-card:not(.r-common).is-sel .dp-glare { background: radial-gradient(circle at var(--mx, 35%) var(--my, 25%), rgba(255,255,255,.42), rgba(255,255,255,0) 55%); }
+.dp-card.r-uncommon .dp-glare::after { animation: dp-sweep 1s ease-in-out calc(var(--i) * 260ms + 1300ms) 1 backwards; }
+.dp-card.r-rare .dp-glare::after, .dp-card.r-legendary .dp-glare::after { animation: dp-sweep 3.6s ease-in-out calc(var(--i) * 260ms + 1300ms) infinite backwards; }
+.dp-root:not(.dp-anim) .dp-card .dp-glare::after { animation-delay: .2s; }
+
+/* ---- rarity: the foil ---- */
+.dp-card.r-uncommon { --rc: #bfe8c8; --foil: linear-gradient(135deg, #2e8f48 0%, #a3e3b4 22%, #3fae5a 42%, #dcf7e2 58%, #4cb866 76%, #2e8f48 100%); }
+.dp-card.r-rare { --rc: #bcd6ff; --foil: linear-gradient(135deg, #2a5cc0 0%, #b2ceff 20%, #3f7fe0 40%, #eef4ff 55%, #7aa6f0 72%, #2a5cc0 100%); --gl: 0 0 26px 4px rgba(90,150,255,.55); }
+.dp-card.r-rare .dp-face { animation: dp-foil 7s linear infinite; }
+.dp-card.r-legendary { --rc: #ffd66b; --foil: linear-gradient(120deg, #a86c00 0%, #ffe08a 14%, #e0a000 28%, #fff7d1 42%, #e8a800 56%, #ffd66b 70%, #fff2b8 84%, #a86c00 100%); --gl: 0 0 34px 8px rgba(255,196,48,.75); }
+.dp-card.r-legendary .dp-face { animation: dp-foil 3s linear infinite, dp-glow 1.6s ease-in-out infinite alternate; }
+.dp-card.r-legendary .dp-art::after { content: ''; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay; background-size: 300% 100%; animation: dp-holo 2.6s linear infinite;
+  background-image: linear-gradient(110deg, transparent 18%, rgba(255,80,170,.7) 32%, rgba(255,230,80,.7) 42%, rgba(80,230,255,.7) 52%, rgba(160,100,255,.7) 62%, transparent 76%); }
+.dp-sparks i { position: absolute; z-index: 1; width: 20px; height: 20px; background: #fff; clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); animation: dp-twinkle 1.5s steps(6) infinite; }
+.dp-sparks i:nth-child(1) { left: 16%; top: 22%; } .dp-sparks i:nth-child(2) { left: 78%; top: 30%; width: 14px; height: 14px; animation-delay: -.4s; }
+.dp-sparks i:nth-child(3) { left: 70%; top: 72%; animation-delay: -.8s; } .dp-sparks i:nth-child(4) { left: 22%; top: 70%; width: 13px; height: 13px; animation-delay: -1.1s; }
+.dp-sparks i:nth-child(5) { left: 48%; top: 9%; width: 12px; height: 12px; animation-delay: -.6s; } .dp-sparks i:nth-child(6) { left: 88%; top: 58%; width: 11px; height: 11px; animation-delay: -1.3s; }
+
+/* ---- lifted (hover, arrows, the first tap): up, towards you, tilted after the pointer ---- */
+.dp-card.is-sel { z-index: 2; }
+.dp-card.is-sel .dp-lift { transform: perspective(900px) translateY(-16px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(1.05); }
+.dp-card.is-sel .dp-face { --sh: 12px 20px 0; }
+.dp-card.is-sel .dp-img { animation: dp-bob 1.3s ease-in-out infinite; }
+.dp-cards:has(.is-sel) .dp-card:not(.is-sel) .dp-lift { transform: scale(.96); }
+.dp-card:focus-visible .dp-face { outline: 4px solid var(--paper); outline-offset: 3px; }
+.dp-card:disabled { cursor: not-allowed; }
+.dp-card:disabled .dp-face { filter: saturate(.55); }
+.dp-noroom { position: absolute; left: 10px; bottom: 12px; rotate: -7deg; font-size: 19px; line-height: 1; padding: 6px 9px 2px; color: var(--paper); background: var(--accent); border: var(--lw-frame) solid var(--ink); border-radius: 10px; box-shadow: 0 4px 0 var(--ink); }
+
+/* ---- the full apron, and the dock while a decal is peeled off ---- */
+.dp-fullnote { display: flex; align-items: center; gap: 12px; max-width: 640px; padding: 7px 7px 7px 14px; background: var(--paper); border: var(--lw-frame) solid var(--ink); border-radius: 14px; box-shadow: 4px 5px 0 var(--ink); font-size: 14px; rotate: -1deg; }
+.dp-peel, .dp-dock button { flex: none; font: 400 17px/1 var(--display); padding: 8px 14px 5px; color: var(--paper); background: var(--accent); border-radius: 10px; }
+.dp-dock { display: none; }
+.dp-root.dp-docked { pointer-events: none; }
+.dp-docked .dp-dim, .dp-docked .dp-rays, .dp-docked .dp-stage { display: none; }
+.dp-docked .dp-dock { pointer-events: auto; position: fixed; top: 14px; left: 50%; translate: -50% 0; display: flex; align-items: center; gap: 12px; width: max-content; max-width: calc(100vw - 32px); padding: 7px 7px 7px 14px; font-size: 13.5px; background: var(--paper); border: var(--lw-frame) solid var(--ink); border-radius: 14px; box-shadow: 4px 5px 0 var(--drop); animation: dp-drop .3s cubic-bezier(.3,1.5,.5,1) backwards; }
+
+/* ---- the footer: the apron's slots, the cash instead, the keys ---- */
+.dp-footer { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px 18px; }
+.dp-apron { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 8px; border-radius: 99px; background: var(--rim); border: var(--lw-widget) solid var(--ink); }
+.dp-apron i { width: 15px; height: 15px; border-radius: 50%; border: 2px dashed var(--paper); }
+.dp-apron i.on { background: var(--paper); border: var(--lw-detail) solid var(--ink); }
+.dp-apron i.next { background: var(--glow); border: var(--lw-detail) solid var(--ink); animation: dp-pulse 1s ease-in-out infinite alternate; }
+.dp-apron small { margin-left: 3px; font: 800 10.5px var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--paper); }
+.dp-skip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px 6px 6px; border-radius: 99px; font: 800 14px var(--ui); background: var(--paper); box-shadow: 0 4px 0 var(--ink); transition: transform .12s, box-shadow .12s; }
+.dp-skip:hover, .dp-skip:focus-visible { transform: translateY(-2px); box-shadow: 0 6px 0 var(--ink); outline: none; }
+.dp-skip:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.dp-coin { display: grid; place-items: center; width: 26px; height: 26px; padding-top: 3px; border-radius: 50%; background: var(--coin); border: var(--lw-detail) solid var(--ink); font: 400 15px/1 var(--display); box-shadow: inset 0 -3px 0 var(--coin-shade); }
+.dp-hint { font-size: 12px; font-weight: 700; color: var(--paper); opacity: .85; }
+.dp-hint kbd { margin: 0 1px; }
+@media (pointer: coarse) { .dp-hint, .dp-key, .dp-skip kbd { display: none; } }
+
+/* ---- the pick's flight, and what lands with it ---- */
+.dp-fly { position: fixed; z-index: 3; pointer-events: none; transform-origin: 50% 50%; filter: drop-shadow(5px 9px 0 color-mix(in srgb, var(--ink) 30%, transparent)); will-change: transform; }
+.dp-out .dp-dim, .dp-out .dp-rays { opacity: 0; transition: opacity .45s ease-in .3s; }
+.dp-out .dp-card.is-chosen .dp-lift { transform: translateY(-12px) scale(1.04); }
+.dp-out .dp-card.is-chosen { opacity: 0; transition: opacity .3s ease-in .35s; }
+.dp-bit { position: fixed; z-index: 4; width: 15px; height: 15px; border: var(--lw-detail) solid var(--ink); pointer-events: none; }
+.dp-bit.dot { border-radius: 50%; }
+.dp-bit.chip { width: 19px; height: 11px; border-radius: 3px; }
+.dp-bit.star { width: 24px; height: 24px; border: 0; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.dp-stuck, .dp-cash { position: fixed; z-index: 5; pointer-events: none; white-space: nowrap; font-size: 32px; line-height: 1; color: var(--glow); -webkit-text-stroke: 7px var(--ink); paint-order: stroke fill; text-shadow: 0 4px 0 var(--ink); }
+.dp-cash { color: var(--coin); font-size: 38px; }
+
+/* ---- the reveal: timings match T in decalPick.ts; once settled every animation is dropped and all rests ---- */
+.dp-anim:not(.dp-settled) .dp-dim { animation: dp-fade .35s ease-out backwards; }
+.dp-anim:not(.dp-settled) .dp-rays { animation: dp-spin 70s linear infinite, dp-raysin 1s cubic-bezier(.2,.9,.3,1.1) .1s backwards; }
+.dp-anim:not(.dp-settled) .dp-title { animation: dp-stamp .5s cubic-bezier(.2,.9,.3,1.25) .12s backwards; }
+.dp-anim:not(.dp-settled) .dp-banner { animation: dp-unfurl .42s cubic-bezier(.3,1.6,.5,1) .52s backwards; }
+.dp-anim:not(.dp-settled) .dp-sub, .dp-anim:not(.dp-settled) .dp-fullnote { animation: dp-rise .35s ease-out .7s backwards; }
+.dp-anim:not(.dp-settled) .dp-footer { animation: dp-rise .35s ease-out 1.6s backwards; }
+.dp-anim:not(.dp-settled) .dp-card { animation: dp-slap .44s cubic-bezier(.25,.8,.35,1.2) calc(var(--i) * 260ms + 760ms) backwards; }
+.dp-anim:not(.dp-settled) .dp-flip { animation: dp-flip .48s cubic-bezier(.3,.2,.3,1.3) calc(var(--i) * 260ms + 990ms) backwards; }
+.dp-root:not(.dp-anim) .dp-stage { animation: dp-rise .25s ease-out backwards; }
+.dp-root:not(.dp-anim) .dp-dim { animation: dp-fade .2s ease-out backwards; }
+
+@keyframes dp-fade { from { opacity: 0; } }
+@keyframes dp-spin { to { rotate: 360deg; } }
+@keyframes dp-raysin { from { scale: .2; opacity: 0; } }
+@keyframes dp-stamp { 0% { transform: scale(2.8) rotate(-10deg); opacity: 0; } 50% { transform: scale(.9) rotate(1deg); opacity: 1; } 72% { transform: scale(1.06); } 100% { transform: none; } }
+@keyframes dp-unfurl { from { transform: scaleX(0); opacity: 0; } 40% { opacity: 1; } }
+@keyframes dp-rise { from { transform: translateY(14px); opacity: 0; } }
+@keyframes dp-drop { from { transform: translateY(-30px); opacity: 0; } }
+@keyframes dp-slap { 0% { transform: translateY(-110px) scale(1.55) rotate(calc(-14deg + var(--i) * 14deg)); opacity: 0; } 15% { opacity: 1; } 58% { transform: translateY(8px) scale(.93) rotate(calc(2deg - var(--i) * 2deg)); } 80% { transform: translateY(-3px) scale(1.03); } 100% { transform: none; } }
+@keyframes dp-flip { 0% { transform: perspective(1000px) rotateY(180deg); } 50% { transform: perspective(1000px) rotateY(90deg) scale(1.08); } 100% { transform: perspective(1000px) rotateY(0deg); } }
+@keyframes dp-sweep { 0% { left: -60%; } 30%, 100% { left: 130%; } }
+@keyframes dp-foil { to { background-position: 250% 250%; } }
+@keyframes dp-glow { from { box-shadow: var(--sh, 6px 7px 0) var(--cast), 0 0 22px 3px rgba(255,196,48,.55); } to { box-shadow: var(--sh, 6px 7px 0) var(--cast), 0 0 40px 10px rgba(255,210,70,.85); } }
+@keyframes dp-holo { to { background-position: 300% 0; } }
+@keyframes dp-twinkle { 0%, 100% { transform: scale(0) rotate(0deg); } 33% { transform: scale(1.18) rotate(30deg); } 50% { transform: scale(1) rotate(45deg); } 75% { transform: scale(.68) rotate(60deg); } }
+@keyframes dp-bob { 50% { transform: translateY(-5px) rotate(-3deg); } }
+@keyframes dp-pulse { to { transform: scale(1.25); } }
+
+/* ---- smaller screens: shorter cards; on a phone they stack as rows ---- */
+@media (max-height: 800px) and (min-width: 641px) {
+  .dp-stage { gap: 14px; padding-block: 14px 18px; }
+  .dp-title { font-size: clamp(40px, 5vw, 62px); }
+  .dp-sub { margin-top: 10px; }
+  .dp-art { height: 140px; }
+  .dp-img { width: 140px; height: 140px; }
+}
+@media (max-width: 640px) {
+  .dp-stage { gap: 12px; padding: 18px 16px 22px; }
+  .dp-title { font-size: 46px; -webkit-text-stroke: 8px var(--ink); text-shadow: 0 6px 0 var(--ink); }
+  .dp-banner { margin-top: 10px; font-size: 17px; padding: 8px 22px 4px; }
+  .dp-sub { margin-top: 10px; font-size: 13.5px; }
+  .dp-cards { flex-direction: column; gap: 12px; width: 100%; max-width: 460px; }
+  .dp-card { width: 100%; }
+  .dp-face { display: grid; grid-template-columns: 104px minmax(0, 1fr); padding: 5px; border-radius: 18px; }
+  .dp-back { border-radius: 18px; }
+  .dp-art { height: auto; min-height: 112px; border-radius: 12px 0 0 12px; }
+  .dp-img { width: 108px; height: 108px; }
+  .dp-kind { top: auto; bottom: 6px; right: auto; left: 50%; translate: -50% 0; font-size: 9.5px; padding: 0 7px; }
+  .dp-body { gap: 4px; padding: 8px 10px 7px; border-top: var(--lw-widget) solid var(--ink); border-left: 0; border-radius: 0 12px 12px 0; }
+  .dp-name { font-size: 20px; }
+  .dp-txt { font-size: 13px; line-height: 1.32; }
+  .dp-foot { font-size: 11px; padding-top: 5px; }
+  .dp-backmark { width: 74px; height: 74px; font-size: 52px; padding-top: 10px; -webkit-text-stroke: 5px var(--ink); }
+  .dp-backtag { display: none; }
+  .dp-noroom { left: 50%; bottom: auto; top: 6px; translate: -50% 0; font-size: 13px; padding: 4px 6px 1px; }
+  .dp-card.is-sel .dp-lift { transform: translateY(-4px) scale(1.02); }
+  .dp-cards:has(.is-sel) .dp-card:not(.is-sel) .dp-lift { transform: scale(.98); }
+  .dp-fullnote { flex-direction: column; align-items: stretch; text-align: center; }
+  @keyframes dp-slap { 0% { transform: translateY(-60px) scale(1.25) rotate(calc(-6deg + var(--i) * 6deg)); opacity: 0; } 15% { opacity: 1; } 60% { transform: translateY(5px) scale(.97); } 100% { transform: none; } }
+}
+
+/* Calm mode keeps the reveal but drops the endless motion; reduced motion drops all of it */
+body.calm .dp-rays, body.calm .dp-burst, body.calm .dp-card .dp-face, body.calm .dp-art::after, body.calm .dp-sparks i, body.calm .dp-stars i, body.calm .dp-img, body.calm .dp-apron i, body.calm .dp-glare::after { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .dp-root *, .dp-root *::before, .dp-root *::after { animation: none !important; transition: none !important; }
+  .dp-card.is-sel .dp-lift { transform: translateY(-6px); }
+  .dp-sparks, .dp-stars { display: none; }
+}

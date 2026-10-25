@@ -17,6 +17,8 @@ import { Bot } from './sim/bot';
 import type { Input, SimEvent } from './sim/sim';
 import { bossCard, decalCard, fmt, HUD_TIPS, partCard, rarityChip, roleVar, statsLine } from './ui/html';
 import { applyBackdrop, chase, makeBulbs, MultDial, Odometer } from './ui/hud';
+import { DecalPicker } from './ui/decalPick';
+import './ui/decalPick.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORE = 'pinball-roguelite.run.v2';
@@ -418,37 +420,10 @@ async function main() {
 
   // ---- the decal selection screen after a boss, and the boss panel on the scoreboard ----------------
   let upgradeKey = '';
+  /** The reveal after a boss: BOSS BEATEN, three sticker cards, and the pick flies onto the apron (src/ui/decalPick.ts). */
+  const picker = new DecalPicker($('upgradeBox'), { game, renderer, audio, say, changed: () => afterHistory() });
   function renderUpgrades() {
-    const box = $('upgradeBox');
-    const show = game.pending !== null && game.editable;
-    box.hidden = !show;
-    const key = JSON.stringify([game.pending, game.decals.length, theme.id]);
-    if (key !== upgradeKey) {
-      upgradeKey = key;
-      if (game.pending) {
-        const full = !game.apronFree;
-        box.innerHTML = `<h3>Boss beaten! Pick a decal<small>one of three, stuck on your apron for the rest of the run (or take $${SKIP_PAY} instead)</small></h3>
-          ${full ? '<div class="full">Your apron is full: click a decal on the apron and peel it to make room.</div>' : ''}
-          <div class="ucards">${game.pending.map((o, i) => {
-            const d = DECALS[o.id];
-            return `<button class="ucard k-${d.kind} r-${d.rarity}" data-pick="${i}" ${game.canTake(i) ? '' : 'disabled'}><span class="head"><b>${decalTitle(o)}</b><span class="tag">${KIND_NAMES[d.kind].toUpperCase()}</span></span>
-              <img class="decalimg" alt="" src="${decalURL(o.id)}"><span class="txt">${d.text(o.target)}</span>${rarityChip(d.rarity)}</button>`;
-          }).join('')}</div>
-          <button id="btnSkip">Skip: take $${SKIP_PAY}</button>`;
-        box.querySelectorAll<HTMLButtonElement>('button[data-pick]').forEach((b) => {
-          b.onclick = () => {
-            audio.unlock();
-            const o = game.pending?.[Number(b.dataset.pick)];
-            if (!game.chooseDecal(Number(b.dataset.pick))) { if (!game.apronFree) say('NO ROOM ON THE APRON. PEEL ONE FIRST'); return; }
-            audio.goal();
-            say(`${o ? DECALS[o.id].name.toUpperCase() : 'DECAL'} STUCK ON THE APRON`);
-            persist();
-            afterHistory();
-          };
-        });
-        ($('btnSkip') as HTMLButtonElement).onclick = () => { if (game.skipPick()) { sayKey('skipped'); persist(); afterHistory(); } };
-      }
-    }
+    picker.update();
   }
 
   let bossKey = '';
