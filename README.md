@@ -7,6 +7,8 @@ A rogue-lite where you **build, tune and rebuild a pinball machine** to hit a sc
 - What the physics spike measured: [docs/m0-physics-findings.md](docs/m0-physics-findings.md)
 - Creative parts from real machines (with sources): [docs/parts-catalog.md](docs/parts-catalog.md)
 - Run flow, major upgrades, rebalancing, board variety: [docs/run-flow-and-balance.md](docs/run-flow-and-balance.md)
+- Art direction, themed machines, particles, with concept sheets: [docs/art-direction.md](docs/art-direction.md)
+- How to build that look, phase by phase: [docs/art-implementation-plan.md](docs/art-implementation-plan.md)
 
 ## Run it
 
@@ -35,6 +37,7 @@ npm run balance -- --cache=par.json          # keep the par runs, so a report ca
 npx vite-node tools/explain.ts report.json 6  # replay one measured round and see where its score came from
 npm run clears            # the old quick check: how often the starter machine clears round 1
 npx vite-node tools/launch-spread.ts   # where do launched balls land?
+npm run concept           # re-render the concept sheets in docs/concept from the real table and parts
 ```
 
 ## Layout
