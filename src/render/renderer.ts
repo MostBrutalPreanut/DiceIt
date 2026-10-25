@@ -19,13 +19,16 @@ export interface DrawState {
   hoverDecal?: number | null;
 }
 
-/** How far the machine is tipped towards you (art-direction §3): flat to build, tipped to play, hard on TILT. */
-export const TIP = { workshop: 1, play: 0.86, tilt: 0.8 } as const;
+/**
+ * How far the machine is tipped towards you (art-direction §3). Playtest feedback: the machine must keep one
+ * size between building and playing, so it stays at one tip in every mode; TILT leans and goes dark instead.
+ */
+export const TIP_K = 0.9;
 /** k is quantised so the baked textures can be shared between frames of the tip animation. */
 const K_STEP = 0.02;
 const quantK = (k: number) => Math.round(k / K_STEP) * K_STEP;
 /** Height scale follows the tip: low when flat (the footprint is the collision), taller once tipped. */
-const kzFor = (k: number) => 0.3 + 0.3 * Math.min(1, Math.max(0, (1 - k) / (1 - TIP.play)));
+const kzFor = (k: number) => 0.3 + 0.3 * Math.min(1, Math.max(0, (1 - k) / 0.14));
 
 interface Baked { tex: Texture; ax: number; ay: number }
 interface PartView { sprite: Sprite }
@@ -54,7 +57,7 @@ export class Renderer {
   private h = 0;
   /** The view at the current tip. */
   view: View = { S: 10, ox: 0, oy: 0, k: 1, kz: 0.3, shx: 0, lw: 1.4 };
-  private k = 1;
+  private k = TIP_K;
   private cache = new Map<string, Baked>();
   private statics = new Map<string, { tex: Texture; x: number; y: number }>();
   private staticKey = '';
@@ -125,7 +128,7 @@ export class Renderer {
     if (w === this.w && h === this.h) return;
     this.w = w; this.h = h;
     // fit the machine (rim and a little air) at its tallest, flat; the surround may crop on narrow screens
-    const S = Math.max(4, Math.min((w - 12) / (RIM.hw * 2 + 1.2), (h - 16) / (RIM.hh * 2 + 2.6)));
+    const S = Math.max(4, Math.min((w - 12) / (RIM.hw * 2 + 1.2), (h - 16) / (RIM.hh * 2 * TIP_K + 2.6)));
     this.view.S = S;
     this.view.lw = Math.max(1, S * 0.14);
     this.flush();
@@ -265,7 +268,7 @@ export class Renderer {
       s = { tex, x: 0, y: 0 };
       this.statics.set(key, s);
       // keep the flat and the tipped view, and whatever we are passing through now
-      const keep = new Set([TIP.workshop.toFixed(2), TIP.play.toFixed(2), key]);
+      const keep = new Set([TIP_K.toFixed(2), key]);
       for (const [k2, s2] of this.statics) if (!keep.has(k2)) { s2.tex.destroy(true); this.statics.delete(k2); }
     }
     this.staticSprite.texture = s.tex;
@@ -275,10 +278,6 @@ export class Renderer {
 
   draw(game: Game, dt: number, st: DrawState) {
     this.time += dt;
-    // the tip eases towards its target over ~0.4 s
-    const target = game.sim.tilted ? TIP.tilt : game.mode === 'round' ? TIP.play : TIP.workshop;
-    const step = dt / 0.4 * (TIP.workshop - TIP.play);
-    this.k = Math.abs(target - this.k) <= step ? target : this.k + Math.sign(target - this.k) * step;
     // the part cache is bounded; it is only ever emptied between frames, never while sprites are being assigned
     if (this.cache.size > 1600) { for (const c of this.cache.values()) c.tex.destroy(true); this.cache.clear(); }
     const qk = quantK(this.k);

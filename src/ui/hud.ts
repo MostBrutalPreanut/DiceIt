@@ -3,24 +3,23 @@
 // matter of setting the variables and rebuilding the few SVGs.
 import { mix, roleFill, type Theme } from '../render/theme';
 
-/** Score on rolling odometer drums: one drum per character, digits roll on a strip, the width never wobbles. */
+/** Score on rolling odometer drums: four to start (0000), one more whenever the score needs it; digits roll on a strip. */
 export class Odometer {
   private text = '';
-  constructor(private el: HTMLElement) {}
-  set(text: string) {
+  constructor(private el: HTMLElement, private drums = 4) {}
+  set(score: number) {
+    const text = String(Math.max(0, Math.floor(score))).padStart(this.drums, '0');
     if (text === this.text) return;
     const old = this.text;
     this.text = text;
     if (old.length !== text.length) {
-      this.el.style.setProperty('--dw', `${Math.max(22, Math.min(38, Math.floor(240 / Math.max(1, text.replace(/,/g, '').length + text.split(',').length * 0.3))))}px`);
-      this.el.innerHTML = [...text].map((ch) => /\d/.test(ch)
-        ? `<span class="drum"><span class="strip">${'0123456789'.split('').map((d) => `<span>${d}</span>`).join('')}</span></span>`
-        : `<span class="drum sep"><span>${ch}</span></span>`).join('');
+      // the drums share the window: wide while there are few, narrower as the score grows
+      this.el.style.setProperty('--dw', `${Math.min(36, Math.floor((240 - (text.length - 1) * 3) / text.length))}px`);
+      this.el.innerHTML = [...text].map(() => `<span class="drum"><span class="strip">${'0123456789'.split('').map((d) => `<span>${d}</span>`).join('')}</span></span>`).join('');
     }
     [...text].forEach((ch, i) => {
-      if (!/\d/.test(ch)) return;
       const strip = this.el.children[i]?.querySelector('.strip') as HTMLElement | null;
-      if (strip) strip.style.transform = `translateY(${-Number(ch) * 52}px)`;
+      if (strip) strip.style.transform = `translateY(${-Number(ch) * 42}px)`;
     });
   }
 }

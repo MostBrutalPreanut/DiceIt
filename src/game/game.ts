@@ -26,6 +26,8 @@ export interface Payout {
 export const BALLS_PER_ROUND = 3; // the base; Extra Ball upgrades add to it (Game.ballsPerRound)
 export const START_MONEY = 6;
 export const SHOP_SLOTS = 4;
+/** The toolbox holds this many parts off the board; anything stored in a full toolbox is sold for its sell price. */
+export const TOOLBOX_SLOTS = 4;
 
 /** Two significant figures: goals read as 4,300 or 12,000, not 4,312. */
 export function niceGoal(n: number): number {
@@ -146,6 +148,8 @@ export class Game {
   seed = 1;
   /** Tools: play a round against this goal instead of the table's (Infinity = play every ball out). */
   goalOverride: number | null = null;
+  /** Parts the toolbox had no room for and that were sold instead; the UI reports these and clears the list. */
+  soldOverflow: { def: PartId; refund: number }[] = [];
 
   constructor() {
     this.sim = createSim(this.layout, { seed: this.seed, mods: this.simMods() });
@@ -185,6 +189,28 @@ export class Game {
 
   get placed(): PartInstance[] {
     return placedParts(this.layout);
+  }
+
+  /** The toolbox is full (the Test Lab has no limit). */
+  get toolboxFull(): boolean {
+    return !this.sandbox && this.inventory.length >= TOOLBOX_SLOTS;
+  }
+
+  /** Sells a part the toolbox has no room for, at its sell price, and remembers it for the UI. */
+  private sellOverflow(inst: PartInstance): number {
+    const refund = this.sandbox ? 0 : this.sellValue(PARTS[inst.def]);
+    this.money += refund;
+    this.layout.parts = this.layout.parts.filter((q) => q.uid !== inst.uid);
+    if (inst.placed) this.sim.removePart(inst.uid);
+    this.soldOverflow.push({ def: inst.def, refund });
+    return refund;
+  }
+
+  /** Sells whatever no longer fits in the toolbox (newest first), e.g. after loading a layout slot or an old save. */
+  enforceToolbox() {
+    if (this.sandbox) return;
+    const inv = this.inventory;
+    for (const p of inv.slice(TOOLBOX_SLOTS).reverse()) this.sellOverflow(p);
   }
 
   part(uid: number): PartInstance | undefined {
@@ -331,7 +357,9 @@ export class Game {
         const inst = makePart(id, this.layout.nextUid++);
         Object.assign(inst.dials, dials);
         inst.fresh = true;
+        const full = this.toolboxFull;
         this.layout.parts.push(inst);
+        if (full) this.sellOverflow(inst); // no room in the toolbox: it is sold for its sell price
       },
       levelUp: (id) => void this.levelUp(id),
       levelable: () => this.layout.parts.map((p) => p.def).filter((id) => PARTS[id].recipe.perLevel && (this.levels[id] ?? 0) < MAX_LEVEL),
@@ -473,6 +501,7 @@ export class Game {
       } else missing++;
     }
     this.layout.gravity = a.gravity;
+    this.enforceToolbox();
     this.clearHeat();
     this.toWorkshop();
     return { placed, missing };
@@ -548,6 +577,8 @@ export class Game {
     this.offersSoFar = s.offers ?? this.picks.length;
     this.history = [];
     this.future = [];
+    this.enforceToolbox();
+    this.soldOverflow = [];
     this.clearHeat();
     this.toWorkshop();
   }
@@ -569,7 +600,7 @@ export class Game {
   /** Buy an offer into the inventory. Returns the new part, or null if you cannot. */
   buy(slot: number): PartInstance | null {
     const id = this.shop.offers[slot];
-    if (!this.editable || !id) return null;
+    if (!this.editable || !id || this.toolboxFull) return null;
     const cost = this.priceOf(id);
     if (!this.canAfford(cost)) return null;
     this.checkpoint();
@@ -628,14 +659,19 @@ export class Game {
     return true;
   }
 
-  /** Take a part off the board and back into the inventory. */
-  store(uid: number) {
+  /**
+   * Take a part off the board and back into the toolbox. If the toolbox is full the part is sold instead,
+   * for its sell price: the return value is that refund (null when it was stored).
+   */
+  store(uid: number): number | null {
     const p = this.part(uid);
-    if (!this.editable || !p || !p.placed) return;
+    if (!this.editable || !p || !p.placed) return null;
     this.checkpoint();
     this.clearHeat();
+    if (this.toolboxFull) return this.sellOverflow(p);
     p.placed = false;
     this.sim.updatePart(p);
+    return null;
   }
 
   rotate(uid: number, delta: number) {

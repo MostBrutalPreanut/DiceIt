@@ -101,14 +101,14 @@ export interface PartDef {
   weight: number;
   shape: Shape;
   rotatable: boolean;
-  /** Ball speed added per point of the Kick dial (bumpers and kickers). */
+  /** Ball speed added per point of the Bounce dial (bumpers and kickers). */
   kickUnit: number;
   recipe: Recipe;
   dials: DialDef[];
 }
 
-const kickDial = (def: number, tradeoff = 'A harder kick sends the ball farther, but pays less.', ends: [string, string] = ['soft kick, more points', 'hard kick, fewer']): DialDef => ({
-  id: 'kick', label: 'Kick', min: 0, max: 4, step: 0.25, default: def, tradeoff, ends,
+const kickDial = (def: number, tradeoff = 'How hard it bounces the ball back. Softer pays more per hit; harder sends the ball farther.', ends: [string, string] = ['soft, pays more', 'hard, pays less']): DialDef => ({
+  id: 'kick', label: 'Bounce', min: 0, max: 4, step: 0.25, default: def, tradeoff, ends,
   // neutral at the default, so the numbers printed in the recipe are the numbers you get
   payoff: (v) => 1 + 0.25 * (def - v),
   fmt: (v) => v.toFixed(2),
@@ -133,7 +133,7 @@ export const PARTS: Record<PartId, PartDef> = {
   sling: {
     id: 'sling', name: 'Slingshot', blurb: 'A rubber band with opinions.', kind: 'kicker', cost: 4, weight: 2,
     shape: { type: 'box', hw: 1.7, hh: 0.4 }, rotatable: true, kickUnit: 16,
-    recipe: { points: 30, per: 'hit', perLevel: 10 }, dials: [kickDial(3, 'A harder snap throws the ball across the table, but pays less.', ['soft snap, more points', 'hard snap, fewer'])],
+    recipe: { points: 30, per: 'hit', perLevel: 10 }, dials: [kickDial(3, 'How hard it snaps the ball away. Softer pays more per hit; harder throws it across the table.')],
   },
   spinner: {
     id: 'spinner', name: 'Spinner', blurb: 'Whee. Faster ball, more whee.', kind: 'spinner', cost: 4, weight: 2,
@@ -172,7 +172,7 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: {},
     dials: [{
       id: 'side', label: 'Button', min: 0, max: 1, step: 1, default: 0,
-      tradeoff: 'Which flipper button works it. Left (Z) or Right (/).', ends: ['Left (Z)', 'Right (/)'], fmt: (v) => (v >= 0.5 ? 'Right' : 'Left'),
+      tradeoff: 'Which flipper key works it: Left (←) or Right (→).', ends: ['Left (←)', 'Right (→)'], fmt: (v) => (v >= 0.5 ? 'Right' : 'Left'),
     }],
   },
   lamp: {
@@ -185,7 +185,7 @@ export const PARTS: Record<PartId, PartDef> = {
     }],
   },
   uplight: {
-    id: 'uplight', name: 'Level Light', blurb: 'Light them all and your bumpers level up. Hit one twice and it goes out.', kind: 'rollover', cost: 5, weight: 2,
+    id: 'uplight', name: 'Level Light', blurb: 'Light them all and your bumpers level up.', kind: 'rollover', cost: 5, weight: 2,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
     recipe: { points: 10, per: 'pass', levelUp: true },
     dials: [{
@@ -223,7 +223,7 @@ export const PARTS: Record<PartId, PartDef> = {
     }],
   },
   saver: {
-    id: 'saver', name: 'Ball Saver', blurb: 'Shoot again! If you drain early, the machine pretends it never happened.', kind: 'saver', cost: 5, weight: 1,
+    id: 'saver', name: 'Ball Saver', blurb: 'Drain early? The machine pretends it never happened.', kind: 'saver', cost: 5, weight: 1,
     shape: { type: 'circle', r: 0.8 }, rotatable: false, kickUnit: 0, recipe: {}, dials: [],
   },
 };
@@ -323,11 +323,11 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   const f = (n: number) => num(Math.round(n * factor * 100) / 100);
 
   const lvlBonus = (r.perLevel ?? 0) * level;
-  if (r.points) lines.push({ tag: 'score', text: `Scores ${f(r.points + lvlBonus)} per ${r.per ?? 'hit'}, times your Mult.` });
+  if (r.points) lines.push({ tag: 'score', text: `Scores ${f(r.points + lvlBonus)} per ${r.per ?? 'hit'}.` });
   const upg = modFactor(def.id, mods);
   if (r.points && Math.abs(upg - 1) > 0.001) lines.push({ tag: 'level', text: `Your upgrades multiply its base points by ${num(upg)}.` });
   if (r.grow) lines.push({ tag: 'grow', text: `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it)${r.growCap ? `, up to +${num(r.growCap * factor)}` : ''}.` });
-  if (r.perLevel) lines.push({ tag: 'level', text: `Level ${level} of ${MAX_LEVEL}${level ? ` (+${lvlBonus})` : ''}: each level adds +${r.perLevel} per ${r.per ?? 'hit'} for the rest of the run.` });
+  if (r.perLevel) lines.push({ tag: 'level', text: `Level ${level}/${MAX_LEVEL}: each level adds +${r.perLevel} for the rest of the run.` });
   if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${num(r.mult)} per ${r.per ?? 'hit'}${r.multCap ? `, up to +${num(r.multCap)} a ball from all ${def.name}s` : ''}.` });
   if (r.money) lines.push({ tag: 'money', text: `Pays $${r.money} per ${r.per ?? 'hit'}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
   if (def.kind === 'lamp') {
@@ -335,7 +335,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     lines.push({ tag: 'lamp', text: `Roll a ball over it to light it for this ball. While lit, every scoring part within ${num(lamp.radius)} units scores +${Math.round(lamp.bonus * 100)}%.` });
   }
   if (r.lights && def.kind === 'rollover') lines.push({ tag: 'note', text: 'Lights up for the rest of this ball.' });
-  if (def.id === 'lane') lines.push({ tag: 'note', text: 'Lane change: every time you press a flipper button the lit lanes shift one lane (Z left, / right, wrapping round), so you can steer which lane is still dark.' });
+  if (def.id === 'lane') lines.push({ tag: 'note', text: 'Lane change: each flipper press shifts the lit lanes one lane (← left, → right), so you can steer the dark one.' });
   if (r.tiers) {
     const stiff = inst ? dialValue(inst, 'stiff') : 1;
     lines.push({ tag: 'note', text: `Pays more for a harder hit: ${r.tiers.map((t) => `x${t.x} ${t.name}${t.from ? ` (${num(t.from * stiff)}+ speed)` : ''}`).join(', ')}.` });
@@ -355,11 +355,9 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     lines.push({ tag: 'note', text: `Holds the ball ${num(hold)} s, then fires it out with power ${pw}. Rotate to aim.` });
   }
   if (def.kind === 'spinner') lines.push({ tag: 'note', text: `A faster ball spins it more (1 to ${Math.round(10 * mods.spinBoost)} spins).` });
-  if (def.kind === 'kicker') lines.push({ tag: 'note', text: 'Kicks the ball away from whichever face it hits.' });
-  if (def.kind === 'bumper') lines.push({ tag: 'note', text: 'Kicks the ball away from its centre.' });
   if (def.kind === 'flipper') {
     const side = inst ? dialValue(inst, 'side') : 0;
-    lines.push({ tag: 'note', text: `A flipper worked by the ${side >= 0.5 ? 'Right (/)' : 'Left (Z)'} button. Scores nothing itself.` });
+    lines.push({ tag: 'note', text: `A flipper worked by the ${side >= 0.5 ? 'Right (→)' : 'Left (←)'} key. Scores nothing itself.` });
   }
   if (def.kind === 'deflector') lines.push({ tag: 'note', text: 'Scores nothing. A bouncy bar that bends the ball\'s path.' });
   if (def.kind === 'kickback') {
@@ -370,10 +368,5 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     lines.push({ tag: 'note', text: `Scores nothing. For ${SAVER_WINDOW} s after you launch a ball, a drain sends it back to the plunger instead, and the ball is not spent. Each Ball Saver on the board saves one drain per ball.` });
   }
 
-  for (const d of def.dials) {
-    if (!d.payoff) continue;
-    const v = inst ? dialValue(inst, d.id) : d.default;
-    lines.push({ tag: 'note', text: `${d.label} ${d.fmt ? d.fmt(v) : v}: payout ×${num(d.payoff(v))}. ${d.tradeoff}` });
-  }
   return lines;
 }

@@ -1,10 +1,10 @@
 import './style.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { describe, dialValue, footprint, PART_IDS, PARTS, type PartDef, type PartId, type PartInstance } from './data/parts';
+import { dialValue, footprint, PART_IDS, PARTS, type PartDef, type PartId, type PartInstance } from './data/parts';
 import { BOSS_EVERY, COLUMN_NAMES, offerText, SKIP_PAY, UPGRADE_IDS, UPGRADES, type UpgradeId, type UpgradeOffer } from './data/upgrades';
 import { DECAL_SLOTS } from './data/decals';
 import { AudioFx } from './audio';
-import { Game, goalFor, parseRun, type Arrangement, type GameEvent, type Payout } from './game/game';
+import { Game, goalFor, parseRun, TOOLBOX_SLOTS, type Arrangement, type GameEvent, type Payout } from './game/game';
 import type { ScoreEvent } from './game/scoring';
 import { Renderer, type DrawState } from './render/renderer';
 import { FxOverlay, rectCentre } from './render/overlay';
@@ -13,7 +13,7 @@ import { DT } from './sim/constants';
 import { canPlace } from './sim/layout';
 import { Bot } from './sim/bot';
 import type { Input, SimEvent } from './sim/sim';
-import { barVar, decalCard, descHtml, fmt, HUD_TIPS, partCard, roleVar, statsLine } from './ui/html';
+import { decalCard, fmt, HUD_TIPS, partCard, roleVar, statsLine } from './ui/html';
 import { applyBackdrop, chase, makeBulbs, MultDial, Odometer } from './ui/hud';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -69,6 +69,8 @@ async function main() {
   let lastStamp = 0;
   /** Coins still flying to the money stack: the balance counts them when they land. */
   let coinsInFlight = 0;
+  const overlayEl = $('overlay');
+  $('stage').appendChild($('upgradeBox')); // the upgrade picker floats over the top of the table
   const drawState: DrawState = { ghost: null, selectedUid: null, hoverUid: null, showHeat: false, hoverDecal: null };
 
   const say = (text: string) => {
@@ -111,7 +113,7 @@ async function main() {
     renderer.setTheme(t);
     overlay.setTheme(t);
     dial.build(t);
-    $('cashCap').innerHTML = `<img alt="" src="${iconURL('button', 64, 48)}">`;
+    for (const cap of ['cashCap', 'startCap']) $(cap).innerHTML = `<img alt="" src="${iconURL('button', 64, 48)}">`;
     ballsKey = '';
     $('themeRow').innerHTML = THEMES.map((th) => `<button data-theme="${th.id}" class="${th.id === t.id ? 'on' : ''}" style="background:${th.bg};color:${th.ink}">${th.tagline.split(' ')[0]}<span class="swatch">${[th.role.pop, th.role.coin, th.role.mega, th.accent].map((c) => `<i style="background:${c}"></i>`).join('')}</span></button>`).join('');
     for (const b of $('themeRow').querySelectorAll<HTMLButtonElement>('button[data-theme]')) b.onclick = () => { pickTheme(b.dataset.theme!); };
@@ -157,7 +159,7 @@ async function main() {
     tip.style.setProperty('--head', roleVar(def.id));
     const row = inst ? game.scorer.ledger.get(inst.uid) : undefined;
     tip.innerHTML = partCard(def, inst, { ...ctxFor(def), scorer: live ? game.scorer : undefined, mult: game.scorer.mult }, {
-      blurb: !live, stats: live ? statsLine(row) : undefined,
+      stats: live ? statsLine(row) : undefined,
       keys: live ? (game.editable ? 'drag to move · R rotate · Del store' : 'between rounds: drag, R rotate, Del store') : inst ? 'click to place it' : 'buy it, then place it on the table',
     });
     tip.hidden = false;
@@ -166,15 +168,11 @@ async function main() {
 
   function offerHtml(id: PartId, price: number | null, index: number | null) {
     const def = PARTS[id];
-    // the recipe line: what it pays, or for parts that do not score, the first sentence of its recipe
-    const lines = partCard(def, undefined, ctxFor(def), { dial: false }).match(/<div class="now">([\s\S]*?)<\/div>/)?.[1] ?? describe(def, undefined, ctxFor(def))[0]?.text ?? '';
     const btn = index === null
-      ? `<button class="buy" data-add="${id}">Add · free</button>`
-      : `${price! < def.cost ? `<s>$${def.cost}</s>` : ''}<button class="buy" data-buy="${index}" ${game.canAfford(price!) && game.editable ? '' : 'disabled'}>BUY $${price}</button>`;
-    return `<div class="offer" data-id="${id}"><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id)}"></div>
-      <div class="name">${def.name}</div><div class="blurb">${def.blurb}</div>
-      <div class="recipe" style="--bar:${barVar(id)}">${lines || def.blurb}</div>
-      <div class="buyrow">${btn}</div></div>`;
+      ? `<button class="buy" data-add="${id}">Add</button>`
+      : `${price! < def.cost ? `<s>$${def.cost}</s>` : ''}<button class="buy" data-buy="${index}" ${game.canAfford(price!) && game.editable && !game.toolboxFull ? '' : 'disabled'}>$${price}</button>`;
+    return `<div class="offer" data-id="${id}"><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}"></div>
+      <div class="name">${def.name}</div><div class="buyrow">${btn}</div><div class="blurb">${def.blurb}</div></div>`;
   }
 
   /** Test Lab: every part in the game, free, instead of 4 rotating offers. */
@@ -210,12 +208,12 @@ async function main() {
 
   function renderShop() {
     $('shopBox').classList.toggle('locked', !game.editable);
-    $('shopNote').textContent = game.editable ? 'buy parts, then place them' : 'opens between rounds';
+    $('shopNote').textContent = game.toolboxFull ? 'toolbox full: place or sell first' : 'buy, then place';
     if (game.sandbox) { renderCatalog(); return; }
     $('offers').className = '';
     const rb = $('btnReroll') as HTMLButtonElement;
     rb.hidden = false;
-    rb.textContent = game.rerollCost ? `REROLL $${game.rerollCost}` : 'REROLL FREE';
+    rb.textContent = game.rerollCost ? `REROLL $${game.rerollCost}` : 'REROLL';
     rb.disabled = !game.canAfford(game.rerollCost) || !game.editable;
     $('offers').innerHTML = game.shop.offers.map((id, i) => (id ? offerHtml(id, game.priceOf(id), i) : `<div class="offer sold">Sold</div>`)).join('');
     bindOfferTips($('offers'));
@@ -236,10 +234,10 @@ async function main() {
 
   function renderInventory() {
     const inv = game.inventory;
-    $('inventoryHint').hidden = inv.length > 0;
-    const cells = inv.map((p) => `<div class="item ${armed === p.uid ? 'armed' : ''} ${selected === p.uid ? 'sel' : ''}" data-uid="${p.uid}"><img alt="${PARTS[p.def].name}" src="${iconURL(p.def)}">${p.fresh ? '<span class="new">NEW</span>' : ''}</div>`);
-    const pad = inv.length === 0 ? 0 : (4 - (inv.length % 4)) % 4;
-    $('inventory').innerHTML = cells.join('') + '<div class="item empty"></div>'.repeat(pad);
+    const cells = inv.map((p) => `<div class="item ${armed === p.uid ? 'armed' : ''} ${selected === p.uid ? 'sel' : ''}" data-uid="${p.uid}"><img alt="${PARTS[p.def].name}" src="${iconURL(p.def, 64, 64)}">${p.fresh ? '<span class="new">NEW</span>' : ''}</div>`);
+    const slots = Math.max(TOOLBOX_SLOTS, Math.ceil(inv.length / TOOLBOX_SLOTS) * TOOLBOX_SLOTS); // the Test Lab has no limit
+    $('inventory').innerHTML = cells.join('') + '<div class="item empty"></div>'.repeat(slots - inv.length);
+    $('toolboxNote').textContent = game.sandbox ? 'no limit in the Test Lab' : `${inv.length}/${TOOLBOX_SLOTS} · full? storing sells for half`;
     for (const el of $('inventory').querySelectorAll<HTMLElement>('.item[data-uid]')) {
       const part = game.part(Number(el.dataset.uid))!;
       el.onmouseenter = (e) => tipPart(PARTS[part.def], part, e.clientX, e.clientY, false);
@@ -266,7 +264,7 @@ async function main() {
     const def = PARTS[inst.def];
     card.className = 'card tipcard';
     card.style.setProperty('--head', roleVar(def.id));
-    card.innerHTML = `${partCard(def, inst, { ...ctxFor(def), scorer: game.scorer, mult: game.scorer.mult }, { blurb: true, dial: false })}
+    card.innerHTML = `${partCard(def, inst, { ...ctxFor(def), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false })}
       ${def.dials.map((d) => `<div class="dial"><div class="row2"><span>${d.label}</span><b id="dv-${d.id}">${d.fmt ? d.fmt(dialValue(inst, d.id)) : dialValue(inst, d.id)}</b></div>
         <input data-dial="${d.id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${dialValue(inst, d.id)}" /><div class="hint">${d.tradeoff}</div></div>`).join('')}
       <div class="live" id="selLive">${liveText(inst)}</div>
@@ -281,8 +279,10 @@ async function main() {
         const d = def.dials.find((x) => x.id === input.dataset.dial)!;
         game.setDial(inst.uid, d.id, Number(input.value));
         $(`dv-${d.id}`).textContent = d.fmt ? d.fmt(Number(input.value)) : input.value;
-        // the recipe text follows the dial
-        card.querySelector('.desc')!.outerHTML = descHtml(def, inst, ctxFor(def));
+        // what it pays follows the dial
+        const now = card.querySelector('.now');
+        const fresh = partCard(def, inst, { ...ctxFor(def), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false }).match(/<div class="now">([\s\S]*?)<\/div>/);
+        if (now && fresh) now.innerHTML = fresh[1];
         persist();
       };
     }
@@ -326,11 +326,20 @@ async function main() {
 
   function storeSelected() {
     if (selected == null || !game.editable) return;
-    game.store(selected);
+    const sold = game.store(selected);
+    if (sold !== null) selected = null;
     audio.remove();
-    sayKey('store');
+    if (sold === null) sayKey('store');
     persist();
     refreshWorkshop();
+  }
+  /** Anything the full toolbox had to sell (a store, an upgrade's free part, a layout slot) gets said out loud. */
+  function reportSold() {
+    if (!game.soldOverflow.length) return;
+    const total = game.soldOverflow.reduce((a, s) => a + s.refund, 0);
+    const names = game.soldOverflow.map((s) => PARTS[s.def].name.toUpperCase()).join(', ');
+    say(`TOOLBOX FULL. SOLD ${names} FOR $${total}`);
+    game.soldOverflow = [];
   }
 
   // ---- major upgrades: the three cards, and the chips that list what the run has taken ----------------
@@ -380,6 +389,7 @@ async function main() {
   }
 
   function refreshWorkshop() {
+    reportSold();
     if (selectedDecal !== null && !game.decals[selectedDecal]) selectedDecal = null;
     renderUpgrades();
     renderShop();
@@ -512,7 +522,7 @@ async function main() {
   }
 
   // ---- keyboard ---------------------------------------------------------------------------------------
-  const GAME_KEYS = new Set(['Space', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Slash', 'KeyZ', 'ShiftLeft', 'ShiftRight']);
+  const GAME_KEYS = new Set(['Space', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter']);
   addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement;
     if (t.tagName === 'INPUT' || t.tagName === 'SELECT') return;
@@ -525,9 +535,10 @@ async function main() {
     if (GAME_KEYS.has(e.code)) e.preventDefault();
     if (e.repeat) return;
     keys.add(e.code);
-    if (e.code === 'ArrowLeft') nudgePulse = -1;
-    if (e.code === 'ArrowRight') nudgePulse = 1;
+    if (e.code === 'KeyZ') nudgePulse = -1;
+    if (e.code === 'KeyX') nudgePulse = 1;
     if (e.code === 'Tab') game.cashOut();
+    if (e.code === 'Enter' && game.canStart && $('themePick').hidden && overlayEl.hidden) startRound();
     if (e.code === 'KeyM') say(audio.toggleMute() ? 'SOUND OFF. THE SILENCE IS LOUD' : 'SOUND ON');
     if (e.code === 'Space' && game.mode === 'workshop' && game.sim.ballCount === 0) { game.testBall(); sayKey('start'); }
     if (e.code === 'KeyR' && game.editable) {
@@ -551,8 +562,8 @@ async function main() {
 
   const readInput = (): Input => {
     const input: Input = {
-      left: keys.has('KeyZ') || keys.has('ShiftLeft'),
-      right: keys.has('Slash') || keys.has('ShiftRight'),
+      left: keys.has('ArrowLeft'),
+      right: keys.has('ArrowRight'),
       plunge: keys.has('Space'),
       nudge: nudgePulse,
     };
@@ -561,14 +572,24 @@ async function main() {
   };
 
   // ---- buttons -------------------------------------------------------------------------------------------
-  $('btnStart').onclick = () => { audio.unlock(); game.startRound(); armed = null; selected = null; selectedDecal = null; $('tip').hidden = true; refreshWorkshop(); sayKey('start'); persist(); };
+  function startRound() {
+    if (!game.canStart) return;
+    audio.unlock(); game.startRound(); armed = null; selected = null; selectedDecal = null; $('tip').hidden = true; refreshWorkshop(); sayKey('start'); persist();
+  }
+  $('btnStart').onclick = startRound;
   $('btnCash').onclick = () => game.cashOut();
   $('btnTest').onclick = () => { audio.unlock(); game.testBall(); sayKey('start'); };
   $('btnReset').onclick = () => { game.newRun(); armed = selected = null; selectedDecal = null; persist(); refreshWorkshop(); say('NEW RUN. SAME OLD PHYSICS'); };
   $('btnReroll').onclick = () => { if (game.reroll()) { sayKey('reroll'); persist(); } else sayKey('broke'); refreshWorkshop(); };
   const sandbox = $('sandbox') as HTMLInputElement;
   sandbox.checked = game.sandbox;
-  sandbox.onchange = () => { game.sandbox = sandbox.checked; persist(); refreshWorkshop(); say(sandbox.checked ? 'TEST LAB OPEN. NOTHING HERE COUNTS' : 'BACK TO REAL MONEY'); };
+  sandbox.onchange = () => {
+    game.sandbox = sandbox.checked;
+    say(sandbox.checked ? 'TEST LAB OPEN. NOTHING HERE COUNTS' : 'BACK TO REAL MONEY');
+    if (!sandbox.checked) game.enforceToolbox();
+    persist();
+    refreshWorkshop();
+  };
   const gravity = $('gravity') as HTMLInputElement;
   gravity.value = String(game.layout.gravity);
   $('gravVal').textContent = gravity.value;
@@ -703,7 +724,7 @@ async function main() {
     if (g.type === 'ballEnd') lastMultBand = 1;
   };
 
-  const overlayEl = $('overlay');
+  // overlayEl is declared up top (the keyboard needs it)
   function showOverlay(kind: 'won' | 'over', payout?: Payout) {
     overlayEl.hidden = false;
     if (kind === 'won' && payout) {
@@ -724,23 +745,36 @@ async function main() {
   // ---- HUD ------------------------------------------------------------------------------------------------------
   /** The between-rounds bar: Shop, Upgrade (only when one is owed or was just taken), Install, and the one big button. */
   function updateStepper() {
-    const bar = $('stepper');
-    bar.hidden = game.mode !== 'workshop';
-    if (bar.hidden) return;
+    const play = game.mode !== 'workshop';
     const owed = game.pending !== null;
+    $('stepPlay').className = `step ${play ? 'cur' : 'done'}`;
+    $('stepPlayNote').textContent = play ? `round ${game.round}` : '';
     const up = $('stepUpgrade');
-    up.hidden = !owed && !game.resolved;
+    up.hidden = play || (!owed && !game.resolved);
     up.className = `step ${owed ? 'owed' : 'done'}`;
     $('stepUpgradeNote').textContent = owed ? 'pick 1 of 3' : game.resolved === 'skipped' ? `skipped, +$${SKIP_PAY}` : game.resolved ? UPGRADES[game.resolved.id].name : '';
-    $('stepShop').className = `step ${owed ? '' : 'active'}`;
-    $('stepShopNote').textContent = game.sandbox ? 'free' : `$${game.money}`;
+    $('stepShop').className = `step ${play ? '' : owed ? '' : 'cur'}`;
+    $('stepShopNote').textContent = play ? '' : game.sandbox ? 'free' : `$${game.money}`;
     const inv = game.inventory.length, fresh = game.inventory.filter((p) => p.fresh).length;
-    $('stepInstall').className = `step ${!owed && inv > 0 ? 'active' : ''}`;
-    $('stepInstallNote').textContent = inv ? `${inv} to place${fresh ? `, ${fresh} new` : ''}` : 'board is set';
+    $('stepInstall').className = `step ${!play && !owed && inv > 0 ? 'cur' : ''}`;
+    $('stepInstallNote').textContent = play ? '' : inv ? `${inv} to place${fresh ? `, ${fresh} new` : ''}` : 'board is set';
     const start = $('btnStart') as HTMLButtonElement;
+    start.hidden = play;
     start.disabled = owed;
     start.title = owed ? 'Pick an upgrade (or skip it) first' : '';
     start.classList.toggle('ready', !owed && inv === 0);
+  }
+
+  let keysKey = '';
+  /** The controls, in one short line under the table: what the keys do right now. */
+  function updateKeys() {
+    const mode = game.mode === 'workshop' ? 'build' : 'play';
+    if (mode === keysKey) return;
+    keysKey = mode;
+    const k = (key: string, what: string) => `<kbd>${key}</kbd><span>${what}</span>`;
+    $('keys').innerHTML = mode === 'play'
+      ? [k('←', ''), k('→', 'flippers'), k('Space', 'shoot'), k('Z', ''), k('X', 'nudge'), k('Tab', 'cash out'), k('M', 'mute')].join(' ')
+      : [k('Enter', 'play round'), k('Space', 'test ball'), k('R', 'rotate'), k('Del', 'store'), k('Ctrl+Z', 'undo'), k('M', 'mute')].join(' ');
   }
 
   let ballsKey = '';
@@ -759,14 +793,17 @@ async function main() {
   function updateHud(dt: number) {
     const sc = game.scorer;
     const inRound = game.mode === 'round' || game.mode === 'roundEnd' || game.mode === 'runOver';
-    $('modeBadge').textContent = game.mode === 'workshop' ? (game.sandbox ? 'TEST LAB' : 'WORKSHOP') : `ROUND ${game.round}`;
-    odometer.set(fmt(sc.score));
+    // the scoreboard names the step of the loop you are on: build (shop and place), then play
+    const playing = game.mode !== 'workshop';
+    $('phaseTitle').textContent = playing ? 'PLAY' : 'BUILD';
+    $('phaseNote').textContent = playing ? 'then build' : game.sandbox ? 'test lab' : 'then play';
+    document.body.classList.toggle('playing', playing);
+    odometer.set(sc.score);
     $('mult').textContent = `×${sc.mult.toFixed(2)}`;
     $('mult').classList.toggle('hot', sc.mult >= 2);
     dial.set(sc.mult, theme);
     const money = game.money + (inRound ? sc.money : 0) - coinsInFlight;
     $('shopMoney').textContent = game.sandbox ? '$∞' : `$${Math.max(0, money)}`;
-    $('spareNote').textContent = `+$${game.mods.unusedBallPay} per spare ball`;
     $('round').textContent = String(game.round);
     const stage = (game.round - 1) % BOSS_EVERY;
     for (let i = 0; i < 3; i++) $(`stage${i}`).className = i === stage ? 'cur' : i < stage ? 'done' : '';
@@ -784,11 +821,11 @@ async function main() {
     $('clockFill').style.width = `${clock === null ? 100 : (clock / game.sim.clockTotal) * 100}%`;
     $('clockFill').classList.toggle('low', clock !== null && clock < 10);
     updateStepper();
+    updateKeys();
     const cash = $('btnCash') as HTMLButtonElement;
     cash.hidden = game.mode !== 'round';
     cash.disabled = !(game.mode === 'round' && sc.goalReached);
     $('workshop').hidden = game.mode !== 'workshop';
-    $('machineBox').hidden = game.mode !== 'workshop';
     ($('btnUndo') as HTMLButtonElement).disabled = !game.canUndo;
     ($('btnRedo') as HTMLButtonElement).disabled = !game.canRedo;
     $('labTools').hidden = !game.sandbox;

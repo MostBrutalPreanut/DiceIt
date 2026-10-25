@@ -28,6 +28,10 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.evaluate(() => window.__pinball.freeze(true));
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/smoke-1-workshop.png` });
+  const shopBox = await (await page.$('#offers')).boundingBox();
+  check(shopBox.y + shopBox.height <= 900, 'every shop offer is on screen without scrolling');
+  check(await page.locator('#score .drum').count() === 4, 'the score window starts with four drums (0000)');
+  await page.click('#machineBox summary'); // undo, the Test Lab and the slots live under Machine & options
 
   // sim -> screen goes through the projection and the machine's tilt, so ask the game where a point is
   const at = (x, y) => page.evaluate(([px, py]) => window.__pinball.toScreen(px, py), [x, y]);
@@ -46,7 +50,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(s.placed === 4 && s.inv === 0, 'clicking the table places it');
   check(await page.isVisible('#selected'), 'the part card is shown for the new part');
   const card = await page.innerText('#selected');
-  check(/Scores|Prints|flipper|Roll a ball|Scores nothing|Each target/i.test(card), 'the part card explains how it scores');
+  check(/pays|flipper|Roll a ball|Scores nothing|Each target/i.test(card), 'the part card says what it pays');
   await page.click('#btnUndo');
   s = await state();
   check(s.placed === 3 && s.inv === 1, 'undo takes the placement back');
@@ -113,6 +117,22 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(/Next hit pays \d+/i.test(tip) && /your Mult/i.test(tip), 'the tooltip leads with the next-hit number and its math chips');
   await page.mouse.move(5, 5);
 
+  // the toolbox holds four: buying stops, and storing into a full toolbox sells the part for half
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.money = 50; window.__pinball.refresh(); });
+  for (let i = 0; i < 4; i++) {
+    await page.evaluate(() => { const g = window.__pinball.game; g.shop.offers = ['pop', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
+    await page.click('button[data-buy="0"]');
+  }
+  check((await state()).inv === 4 && await page.isDisabled('button[data-buy="1"]'), 'with four parts in the toolbox the Buy buttons are off');
+  const before = (await state()).money;
+  await page.keyboard.press('Escape'); // the last part bought is still in hand
+  const pop2 = await at(11, 45.5);
+  await page.mouse.click(pop2.x, pop2.y);
+  await page.keyboard.press('Delete');
+  const after = await state();
+  check(after.money === before + 1 && after.placed === 2 && after.inv === 4, `storing into a full toolbox sells the part for half ($${before} -> $${after.money})`);
+  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
+
   // relic decals: earn one from a Rules card, read it on the apron, peel it off
   await page.evaluate(() => { const g = window.__pinball.game; g.pending = [{ id: 'sponsor' }, { id: 'headStart' }]; window.__pinball.refresh(); });
   check(await page.locator('.ucard.c-rules .decalimg').count() === 1, 'a Rules card shows the decal it would stick on');
@@ -160,7 +180,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   const st = await page.evaluate(() => { const g = window.__pinball.game; return { mode: g.mode, score: Math.round(g.scorer.score), rows: g.scorer.ledgerRows().length, k: window.__pinball.renderer.view.k }; });
   console.log('after 25s of bot play:', JSON.stringify(st));
   check(st.score > 0 && st.rows > 0, 'the bot scored and the ledger attributes it');
-  check(st.mode !== 'round' || Math.abs(st.k - 0.86) < 0.011, `the machine is tipped to 0.86 in play (k ${st.k})`);
+  check(Math.abs(st.k - 0.9) < 0.011, `the machine keeps its one tip in play (k ${st.k})`);
   check(await page.locator('#ledger tbody tr').count() > 0, 'the receipt prints the ledger');
   const ms = await page.evaluate(() => window.__pinball.probe(60));
   console.log(`renderer: ${ms.toFixed(2)} ms per frame (CPU side, software GL)`);
@@ -172,10 +192,11 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
     await page.evaluate((t) => { const d = window.__pinball; d.theme(t); d.game.newRun(); d.refresh(); }, theme);
     await page.evaluate(() => window.__pinball.advance(0.5, 1));
     await page.screenshot({ path: `${out}/snap-${theme}-workshop.png` });
-    const k0 = await page.evaluate(() => window.__pinball.renderer.view.k);
-    check(k0 === 1, `${theme}: the workshop lies flat (k ${k0})`);
+    const size0 = await page.evaluate(() => { const v = window.__pinball.renderer.view; return [v.S, v.k, v.oy].join(); });
     await page.click('#btnStart');
     await page.evaluate(() => window.__pinball.advance(8, 7));
+    const size1 = await page.evaluate(() => { const v = window.__pinball.renderer.view; return [v.S, v.k, v.oy].join(); });
+    check(size0 === size1, `${theme}: the machine is the same size building and playing (${size1})`);
     const buf = await page.screenshot({ path: `${out}/snap-${theme}-play.png`, clip: await (await page.$('#stage')).boundingBox() });
     shots.push(buf.toString('base64').length);
     const bg = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim());

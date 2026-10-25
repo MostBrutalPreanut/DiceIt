@@ -45,7 +45,7 @@ export interface TipCtx {
  * The tooltip's fixed anatomy (art-direction §6): header, the next-hit number, the math as chips
  * (cross-part effects as their own chip), the recipe, this round, the dial with its trade-off, controls.
  */
-export function partCard(def: PartDef, inst: PartInstance | undefined, c: TipCtx, opts: { keys?: string; blurb?: boolean; stats?: string; dial?: boolean } = {}): string {
+export function partCard(def: PartDef, inst: PartInstance | undefined, c: TipCtx, opts: { keys?: string; blurb?: boolean; stats?: string; dial?: boolean; recipe?: boolean } = {}): string {
   const r = def.recipe;
   const level = r.perLevel ? c.level : 0;
   const lvl = (r.perLevel ?? 0) * level;
@@ -74,9 +74,9 @@ export function partCard(def: PartDef, inst: PartInstance | undefined, c: TipCtx
     if (live) chips.push([`×${(c.mult ?? 1).toFixed(2)}`, 'your Mult']);
     o.push(`<div class="chips">${chips.slice(0, 5).map(([v, l]) => `<span><b>${v}</b><small>${l}</small></span>`).join('')}</div>`);
   }
-  o.push(descHtml(def, inst, { level: c.level, mods: c.mods }));
+  if (opts.recipe !== false) o.push(descHtml(def, inst, { level: c.level, mods: c.mods }));
   if (opts.stats) o.push(`<div class="stats">${opts.stats}</div>`);
-  if (opts.dial !== false) {
+  if (opts.dial) {
     const d = def.dials[0];
     if (d) {
       const v = inst ? dialValue(inst, d.id) : d.default;

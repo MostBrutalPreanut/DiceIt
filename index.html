@@ -11,7 +11,7 @@
     <aside id="left" class="panel housing">
       <i class="screw tl"></i><i class="screw tr"></i><i class="screw bl"></i><i class="screw br"></i>
       <div class="inner">
-        <header class="marquee"><span class="bulbs"></span><h1 class="disp">FREE PLAY</h1><span id="modeBadge" class="badge">WORKSHOP</span></header>
+        <header class="marquee"><span class="bulbs"></span><h1 class="disp" id="phaseTitle">BUILD</h1><span id="phaseNote" class="badge">then play</span></header>
         <div class="scroll">
           <div class="tile roundstrip">
             <b class="disp">ROUND <span id="round">1</span></b>
@@ -58,93 +58,78 @@
           </section>
 
           <div id="actions">
-            <button id="btnCash" class="arcade" hidden disabled><span class="cap" id="cashCap"></span><span class="disp">CASH OUT</span><kbd>TAB</kbd></button>
+            <button id="btnStart" class="arcade"><span class="cap" id="startCap"></span><span class="disp">PLAY ROUND</span></button>
+            <button id="btnCash" class="arcade" hidden disabled><span class="cap" id="cashCap"></span><span class="disp">CASH OUT</span></button>
           </div>
-
-          <details class="help">
-            <summary>Controls</summary>
-            <ul>
-              <li>Click the table once so the keyboard works.</li>
-              <li><kbd>Z</kbd>/<kbd>Shift</kbd> left flipper · <kbd>/</kbd>/<kbd>Shift</kbd> right</li>
-              <li>Hold <kbd>Space</kbd> to charge the plunger, release to fire</li>
-              <li><kbd>←</kbd> <kbd>→</kbd> nudge (too much = TILT)</li>
-              <li><kbd>Tab</kbd> cash out once the goal is hit</li>
-              <li>Workshop: buy parts, click one in your toolbox, click the table. Drag parts to move them, or drag them onto the toolbox to take them off the board. <kbd>R</kbd> rotates, <kbd>Del</kbd> stores. <kbd>Space</kbd> fires a test ball.</li>
-              <li>Click a decal on the apron to read it, or peel it off between rounds.</li>
-              <li><kbd>M</kbd> mute</li>
-            </ul>
-          </details>
         </div>
       </div>
     </aside>
 
     <main id="center">
       <div id="dmd"><span class="bulbs top"></span><div class="screen"><span id="dmdText">INSERT COIN</span></div><span class="bulbs bottom"></span></div>
-      <div id="stepper" hidden>
+      <div id="stepper">
         <ol>
-          <li id="stepShop" class="step"><b>1</b><span>Shop</span><i id="stepShopNote"></i></li>
-          <li id="stepUpgrade" class="step" hidden><b>2</b><span>Upgrade</span><i id="stepUpgradeNote"></i></li>
-          <li id="stepInstall" class="step"><b>3</b><span>Install</span><i id="stepInstallNote"></i></li>
+          <li id="stepPlay" class="step"><b>1</b><span>Play</span><i id="stepPlayNote"></i></li>
+          <li id="stepShop" class="step"><b>2</b><span>Shop</span><i id="stepShopNote"></i></li>
+          <li id="stepUpgrade" class="step" hidden><b>★</b><span>Upgrade</span><i id="stepUpgradeNote"></i></li>
+          <li id="stepInstall" class="step"><b>3</b><span>Place</span><i id="stepInstallNote"></i></li>
         </ol>
-        <button id="btnStart" class="primary disp">Start round</button>
       </div>
       <div id="stage"></div>
+      <div id="upgradeBox" class="card" hidden></div>
       <div id="overlay" hidden></div>
       <div id="touch" aria-label="Touch controls">
-        <button data-key="KeyZ" class="disp">LEFT</button>
+        <button data-key="ArrowLeft" class="disp">LEFT</button>
         <button data-key="Space" class="disp">PLUNGE</button>
-        <button data-key="Slash" class="disp">RIGHT</button>
+        <button data-key="ArrowRight" class="disp">RIGHT</button>
       </div>
+      <div id="keys" class="keys"></div>
     </main>
 
     <aside id="right" class="panel housing">
       <i class="screw tl"></i><i class="screw tr"></i><i class="screw bl"></i><i class="screw br"></i>
       <div class="inner">
-        <header class="marquee"><span class="bulbs"></span><h2 class="disp">PARTS</h2><button id="btnReroll" class="pill">Reroll</button></header>
+        <header class="marquee"><span class="bulbs"></span><h2 class="disp">SHOP</h2><button id="btnReroll" class="pill">Reroll</button></header>
         <div class="fixed">
-          <div class="tile moneyrow" data-tip="money"><span id="coinStack" class="coins"><i></i><i></i><i></i></span><b id="shopMoney" class="disp">$0</b><span id="moneyTick" class="tick"></span><span class="hint" id="spareNote">+$3 per spare ball</span></div>
+          <div class="tile moneyrow" data-tip="money"><span id="coinStack" class="coins"><i></i><i></i><i></i></span><b id="shopMoney" class="disp">$0</b><span id="moneyTick" class="tick"></span><span class="hint" id="shopNote">buy, then place</span></div>
           <div id="invWrap">
-            <div class="lbl">Toolbox <span class="hint">drag a part in to store it</span></div>
-            <div id="inventoryBox" class="toolbox">
-              <div id="inventory"></div>
-              <div id="inventoryHint" class="hint">Empty. Buy a part, or drag one off the table to store it.</div>
-            </div>
+            <div class="lbl">Toolbox <span class="hint" id="toolboxNote">4 slots · drag a part here to store it</span></div>
+            <div id="inventoryBox" class="toolbox"><div id="inventory"></div></div>
           </div>
+          <section id="shopBox">
+            <div id="offers"></div>
+          </section>
+          <div id="shopClosed" class="hint">The shop opens between rounds.</div>
         </div>
         <div class="scroll">
           <section id="workshop">
-            <div id="upgradeBox" class="card" hidden></div>
             <div id="decalCard" class="card" hidden></div>
             <div id="selected" class="card" hidden></div>
           </section>
-          <section id="shopBox">
-            <div class="lbl">Shop <span class="hint" id="shopNote">buy parts, then place them</span></div>
-            <div id="offers"></div>
-            <label class="check"><input id="sandbox" type="checkbox" /> Test Lab: every part, free, nothing counts</label>
-          </section>
-          <section id="machineBox">
-            <div class="lbl">Machine</div>
+          <details id="machineBox">
+            <summary class="lbl">Machine &amp; options</summary>
             <div class="card">
               <div class="lbl">Theme</div>
               <div id="themeRow" class="themes"></div>
-              <label class="check"><input id="calm" type="checkbox" /> Calm mode: no shake, drift or twinkles, half the particles</label>
-              <label>Table tilt (gravity) <b id="gravVal" class="num">50</b>
-                <input id="gravity" type="range" min="30" max="80" step="1" value="50" />
-              </label>
-              <div class="hint">Steeper table: faster ball, more drains, harder to cradle.</div>
+              <label class="check"><input id="calm" type="checkbox" /> Calm mode: no shake, drift or twinkles</label>
               <div class="btnrow">
                 <button id="btnUndo" title="Ctrl+Z">Undo</button>
                 <button id="btnRedo" title="Ctrl+Y">Redo</button>
+                <button id="btnTest" title="Space">Test ball</button>
+                <button id="btnReset">New run</button>
               </div>
+              <label>Table tilt (gravity) <b id="gravVal" class="num">50</b>
+                <input id="gravity" type="range" min="30" max="80" step="1" value="50" />
+              </label>
               <label class="check"><input id="heat" type="checkbox" /> Heatmap: where the balls went
                 <button id="btnHeatClear" class="mini">clear</button></label>
               <div class="lbl">Layout slots</div>
               <div id="slots"></div>
               <div id="slotMsg" class="hint"></div>
+              <label class="check"><input id="sandbox" type="checkbox" /> Test Lab: every part, free, nothing counts</label>
             </div>
             <div id="labTools" class="card" hidden>
               <h3 class="disp">Test Lab</h3>
-              <div class="hint">Every part is free and nothing here counts. The catalog replaces the shop.</div>
               <div class="btnrow">
                 <button id="labBalls4">Drop 4 balls</button>
                 <button id="labBalls12">Drop 12 balls</button>
@@ -157,13 +142,8 @@
                 <button id="labTake" class="mini">Take</button>
                 <button id="labDrop" class="mini">Clear all</button>
               </div>
-              <div class="hint">Takes any major upgrade for free (the offer rules do not apply here).</div>
             </div>
-            <div class="row">
-              <button id="btnTest">Test ball (Space)</button>
-              <button id="btnReset">New run</button>
-            </div>
-          </section>
+          </details>
         </div>
       </div>
     </aside>

@@ -140,7 +140,7 @@ const count = (g: Game) => {
   return c;
 };
 
-/** Buy by value per dollar until nothing affordable is left, rerolling a couple of times when the shelf is bare. */
+/** Buy by value per dollar until nothing affordable is left or the toolbox is full, rerolling a couple of times when the shelf is bare. */
 export function parShop(g: Game): { bought: { id: PartId; price: number }[]; rerolls: number } {
   const bought: { id: PartId; price: number }[] = [];
   let rerolls = 0;
@@ -150,12 +150,13 @@ export function parShop(g: Game): { bought: { id: PartId; price: number }[]; rer
       .map((id, slot) => ({ id, slot }))
       .filter((o): o is { id: PartId; slot: number } => o.id !== null && PART_VALUE[o.id] > 0 && g.priceOf(o.id) <= g.money && (have[o.id] ?? 0) < PART_CAP[o.id])
       .sort((a, b) => PART_VALUE[b.id] / g.priceOf(b.id) - PART_VALUE[a.id] / g.priceOf(a.id));
-    if (options.length) {
+    if (options.length && !g.toolboxFull) { // the toolbox holds four: the rest waits for the next shop
       const price = g.priceOf(options[0].id);
-      g.buy(options[0].slot);
+      if (!g.buy(options[0].slot)) break;
       bought.push({ id: options[0].id, price });
       continue;
     }
+    if (g.toolboxFull) break;
     if (rerolls < MAX_REROLLS && g.money - g.rerollCost >= 3 && g.reroll()) { rerolls++; continue; }
     break;
   }
