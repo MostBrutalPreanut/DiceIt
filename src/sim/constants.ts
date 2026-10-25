@@ -41,7 +41,12 @@ export const FLIPPER_TORQUE = 60000;
 /** Build area for placed parts (the rest of the table is protected). */
 export const BUILD_AREA = { x0: 2, x1: 22, y0: 15, y1: 48 };
 
+/** Seconds a ball must sit still before the ball search kicks it. */
 export const BALL_SEARCH_AFTER = 3.5;
+/** A kicked ball that comes to rest in the same spot again is searched again sooner. */
+export const BALL_SEARCH_AGAIN = 1.5;
+/** Kicks a stuck ball gets before the search gives up and puts it back in the plunger lane (still the same ball). */
+export const BALL_SEARCH_KICKS = 2;
 /** A ball (with every ball it turns into) lasts at most this long after its first launch. Late-game balls hit it often, which keeps rounds near 2.5 minutes. */
 export const BALL_TIMEOUT = 60;
 export const NUDGE_SPEED = 7;

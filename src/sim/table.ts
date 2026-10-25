@@ -20,6 +20,15 @@ export const FLIPPER_PIVOTS = {
 } as const;
 
 /**
+ * The one-way gate over the top of the plunger lane, from the top of the lane wall's cap to the outer wall. A ball
+ * plunged up the lane passes through it; a ball coming down from the playfield (off the dome, the chamfer or a wild
+ * throw) lands on it and rolls back into the playfield, instead of dropping into the lane and back to the plunger.
+ * It slopes down towards the playfield so nothing can rest on it.
+ */
+export const LANE_GATE: Seg = { x1: LANE_WALL_X - 1.6, y1: LANE_TOP_Y + 2.6, x2: TABLE_W, y2: LANE_TOP_Y + 3.4 };
+export const isLaneGate = (s: Seg) => s.x1 === LANE_GATE.x1 && s.y1 === LANE_GATE.y1 && s.x2 === LANE_GATE.x2 && s.y2 === LANE_GATE.y2;
+
+/**
  * Fixed rubber posts in the dome. They are cabinet furniture, not parts: they scatter the ball
  * as it arrives from the plunger lane, so the first landing spot varies from launch to launch.
  */
@@ -79,6 +88,8 @@ function makeTable(): { segs: Seg[]; outline: [number, number][] } {
   seg(TABLE_W, rightTop, TABLE_W, LANE_FLOOR_Y); // outer right wall of the lane
   seg(LANE_WALL_X, LANE_TOP_Y, LANE_WALL_X, LANE_FLOOR_Y); // lane inner wall: reaches the floor, or a ball can wedge in a slot
   seg(LANE_WALL_X, LANE_TOP_Y, LANE_WALL_X - 1.6, LANE_TOP_Y + 2.6); // sloped cap so a falling ball drops into the playfield
+  // the one-way gate over the top of the lane (see LANE_GATE): it continues the cap's rail to the outer wall
+  seg(LANE_GATE.x1, LANE_GATE.y1, LANE_GATE.x2, LANE_GATE.y2);
   seg(LANE_WALL_X, LANE_FLOOR_Y, TABLE_W, LANE_FLOOR_Y); // plunger floor
   // Guide rails end just outside the swept circle of each flipper's rear corner, so a ball rolls from
   // rail to flipper with no groove narrower than itself to rest in (that was a real stall bug).

@@ -7,6 +7,10 @@ import type { Input, Sim } from './sim';
  */
 export class Bot {
   private holdUntil = { L: 0, R: 0 };
+  /** A ball cradled on a held flipper: since when, how long to keep it, and until when the flipper is let go. */
+  private cradle = { L: -1, R: -1 };
+  private cradleFor = { L: 0, R: 0 };
+  private dropUntil = { L: 0, R: 0 };
   private plungeFor = 0;
   private plungeStart = -1;
   private rng: Rng;
@@ -26,18 +30,29 @@ export class Bot {
         this.plungeFor = this.rng.range(0.75, 1.0);
       }
       input.plunge = t - this.plungeStart < this.plungeFor;
-      return input;
-    }
-    this.plungeStart = -1;
+    } else this.plungeStart = -1;
 
+    // keep flipping for the balls in play, even while one waits at the plunger (a multiball)
+    const cradled = { L: false, R: false };
     for (const b of sim.ballStates()) {
-      if (b.inLane) continue;
+      if (b.inLane || b.held) continue;
       for (const f of sim.flipperStates()) {
         const sign = f.side === 'L' ? 1 : -1;
         const dx = (b.x - f.pivotX) * sign;
         const dy = b.y - f.pivotY;
         const inReach = dx > 0.3 && dx < f.length + 0.6 && dy > -1 && dy < 2.4 && b.vy < 8;
-        if (inReach && this.rng.next() < this.skill) this.holdUntil[f.side] = t + 0.18;
+        if (inReach && t >= this.dropUntil[f.side] && this.rng.next() < this.skill) this.holdUntil[f.side] = t + 0.18;
+        if (inReach && Math.hypot(b.vx, b.vy) < 1.5 && t < this.holdUntil[f.side]) cradled[f.side] = true;
+      }
+    }
+    // a ball resting on a held flipper: keep it a moment, then let it roll down the flipper and shoot it
+    for (const side of ['L', 'R'] as const) {
+      if (!cradled[side]) { this.cradle[side] = -1; continue; }
+      if (this.cradle[side] < 0) { this.cradle[side] = t; this.cradleFor[side] = this.rng.range(0.3, 1.2); }
+      if (t - this.cradle[side] > this.cradleFor[side]) {
+        this.dropUntil[side] = t + this.rng.range(0.15, 0.3);
+        this.holdUntil[side] = 0;
+        this.cradle[side] = -1;
       }
     }
     input.left = t < this.holdUntil.L;
