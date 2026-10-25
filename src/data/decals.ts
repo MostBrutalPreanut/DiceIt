@@ -23,7 +23,7 @@ export type DecalId =
   | 'overshoot' | 'goldenTicket' | 'collector' | 'savingsBond'
   // score
   | 'headStart' | 'lucky' | 'overclock' | 'levelUp' | 'lamps' | 'sets' | 'goldenAge' | 'glassCannon' | 'comboKing' | 'spinDoctor'
-  | 'multiball' | 'lastCall' | 'thrifty' | 'fanClub'
+  | 'multiball' | 'lastCall' | 'thrifty' | 'fanClub' | 'momentum' | 'afterglow'
   // ball
   | 'rubber' | 'heavy' | 'glass' | 'gold' | 'twin' | 'extraBall' | 'safetyNet' | 'longFuse' | 'freeKick' | 'printerPlus'
   // build
@@ -49,6 +49,8 @@ export interface DecalLook {
 export interface DecalPick {
   id: DecalId;
   target?: PartId;
+  /** Momentum and Afterglow: the Mult this decal has kept so far (every ball starts with it). */
+  grown?: number;
 }
 export type DecalOffer = DecalPick;
 
@@ -71,6 +73,11 @@ export interface DecalDef {
   excludes?: DecalId[];
   /** Targeted decals: the part types it could be aimed at right now. */
   targets?: (v: RunView) => PartId[];
+  /**
+   * A decal that keeps Mult from round to round: 'cleared' adds `N.momentum` for every round you clear, 'peak'
+   * adds a share of the round's highest Mult.
+   */
+  grows?: 'cleared' | 'peak';
   /** Extra condition for being worth offering (never offer a dead pick). */
   worth?: (v: RunView) => boolean;
   mods: (m: Mods, target?: PartId) => void;
@@ -88,7 +95,7 @@ export const BOSS_EVERY = 3;
 const N = {
   sponsor: 2, interestPer: 5, interestCap: 5, coupon: 1, ballHog: 5, toolbox: 2, overshoot: 2, ticket: 8, collector: 1, bond: 1,
   head: 0.5, lucky: 7, luckyX: 3, overclock: 0.5, lampRadius: 2, lampBonus: 0.04, glass: 1.5, combo: 2, spin: 2, spinBoost: 1.5,
-  multiball: 2, lastCall: 2, thriftyPer: 0.01, thriftyCap: 0.5, fanClub: 3,
+  multiball: 2, lastCall: 2, thriftyPer: 0.01, thriftyCap: 0.5, fanClub: 3, momentum: 0.25, afterglow: 0.1,
   bounce: 0.3, heavyPoints: 0.25, heavyNudge: 0.6, glassGravity: 0.8, glassSpin: 1.5, goldEvery: 10, goldCap: 5, fuse: 20,
   bumper: 1.5, catch: 0.75, target: 2, targetEase: 0.8, lightShow: 1.5, purist: 2, puristTypes: 4, crowd: 0.04, empty: 0.25,
 } as const;
@@ -165,6 +172,12 @@ export const DECALS: Record<DecalId, DecalDef> = {
     mods: (m) => { m.cashPer += N.thriftyPer; m.cashCap = Math.max(m.cashCap, N.thriftyCap); }, look: { shape: 'circle', color: C.green, icon: 'jar' } },
   fanClub: { id: 'fanClub', name: 'Big Boi Fan Club', kind: 'score', rarity: 'uncommon', text: () => `Big Boi pays ${N.fanClub}× (his jackpots too).`,
     mods: (m) => { m.bigBoiX *= N.fanClub; }, look: { shape: 'shield', color: C.purple, icon: 'duck' } },
+  momentum: { id: 'momentum', name: 'Momentum', kind: 'score', rarity: 'uncommon', grows: 'cleared',
+    text: () => `Every round you clear adds +${N.momentum} to the Mult every ball starts at, for as long as this decal stays.`,
+    mods: () => {}, look: { shape: 'banner', color: C.lime, glyph: '+M↑' } },
+  afterglow: { id: 'afterglow', name: 'Afterglow', kind: 'score', rarity: 'rare', grows: 'peak',
+    text: () => `At the end of every round, this decal keeps ${pct(N.afterglow)} of the highest Mult you reached: every ball after starts that much higher.`,
+    mods: () => {}, look: { shape: 'star', color: '#ff8fd0', glyph: 'GLOW' } },
 
   // ---- Ball: the ball and the table ----
   rubber: { id: 'rubber', name: 'Rubber Ball', kind: 'ball', rarity: 'common', text: () => 'The ball rebounds harder off walls, parts and flippers.',
@@ -257,4 +270,12 @@ export function rollDecalPick(seed: number, v: RunView, bossNo: number, count = 
 }
 
 export const decalTitle = (o: DecalPick) => DECALS[o.id].name + (o.target ? ` · ${PARTS[o.target].name}s` : '');
-export const decalText = (o: DecalPick) => DECALS[o.id].text(o.target);
+export const decalText = (o: DecalPick) => DECALS[o.id].text(o.target) + (o.grown ? ` Kept so far: +${Math.round(o.grown * 100) / 100} Mult.` : '');
+
+/** What a growing decal keeps at the end of a round: Momentum for a cleared round, Afterglow a share of the round's best Mult. */
+export function decalGrowth(o: DecalPick, cleared: boolean, peakMult: number): number {
+  const g = DECALS[o.id].grows;
+  if (g === 'cleared') return cleared ? N.momentum : 0;
+  if (g === 'peak') return Math.round(N.afterglow * peakMult * 100) / 100;
+  return 0;
+}

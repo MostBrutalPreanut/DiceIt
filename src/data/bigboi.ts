@@ -33,17 +33,17 @@ export const BIG_BOIS: Record<BigBoiId, BigBoiDef> = {
   foreman: {
     id: 'foreman', machine: 'factory', title: 'The Foreman', ability: '',
     blurb: 'Heavy, rude, hard to miss.',
-    recipe: { points: 250, per: 'hit', mult: 0.15, multCap: 3, perLevel: 25 },
+    recipe: { points: 50, per: 'hit', mult: 0.15, multCap: 3, perLevel: 12 },
   },
   cook: {
     id: 'cook', machine: 'diner', title: 'The Cook', ability: 'Order Up!',
     blurb: 'Calls an order. Fill it and he gets generous.',
-    recipe: { points: 150, per: 'hit', perLevel: 15 },
+    recipe: { points: 30, per: 'hit', perLevel: 8 },
   },
   dragon: {
     id: 'dragon', machine: 'castle', title: 'The Dragon', ability: 'Siege',
     blurb: 'Armoured. Knock every plate off and he pays the castle.',
-    recipe: { points: 200, per: 'hit', perLevel: 20 },
+    recipe: { points: 40, per: 'hit', perLevel: 10 },
   },
 };
 

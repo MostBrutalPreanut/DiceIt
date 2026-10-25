@@ -266,6 +266,20 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.cyl(x, y, 0.14, 1.46, 0.22, metal);
       break;
     }
+    case 'trophy': {
+      // a silver cup on a plinth: the more it is polished, the more it shines
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      const cup = st.hit ? mat(t, mix(t.role.trophy, WHITE, 0.45)) : role;
+      p.cyl(x, y, r, 0, 0.18, mat(t, t.paper));
+      p.cyl(x, y, r * 0.28, 0.18, 0.34, metal);
+      const bowl = [0, 0.25, 0.5, 0.75, 1].flatMap((u) => ring(x, y, r * (0.38 + 0.52 * Math.sqrt(u)), 26).map(([a, b]) => P(v, a, b, 0.52 + u * 0.78)));
+      p.face(hull(bowl), cup.base);
+      for (const sx of [-1, 1]) p.face(ring(x + sx * r * 0.86, y, r * 0.2, 12).map(([a, b]) => P(v, a, b, 1.0)), cup.shade, { sil: false, line: 0.5 });
+      p.face(ring(x, y, r * 0.9, 26).map(([a, b]) => P(v, a, b, 1.3)), cup.light, { sil: false, line: 0.45 });
+      p.face(ring(x, y, r * 0.66, 22).map(([a, b]) => P(v, a, b, 1.3)), cup.shade, { sil: false, line: 0.3 });
+      p.face(star(x, y + r * 0.05, r * 0.3, r * 0.13, 5, Math.PI / 2).map(([a, b]) => P(v, a, b, 1.0 - 0.1)), t.role.coin, { sil: false, line: 0.4 });
+      break;
+    }
     case 'thunder': {
       // a big wedge pointing up the table, with a bolt on its face: it throws the ball upwards
       const sh = def.shape.type === 'tri' ? def.shape : { hw: 1.7, hh: 1.4 };

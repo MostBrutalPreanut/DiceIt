@@ -396,7 +396,7 @@ export class Renderer {
     const pulse = this.pulses.get(p.uid) ?? 0;
     switch (p.def) {
       case 'mega': return { hit: pulse > 0.35, follow: true, mood: this.moodFor(game, pulse) };
-      case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': return { hit: pulse > 0.35 };
+      case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': case 'trophy': return { hit: pulse > 0.35 };
       case 'piggy': return { hit: pulse > 0.35, seg: game.scorer.piggies.get(p.uid) ?? 0 };
       case 'xlane': return { lit: !tilted && !game.mods.lightsOut && !game.scorer.coolingDown(p.uid, game.sim.time) };
       case 'disco': return { lit: !tilted && !game.mods.lightsOut && game.scorer.label(p) !== null && !this.discoFired(game, p.uid) };
@@ -642,7 +642,7 @@ export class Renderer {
     }
     tag.c.visible = true;
     const floorTag = def.kind === 'mover' || def.kind === 'goal' || def.kind === 'strip' || def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'target' || def.kind === 'bank' || p.def === 'magnet' || p.def === 'jackpot';
-    const z = p.def === 'mega' ? 2.05 : p.def === 'printer' ? 1.75 : p.def === 'pop' && t.popMotif === 'cone' ? 1.6 : p.def === 'ding' ? 1.7 : p.def === 'thunder' || p.def === 'golden' ? 1.2 : 0.95;
+    const z = p.def === 'mega' ? 2.05 : p.def === 'printer' ? 1.75 : p.def === 'pop' && t.popMotif === 'cone' ? 1.6 : p.def === 'ding' || p.def === 'trophy' ? 1.7 : p.def === 'thunder' || p.def === 'golden' ? 1.2 : 0.95;
     const [X, Y] = floorTag ? P(v, p.x, p.y - footprint(def) - 0.75, 0) : P(v, p.x, p.y, z);
     tag.c.position.set(X, Y);
   }

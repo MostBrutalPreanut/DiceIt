@@ -3,6 +3,7 @@ import { neutralMods, simModsOf, type Mods } from '../data/mods';
 import {
   BOSS_EVERY, computeMods, DECAL_SLOTS, DECALS, rollDecalPick, SKIP_PAY,
   type DecalId, type DecalLook, type DecalOffer, type DecalPick, type RunView,
+  decalGrowth,
 } from '../data/decals';
 import { BOSSES, bossOf, FINAL_ROUND, planBosses, type BossDef, type BossId } from '../data/bosses';
 import type { MachineId } from '../data/bigboi';
@@ -33,6 +34,8 @@ export const START_MONEY = 6;
 export const SHOP_SLOTS = 4;
 /** The toolbox holds this many parts off the board (Big Toolbox adds more); anything stored in a full toolbox is sold for its sell price. */
 export const TOOLBOX_SLOTS = 4;
+/** The Tune-up: the first level costs `base`, every level after `step` more. */
+export const TUNE = { base: 2, step: 2 } as const;
 
 /** Two significant figures: goals read as 4,300 or 12,000, not 4,312. */
 export function niceGoal(n: number): number {
@@ -195,16 +198,52 @@ export class Game {
     if (persistent) {
       const boss = this.boss;
       const later = boss?.decalsOffUntilHalf && !this.fixedMods ? (() => { const m = this.roundMods(true); return { mods: m, at: goal / 2, baseMult: this.startMult(m) }; })() : undefined;
-      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), jam: boss?.jam, later });
+      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), onPolish: (inst, by, cap) => this.polish(inst, by, cap), jam: boss?.jam, later });
     }
     return new Scorer(goal, () => this.layout.parts, base); // a test ball's level-ups stay in its own scorer
   }
 
-  /** The Mult every ball starts at with these mods: Head Start, plus Crowd Pleaser and Minimalist counting your table and toolbox. */
+  /**
+   * The Mult every ball starts at with these mods: Head Start, plus Crowd Pleaser and Minimalist counting your
+   * table and toolbox, plus the Mult kept from earlier rounds.
+   */
   startMult(m: Mods): number {
     const onTable = this.layout.parts.filter((p) => p.placed && !p.fixed).length;
     const empty = Math.max(0, m.toolboxSlots - this.inventory.length);
-    return Math.round((m.startMult + m.startMultPerPart * onTable + m.startMultPerEmpty * empty) * 100) / 100;
+    return Math.round((m.startMult + m.startMultPerPart * onTable + m.startMultPerEmpty * empty + this.keptMult) * 100) / 100;
+  }
+
+  /** Mult kept from round to round: the polish of the Trophy Cups on the table, and what Momentum and Afterglow have kept. */
+  get keptMult(): number {
+    const cups = this.layout.parts.filter((p) => p.placed).reduce((a, p) => a + (p.polish ?? 0), 0);
+    const decals = this.decals.reduce((a, d) => a + (d.grown ?? 0), 0);
+    return Math.round((cups + decals) * 100) / 100;
+  }
+
+  /** A Trophy Cup is polished (at most `cap`). Returns its polish now. */
+  polish(inst: PartInstance, by: number, cap: number): number {
+    inst.polish = Math.round(Math.min(cap, (inst.polish ?? 0) + by) * 1000) / 1000;
+    return inst.polish;
+  }
+
+  /** What tuning a part up one more level costs: it gets dearer every level. */
+  tuneCost(inst: PartInstance): number {
+    return TUNE.base + TUNE.step * (inst.level ?? 0);
+  }
+
+  /** Can this part be tuned up now (a part with levels, below the top level, and you can pay)? */
+  canTune(inst: PartInstance): boolean {
+    return this.editable && !!PARTS[inst.def].recipe.perLevel && (inst.level ?? 0) < MAX_LEVEL && this.canAfford(this.tuneCost(inst));
+  }
+
+  /** The Tune-up, between rounds: pay to level a part up by one, for the rest of the run. */
+  tuneUp(uid: number): boolean {
+    const inst = this.part(uid);
+    if (!inst || !this.canTune(inst)) return false;
+    this.checkpoint();
+    if (!this.sandbox) this.money -= this.tuneCost(inst);
+    this.levelUp(inst, 1);
+    return true;
   }
 
   /** Level a part up for the rest of the run (at most MAX_LEVEL). Returns its new level. */
@@ -937,6 +976,10 @@ export class Game {
     if (this.scorer.goalReached) {
       this.payout = this.computePayout();
       this.money += this.payout.total;
+      for (const d of this.decals) {
+        const g = decalGrowth(d, true, this.scorer.peakMult);
+        if (g) d.grown = Math.round(((d.grown ?? 0) + g) * 100) / 100; // Momentum and Afterglow keep Mult for the next rounds
+      }
       this.mode = 'roundEnd';
       const runWon = this.round === FINAL_ROUND && !this.won;
       if (runWon) this.won = true;

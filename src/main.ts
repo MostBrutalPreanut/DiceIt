@@ -1,6 +1,6 @@
 import './style.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { dialValue, footprint, PARTS, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
+import { dialValue, footprint, MAX_LEVEL, PARTS, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
 import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, decalTitle, KIND_NAMES, SKIP_PAY, type DecalId, type DecalPick } from './data/decals';
 import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
 import { FINAL_ROUND } from './data/bosses';
@@ -329,6 +329,8 @@ async function main() {
       ${def.dials.map((d) => `<div class="dial"><div class="row2"><span>${d.label}</span><b id="dv-${d.id}">${d.fmt ? d.fmt(dialValue(inst, d.id)) : dialValue(inst, d.id)}</b></div>
         <input data-dial="${d.id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${dialValue(inst, d.id)}" /><div class="hint">${d.tradeoff}</div></div>`).join('')}
       <div class="live" id="selLive">${liveText(inst)}</div>
+      ${def.recipe.perLevel && inst.placed ? `<div class="btnrow tune">${(inst.level ?? 0) >= MAX_LEVEL ? '<button disabled>Fully tuned</button>'
+        : `<button id="btnTune" ${game.canTune(inst) ? '' : 'disabled'} title="Pay to level this part up by one, for the rest of the run">Tune up to LVL ${(inst.level ?? 0) + 1} · $${game.tuneCost(inst)}</button>`}</div>` : ''}
       ${inst.fixed ? '<div class="hint">Part of every machine: it stays where it is.</div>' : `<div class="btnrow">
         ${def.rotatable ? '<button id="btnRotL">⟲ 15°</button><button id="btnRotR">15° ⟳</button>' : ''}
         ${inst.placed ? '<button id="btnStore">To toolbox</button>' : ''}
@@ -347,6 +349,14 @@ async function main() {
         persist();
       };
     }
+    const tune = card.querySelector<HTMLButtonElement>('#btnTune');
+    if (tune) tune.onclick = () => {
+      if (!game.tuneUp(inst.uid)) return;
+      audio.buy();
+      say(`TUNED UP: LVL ${inst.level}`);
+      persist();
+      refreshWorkshop();
+    };
     if (inst.fixed) return;
     const rot = (dir: number) => { game.rotate(inst.uid, dir * (Math.PI / 12)); persist(); };
     if (def.rotatable) { $('btnRotL').onclick = () => rot(1); $('btnRotR').onclick = () => rot(-1); }

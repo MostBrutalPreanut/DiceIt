@@ -16,19 +16,19 @@ import type { Layout } from '../src/sim/layout';
 export const PART_VALUE: Record<PartId, number> = {
   pop: 4, coin: 2.5, mega: 0, sling: 2.5, spinner: 3, lane: 2, printer: 6, flipper: 3, lamp: 2, uplight: 0,
   deflector: 0.5, bank: 4.5, kickback: 1.5, saver: 4, vari: 4,
-  ding: 5, piggy: 4, magnet: 5, thunder: 10, jackpot: 10, xlane: 13, golden: 20, disco: 18,
+  ding: 5, piggy: 4, magnet: 5, thunder: 10, jackpot: 10, xlane: 13, golden: 20, disco: 18, trophy: 9,
   flipperR: 3, duck: 9, goal: 18, strip: 4, roller: 6,
 };
 /** How many of each it will own. (Level Lights need aiming in sets of two or more, which par does not do.) */
 export const PART_CAP: Record<PartId, number> = {
   pop: 4, coin: 3, mega: 0, sling: 2, spinner: 2, lane: 3, printer: 1, flipper: 1, lamp: 2, uplight: 0,
   deflector: 1, bank: 1, kickback: 2, saver: 1, vari: 2,
-  ding: 2, piggy: 1, magnet: 1, thunder: 2, jackpot: 1, xlane: 2, golden: 2, disco: 1,
+  ding: 2, piggy: 1, magnet: 1, thunder: 2, jackpot: 1, xlane: 2, golden: 2, disco: 1, trophy: 1,
   flipperR: 1, duck: 1, goal: 1, strip: 1, roller: 2,
 };
 /** The first decal of the three it is offered (or the shop's) that appears in this list is the one it takes. */
 export const DECAL_PRIORITY: DecalId[] = [
-  'goldenAge', 'twin', 'extraBall', 'glassCannon', 'multiball', 'overclock', 'levelUp', 'headStart', 'crowd', 'sets', 'lucky', 'lastCall', 'fanClub',
+  'goldenAge', 'twin', 'extraBall', 'afterglow', 'momentum', 'glassCannon', 'multiball', 'overclock', 'levelUp', 'headStart', 'crowd', 'sets', 'lucky', 'lastCall', 'fanClub',
   'printerPlus', 'heavy', 'lamps', 'thrifty', 'safetyNet', 'interest', 'sponsor', 'gold', 'comboKing', 'spinDoctor', 'longFuse', 'freeKick',
   'collector', 'savingsBond', 'goldenTicket', 'rubber', 'glass', 'coupon', 'bigShelf', 'freeReroll', 'bargain', 'overshoot', 'fullRefund', 'ballHog',
 ];
@@ -170,6 +170,22 @@ export function parShop(g: Game): { bought: { id: PartId; price: number }[]; rer
   return { bought, rerolls };
 }
 
+/** Money the par player keeps for the next shop instead of tuning. */
+const TUNE_RESERVE = 10;
+
+/** After the shop, the par player spends what is left on Tune-ups: the best part for the money first (Big Boi counts as a big one). */
+export function parTune(g: Game): number {
+  let tuned = 0;
+  for (let guard = 0; guard < 60; guard++) {
+    const best = g.layout.parts
+      .filter((p) => PARTS[p.def].recipe.perLevel && g.money - g.tuneCost(p) >= TUNE_RESERVE && g.canTune(p))
+      .sort((a, b) => (PART_VALUE[b.def] || 12) / g.tuneCost(b) - (PART_VALUE[a.def] || 12) / g.tuneCost(a))[0];
+    if (!best || !g.tuneUp(best.uid)) break;
+    tuned++;
+  }
+  return tuned;
+}
+
 /** The index of the offered card the par player takes. */
 export function parPick(g: Game): number {
   const offers = g.pending ?? [];
@@ -202,6 +218,7 @@ export function runPar(o: ParOptions): ParRun {
       if (!g.chooseDecal(index)) g.skipPick();
     }
     const { bought, rerolls } = parShop(g);
+    parTune(g);
 
     // the machine is built and measured for the round it is about to play: a boss round with the boss's rules
     const mods = g.modsForRound;

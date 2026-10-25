@@ -51,6 +51,8 @@ export interface ScorerOpts {
    * change). Without it the scorer keeps the levels to itself, so a free test ball never levels up a machine.
    */
   onLevelUp?: (inst: PartInstance, levels: number) => void;
+  /** Called when a Trophy Cup is polished, for real (like onLevelUp). Returns its polish now. */
+  onPolish?: (inst: PartInstance, by: number, cap: number) => number;
   /** The run's decals and the boss (neutral if absent). */
   mods?: Mods;
   /** Overrides the Mult every ball starts with (default: the mods' `startMult`). */
@@ -86,6 +88,9 @@ export class Scorer {
   /** Levels this scorer gave out itself (a test ball's, which never reach the machine). */
   private gained = new Map<number, number>();
   private onLevelUp?: (inst: PartInstance, levels: number) => void;
+  private onPolish?: (inst: PartInstance, by: number, cap: number) => number;
+  /** The highest Mult any ball reached this round (Afterglow keeps a share of it). */
+  peakMult = 1;
   /** Lamps: how bright each one is this ball, and until when every Lamp is at full glow (a bank set, the Disco Ball). */
   private lampSteps = new Map<number, number>();
   private lampFlashUntil = -1;
@@ -136,8 +141,9 @@ export class Scorer {
     this.opts = opts;
     this.mods = { ...neutralMods(), ...opts.mods }; // a saved machine from before a mod existed still scores
     this.baseMult = opts.baseMult ?? this.mods.startMult;
-    this.mult = this.baseMult;
+    this.mult = this.peakMult = this.baseMult;
     this.onLevelUp = opts.onLevelUp;
+    this.onPolish = opts.onPolish;
     this.machine = opts.machine ?? 'factory';
     this.bigBoi = bigBoiOf(this.machine).id;
     this.rng = new Rng(opts.seed ?? 1);
@@ -163,6 +169,7 @@ export class Scorer {
 
   /** Called when a round (not a ball) starts: the Level Lights go dark, the piggies are empty, a jam is decided. */
   resetRound() {
+    this.peakMult = this.baseMult;
     this.roundLit.clear();
     this.saversUsed.clear();
     this.roundHits = 0;
@@ -358,6 +365,7 @@ export class Scorer {
     const multBefore = this.mult;
     const points = Math.round(base * multBefore);
     this.mult = Math.round((this.mult + multGain) * xmult * 1000) / 1000;
+    this.peakMult = Math.max(this.peakMult, this.mult);
     this.score += points;
     this.money += money;
     if (this.score >= this.goal) this.goalReached = true;
@@ -532,6 +540,11 @@ export class Scorer {
       if (r.feeds) this.hitsByType.set(r.feeds.id, this.hitsOf(r.feeds.id) + r.feeds.n);
       this.typesHit.add(inst.def);
       if (r.jackpot) this.potFrom.set(inst.uid, this.ballHits);
+      if (r.keep) {
+        const before = inst.polish ?? 0;
+        const now = this.onPolish ? this.onPolish(inst, r.keep.per, r.keep.cap) : Math.min(r.keep.cap, before + r.keep.per);
+        notes.push(now > before ? `+${Math.round((now - before) * 100) / 100} kept Mult` : 'fully polished');
+      }
       if (r.perBall) this.firedThisBall.set(inst.uid, (this.firedThisBall.get(inst.uid) ?? 0) + 1);
       if (r.lightsLamps) this.flashLamps(ev.t, r.lightsLamps);
       const label = r.perBall && xmult > 1 ? `MULT x${xmult.toFixed(2)}` : r.jackpot && pot ? 'JACKPOT!' : edge > 1 ? 'EDGE SHOT!' : undefined;
