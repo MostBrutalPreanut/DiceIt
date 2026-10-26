@@ -105,6 +105,13 @@ body.still #backdrop { animation-play-state: paused; }
 #clockFill { height: 100%; width: 100%; background: var(--role-lane-fill); transition: width .2s linear; }
 #clockFill.low { background: var(--accent); }
 #clockBox[hidden] { visibility: hidden; display: block; }
+/* the last 10 s: each tick of the clock kicks the bar; at TIME! the bar blinks while the balls roll out */
+#clockBox.beat .bar { animation: beat .32s ease-out; }
+@keyframes beat { 25% { transform: scale(1.05, 1.45); } }
+#clockBox.up #clockSec { color: var(--accent); }
+#clockBox.up .bar { animation: timeup .5s steps(1) infinite; }
+@keyframes timeup { 50% { background: var(--accent); } }
+body.calm #clockBox .bar { animation: none; }
 
 /* the next boss, named on the scoreboard; it glows when it is this round */
 .tile.boss { display: grid; gap: 2px; padding: 8px 10px; margin: 8px 0; border-left: 6px solid var(--accent); cursor: help; }

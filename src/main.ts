@@ -932,6 +932,8 @@ async function main() {
     for (const t of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) b.addEventListener(t, () => fire('keyup'));
   }
 
+  /** The flipper buttons a step ago: a press after the ball clock ran out gets a dead click. */
+  let flipWas = { left: false, right: false };
   const readInput = (): Input => {
     const input: Input = {
       left: keys.has(settings.keys.left),
@@ -940,6 +942,8 @@ async function main() {
       nudge: nudgePulse,
     };
     nudgePulse = 0;
+    if (game.sim.timeUp && ((input.left && !flipWas.left) || (input.right && !flipWas.right))) { audio.deadFlip(); renderer.nope(); }
+    flipWas = { left: input.left, right: input.right };
     return input;
   };
 
@@ -1048,6 +1052,8 @@ async function main() {
         if (ev.reason !== 'timeout' && game.mode !== 'workshop') sayKey('drain');
         break;
       case 'timeUp':
+        audio.timeUp();
+        renderer.flashDmd();
         sayKey('clock');
         if (game.mode === 'round') renderer.bigBoiMood('sad', 2.2);
         break;
@@ -1267,6 +1273,23 @@ async function main() {
     $('balls').textContent = `${Math.max(0, game.ballsLeft)} LEFT`;
   }
 
+  /** The mark of the last tick of the ball clock's countdown (null outside its last 10 s). */
+  let tickMark: number | null = null;
+  /** The ball clock's last 10 s tick, twice a second in the last 3; each tick kicks the clock's bar. */
+  function countdown(left: number | null) {
+    if (game.mode !== 'round' || left === null || game.sim.timeUp || left > 10) { tickMark = null; return; }
+    const mark = left > 3 ? Math.ceil(left) : Math.ceil(left * 2) / 2;
+    if (mark === tickMark || mark <= 0) return;
+    tickMark = mark;
+    if (simulating) return;
+    audio.clockTick(mark);
+    if (mark === 10) sayKey('hurry');
+    const box = $('clockBox');
+    box.classList.remove('beat');
+    void box.offsetWidth; // restart the kick
+    box.classList.add('beat');
+  }
+
   function updateHud(dt: number) {
     const sc = game.scorer;
     const inRound = game.mode === 'round' || game.mode === 'roundEnd' || game.mode === 'runOver';
@@ -1295,7 +1318,9 @@ async function main() {
     $('tiltFill').classList.toggle('danger', game.sim.tiltMeter > 0.55 || game.sim.tilted);
     const clock = game.sim.clockLeft;
     $('clockBox').hidden = game.mode !== 'round';
-    $('clockSec').textContent = clock === null ? `${game.sim.clockTotal} s` : `${Math.ceil(clock)} s`;
+    $('clockBox').classList.toggle('up', game.sim.timeUp);
+    countdown(clock);
+    $('clockSec').textContent = game.sim.timeUp ? 'TIME!' : clock === null ? `${game.sim.clockTotal} s` : `${Math.ceil(clock)} s`;
     $('clockFill').style.width = `${clock === null ? 100 : (clock / game.sim.clockTotal) * 100}%`;
     $('clockFill').classList.toggle('low', clock !== null && clock < 10);
     updateStepper();

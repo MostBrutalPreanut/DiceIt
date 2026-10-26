@@ -128,6 +128,8 @@ export class Renderer {
   private time = 0;
   private twinkleClock = 0;
   private tiltStamp: Container | null = null;
+  /** TIME!: the sticker on the apron while the balls roll out after the ball clock, with its slam, head-shake and exit timers. */
+  private timeStamp: { c: Container; age: number; wiggle: number; out: number } | null = null;
 
   constructor(theme: Theme) { this.theme = theme; }
 
@@ -189,6 +191,8 @@ export class Renderer {
   /** Big Boi pulls a face for a while. */
   bigBoiMood(m: Mood, seconds: number) { this.mood = { m, until: this.time + seconds }; }
   flashDmd() { this.dmd.flash(); }
+  /** A flipper pressed after the ball clock ran out: the TIME! sticker shakes its head. */
+  nope() { if (this.timeStamp && !this.calm) this.timeStamp.wiggle = 0.35; }
 
   /** Drop every baked texture (theme change, resize). */
   private flush() {
@@ -444,6 +448,7 @@ export class Renderer {
     this.particles.update(dt, this.view);
     this.dmd.update(dt);
     this.drawTilt(game);
+    this.drawTimeUp(game, dt);
   }
 
   private glow(x: number, y: number, r: number, color: string, alpha: number) {
@@ -914,7 +919,7 @@ export class Renderer {
       let g = this.flippers.get(key);
       if (!g) { g = new Graphics(); this.partLayer.addChild(g); this.flippers.set(key, g); }
       g.clear();
-      drawFlipper(g, this.view, this.theme, f.x, f.y, f.angle, f.side === 'L' ? 1 : -1, f.length, f.auto);
+      drawFlipper(g, this.view, this.theme, f.x, f.y, f.angle, f.side === 'L' ? 1 : -1, f.length, f.auto, game.sim.timeUp);
       g.zIndex = -f.y * 100 + 1;
     }
     for (const [k, g] of this.flippers) if (!seen.has(k)) { g.destroy(); this.flippers.delete(k); }
@@ -1004,6 +1009,59 @@ export class Renderer {
       this.tiltStamp!.position.set(this.w / 2, this.h * 0.45);
       this.tiltStamp!.scale.set(Math.min(1, this.w / 320));
     }
+  }
+
+  /**
+   * TIME!: the ball clock has run out and the flippers are dead. A sticker slaps onto the apron, over the drain and out
+   * of the ball's way (nothing is dimmed: the balls are still rolling and still scoring), stays while they roll out,
+   * and peels off when the last one is gone.
+   */
+  private drawTimeUp(game: Game, dt: number) {
+    const up = game.sim.timeUp;
+    let s = this.timeStamp;
+    if (up && (!s || s.out > 0)) {
+      s?.c.destroy({ children: true });
+      s = this.timeStamp = { c: this.timeSticker(), age: 0, wiggle: 0, out: 0 };
+      this.machine.addChild(s.c);
+      this.particles.puff(TABLE_W / 2, 3.6, APRON_Z, 1.6);
+      if (!this.calm) this.trauma = Math.min(1, this.trauma + 0.35);
+    }
+    if (!s) return;
+    s.age += dt;
+    if (!up) s.out += dt;
+    if (s.out >= 0.22) { s.c.destroy({ children: true }); this.timeStamp = null; return; }
+    // it lands like a rubber stamp: big, then down with a little bounce (Calm mode: it is just there)
+    const a = Math.min(1, s.age / 0.24);
+    const slam = this.calm ? 1 : a < 1 ? 1 + 1.3 * (1 - a) * (1 - a) - 0.12 * Math.sin(a * Math.PI) : 1;
+    const bob = this.calm ? 0 : Math.sin(this.time * 2.6) * 0.025;
+    s.wiggle = Math.max(0, s.wiggle - dt);
+    const shake = s.wiggle > 0 ? Math.sin(s.wiggle * 55) * 0.16 * (s.wiggle / 0.35) : 0;
+    const v = this.view, [X, Y] = P(v, TABLE_W / 2, 3.6, APRON_Z);
+    s.c.position.set(X, Y);
+    s.c.scale.set(((v.S * 10.6) / 236) * slam * (1 - s.out / 0.22));
+    s.c.rotation = -0.09 + bob + shake;
+    s.c.alpha = 1 - s.out / 0.22;
+  }
+
+  /** The TIME! sticker: an alarm clock and the word, in paper with an ink contour, drawn at 236 x 100 px. */
+  private timeSticker(): Container {
+    const t = this.theme, c = new Container(), g = new Graphics();
+    const W = 236, H = 100, R = 18;
+    g.roundRect(-W / 2 + 5, -H / 2 + 7, W, H, R).fill({ color: mix(t.ink, t.shadeTint, 0.3), alpha: 0.4 });
+    g.roundRect(-W / 2, -H / 2, W, H, R).fill(t.paper).stroke({ width: 7, color: t.ink });
+    g.roundRect(-W / 2 + 10, -H / 2 + 10, W - 20, H - 20, R - 8).stroke({ width: 4, color: t.accent });
+    // the alarm clock: two bells, a face, the hands at twelve
+    const cx = -W / 2 + 50, cy = 4;
+    for (const s of [-1, 1]) g.circle(cx + s * 17, cy - 24, 10).fill(t.accent).stroke({ width: 5, color: t.ink });
+    g.circle(cx, cy, 27).fill(t.paper).stroke({ width: 6, color: t.ink });
+    g.moveTo(cx, cy).lineTo(cx, cy - 17).moveTo(cx, cy).lineTo(cx + 10, cy + 5).stroke({ width: 5, color: t.ink, cap: 'round' });
+    g.circle(cx, cy, 3.5).fill(t.ink);
+    const word = label('TIME!', 54, t.accent, { stroke: t.ink, strokeW: 10 });
+    word.position.set(32, -13);
+    const sub = label('FLIPPERS OFF', 19, t.ink, { face: 'ui', weight: '900', spacing: 1 });
+    sub.position.set(32, 27);
+    c.addChild(g, word, sub);
+    return c;
   }
 
   /** Frame-cost probe for the smoke test: ms spent in draw() over n frames of the current state. */
