@@ -17,8 +17,10 @@ export interface SavedRunInfo { machine: MachineId; round: number; money: number
 export interface MenuHooks {
   /** The run in storage, if there is one (Resume continues it). */
   savedRun(): SavedRunInfo | null;
-  /** Start a run on this machine; any run in storage was already ended (abandoned) by the menu. */
-  newGame(machine: MachineId): void;
+  /** Start a run on this machine (with Big Boi's tour, or not); any run in storage was already ended (abandoned) by the menu. */
+  newGame(machine: MachineId, tutorial: boolean): void;
+  /** Where the picker's Tutorial switch starts: on until the tour has been seen once. */
+  tutorialDefault(): boolean;
   resume(): void;
   /** Pause menu: back to the table. */
   unpause(): void;
@@ -64,6 +66,8 @@ export class Menu {
   /** Settings can be opened from the main menu or from the pause menu; Back returns there. */
   private from: Screen = 'main';
   private picked: string | null = null;
+  /** The picker's Tutorial switch: the next run starts with Big Boi's tour. */
+  private tutorial = false;
   private binding: Action | null = null;
   private confirmOpen: { no: () => void } | null = null;
   private thumbs = new Map<string, string>();
@@ -90,7 +94,7 @@ export class Menu {
   get inMenu() { return this.open && !this.paused; }
 
   showMain() { this.from = 'main'; this.show('main'); }
-  showPicker() { this.from = 'main'; this.show('picker'); }
+  showPicker() { this.from = 'main'; this.tutorial = this.hooks.tutorialDefault(); this.show('picker'); }
   showPause() { this.from = 'pause'; this.show('pause'); }
   /** Settings, opened over the screen you are on (Back returns to it). */
   showSettings() { this.show('settings'); }
@@ -176,7 +180,9 @@ export class Menu {
         </button>`;
       }).join('');
       return `<section class="mscreen">
-        <header class="mhead">${back()}<div><h2 class="disp">Pick your machine</h2><p>Each machine has its own look and its own Big Boi in the middle of the table, and he decides what kind of build pays best. The machine stays for the whole run.</p></div></header>
+        <header class="mhead">${back()}<div><h2 class="disp">Pick your machine</h2><p>Each machine has its own look and its own Big Boi in the middle of the table, and he decides what kind of build pays best. The machine stays for the whole run.</p></div>
+          <div class="mtut"><img alt="" src="${this.hooks.bigBoi(this.machine, 'cool')}"><span><b class="disp">Tutorial</b><small>Big Boi shows you around</small></span>
+            <span class="seg" role="group" aria-label="Tutorial">${this.tutSeg()}</span></div></header>
         <div class="cabs">${cards}</div>
       </section>`;
     }
@@ -249,7 +255,15 @@ export class Menu {
       };
     }
     if (s === 'picker') {
-      for (const b of q<HTMLButtonElement>('.cab')) b.onclick = () => this.hooks.newGame(b.dataset.theme as MachineId);
+      for (const b of q<HTMLButtonElement>('.cab')) b.onclick = () => this.hooks.newGame(b.dataset.theme as MachineId, this.tutorial);
+      const seg = this.root.querySelector<HTMLElement>('.mtut .seg')!;
+      seg.onclick = (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-tut]');
+        if (!b) return;
+        this.tutorial = b.dataset.tut === '1';
+        seg.innerHTML = this.tutSeg();
+        seg.querySelector<HTMLElement>(`[data-tut="${b.dataset.tut}"]`)?.focus();
+      };
       // a cabinet that was still loading drops in when it arrives
       for (const el of q<HTMLElement>('.art')) {
         const id = el.dataset.art as MachineId;
@@ -298,6 +312,10 @@ export class Menu {
       };
     } else this.root.onclick = null;
     if (s === 'pause') this.root.querySelector('.bulbs')!.innerHTML = Array.from({ length: 13 }, (_, i) => `<i class="${i % 2 ? 'on' : ''}"></i>`).join('');
+  }
+
+  private tutSeg() {
+    return `<button data-tut="0" class="${this.tutorial ? '' : 'on'}" aria-pressed="${!this.tutorial}">Off</button><button data-tut="1" class="${this.tutorial ? 'on' : ''}" aria-pressed="${this.tutorial}">On</button>`;
   }
 
   // ---- the title's Big Boi: he blinks now and then, and pulls a face when poked ---------------------------------

@@ -44,8 +44,26 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(await page.isVisible('#menu .mpanel'), 'Esc goes back from the picker to the main menu');
   await page.keyboard.press('Enter'); // New Game has the focus
   await page.waitForSelector('#menu .cab');
+  check(await page.locator('#menu .mtut [data-tut="1"].on').count() === 1, 'the Tutorial switch is on for the very first run');
   await page.click('#menu .cab[data-theme="factory"]');
   check(await page.isHidden('#menu'), 'picking a machine closes the menu');
+  // Big Boi's tour: everything goes dark, he talks from the middle of the table, and only moving the tour on works
+  await page.waitForSelector('.tut .tut-bub');
+  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.tutorial.v1')) === '1', 'the tour is remembered as seen');
+  await page.waitForTimeout(400);
+  check(/welcome back/i.test(await page.innerText('.tut .tut-txt')), 'Big Boi opens the tour with a welcome');
+  await page.keyboard.press('Space');
+  check(await page.evaluate(() => window.__pinball.game.sim.ballCount) === 0, 'the game takes no keys during the tour');
+  let lines = 1;
+  for (let i = 0; i < 60 && await page.locator('.tut:not(.out)').count(); i++) {
+    const before = await page.innerText('.tut .tut-txt');
+    if (/route/i.test(before)) await page.screenshot({ path: `${out}/smoke-1t-tour.png` });
+    await page.mouse.click(2, 2); // anywhere moves it on (a corner, clear of the Skip button)
+    await page.waitForTimeout(60);
+    if (await page.locator('.tut:not(.out)').count() && await page.innerText('.tut .tut-txt') !== before) lines++;
+  }
+  check(await page.locator('.tut:not(.out)').count() === 0 && lines >= 10, `clicks walk through the tour to its end (${lines} lines)`);
+  await page.waitForTimeout(400);
   check(!(await page.evaluate(() => window.__pinball.attract())), 'and stops the attract table');
   check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.theme.v1')) === 'factory', 'the machine choice is saved');
   check(await page.evaluate(() => window.__pinball.game.machine) === 'factory', 'the run is on the picked machine');
@@ -70,6 +88,13 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.move(seat.x, seat.y);
   await page.mouse.click(seat.x, seat.y);
   check((await state()).money === 6 && (await state()).placed === 2, 'placing a starting bumper is free');
+  await page.waitForSelector('.tut .tut-bub');
+  await page.waitForTimeout(500);
+  check(/press any part/i.test(await page.innerText('.tut .tut-txt')), 'after the tour, the first part placed gets Big Boi\'s word on part cards');
+  await page.screenshot({ path: `${out}/smoke-1u-part-tip.png` });
+  await page.keyboard.press('Escape'); // Esc ends what he is saying
+  await page.waitForTimeout(400);
+  check(await page.locator('.tut:not(.out)').count() === 0, 'Esc ends the tour');
   await page.keyboard.press('Escape');
   await page.evaluate(() => { const g = window.__pinball.game; g.place(1, 17, 44.5); window.__pinball.seatStarters(); });
   s = await state();
@@ -430,7 +455,9 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   // a new run: Esc pauses it, and the sim holds still under the pause menu (the sim runs in real time from here)
   await page.evaluate(() => window.__pinball.freeze(false));
   await page.click('#menu [data-act="new"]');
+  check(await page.locator('#menu .mtut [data-tut="0"].on').count() === 1, 'once the tour has been seen, the Tutorial switch starts off');
   await page.click('#menu .cab[data-theme="diner"]');
+  check(await page.locator('.tut').count() === 0, 'a run with the switch off has no tour');
   await page.click('#btnStart');
   await page.waitForTimeout(400);
   await page.keyboard.press('Escape');

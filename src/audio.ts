@@ -1312,6 +1312,14 @@ export class AudioFx {
     this.osc(v.o, v.t, 95, 0.12, 0.3, { to: 60 });
   }
 
+  /** Big Boi talking in the tour: one babbled syllable, a little higher or lower each time. */
+  talk() {
+    const v = this.voice('talk', 0.45, 0.1, 0.07, 4);
+    if (!v) return;
+    const f = rand(160, 250);
+    this.osc(v.o, v.t, f, 0.08, 0.2, { type: 'square', to: f * rand(0.75, 1.3), glide: 0.06, lp: 1400, attack: 0.005 });
+  }
+
   /** The run is over: a slow music box, running down. */
   gameOver() {
     const v = this.voice('gameOver', 0.7, 2.6, 1, 1, true);

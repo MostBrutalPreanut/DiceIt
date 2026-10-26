@@ -6,15 +6,15 @@ import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, KIND_NAMES, type DecalId, t
 import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
 import { FINAL_ROUND } from './data/bosses';
 import { AudioFx } from './audio';
-import { Game, goalFor, parseRun, type Arrangement, type GameEvent, type Payout, type RunSave } from './game/game';
+import { Game, goalFor, parseRun, UPKEEP, type Arrangement, type GameEvent, type Payout, type RunSave } from './game/game';
 import type { ScoreEvent } from './game/scoring';
 import { Renderer, type DrawState } from './render/renderer';
 import type { Mood } from './render/props';
 import { FxOverlay } from './render/overlay';
 import { FACTORY, roleFill, themeById, THEMES, themeVars, type Theme } from './render/theme';
-import { DT } from './sim/constants';
+import { DT, LANE_WALL_X, TABLE_W } from './sim/constants';
 import { canPlaceLedge, starterLayout } from './sim/layout';
-import { clampLedge, LEDGE, ledgeSeg } from './sim/table';
+import { clampLedge, FLIPPER_PIVOTS, LEDGE, ledgeSeg } from './sim/table';
 import { Bot } from './sim/bot';
 import type { Input, SimEvent } from './sim/sim';
 import { bossCard, decalCard, fmt, HUD_TIPS, partCard, rarityChip, roleVar, statsLine } from './ui/html';
@@ -26,6 +26,8 @@ import { Menu, type SavedRunInfo } from './ui/menu';
 import { keyLabel, loadSettings, saveSettings, type Settings } from './ui/settings';
 import { Scoreboard, sourceOfSave, type RunResult } from './ui/scoreboard';
 import { Attract } from './attract';
+import { around, Tutorial, TUTORIAL_KEY, type Box, type Step } from './ui/tutorial';
+import './ui/tutorial.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORE = 'pinball-roguelite.run.v2';
@@ -576,7 +578,7 @@ async function main() {
     if (over === canvas) {
       const p = spotFor(d.id, cx, cy);
       part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y, d.angle) : game.buyAndPlace(d.slot, p.x, p.y, d.angle);
-      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? 'DECOR GOES ON THE CABINET' : 'NO ROOM THERE'); return false; }
+      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); placedTip(part.uid); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? 'DECOR GOES ON THE CABINET' : 'NO ROOM THERE'); return false; }
     } else if (over?.closest('#inventoryBox')) {
       part = d.slot === null ? game.grant(d.id, d.angle) : game.buy(d.slot, d.angle);
       if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(d.slot !== null && !game.hasRoomFor(d.id) ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
@@ -690,6 +692,7 @@ async function main() {
         audio.place();
         sayKey('place');
         persist();
+        if (selected !== null) placedTip(selected);
       } else if (isInlay(game.part(armed)?.def ?? 'pop')) say('DROP IT ON A PART IT FITS');
     } else {
       const hit = hitAt(e.clientX, e.clientY);
@@ -766,6 +769,7 @@ async function main() {
         sayKey('place');
         persist();
         refreshWorkshop();
+        if (selected !== null) placedTip(selected);
       } else if (isInlay(game.part(armed)?.def ?? 'pop')) say('DROP IT ON A PART IT FITS');
     }
   });
@@ -1272,6 +1276,70 @@ async function main() {
     }
   }
 
+  // ---- Big Boi's tour (src/ui/tutorial.ts): what is where, never what to do ----------------------------------------
+  /** The screen box around a patch of the table, from its floor up to height z. */
+  const tableBox = (x0: number, y0: number, x1: number, y1: number, z = 0): Box[] => {
+    const pts = [x0, x1].flatMap((x) => [y0, y1].flatMap((y) => [renderer.toClient(x, y, 0), renderer.toClient(x, y, z)]));
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    return [{ x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) }];
+  };
+  const partBox = (uid: number): Box[] => {
+    const p = game.part(uid);
+    if (!p?.placed) return [];
+    const r = footprint(PARTS[p.def]);
+    return tableBox(p.x - r, p.y - r, p.x + r, p.y + r, 1).map((b) => ({ ...b, round: true }));
+  };
+  const tour = new Tutorial({
+    // the Big Boi in the middle of the table does the talking: the bubbles come out of him, and he pulls the faces
+    speaker: () => {
+      const p = game.placed.find((q) => q.def === 'mega');
+      if (!p) return null;
+      const r = footprint(PARTS.mega);
+      return tableBox(p.x - r, p.y - r, p.x + r, p.y + r, 1.9)[0];
+    },
+    face: (m) => renderer.bigBoiMood(m ?? 'happy', m ? 600 : 0),
+    talk: () => audio.talk(),
+    pop: () => audio.pickUp(),
+  });
+  /** Big Boi still has one thing to say after the tour: about the first part you put on the table. */
+  let partTip = false;
+  function startTour() {
+    store.set(TUTORIAL_KEY, '1');
+    partTip = true;
+    const k = settings.keys, n = game.inventory.length;
+    const { L, R } = FLIPPER_PIVOTS;
+    const steps: Step[] = [
+      { say: "Hey, welcome back! I haven't seen you in a while. Let me remind you how things go.", mood: 'cool' },
+      { say: 'This is your <b>route</b>: 15 rounds to clear, each with a bigger goal. Some of them have their own nasty rules. Those are the <b>bosses</b>, and this box warns you which one is next.', at: () => [...around('#roundMap'), ...around('#bossBox')], scroll: '#roundMap' },
+      { say: 'This is the <b>score</b> to beat. It grows every round.', at: () => around('#score', '#left .goalrow', '#left .tube'), scroll: '#score' },
+      { say: `This is your <b>toolbox</b>. Right now it holds ${n} bumper${n === 1 ? '' : 's'}. Press one, then press the table to put it there.`, at: () => around('#invWrap'), scroll: '#invWrap' },
+      { say: `Think before you place something: moving it later costs you <b>$${UPKEEP.move}</b>.`, mood: 'oof', at: () => around('#invWrap'), scroll: '#invWrap' },
+      { say: 'This is your <b>money</b>. Every round you clear pays, every ball you did not need pays extra, and some parts cough up coins when you hit them.', at: () => around('#right .money'), scroll: '#right .moneyrow' },
+      { say: 'This is the <b>shop</b>. After every round you can buy new parts for the machine here.', at: () => around('#shopBox'), scroll: '#shopBox' },
+      {
+        say: `These are your <b>flippers</b>: <kbd>${keyLabel(k.left)}</kbd> and <kbd>${keyLabel(k.right)}</kbd>. Hold <kbd>${keyLabel(k.launch)}</kbd> to pull the plunger, let go to shoot. Until the round starts, balls are free: shoot as many as you like.`,
+        at: () => [...tableBox(L.x - 1, L.y - 2.4, R.x + 1, L.y + 1, 0.5), ...tableBox(LANE_WALL_X, 0, TABLE_W, 7, 0.5)], scroll: '#stage',
+      },
+      { say: `When you're ready, hit <b>Play Round</b>. Then it counts: ${game.ballsPerRound} balls to reach the goal.`, at: () => around('#btnStart'), scroll: '#actions' },
+      {
+        say: 'During the round this turns into <b>Cash Out</b>. Once the goal is hit you can bank the round any time: handy if a ball gets stuck, or you just want out.',
+        at: () => around('#btnCash'), scroll: '#actions',
+        enter: () => document.body.classList.add('tut-cash'), leave: () => document.body.classList.remove('tut-cash'),
+      },
+      { say: 'Ball stuck anyway? Shove the table with <kbd>Z</kbd> and <kbd>X</kbd>. Gently! Shove too hard and this fills up: <b>TILT</b>. Lights out, flippers dead, and I sulk.', mood: 'sad', at: () => around('#left .gauge[data-tip="tilt"]'), scroll: '#tiltFill' },
+      { say: "That's the tour! I'll be right here in the middle, watching the ball.", mood: 'cool' },
+    ];
+    tour.start(steps, (skipped) => { if (skipped) partTip = false; });
+  }
+  function placedTip(uid: number) {
+    if (!partTip || tour.open) return;
+    partTip = false;
+    tour.start([
+      { say: 'Nice spot! Press any part on the table to open its card: what it pays, a dial to tune it (like how hard it bounces the ball), and buttons to move it, store it or get rid of it.', at: () => [...partBox(uid), ...around('#inspect')] },
+      { say: "That's all from me. Good luck!", mood: 'cool' },
+    ]);
+  }
+
   // ---- menus: settings, the scoreboard, pause, the main menu -------------------------------------------------------
   function applySettings(s: Settings) {
     settings = s;
@@ -1354,7 +1422,14 @@ async function main() {
 
   const menu = new Menu({
     savedRun: (): SavedRunInfo | null => { const r = savedRun(); return r ? { machine: r.machine ?? 'factory', round: r.round, money: r.money, won: !!r.won } : null; },
-    newGame: (id) => { audio.unlock(); if (savedRun()) endRun('abandoned'); pickTheme(id); },
+    newGame: (id, tutorial) => {
+      audio.unlock();
+      if (savedRun()) endRun('abandoned');
+      pickTheme(id);
+      partTip = false;
+      if (tutorial) startTour();
+    },
+    tutorialDefault: () => store.get(TUTORIAL_KEY) !== '1',
     resume: () => {
       const run = savedRun();
       if (!run) { menu.showMain(); return; }

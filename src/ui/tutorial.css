@@ -1,0 +1,79 @@
+/* Big Boi's tour (src/ui/tutorial.ts): the screen goes dark, the lights glide to what he talks about, and his
+   speech bubbles pop out of the Big Boi on the table. Same sticker kit as the rest: ink frames, paper, drop shadows. */
+
+.tut { position: fixed; inset: 0; z-index: 55; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+.tut-dim { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; animation: tutFade .35s ease-out both; }
+.tut-dim .shade { fill: color-mix(in srgb, var(--ink) 50%, #000); opacity: .84; }
+.tut.out { pointer-events: none; animation: tutFade .3s ease-in reverse both; }
+@keyframes tutFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* a glowing ring round each light, breathing; Big Boi's own light just glows */
+.tut-ring { position: fixed; pointer-events: none; border: 3px solid var(--glow); box-shadow: 0 0 0 3px var(--ink), 0 0 26px 6px var(--glow); animation: tutRing 1.1s ease-in-out infinite; }
+.tut-ring.me { border-color: transparent; box-shadow: 0 0 30px 4px color-mix(in srgb, var(--glow) 60%, transparent); animation: none; }
+@keyframes tutRing { 50% { scale: 1.025; box-shadow: 0 0 0 3px var(--ink), 0 0 40px 12px var(--glow); } }
+
+/* the arrow on the edge of the light, bouncing in towards it */
+.tut-arrow { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.tut-arrow.on { opacity: 1; }
+.tut-arrow svg { position: absolute; left: -46px; top: -17px; width: 46px; height: 34px; overflow: visible; filter: drop-shadow(0 4px 0 var(--ink)); animation: tutPoint .6s ease-in-out infinite alternate; }
+.tut-arrow path { fill: var(--accent); stroke: var(--ink); stroke-width: 3.5px; stroke-linejoin: round; }
+@keyframes tutPoint { from { translate: -12px 0; } to { translate: 0 0; } }
+
+/* the speech bubble: it pops out of Big Boi with a bounce, its letters pop in one after another */
+.tut-spk { position: fixed; left: 0; top: 0; width: min(380px, calc(100vw - 32px)); }
+.tut-spk.glide { transition: transform .45s cubic-bezier(.3,1.35,.5,1); }
+.tut-bub { --tail: 50%; position: relative; padding: 16px 20px 12px; background: var(--paper); color: var(--ink); border: var(--lw-frame) solid var(--ink); border-radius: 24px; box-shadow: 6px 7px 0 var(--drop), 0 0 0 5px color-mix(in srgb, var(--glow) 55%, transparent); font: 700 16.5px/1.42 var(--ui); cursor: default; }
+.tut-spk[data-tail="down"] .tut-bub { transform-origin: var(--tail) 115%; }
+.tut-spk[data-tail="up"] .tut-bub { transform-origin: var(--tail) -15%; }
+.tut-spk[data-tail="left"] .tut-bub { transform-origin: -15% var(--tail); }
+.tut-spk[data-tail="right"] .tut-bub { transform-origin: 115% var(--tail); }
+.tut-bub.pop { animation: tutPop .5s cubic-bezier(.25,1.6,.45,1) both; }
+@keyframes tutPop { 0% { scale: .2; rotate: -8deg; opacity: 0; } 55% { scale: 1.07 .95; rotate: 2deg; opacity: 1; } 78% { scale: .97 1.03; rotate: -.6deg; } 100% { scale: 1; rotate: 0deg; } }
+/* it throbs a little with every syllable */
+.tut-bub.beat { translate: 0 -1.5px; }
+.tut-bub { transition: translate .08s; }
+
+/* the tail: an ink triangle with a paper one inside, on whichever side Big Boi is */
+.tut-bub::before, .tut-bub::after { content: ''; position: absolute; width: 0; height: 0; border: solid transparent; }
+.tut-spk[data-tail="down"] .tut-bub::before { left: var(--tail); top: 100%; margin-left: -16px; border-width: 22px 16px 0; border-top-color: var(--ink); }
+.tut-spk[data-tail="down"] .tut-bub::after { left: var(--tail); top: 100%; margin-left: -11px; margin-top: -1px; border-width: 16px 11px 0; border-top-color: var(--paper); }
+.tut-spk[data-tail="up"] .tut-bub::before { left: var(--tail); bottom: 100%; margin-left: -16px; border-width: 0 16px 22px; border-bottom-color: var(--ink); }
+.tut-spk[data-tail="up"] .tut-bub::after { left: var(--tail); bottom: 100%; margin-left: -11px; margin-bottom: -1px; border-width: 0 11px 16px; border-bottom-color: var(--paper); }
+.tut-spk[data-tail="left"] .tut-bub::before { top: var(--tail); right: 100%; margin-top: -16px; border-width: 16px 22px 16px 0; border-right-color: var(--ink); }
+.tut-spk[data-tail="left"] .tut-bub::after { top: var(--tail); right: 100%; margin-top: -11px; margin-right: -1px; border-width: 11px 16px 11px 0; border-right-color: var(--paper); }
+.tut-spk[data-tail="right"] .tut-bub::before { top: var(--tail); left: 100%; margin-top: -16px; border-width: 16px 0 16px 22px; border-left-color: var(--ink); }
+.tut-spk[data-tail="right"] .tut-bub::after { top: var(--tail); left: 100%; margin-top: -11px; margin-left: -1px; border-width: 11px 0 11px 16px; border-left-color: var(--paper); }
+
+.tut-txt { min-height: 2.8em; }
+.tut-txt .w { display: inline-block; white-space: nowrap; }
+.tut-txt i { display: inline-block; font-style: normal; animation: tutChar .3s cubic-bezier(.3,1.9,.5,1) both; animation-delay: var(--d); }
+.tut-txt kbd.ch { display: inline-block; font-size: 13px; padding: 0 6px; box-shadow: 0 2px 0 var(--ink); animation: tutChar .3s cubic-bezier(.3,1.9,.5,1) both; animation-delay: var(--d); }
+.tut-txt b { color: var(--accent); font-weight: 800; }
+@keyframes tutChar { from { opacity: 0; transform: translateY(9px) scale(.3) rotate(-14deg); } to { opacity: 1; transform: none; } }
+.tut-bub.done .tut-txt i, .tut-bub.done .tut-txt kbd.ch { animation: none; }
+
+.tut-foot { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.tut-skip { padding: 2px 4px; border: none; background: none; box-shadow: none; font: 800 12px var(--ui); color: var(--faint); text-decoration: underline; text-underline-offset: 2px; }
+.tut-skip:hover:not(:disabled) { background: none; color: var(--ink); }
+.tut-dots { flex: 1; display: flex; justify-content: center; gap: 5px; }
+.tut-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); opacity: .45; transition: transform .2s cubic-bezier(.3,1.8,.5,1), opacity .2s; }
+.tut-dots i.on { background: var(--accent); opacity: 1; transform: scale(1.5); box-shadow: 0 0 0 1.5px var(--ink); }
+/* Next waits until he has finished his sentence, then pops up and nods to the right */
+.tut-next { margin-left: auto; padding: 6px 16px 3px; border-radius: 99px; font-size: 19px; background: var(--accent); color: var(--paper); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; box-shadow: 0 4px 0 var(--ink); scale: 0; transition: scale .25s cubic-bezier(.3,1.9,.5,1); }
+.tut-next:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
+.tut-next span { display: inline-block; font-size: 13px; vertical-align: 2px; }
+.tut-bub.done .tut-next { scale: 1; }
+.tut-bub.done .tut-next span { animation: tutNod .7s ease-in-out .3s infinite; }
+@keyframes tutNod { 50% { translate: 4px 0; } }
+
+/* the tour peeks at the round's button: CASH OUT stands where PLAY ROUND was */
+body.tut-cash #btnStart { display: none; }
+body.tut-cash #actions #btnCash { display: flex; opacity: 1; }
+/* no tooltip pops up under the tour */
+body.touring #tip { display: none; }
+
+body.calm .tut-ring, body.calm .tut-arrow svg, body.calm .tut-next span { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tut-ring, .tut-arrow svg, .tut-bub.pop, .tut-txt i, .tut-txt kbd.ch, .tut-next span { animation: none; }
+}
+@media (max-width: 560px) { .tut-bub { font-size: 15px; padding: 13px 15px 10px; } }
