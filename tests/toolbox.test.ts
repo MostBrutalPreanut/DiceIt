@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PARTS } from '../src/data/parts';
-import { Game, parseRun, TOOLBOX_SLOTS } from '../src/game/game';
+import { Game, parseRun, TOOLBOX_SLOTS, UPKEEP } from '../src/game/game';
 
 /** A game with plenty of money and a shelf of cheap Pop Bumpers. */
 function rich() {
@@ -29,7 +29,7 @@ describe('the toolbox holds four parts', () => {
     const onBoard = g.placed[0];
     const money = g.money;
     expect(g.store(onBoard.uid)).toBe(g.sellValue(PARTS.pop));
-    expect(g.money).toBe(money + g.sellValue(PARTS.pop));
+    expect(g.money).toBe(money - UPKEEP.move + g.sellValue(PARTS.pop)); // moving it off the table costs, then it sells
     expect(g.part(onBoard.uid)).toBeUndefined();
     expect(g.inventory.length).toBe(TOOLBOX_SLOTS);
     expect(g.soldOverflow).toEqual([{ def: 'pop', refund: g.sellValue(PARTS.pop) }]);
@@ -44,14 +44,17 @@ describe('the toolbox holds four parts', () => {
     expect(g.part(p.uid)?.placed).toBe(false);
   });
 
-  it("an upgrade's free part with no room is sold, not lost", () => {
+  it('peeling a Big Toolbox sells what no longer fits, and says so', () => {
     const g = rich();
-    fill(g, TOOLBOX_SLOTS);
+    g.pending = [{ id: 'bigToolbox' }];
+    expect(g.chooseDecal(0)).toBe(true);
+    fill(g, TOOLBOX_SLOTS + 2);
+    expect(g.inventory.length).toBe(TOOLBOX_SLOTS + 2);
     const money = g.money;
-    g.pending = [{ id: 'saver' }];
-    expect(g.chooseUpgrade(0)).toBe(true);
+    expect(g.peel(0)).toBe(true);
     expect(g.inventory.length).toBe(TOOLBOX_SLOTS);
-    expect(g.money).toBe(money + g.sellValue(PARTS.saver));
+    expect(g.money).toBeGreaterThan(money);
+    expect(g.soldOverflow.length).toBe(2);
   });
 
   it('an old save with too much in the toolbox sells the extra on load', () => {

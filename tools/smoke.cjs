@@ -19,12 +19,37 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForSelector('canvas');
-  // there is no default machine: the first visit asks for a theme
-  await page.waitForSelector('#themePick .cab');
-  check(await page.locator('#themePick .cab').count() === 3, 'the first visit offers three machines to pick from');
-  await page.click('#themePick .cab[data-theme="factory"]');
-  check(await page.isHidden('#themePick'), 'picking a machine closes the picker');
-  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.theme.v1')) === 'factory', 'the theme choice is saved');
+  // the main menu: the title over a demo machine that plays itself, and nothing to resume on a first visit
+  await page.waitForSelector('#menu .mbtn');
+  const title = await page.innerText('#menu .mtitle');
+  check(/BIG BOI/.test(title) && /PINBALL DESIGNER/.test(title), 'the main menu shows the title');
+  check(await page.locator('#menu [data-act="resume"]').count() === 0, 'a first visit has nothing to resume');
+  check(await page.evaluate(() => window.__pinball.attract() && window.__pinball.game.mode === 'round' && window.__pinball.game.goalOverride === Infinity), 'the attract table plays a demo round behind the menu');
+  check(await page.isHidden('#left') && await page.isHidden('#right'), 'the panels make room for the attract table');
+  await page.evaluate(() => window.__pinball.demo(12));
+  check(await page.evaluate(() => window.__pinball.game.scorer.score > 0), 'the bot scores on the attract table');
+  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.run.v2')) === null, 'the attract table never saves');
+  await page.screenshot({ path: `${out}/smoke-0-menu.png` });
+  // there is no default machine: New Game shows the three cabinets, and each machine names its Big Boi
+  await page.click('#menu [data-act="new"]');
+  await page.waitForSelector('#menu .cab');
+  check(await page.locator('#menu .cab').count() === 3, 'New Game offers three machines to pick from');
+  const picker = await page.innerText('#menu');
+  check(/Foreman/.test(picker) && /Cook/.test(picker) && /Dragon/.test(picker), 'each machine says what its Big Boi does');
+  await page.waitForFunction(() => document.querySelectorAll('#menu .cab .art svg').length === 3);
+  check(true, 'each card shows its full cabinet');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${out}/smoke-0b-picker.png` });
+  await page.keyboard.press('Escape');
+  check(await page.isVisible('#menu .mpanel'), 'Esc goes back from the picker to the main menu');
+  await page.keyboard.press('Enter'); // New Game has the focus
+  await page.waitForSelector('#menu .cab');
+  await page.click('#menu .cab[data-theme="factory"]');
+  check(await page.isHidden('#menu'), 'picking a machine closes the menu');
+  check(!(await page.evaluate(() => window.__pinball.attract())), 'and stops the attract table');
+  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.theme.v1')) === 'factory', 'the machine choice is saved');
+  check(await page.evaluate(() => window.__pinball.game.machine) === 'factory', 'the run is on the picked machine');
+  check(/Next boss/i.test(await page.innerText('#bossBox')), 'the scoreboard names the next boss');
   await page.evaluate(() => window.__pinball.freeze(true));
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/smoke-1-workshop.png` });
@@ -113,11 +138,11 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.move(pop.x + 2, pop.y + 2);
   check(await page.isVisible('#tip'), 'hovering a part shows its tooltip');
   const tip = await page.innerText('#tip');
-  check(tip.includes('Pop Bumper') && tip.includes('100') && tip.includes('+5'), 'the Pop Bumper tooltip says "100" and "+5"');
+  check(tip.includes('Pop Bumper') && tip.includes('20') && tip.includes('+1'), 'the Pop Bumper tooltip says "20" and "+1"');
   check(/Next hit pays \d+/i.test(tip) && /your Mult/i.test(tip), 'the tooltip leads with the next-hit number and its math chips');
   await page.mouse.move(5, 5);
 
-  // the toolbox holds four: buying stops, and storing into a full toolbox sells the part for half
+  // the toolbox holds four: buying stops, and storing into a full toolbox sells the part for half (after the $1 to move it)
   await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.money = 50; window.__pinball.refresh(); });
   for (let i = 0; i < 4; i++) {
     await page.evaluate(() => { const g = window.__pinball.game; g.shop.offers = ['pop', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
@@ -130,14 +155,14 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.click(pop2.x, pop2.y);
   await page.keyboard.press('Delete');
   const after = await state();
-  check(after.money === before + 1 && after.placed === 3 && after.inv === 4, `storing into a full toolbox sells the part for half ($${before} -> $${after.money})`);
-  check(await page.isHidden('#toolSell'), 'the toolbox shows no Sell button until a part in it is picked');
+  check(after.money === before && after.placed === 3 && after.inv === 4, `storing into a full toolbox costs $1 to move and sells for $1 ($${before} -> $${after.money})`);
+  check(await page.isHidden('#toolSell'), 'the toolbox shows no Return button until a part in it is picked');
   await page.click('#inventory .item[data-uid]');
-  check((await page.innerText('#toolSell')) === 'SELL $1', 'picking a toolbox part puts a Sell button with its price on the latch');
+  check((await page.innerText('#toolSell')) === 'RETURN +$3', 'picking a part bought this visit puts a Return button with its price on the latch');
   await page.screenshot({ path: `${out}/smoke-2d-toolbox-sell.png`, clip: await (await page.$('#inventoryBox')).boundingBox() });
   await page.click('#toolSell');
   const sold = await state();
-  check(sold.inv === 3 && sold.money === after.money + 1, 'Sell sells it for half and frees the slot');
+  check(sold.inv === 3 && sold.money === after.money + 3, 'Return gives back what it cost and frees the slot');
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
   // buying by dragging: an offer dropped on the table lands on the board without going through the toolbox
@@ -185,17 +210,28 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.click(to.x, to.y);
   const moved = await page.evaluate(() => window.__pinball.game.placed.find((p) => p.def === 'coin'));
   check(Math.hypot(moved.x - 8, moved.y - 26) < 0.6, `a clicked part follows the pointer and the next click sets it down (${moved.x.toFixed(1)}, ${moved.y.toFixed(1)})`);
-  // 1, 2, 3 switch the theme
+  // the machine stays for the run: number keys no longer switch it
   await page.keyboard.press('Digit2');
-  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.theme.v1')) === 'diner', 'key 2 switches to the second machine');
-  await page.keyboard.press('Digit1');
+  check(await page.evaluate(() => window.__pinball.game.machine) === 'factory', 'the machine cannot be switched mid-run');
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
-  // relic decals: earn one from a Rules card, read it on the apron, peel it off
-  await page.evaluate(() => { const g = window.__pinball.game; g.pending = [{ id: 'sponsor' }, { id: 'headStart' }]; window.__pinball.refresh(); });
-  check(await page.locator('.ucard.c-rules .decalimg').count() === 1, 'a Rules card shows the decal it would stick on');
-  await page.click('.ucard[data-pick="1"]');
-  check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'taking the Rules card sticks a decal on the apron');
+  // lock a shop offer: it is marked, and it is still there after a reroll
+  const lockedId = await page.evaluate(() => window.__pinball.game.shop.offers[1]);
+  await page.click('button[data-lock="1"]');
+  check(await page.evaluate(() => window.__pinball.game.isLocked(1)), 'the lock button locks an offer');
+  await page.evaluate(() => { const g = window.__pinball.game; g.money += 5; g.reroll(); window.__pinball.refresh(); });
+  check(await page.evaluate(() => window.__pinball.game.shop.offers[1]) === lockedId, 'a locked offer survives a reroll');
+  await page.click('button[data-lock="1"]');
+
+  // relic decals: pick one after a boss, read it on the apron, peel it off
+  await page.evaluate(() => { const g = window.__pinball.game; g.pending = [{ id: 'sponsor' }, { id: 'headStart' }, { id: 'rubber' }]; window.__pinball.refresh(); });
+  check(await page.locator('.dp-card .dp-img').count() === 3, 'every decal card shows the decal it would stick on');
+  const cardText = await page.innerText('.dp-card[data-pick="1"]');
+  check(/Head Start/i.test(cardText) && /Score/i.test(cardText) && /Common/i.test(cardText) && /\+0\.5 Mult/.test(cardText) && /apron slot 1 of 4/i.test(cardText), 'a decal card reads its name, kind, rarity, rule and the apron slot it goes to');
+  await page.click('.dp-card[data-pick="1"]'); // waits for the card to land and turn over
+  await page.waitForFunction(() => window.__pinball.game.decals.length === 1, null, { timeout: 5000 }).catch(() => {});
+  check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'taking a card sticks its decal on the apron (once it has flown there)');
+  await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
   await page.evaluate(() => window.__pinball.renderer.draw(window.__pinball.game, 0.016, { ghost: null, selectedUid: null, hoverUid: null, showHeat: false }));
   const slot = await page.evaluate(() => window.__pinball.toScreen(2.6, 6.6, 0.5));
   await page.mouse.move(slot.x, slot.y);
@@ -216,19 +252,39 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   }
   await page.evaluate(() => { window.__pinball.game.toWorkshop(); window.__pinball.refresh(); });
 
-  // the between-rounds flow: a boss was just beaten, so an upgrade is owed before the next round
+  // the between-rounds flow: a boss was just beaten, so a decal pick is owed before the next round
   await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
-  check(await page.isVisible('#upgradeBox'), 'the upgrade picker shows over the table when one is owed');
-  check(await page.locator('.ucard').count() === 3, 'three upgrade cards are offered');
+  check(await page.isVisible('#upgradeBox'), 'the decal picker shows over the table when one is owed');
+  check(await page.locator('.dp-card').count() === 3, 'three decals are offered');
+  const bossName = await page.evaluate(() => window.__pinball.game.bossAt(3).name);
+  check((await page.innerText('.dp-head')).toLowerCase().includes(bossName.toLowerCase()), `the reveal names the boss that was beaten (${bossName})`);
   check(await page.isDisabled('#btnStart'), 'Start round is locked while the pick is owed');
   await page.screenshot({ path: `${out}/smoke-2c-upgrade.png` });
-  await page.click('.ucard[data-pick="0"]');
-  check(!(await page.isDisabled('#btnStart')), 'taking a card unlocks Start round');
-  check(!(await page.isVisible('#upgradeBox')) && (await page.locator('.chip').count()) === 1, 'the offer closes and the run lists the upgrade');
+  await page.waitForSelector('#upgradeBox.dp-settled', { timeout: 5000 });
+  await page.screenshot({ path: `${out}/smoke-2c-upgrade-settled.png` });
+  // the keyboard: the arrows lift a card, Enter sticks it
+  await page.keyboard.press('ArrowRight');
+  check(await page.evaluate(() => document.querySelector('.dp-card.is-sel')?.dataset.pick) === '0', 'an arrow key lifts the first card');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.__pinball.game.decals.length === 1, null, { timeout: 5000 }).catch(() => {});
+  check(!(await page.isDisabled('#btnStart')), 'taking a decal unlocks Start round');
+  await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
+  check(!(await page.isVisible('#upgradeBox')) && (await page.evaluate(() => window.__pinball.game.decals.length)) === 1, 'the offer closes and the decal is on the apron');
   await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
   const cash = await page.evaluate(() => window.__pinball.game.money);
   await page.click('#btnSkip');
   check((await page.evaluate(() => window.__pinball.game.money)) === cash + 4, 'skipping pays $4');
+  await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
+  // the number keys pick straight away, S skips
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  await page.keyboard.press('KeyS');
+  check((await page.evaluate(() => window.__pinball.game.money)) === cash + 4 && !(await page.evaluate(() => window.__pinball.game.pending)), 'S skips for the cash');
+  await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  await page.keyboard.press('Digit3');
+  await page.waitForFunction(() => window.__pinball.game.decals.length === 1, null, { timeout: 5000 }).catch(() => {});
+  check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'a number key sticks that card');
+  await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
   // a real round with the bot at the controls: the machine tips towards you while the ball is live
@@ -272,6 +328,85 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(ov.x <= 1 && ov.y <= 1 && ov.width >= 1430, 'the lose screen greys out the whole page');
   check(await page.locator('#overlay .summary .roundmap svg').count() === 1 && /total points/i.test(await page.innerText('#overlay')), 'the lose screen shows the map and the total points');
   await page.screenshot({ path: `${out}/smoke-4-run-over.png` });
+  check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.run.v2')) === null, 'a lost run is cleared from storage');
+
+  // the lost run is on the scoreboard, with the machine it ended as
+  const lsGet = (k) => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), k);
+  await page.click('#btnToMenu');
+  check(await page.isVisible('#menu .mpanel') && await page.locator('#menu [data-act="resume"]').count() === 0, 'the lose screen goes to the main menu, with nothing to resume');
+  await page.click('#menu [data-act="scores"]');
+  check(await page.locator('#menu .sbrow').count() === 1 && /lost/i.test(await page.innerText('#menu .sbrow')), 'the scoreboard lists the lost run');
+  await page.waitForFunction(() => { const i = document.querySelector('#sbDetail img.thumb'); return i && i.naturalWidth > 0; });
+  check(true, 'the picked run shows its final build as a picture');
+  check((await lsGet('pinball-roguelite.scoreboard.v1'))[0].parts.length >= 4, 'the record keeps the final build, part by part');
+  await page.screenshot({ path: `${out}/smoke-5-scoreboard.png` });
+  await page.keyboard.press('Escape');
+
+  // settings: a flipper rebound, a reserved key refused, graphics and volume saved and used at once
+  await page.click('#menu [data-act="settings"]');
+  await page.click('#menu [data-bind="left"]');
+  await page.keyboard.press('KeyM');
+  check(/taken/.test(await page.innerText('#bindMsg')), 'a key the game uses cannot be bound');
+  await page.keyboard.press('KeyA');
+  check((await lsGet('pinball-roguelite.settings.v1')).keys.left === 'KeyA' && (await page.innerText('#menu [data-bind="left"]')) === 'A', 'the left flippers can be moved to another key');
+  await page.click('#menu [data-q="low"]');
+  check((await lsGet('pinball-roguelite.settings.v1')).quality === 'low' && await page.evaluate(() => window.__pinball.renderer.app.renderer.resolution === 1), 'low graphics is saved and drawn at 1x at once');
+  await page.click('#menu [data-q="high"]');
+  await page.$eval('#menu input[data-vol="music"]', (el) => { el.value = '35'; el.dispatchEvent(new Event('input')); });
+  check((await lsGet('pinball-roguelite.settings.v1')).music === 0.35, 'the music volume is saved');
+  await page.screenshot({ path: `${out}/smoke-6-settings.png` });
+  await page.keyboard.press('Escape');
+
+  // a new run: Esc pauses it, and the sim holds still under the pause menu (the sim runs in real time from here)
+  await page.evaluate(() => window.__pinball.freeze(false));
+  await page.click('#menu [data-act="new"]');
+  await page.click('#menu .cab[data-theme="diner"]');
+  await page.click('#btnStart');
+  await page.waitForTimeout(400);
+  await page.keyboard.press('Escape');
+  check(await page.isVisible('#menu .pausecard'), 'Esc during a round opens the pause menu');
+  const t0 = await page.evaluate(() => window.__pinball.game.sim.time);
+  await page.waitForTimeout(500);
+  check(await page.evaluate(() => window.__pinball.game.sim.time) === t0, 'the sim holds still while paused');
+  await page.screenshot({ path: `${out}/smoke-7-pause.png` });
+  await page.click('#menu [data-act="unpause"]');
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => window.__pinball.game.sim.time) > t0, 'Resume carries on');
+  // the rebound key works the flippers
+  const leftAngle = () => page.evaluate(() => window.__pinball.game.sim.flipperStates().find((f) => f.side === 'L' && f.uid === undefined).angle);
+  const rest = await leftAngle();
+  await page.keyboard.down('KeyA');
+  await page.waitForTimeout(250);
+  const up = await leftAngle();
+  await page.keyboard.up('KeyA');
+  check(Math.abs(up - rest) > 0.3, `the rebound key raises the left flippers (${rest.toFixed(2)} -> ${up.toFixed(2)})`);
+  // the visible pause button, then Quit to Main Menu keeps the run, and Resume brings it back
+  await page.click('#btnPause');
+  await page.click('#menu [data-act="quit"]');
+  check(await page.locator('#menu [data-act="resume"]').count() === 1 && (await lsGet('pinball-roguelite.run.v2')) !== null, 'quitting to the main menu keeps the run saved');
+  await page.screenshot({ path: `${out}/smoke-8-menu-resume.png` });
+  await page.click('#menu [data-act="resume"]');
+  check(await page.isHidden('#menu') && await page.evaluate(() => window.__pinball.game.machine === 'diner' && window.__pinball.game.mode === 'workshop'), 'Resume loads the run back (a round in play starts over)');
+  // New Game while a run exists asks first; Keep it keeps it
+  await page.keyboard.press('Escape');
+  await page.click('#menu [data-act="quit"]');
+  await page.click('#menu [data-act="new"]');
+  check(await page.isVisible('#menu .mconfirm'), 'New Game over a saved run asks before abandoning it');
+  await page.click('#menu .mconfirm [data-no]');
+  check(await page.locator('#menu [data-act="resume"]').count() === 1, 'Keep it keeps the run');
+  // Abandon Run from the pause menu: confirm, onto the scoreboard as abandoned, the save cleared
+  await page.click('#menu [data-act="resume"]');
+  await page.evaluate(() => { window.__pinball.game.round = 4; });
+  await page.keyboard.press('Escape');
+  await page.click('#menu [data-act="abandon"]');
+  await page.click('#menu .mconfirm [data-yes]');
+  const board = await lsGet('pinball-roguelite.scoreboard.v1');
+  check(board.length === 2 && board.some((r) => r.result === 'abandoned' && r.machine === 'diner' && r.cleared === 3), 'an abandoned run goes on the scoreboard');
+  check((await lsGet('pinball-roguelite.run.v2')) === null && await page.locator('#menu [data-act="resume"]').count() === 0, 'and the save is cleared');
+  // keyboard: arrows move the focus, Enter goes
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  check(await page.isVisible('#menu .setcard') || await page.locator('#menu .sbrow').count() > 0, 'the arrows and Enter drive the main menu');
 
   if (errors.length) fail('console errors:\n' + errors.join('\n'));
   else console.log('ok: no console errors');

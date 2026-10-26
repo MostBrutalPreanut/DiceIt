@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makePart, type PartInstance } from '../src/data/parts';
+import { Scorer } from '../src/game/scoring';
 import type { Layout } from '../src/sim/layout';
 import { Bot } from '../src/sim/bot';
 import { SAVER_WINDOW } from '../src/sim/constants';
@@ -36,11 +37,13 @@ describe('each part type does its job in the physics', () => {
     void sim;
   });
 
-  it('a deflector bounces the ball without scoring', () => {
+  it('a deflector bounces the ball and reports the bounce (for its bank shot), but scores nothing', () => {
     const d = makePart('deflector', 1, 12, 30, true);
     d.angle = Math.PI / 4;
     const { events, sim } = drop(layoutOf(d), 12, 34, 0, -10, 1);
-    expect(hitsOf(events, 1)).toHaveLength(0);
+    expect(hitsOf(events, 1).length).toBeGreaterThan(0);
+    const s = new Scorer(1e9, () => [d]);
+    expect(hitsOf(events, 1).flatMap((e) => s.consume(e))).toEqual([]);
     expect(Math.abs(sim.ballStates()[0].x - 12)).toBeGreaterThan(1); // it was steered sideways
   });
 
@@ -94,18 +97,19 @@ describe('each part type does its job in the physics', () => {
     expect(m2).toBeLessThanOrEqual(4);
   });
 
-  it('an extra flipper swings with the button chosen by its Button dial', () => {
-    const f = makePart('flipper', 1, 8, 25, true);
-    const swing = (input: { left: boolean; right: boolean }) => {
-      const sim = createSim(layoutOf(f));
+  it('a Left Flipper swings with the left button and a Right Flipper with the right, and they are smaller', () => {
+    const swing = (id: 'flipper' | 'flipperR', input: { left: boolean; right: boolean }) => {
+      const sim = createSim(layoutOf(makePart(id, 1, 8, 25, true)));
       const rest = sim.flipperStates().find((s) => s.uid === 1)!.angle;
       for (let i = 0; i < 60; i++) sim.step({ ...NO_INPUT, ...input });
       return Math.abs(sim.flipperStates().find((s) => s.uid === 1)!.angle - rest);
     };
-    expect(swing({ left: true, right: false })).toBeGreaterThan(0.8);
-    expect(swing({ left: false, right: true })).toBeLessThan(0.1); // only settles under gravity
-    f.dials.side = 1;
-    expect(swing({ left: false, right: true })).toBeGreaterThan(0.8);
+    expect(swing('flipper', { left: true, right: false })).toBeGreaterThan(0.8);
+    expect(swing('flipper', { left: false, right: true })).toBeLessThan(0.1);
+    expect(swing('flipperR', { left: false, right: true })).toBeGreaterThan(0.8);
+    const sim = createSim(layoutOf(makePart('flipper', 1, 8, 25, true)));
+    const [small, big] = [sim.flipperStates().find((s) => s.uid === 1)!, sim.flipperStates().find((s) => s.uid === undefined)!];
+    expect(small.length).toBeLessThan(big.length * 0.8);
   });
 });
 
@@ -162,7 +166,7 @@ describe('kickback', () => {
     expect(Math.abs(b.vx)).toBeLessThan(12);
   });
 
-  it('fires once per ball: the next ball rolls straight through until a new ball arms it', () => {
+  it('fires, then needs a few seconds to recharge, then fires again in the same ball', () => {
     const sim = createSim(kickLayout());
     const run = () => {
       sim.addBall(12, 33, 0, -20);
@@ -172,9 +176,9 @@ describe('kickback', () => {
     };
     expect(run()).toBe(1);
     expect(sim.kickbackStates().get(1)).toBe(false);
-    for (let i = 0; i < 240 * 6; i++) sim.step(NO_INPUT); // let both balls drain
-    expect(run()).toBe(0);
-    sim.spawnBall(); // a new ball re-arms it
+    for (let i = 0; i < 240 * 1; i++) sim.step(NO_INPUT);
+    expect(run()).toBe(0); // still recharging
+    for (let i = 0; i < 240 * 4; i++) sim.step(NO_INPUT);
     expect(sim.kickbackStates().get(1)).toBe(true);
     expect(run()).toBe(1);
   });

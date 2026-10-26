@@ -1,10 +1,11 @@
-import type { Mods } from '../data/mods';
+import { neutralMods, type Mods } from '../data/mods';
+import type { MachineId } from '../data/bigboi';
 import { PARTS, footprint, type PartId, type PartInstance } from '../data/parts';
 import { Bot } from '../sim/bot';
 import { BUILD_AREA } from '../sim/constants';
 import { canPlace, cloneLayout, type Layout } from '../sim/layout';
 import { Rng } from '../sim/rng';
-import { Game } from './game';
+import { Game, migrateParts } from './game';
 
 /**
  * The auto-builder and the machine meter. Given the parts a run owns, find a good layout by simulated
@@ -18,7 +19,10 @@ export type Levels = Partial<Record<PartId, number>>;
 export interface Machine {
   layout: Layout;
   mods: Mods;
-  levels: Levels;
+  /** Old reports: a level per part type (levels now live on each part). */
+  levels?: Levels;
+  /** The machine (what its Big Boi does); the Factory if absent. */
+  machine?: MachineId;
 }
 
 /** One simulated round with every ball played out (no goal), as the bot plays it. */
@@ -48,8 +52,9 @@ export function playRounds(m: Machine, o: PlayOptions): RoundSample[] {
   for (let i = 0; i < o.rounds; i++) {
     const g = new Game();
     g.layout = cloneLayout(m.layout);
-    g.mods = m.mods;
-    g.levels = { ...m.levels };
+    g.fixedMods = { ...neutralMods(), ...m.mods };
+    if (m.machine) g.machine = m.machine;
+    migrateParts(g.layout, m.levels);
     g.goalOverride = Infinity;
     g.seed = o.seed * 1000 + i * 7 + 1;
     g.startRound();
@@ -162,8 +167,9 @@ export function autoBuild(m: Machine, o: BuildOptions): BuildResult {
 
   // phase B: hill-climb
   for (let step = 0; step < o.steps; step++) {
-    const placed = layout.parts.filter((p) => p.placed);
-    const loose = layout.parts.filter((p) => !p.placed);
+    // the Big Boi is part of the machine: never moved, swapped or benched
+    const placed = layout.parts.filter((p) => p.placed && !p.fixed);
+    const loose = layout.parts.filter((p) => !p.placed && !p.fixed);
     const part = placed.length ? placed[Math.floor(rng.next() * placed.length)] : undefined;
     const roll = rng.next();
     const undo: (() => void)[] = [];

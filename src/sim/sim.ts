@@ -1,15 +1,15 @@
 import * as B from 'phaser-box2d/dist/PhaserBox2D.js';
-import { dialValue, PARTS, type PartInstance } from '../data/parts';
+import { dialValue, PARTS, SMALL_FLIPPER, triPoints, type PartInstance } from '../data/parts';
 import {
-  BALL_R, BALL_SEARCH_AFTER, BALL_SPAWN, BALL_TIMEOUT, DT, FLIPPER_LENGTH, FLIPPER_REST,
+  BALL_R, BALL_SEARCH_AFTER, BALL_SEARCH_AGAIN, BALL_SEARCH_KICKS, BALL_SPAWN, BALL_TIMEOUT, DT, FLIPPER_LENGTH, FLIPPER_REST,
   FLIPPER_SPEED_DOWN, FLIPPER_SPEED_UP, FLIPPER_TORQUE, FLIPPER_UP, LANE_FLOOR_Y, LANE_TOP_Y,
   LANE_WALL_X, MAX_BALL_SPEED, MAX_BALLS, NUDGE_SPEED, NUDGE_TILT, PLUNGE_CHARGE_TIME, PLUNGE_DRIFT,
   PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, SAVER_WINDOW, SUBSTEPS, TABLE_H, TABLE_W, TILT_DECAY, WALL_RESTITUTION,
 } from './constants';
-import { neutralMods, type SimMods } from '../data/mods';
+import { neutralMods, simModsOf, type SimMods } from '../data/mods';
 import { cloneLayout, type Layout } from './layout';
 import { Rng } from './rng';
-import { FLIPPER_PIVOTS, TABLE_POSTS, tableSegments } from './table';
+import { FLIPPER_PIVOTS, isLaneGate, LANE_GATE, TABLE_POSTS, tableSegments } from './table';
 
 /** What the player is doing this tick. `nudge` is a one-tick pulse: -1 left, 1 right, 0 none. */
 export interface Input {
@@ -22,7 +22,7 @@ export const NO_INPUT: Input = { left: false, right: false, plunge: false, nudge
 
 /** Physical things that happened. Scoring and presentation both consume this stream; neither feeds back. */
 export type SimEvent =
-  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean }
+  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean }
   | { type: 'partRelease'; t: number; uid: number; ballId: number }
   | { type: 'extraBall'; t: number; uid: number; ballId: number }
   | { type: 'ballSaved'; t: number; uid: number; ballId: number }
@@ -32,7 +32,8 @@ export type SimEvent =
   | { type: 'flipper'; t: number; side: 'L' | 'R'; on: boolean }
   | { type: 'nudge'; t: number; dir: number; tilt: number }
   | { type: 'tilt'; t: number }
-  | { type: 'ballSearch'; t: number; ballId: number }
+  /** A ball that stopped moving: the sim kicks it where it is, and if kicks do not free it, `relaunch`: it goes back to the plunger (not lost). */
+  | { type: 'ballSearch'; t: number; ballId: number; relaunch?: boolean }
   | { type: 'rescue'; t: number; ballId: number };
 
 export interface BallState {
@@ -53,6 +54,8 @@ export interface FlipperState {
   pivotX: number;
   pivotY: number;
   uid?: number;
+  /** The bat's length (extra flippers are shorter than the two at the bottom). */
+  length: number;
 }
 
 type Local = { lx: number; ly: number };
@@ -67,6 +70,11 @@ interface BallRef {
   saveUntil: number;
   /** Speed just before the last step: the impact speed, since the contact has already bounced it by the time we see it. */
   preSpeed: number;
+  /** Ball searches in a row at about the same spot (kicks that did not free it), and where the last one was. */
+  searches: number;
+  searchAt: { x: number; y: number; t: number } | null;
+  /** Put back in the plunger lane by a ball search: its next launch opens no new save window. */
+  relaunched: boolean;
 }
 interface FlipperRef {
   fid: number;
@@ -78,6 +86,7 @@ interface FlipperRef {
   pivotY: number;
   on: boolean;
   uid?: number;
+  length: number;
 }
 interface BankState {
   shapes: any[];
@@ -91,14 +100,20 @@ interface PartRef {
   body: any;
   flipper?: FlipperRef;
   bank?: BankState;
-  /** Kickbacks only: ready to fire. Re-armed with every new ball. */
+  /** Kickbacks only: ready to fire (it recharges a few seconds after each kick). */
   armed?: boolean;
+  /** Kickbacks only: the sim time it is ready again. */
+  readyAt?: number;
+  /** The sliding piece (duck, goalie, roller): its kinematic body, where it is along its rail, and how fast it goes. */
+  mover?: { body: any; dir: 1 | -1; speedX: number };
 }
 
 /** The three drop targets of a bank, as offsets along the part's long axis. */
 const BANK_OFFSETS = [-1.75, 0, 1.75];
 const BANK_HALF = { hw: 0.8, hh: 0.38 };
 const BANK_RESET_AFTER = 0.8;
+/** How far the peak of the goal's back bar rises above its ends (a slope of about 6 degrees). */
+const GOAL_ROOF = 0.3;
 
 export interface SimOptions {
   dt?: number;
@@ -112,12 +127,19 @@ export interface SimOptions {
   ballClock?: number;
 }
 
-const simMods = (m?: Partial<SimMods>): SimMods => {
-  const n = neutralMods();
-  return { ballBounce: n.ballBounce, ballGravity: n.ballGravity, nudge: n.nudge, spinBoost: n.spinBoost, twin: n.twin, printerExtra: n.printerExtra, ...m };
-};
+const simMods = (m?: Partial<SimMods>): SimMods => ({ ...simModsOf(neutralMods()), ...m });
 
 const V = (x: number, y: number) => new B.b2Vec2(x, y);
+
+/**
+ * A bar (a Slingshot, a Deflector, a target) with every face very slightly peaked: laid flat, or stood on end, it is
+ * never a level shelf a ball can sit on; the ball rolls off. The peaks are too low to see or to change a bounce.
+ */
+function peakedBox(hw: number, hh: number) {
+  const a = Math.min(0.15, hw * 0.08), b = Math.min(0.05, hh * 0.25);
+  const pts = [V(-hw, -hh), V(0, -hh - a), V(hw, -hh), V(hw + b, 0), V(hw, hh), V(0, hh + a), V(-hw, hh), V(-hw - b, 0)];
+  return B.b2MakePolygon(B.b2ComputeHull(pts, pts.length), 0);
+}
 
 /**
  * The deterministic pinball simulation. It owns the Box2D world and nothing about
@@ -146,6 +168,10 @@ export class Sim {
   private nudgeCooldown = 0;
   private rescueOn = true;
   private mods: SimMods = simMods();
+  /** Crossed Wires: the buttons work the other side's flippers (a player, or the bot, swaps hands). */
+  get flippersSwapped(): boolean {
+    return !!this.mods.swapFlippers;
+  }
   private ballClock = BALL_TIMEOUT;
   /** When the current ball was first launched (null until it is). The clock runs for the whole ball, so a Ball Printer cannot keep it alive forever by printing fresh balls. */
   private clockStart: number | null = null;
@@ -154,6 +180,8 @@ export class Sim {
   private sideOn = { L: false, R: false };
   /** Ball Savers already spent on the current ball. */
   private saversUsed = new Set<number>();
+  /** Safety Net saves (no part needed) already spent on the current ball. */
+  private netsUsed = 0;
 
   constructor(layout: Layout, opts: SimOptions = {}) {
     this.dt = opts.dt ?? DT;
@@ -169,6 +197,7 @@ export class Sim {
     wd.maximumLinearVelocity = MAX_BALL_SPEED;
     wd.restitutionThreshold = 2;
     this.worldId = B.CreateWorld({ worldDef: wd }).worldId;
+    B.b2World_SetPreSolveCallback(this.worldId, (a: any, b: any) => this.gateContact(a, b), null);
     this.build(layout);
   }
 
@@ -203,9 +232,10 @@ export class Sim {
     this.rescues = 0;
     this.sideOn = { L: false, R: false };
     this.saversUsed.clear();
+    this.netsUsed = 0;
     this.clockStart = null;
     this.printed = 0;
-    this.buildTable();
+    this.buildTable(layout.ledge);
     this.flippers.push(
       this.buildFlipper('L', FLIPPER_PIVOTS.L.x, FLIPPER_PIVOTS.L.y),
       this.buildFlipper('R', FLIPPER_PIVOTS.R.x, FLIPPER_PIVOTS.R.y),
@@ -215,7 +245,7 @@ export class Sim {
 
   private teardown() {
     for (const b of this.balls) B.b2DestroyBody(b.body);
-    for (const p of this.parts.values()) if (!p.flipper) B.b2DestroyBody(p.body);
+    for (const p of this.parts.values()) { if (p.mover) B.b2DestroyBody(p.mover.body); if (!p.flipper) B.b2DestroyBody(p.body); }
     for (const f of this.flippers) B.b2DestroyBody(f.body); // also destroys its joint
     B.b2DestroyBody(this.ground);
     this.balls = [];
@@ -230,7 +260,7 @@ export class Sim {
 
   // ---- table construction -------------------------------------------------
 
-  private buildTable() {
+  private buildTable(ledge?: number) {
     const bd = B.b2DefaultBodyDef();
     bd.type = B.b2BodyType.b2_staticBody;
     this.ground = B.b2CreateBody(this.worldId, bd);
@@ -239,8 +269,13 @@ export class Sim {
     sd.friction = 0.05;
     sd.restitution = WALL_RESTITUTION;
     sd.userData = { kind: 'wall' };
-    for (const g of tableSegments()) {
-      B.b2CreateSegmentShape(this.ground, sd, new B.b2Segment(V(g.x1, g.y1), V(g.x2, g.y2)));
+    const gate = B.b2DefaultShapeDef();
+    gate.friction = 0.05;
+    gate.restitution = 0.3;
+    gate.userData = { kind: 'gate' };
+    gate.enablePreSolveEvents = true;
+    for (const g of tableSegments(ledge)) {
+      B.b2CreateSegmentShape(this.ground, isLaneGate(g) ? gate : sd, new B.b2Segment(V(g.x1, g.y1), V(g.x2, g.y2)));
     }
     const post = B.b2DefaultShapeDef();
     post.friction = 0.05;
@@ -249,7 +284,7 @@ export class Sim {
     for (const q of TABLE_POSTS) B.b2CreateCircleShape(this.ground, post, new B.b2Circle(V(q.x, q.y), q.r));
   }
 
-  private buildFlipper(side: 'L' | 'R', pivotX: number, pivotY: number, uid?: number): FlipperRef {
+  private buildFlipper(side: 'L' | 'R', pivotX: number, pivotY: number, uid?: number, L = FLIPPER_LENGTH): FlipperRef {
     const sign: 1 | -1 = side === 'L' ? 1 : -1;
     const rest = -sign * FLIPPER_REST;
     const up = sign * FLIPPER_UP;
@@ -261,8 +296,8 @@ export class Sim {
     // NOT a bullet: Box2D v3 only sweeps a bullet (the ball) against non-bullet bodies.
     const body = B.b2CreateBody(this.worldId, bd);
 
-    const L = FLIPPER_LENGTH;
-    const pts = [V(0, -0.5), V(sign * L, -0.28), V(sign * L, 0.28), V(0, 0.5)];
+    const w = L < FLIPPER_LENGTH ? 0.8 : 1; // a small flipper is a little slimmer too
+    const pts = [V(0, -0.5 * w), V(sign * L, -0.28 * w), V(sign * L, 0.28 * w), V(0, 0.5 * w)];
     const hull = B.b2ComputeHull(pts, pts.length);
     const poly = B.b2MakePolygon(hull, 0.12);
     const sd = B.b2DefaultShapeDef();
@@ -285,7 +320,7 @@ export class Sim {
     jd.motorSpeed = -sign * FLIPPER_SPEED_DOWN;
     jd.collideConnected = false;
     const joint = B.b2CreateRevoluteJoint(this.worldId, jd);
-    return { fid: this.nextFlipperId++, side, sign, body, joint, pivotX, pivotY, on: false, uid };
+    return { fid: this.nextFlipperId++, side, sign, body, joint, pivotX, pivotY, on: false, uid, length: L };
   }
 
   // ---- parts: live edits (the workshop changes the machine while a test ball is rolling) ----
@@ -296,7 +331,7 @@ export class Sim {
     const def = PARTS[inst.def];
 
     if (def.kind === 'flipper') {
-      const f = this.buildFlipper(dialValue(inst, 'side') >= 0.5 ? 'R' : 'L', inst.x, inst.y, inst.uid);
+      const f = this.buildFlipper(inst.def === 'flipperR' ? 'R' : 'L', inst.x, inst.y, inst.uid, FLIPPER_LENGTH * SMALL_FLIPPER);
       this.flippers.push(f);
       this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body: f.body, flipper: f });
       return;
@@ -314,9 +349,16 @@ export class Sim {
       this.raiseBank(ref);
       return;
     }
-    if (def.kind === 'saver') {
+    if (def.kind === 'saver' || def.kind === 'strip') {
       // an insert in the playfield: it has a place on the board, but no collision
       this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body });
+      return;
+    }
+    if (def.kind === 'mover' || def.kind === 'goal') {
+      const ref: PartRef = { inst: { ...inst, dials: { ...inst.dials } }, body };
+      if (def.kind === 'goal') this.buildGoal(ref);
+      this.addMover(ref);
+      this.parts.set(inst.uid, ref);
       return;
     }
     const sd = B.b2DefaultShapeDef();
@@ -325,8 +367,64 @@ export class Sim {
     sd.isSensor = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'saucer' || def.kind === 'lamp' || def.kind === 'kickback';
     sd.userData = { kind: 'part', uid: inst.uid };
     if (def.shape.type === 'circle') B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), def.shape.r));
-    else B.b2CreatePolygonShape(body, sd, B.b2MakeBox(def.shape.hw, def.shape.hh));
-    this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body, armed: def.kind === 'kickback' ? true : undefined });
+    else if (def.shape.type === 'tri') {
+      const pts = triPoints(def.shape.hw, def.shape.hh).map(([a, b]) => V(a, b));
+      B.b2CreatePolygonShape(body, sd, B.b2MakePolygon(B.b2ComputeHull(pts, pts.length), 0.15));
+    } else if (sd.isSensor) B.b2CreatePolygonShape(body, sd, B.b2MakeBox(def.shape.hw, def.shape.hh));
+    else B.b2CreatePolygonShape(body, sd, peakedBox(def.shape.hw, def.shape.hh));
+    const kb = def.kind === 'kickback';
+    this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body, armed: kb ? true : undefined, readyAt: kb ? 0 : undefined });
+  }
+
+  /**
+   * The goal's frame, on the part's own static body: a back bar and two side walls (the mouth faces down the
+   * table), and a sensor across the mouth that sees a goal. A ball that scores bounces off the back and falls out.
+   */
+  private buildGoal(ref: PartRef) {
+    const wall = B.b2DefaultShapeDef();
+    wall.friction = 0.05;
+    wall.restitution = 0.5;
+    wall.userData = { kind: 'wall' };
+    // the back bar has a shallow peak on its far side, so a ball that lands on the frame rolls off it instead of resting there
+    const bar = [V(-2.65, 0.81), V(2.65, 0.81), V(2.65, 1.09), V(0, 1.09 + GOAL_ROOF), V(-2.65, 1.09)];
+    B.b2CreatePolygonShape(ref.body, wall, B.b2MakePolygon(B.b2ComputeHull(bar, bar.length), 0));
+    for (const sx of [-1, 1]) B.b2CreatePolygonShape(ref.body, wall, B.b2MakeOffsetBox(0.14, 0.5, V(sx * 2.55, 0.5), 0));
+    const line = B.b2DefaultShapeDef();
+    line.isSensor = true;
+    line.userData = { kind: 'part', uid: ref.inst.uid, goal: true };
+    B.b2CreatePolygonShape(ref.body, line, B.b2MakeOffsetBox(2.3, 0.2, V(0, 0.45), 0));
+  }
+
+  /** The sliding piece of a duck, a goalie or a roller: a kinematic body that travels along the part's rail. */
+  private addMover(ref: PartRef) {
+    const m = PARTS[ref.inst.def].mover;
+    if (!m) return;
+    const bd = B.b2DefaultBodyDef();
+    bd.type = B.b2BodyType.b2_kinematicBody;
+    bd.position = V(ref.inst.x, ref.inst.y + m.y);
+    const body = B.b2CreateBody(this.worldId, bd);
+    const sd = B.b2DefaultShapeDef();
+    sd.friction = 0.1;
+    sd.restitution = m.restitution;
+    sd.userData = { kind: 'part', uid: ref.inst.uid, mover: true };
+    if (m.shape.type === 'circle') B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), m.shape.r));
+    else {
+      // a capsule: round ends and a round top, so a ball can never sit on it
+      const cap = new B.b2Capsule();
+      cap.center1 = V(-m.shape.hw + m.shape.hh, 0);
+      cap.center2 = V(m.shape.hw - m.shape.hh, 0);
+      cap.radius = m.shape.hh;
+      B.b2CreateCapsuleShape(body, sd, cap);
+    }
+    ref.mover = { body, dir: 1, speedX: 1 };
+    B.b2Body_SetLinearVelocity(body, V(m.speed, 0));
+  }
+
+  /** Where every sliding piece is (for drawing), keyed by part uid. */
+  moverStates(): Map<number, { x: number; y: number }> {
+    const out = new Map<number, { x: number; y: number }>();
+    for (const [uid, p] of this.parts) if (p.mover) { const q = B.b2Body_GetPosition(p.mover.body); out.set(uid, { x: q.x, y: q.y }); }
+    return out;
   }
 
   /** (Re)create the physical targets of a bank, all standing. */
@@ -365,6 +463,7 @@ export class Sim {
     this.saversUsed.delete(uid);
     for (const b of this.balls) if (b.held?.uid === uid) this.release(b);
     if (p.flipper) this.flippers = this.flippers.filter((f) => f !== p.flipper);
+    if (p.mover) B.b2DestroyBody(p.mover.body);
     B.b2DestroyBody(p.body);
     this.parts.delete(uid);
   }
@@ -401,7 +500,11 @@ export class Sim {
   /** A new ball: every Kickback is armed again and every Ball Saver is ready. */
   rearm() {
     this.saversUsed.clear();
-    for (const p of this.parts.values()) if (p.armed === false) p.armed = true;
+    this.netsUsed = 0;
+    for (const p of this.parts.values()) {
+      if (p.armed !== undefined) { p.armed = true; p.readyAt = 0; }
+      if (p.mover) p.mover.speedX = 1; // a new ball: the duck calms down
+    }
   }
 
   /** Test hook / multiball: drop a ball anywhere with a velocity. */
@@ -421,7 +524,7 @@ export class Sim {
     sd.userData = { kind: 'ball', id };
     B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), BALL_R));
     B.b2Body_SetGravityScale(body, this.mods.ballGravity);
-    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0, preSpeed: 0 });
+    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0, preSpeed: 0, searches: 0, searchAt: null, relaunched: false });
     return id;
   }
 
@@ -453,7 +556,7 @@ export class Sim {
   flipperStates(): FlipperState[] {
     return this.flippers.map((f) => {
       const p = B.b2Body_GetPosition(f.body);
-      return { x: p.x, y: p.y, angle: B.b2RevoluteJoint_GetAngle(f.joint), side: f.side, pivotX: f.pivotX, pivotY: f.pivotY, uid: f.uid };
+      return { x: p.x, y: p.y, angle: B.b2RevoluteJoint_GetAngle(f.joint), side: f.side, pivotX: f.pivotX, pivotY: f.pivotY, uid: f.uid, length: f.length };
     });
   }
 
@@ -495,7 +598,8 @@ export class Sim {
 
     // flippers: every flipper follows the button of its side
     for (const side of ['L', 'R'] as const) {
-      const want = (side === 'L' ? input.left : input.right) && !this.tilted;
+      const button = this.mods.swapFlippers ? (side === 'L' ? input.right : input.left) : side === 'L' ? input.left : input.right;
+      const want = button && !this.tilted;
       if (want !== this.sideOn[side]) {
         this.sideOn[side] = want;
         this.events.push({ type: 'flipper', t, side, on: want });
@@ -521,7 +625,9 @@ export class Sim {
           // like Space Cadet's plunger: the shot is never exactly the charge you gave it
           const boosted = power * (1 + this.rng.range(0, PLUNGE_NOISE));
           B.b2Body_SetLinearVelocity(ball.body, V(this.rng.range(-PLUNGE_DRIFT, PLUNGE_DRIFT), boosted));
-          ball.saveUntil = this.armedSaver() ? t + SAVER_WINDOW : 0;
+          // a ball the ball search put back in the lane is still the same ball: it gets no fresh save window
+          ball.saveUntil = !ball.relaunched && (this.armedSaver() || this.netsUsed < this.mods.extraSaves) ? t + SAVER_WINDOW : 0;
+          ball.relaunched = false;
           if (this.clockStart === null) this.clockStart = t;
           this.events.push({ type: 'launch', t, ballId: ball.id, power });
           this.awaitingPlunge = false;
@@ -531,14 +637,15 @@ export class Sim {
       this.plungeWasHeld = input.plunge;
     }
 
-    // nudge: a velocity kick on every live ball, paid for with tilt
+    // nudge: a velocity kick on every live ball, paid for with tilt (a ball waiting in the lane is not in play; in a
+    // multiball the others still are, so a ball back at the plunger does not lock the nudge)
     this.nudgeCooldown = Math.max(0, this.nudgeCooldown - this.dt);
     this.tiltMeter = Math.max(0, this.tiltMeter - TILT_DECAY * this.dt);
-    if (input.nudge !== 0 && !this.awaitingPlunge && this.nudgeCooldown === 0 && !this.tilted) {
+    if (input.nudge !== 0 && this.balls.some((b) => !b.held && !this.inLane(b)) && this.nudgeCooldown === 0 && !this.tilted) {
       this.nudgeCooldown = 0.15;
       this.tiltMeter += NUDGE_TILT;
       for (const b of this.balls) {
-        if (b.held) continue;
+        if (b.held || this.inLane(b)) continue;
         const v = B.b2Body_GetLinearVelocity(b.body);
         B.b2Body_SetLinearVelocity(b.body, V(v.x + input.nudge * NUDGE_SPEED * this.mods.nudge, v.y + 2 * this.mods.nudge));
       }
@@ -561,6 +668,32 @@ export class Sim {
 
     for (const p of this.parts.values()) if (p.bank?.resetAt != null && this.tick >= p.bank.resetAt) this.resetBank(p);
 
+    // the sliding pieces go back and forth along their rails
+    for (const p of this.parts.values()) {
+      if (!p.mover) continue;
+      const m = PARTS[p.inst.def].mover!;
+      const x = B.b2Body_GetPosition(p.mover.body).x - p.inst.x;
+      if (x > m.travel && p.mover.dir > 0) p.mover.dir = -1;
+      else if (x < -m.travel && p.mover.dir < 0) p.mover.dir = 1;
+      B.b2Body_SetLinearVelocity(p.mover.body, V(p.mover.dir * m.speed * p.mover.speedX, 0));
+    }
+    // a kickback recharges
+    for (const p of this.parts.values()) if (p.armed === false && t >= (p.readyAt ?? 0)) p.armed = true;
+
+    // a boss's magnet tugs every free ball towards it, harder the closer it is
+    const mg = this.mods.magnet;
+    if (mg) {
+      for (const b of this.balls) {
+        if (b.held) continue;
+        const p = B.b2Body_GetPosition(b.body);
+        if (p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y) continue; // not in the plunger lane
+        const dx = mg.x - p.x, dy = mg.y - p.y, d = Math.hypot(dx, dy);
+        if (d > mg.radius || d < 0.5) continue;
+        const a = mg.strength * (1 - d / mg.radius) * this.dt;
+        const v = B.b2Body_GetLinearVelocity(b.body);
+        B.b2Body_SetLinearVelocity(b.body, V(v.x + (dx / d) * a, v.y + (dy / d) * a));
+      }
+    }
     for (const b of this.balls) {
       const v = B.b2Body_GetLinearVelocity(b.body);
       b.preSpeed = Math.hypot(v.x, v.y);
@@ -578,6 +711,22 @@ export class Sim {
     return p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y;
   }
 
+  /**
+   * The pre-solve filter (only the lane gate asks): the gate is one-way. It stops a ball that is above it, or was a
+   * tick ago (a fast one), unless that ball is on its way up out of the lane; a plunged ball passes through.
+   */
+  private gateContact(shapeA: any, shapeB: any): boolean {
+    const a = B.b2Shape_GetUserData(shapeA), b = B.b2Shape_GetUserData(shapeB);
+    const ball = a?.kind === 'ball' ? shapeA : b?.kind === 'ball' ? shapeB : null;
+    if (!ball || (a?.kind !== 'gate' && b?.kind !== 'gate')) return true;
+    const body = B.b2Shape_GetBody(ball);
+    const p = B.b2Body_GetPosition(body), v = B.b2Body_GetLinearVelocity(body);
+    const g = LANE_GATE, len = Math.hypot(g.x2 - g.x1, g.y2 - g.y1);
+    const nx = -(g.y2 - g.y1) / len, ny = (g.x2 - g.x1) / len; // the gate's upper (playfield) side
+    const side = (p.x - g.x1) * nx + (p.y - g.y1) * ny, vn = v.x * nx + v.y * ny;
+    return (side > 0 || side - vn * this.dt > 0) && vn < 1;
+  }
+
   private release(b: BallRef) {
     b.held = null;
     B.b2Body_SetGravityScale(b.body, this.mods.ballGravity);
@@ -586,16 +735,17 @@ export class Sim {
   /** Fire a caught ball out of its saucer. Like Space Cadet's throw_ball: random angle and speed around the aim. */
   private eject(b: BallRef, pr: PartRef) {
     const speed = dialValue(pr.inst, 'power');
-    const a = pr.inst.angle + this.rng.range(-0.12, 0.12);
+    // an aimed saucer (Mag-Grab) throws the way it faces; the others fire out at random, somewhere up the table
+    const a = PARTS[pr.inst.def].rotatable ? pr.inst.angle + this.rng.range(-0.12, 0.12) : this.rng.range(-1.2, 1.2);
     const s = speed * (1 + this.rng.range(-0.08, 0.08));
     this.release(b);
     B.b2Body_SetLinearVelocity(b.body, V(-Math.sin(a) * s, Math.cos(a) * s));
     this.events.push({ type: 'partRelease', t: this.time, uid: pr.inst.uid, ballId: b.id });
 
     const def = PARTS[pr.inst.def];
-    for (let k = 0; k < (def.recipe.spawn ?? 0) + this.mods.printerExtra && this.balls.length < MAX_BALLS && this.printed < (def.recipe.printCap ?? Infinity); k++) {
+    for (let k = 0; def.recipe.spawn && k < def.recipe.spawn + this.mods.printerExtra && this.balls.length < MAX_BALLS && this.printed < (def.recipe.printCap ?? Infinity); k++) {
       this.printed++;
-      const a2 = pr.inst.angle + this.rng.range(0.3, 0.6) * (this.rng.next() < 0.5 ? -1 : 1);
+      const a2 = a + this.rng.range(0.3, 0.6) * (this.rng.next() < 0.5 ? -1 : 1);
       const id = this.addBall(pr.inst.x, pr.inst.y, -Math.sin(a2) * s * 0.9, Math.cos(a2) * s * 0.9);
       this.events.push({ type: 'extraBall', t: this.time, uid: pr.inst.uid, ballId: id });
     }
@@ -618,6 +768,21 @@ export class Sim {
       if (!pr || !br) continue;
       const def = PARTS[pr.inst.def];
 
+      if (part.mover && pr.mover) {
+        // a hit on the sliding piece: near either end of its rail is an edge shot; a moving bumper kicks
+        const m = def.mover!, mp = B.b2Body_GetPosition(pr.mover.body), bp = B.b2Body_GetPosition(br.body);
+        const edge = def.recipe.edgeShot ? Math.abs(mp.x - pr.inst.x) >= m.travel * def.recipe.edgeShot.edge : false;
+        if (m.kick) {
+          const dx = bp.x - mp.x, dy = bp.y - mp.y, len = Math.hypot(dx, dy) || 1;
+          const v = B.b2Body_GetLinearVelocity(br.body);
+          B.b2Body_SetLinearVelocity(br.body, V(v.x + (dx / len) * m.kick * this.mods.kickFactor, v.y + (dy / len) * m.kick * this.mods.kickFactor));
+        }
+        const up = def.recipe.speedUp;
+        if (up) pr.mover.speedX = Math.min(up.max, pr.mover.speedX * (1 + up.by));
+        this.events.push({ type: 'partHit', t: this.time, uid: pr.inst.uid, ballId: br.id, x: mp.x, y: mp.y, speed: br.preSpeed, mover: true, edge });
+        continue;
+      }
+
       if (def.kind === 'bank' && pr.bank && part.index !== undefined) {
         if (pr.bank.down[part.index]) continue;
         B.b2DestroyShape(pr.bank.shapes[part.index]);
@@ -633,8 +798,8 @@ export class Sim {
         }
         continue;
       }
-      if (def.kind === 'target') {
-        // a passive standup: it just bounces the ball, and reports how hard it was hit
+      if (def.kind === 'target' || def.kind === 'deflector') {
+        // a passive standup (or a deflector bar): it just bounces the ball, and reports how hard it was hit
         this.events.push({ type: 'partHit', t: this.time, uid: pr.inst.uid, ballId: br.id, x: pr.inst.x, y: pr.inst.y, speed: br.preSpeed });
         continue;
       }
@@ -642,13 +807,20 @@ export class Sim {
 
       const bp = B.b2Body_GetPosition(br.body);
       const v = B.b2Body_GetLinearVelocity(br.body);
-      const kickSpeed = dialValue(pr.inst, 'kick') * def.kickUnit;
+      const kickSpeed = dialValue(pr.inst, 'kick') * def.kickUnit * this.mods.kickFactor;
       let nx: number, ny: number;
       if (def.shape.type === 'circle') {
         const dx = bp.x - pr.inst.x, dy = bp.y - pr.inst.y;
         const len = Math.hypot(dx, dy) || 1;
         nx = dx / len;
         ny = dy / len;
+      } else if (def.shape.type === 'tri') {
+        // a wedge throws the ball away from it and up the table
+        const dx = bp.x - pr.inst.x, dy = bp.y - pr.inst.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len + 1.1, ul = Math.hypot(ux, uy) || 1;
+        nx = ux / ul;
+        ny = uy / ul;
       } else {
         // kick along the face of the box that was hit
         const c = Math.cos(pr.inst.angle), s = Math.sin(pr.inst.angle);
@@ -660,7 +832,7 @@ export class Sim {
         ny = nlx * s + nly * c;
       }
       B.b2Body_SetLinearVelocity(br.body, V(v.x + nx * kickSpeed, v.y + ny * kickSpeed));
-      const r = def.shape.type === 'circle' ? def.shape.r : 0.4;
+      const r = def.shape.type === 'circle' ? def.shape.r : def.shape.type === 'tri' ? def.shape.hh : 0.4;
       this.events.push({
         type: 'partHit', t: this.time, uid: pr.inst.uid, ballId: br.id,
         x: pr.inst.x + nx * r, y: pr.inst.y + ny * r, speed: Math.hypot(v.x, v.y),
@@ -683,7 +855,9 @@ export class Sim {
       const speed = Math.hypot(vel.x, vel.y);
       const hit = { type: 'partHit' as const, t: this.time, uid: pr.inst.uid, ballId: br.id, x: pr.inst.x, y: pr.inst.y, speed };
 
-      if (def.kind === 'spinner') {
+      if (s.goal) {
+        this.events.push({ ...hit, goal: true });
+      } else if (def.kind === 'spinner') {
         const spins = Math.max(1, Math.min(Math.round(10 * this.mods.spinBoost), Math.round((speed / 10) * this.mods.spinBoost)));
         const drag = 1 - 0.08 * dialValue(pr.inst, 'drag');
         B.b2Body_SetLinearVelocity(br.body, V(vel.x * drag, vel.y * drag));
@@ -699,6 +873,7 @@ export class Sim {
         if (!pr.armed) continue;
         // like the saucer's throw: never exactly the same shot twice
         pr.armed = false;
+        pr.readyAt = this.time + (PARTS[pr.inst.def].recipe.cooldown ?? 4) * this.mods.kickbackCooldown;
         const a = pr.inst.angle + this.rng.range(-0.08, 0.08);
         const s = dialValue(pr.inst, 'power') * (1 + this.rng.range(-0.05, 0.05));
         B.b2Body_SetLinearVelocity(br.body, V(-Math.sin(a) * s, Math.cos(a) * s));
@@ -724,7 +899,7 @@ export class Sim {
       let reason: 'drain' | 'timeout' | null = null;
       if (p.y < 2.2 && !inLane) reason = 'drain';
       else if (expired && !inLane) reason = 'timeout';
-      else if (b.age > BALL_TIMEOUT && !this.awaitingPlunge) reason = 'timeout';
+      else if (b.age > BALL_TIMEOUT && !inLane) reason = 'timeout';
       // a ball that leaves the table any other way is a bug; treat it as a drain so a run can't soft-lock
       else if (p.x < -1 || p.x > TABLE_W + 1 || p.y > TABLE_H + 2) reason = 'drain';
 
@@ -745,18 +920,68 @@ export class Sim {
 
       if (this.rescueOn) this.rescueFromFlippers(b);
 
-      // ball search: a motionless ball gets a kick instead of stalling the round
-      if (!this.awaitingPlunge && Math.hypot(v.x, v.y) < 0.6) {
+      // ball search: a motionless ball gets a kick instead of stalling the round. Not one waiting in the lane, and
+      // not one the player is cradling on a raised flipper: that one is not stuck, it is being held.
+      if (!inLane && Math.hypot(v.x, v.y) < 0.6 && !this.onRaisedFlipper(p.x, p.y)) {
         b.slowTime += this.dt;
-        if (b.slowTime > BALL_SEARCH_AFTER) {
-          b.slowTime = 0;
-          B.b2Body_SetLinearVelocity(b.body, V(this.rng.range(-8, 8), this.rng.range(10, 18)));
-          this.events.push({ type: 'ballSearch', t, ballId: b.id });
-        }
+        if (b.slowTime > (b.searches > 0 ? BALL_SEARCH_AGAIN : BALL_SEARCH_AFTER)) this.ballSearch(b, p.x, p.y);
       } else {
         b.slowTime = 0;
       }
     }
+  }
+
+  /**
+   * A ball that has stopped moving: kick it where it is, harder and in a wilder direction if it is still in the same
+   * spot after the last kick, and after BALL_SEARCH_KICKS kicks put it back in the plunger lane. A ball search never
+   * costs the player the ball: the ball and its score carry on, and the ball clock keeps running.
+   */
+  private ballSearch(b: BallRef, x: number, y: number) {
+    const t = this.time;
+    b.slowTime = 0;
+    const last = b.searchAt;
+    b.searches = last && Math.hypot(last.x - x, last.y - y) < 1.5 && t - last.t < 15 ? b.searches + 1 : 1;
+    b.searchAt = { x, y, t };
+    if (b.searches <= BALL_SEARCH_KICKS) {
+      if (b.searches === 1) B.b2Body_SetLinearVelocity(b.body, V(this.rng.range(-8, 8), this.rng.range(10, 18)));
+      else {
+        // still there: kick harder, any way but straight down
+        const a = this.rng.range(-2.2, 2.2), s = this.rng.range(20, 30);
+        B.b2Body_SetLinearVelocity(b.body, V(-Math.sin(a) * s, Math.cos(a) * s));
+      }
+      this.events.push({ type: 'ballSearch', t, ballId: b.id });
+      return;
+    }
+    // nothing frees it: back to the plunger
+    const at = this.laneSpot(b);
+    B.b2Body_SetTransform(b.body, V(at.x, at.y), B.b2MakeRot(0));
+    B.b2Body_SetLinearVelocity(b.body, V(0, 0));
+    B.b2Body_SetAngularVelocity(b.body, 0);
+    b.prevLocal.clear();
+    b.searches = 0;
+    b.searchAt = null;
+    b.saveUntil = 0;
+    b.relaunched = true;
+    this.awaitingPlunge = true;
+    this.plungeCharge = 0;
+    this.plungeWasHeld = true; // require a fresh press
+    this.events.push({ type: 'ballSearch', t, ballId: b.id, relaunch: true });
+  }
+
+  /** Where a ball sent back to the plunger goes: the spawn point, or behind the balls already waiting there (never on top of one). */
+  private laneSpot(except?: BallRef): { x: number; y: number } {
+    const waiting = this.balls.filter((o) => o !== except && this.inLane(o)).length;
+    return { x: BALL_SPAWN.x, y: BALL_SPAWN.y + waiting * BALL_R * 2.2 };
+  }
+
+  /** Is (x, y) a ball resting on a flipper that is held up (cradled)? */
+  private onRaisedFlipper(x: number, y: number): boolean {
+    for (const f of this.flippers) {
+      if (!f.on) continue;
+      const q = this.localTo(f, x, y);
+      if (q.lx > -0.6 && q.lx < f.length + 0.3 && q.ly > 0 && q.ly < 0.62 + BALL_R + 0.3) return true;
+    }
+    return false;
   }
 
   /** A placed Ball Saver that has not saved a ball yet this ball. */
@@ -769,15 +994,17 @@ export class Sim {
   private trySave(b: BallRef): boolean {
     if (this.tilted || b.saveUntil < this.time) return false;
     const saver = this.armedSaver();
-    if (!saver) return false;
-    this.saversUsed.add(saver.inst.uid);
+    if (!saver && this.netsUsed >= this.mods.extraSaves) return false;
+    if (saver) this.saversUsed.add(saver.inst.uid);
+    else this.netsUsed++;
     B.b2DestroyBody(b.body);
     this.balls = this.balls.filter((x) => x !== b);
-    const id = this.addBall(BALL_SPAWN.x, BALL_SPAWN.y, 0, 0);
+    const at = this.laneSpot();
+    const id = this.addBall(at.x, at.y, 0, 0);
     this.awaitingPlunge = true;
     this.plungeCharge = 0;
     this.plungeWasHeld = true; // require a fresh press
-    this.events.push({ type: 'ballSaved', t: this.time, uid: saver.inst.uid, ballId: id });
+    this.events.push({ type: 'ballSaved', t: this.time, uid: saver?.inst.uid ?? -1, ballId: id });
     return true;
   }
 
@@ -792,12 +1019,12 @@ export class Sim {
     for (const f of this.flippers) {
       const loc = this.localTo(f, p.x, p.y);
       const prev = b.prevLocal.get(f.fid);
-      const inSpan = (q: Local) => q.lx > 0.3 && q.lx < FLIPPER_LENGTH - 0.3;
+      const inSpan = (q: Local) => q.lx > 0.3 && q.lx < f.length - 0.3;
       if (prev && inSpan(prev) && inSpan(loc) && prev.ly >= 0 && loc.ly < -0.3) {
         const fp = B.b2Body_GetPosition(f.body);
         const a = B.b2RevoluteJoint_GetAngle(f.joint);
         const c = Math.cos(a), s = Math.sin(a);
-        const half = 0.5 + ((0.28 - 0.5) * loc.lx) / FLIPPER_LENGTH;
+        const half = 0.5 + ((0.28 - 0.5) * loc.lx) / f.length;
         const lyTop = half + 0.12 + BALL_R + 0.02;
         const bx = loc.lx * f.sign, by = lyTop; // flipper body frame
         const nx = fp.x + c * bx - s * by, ny = fp.y + s * bx + c * by;

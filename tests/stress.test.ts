@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeMods } from '../src/data/upgrades';
+import { computeMods } from '../src/data/decals';
 import { DT, SUBSTEPS } from '../src/sim/constants';
 import { starterLayout } from '../src/sim/layout';
 import { escapeFuzz, flipperTunnelTrials } from '../tools/stress';

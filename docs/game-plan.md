@@ -19,12 +19,12 @@ Docs: research [genre-research.md](genre-research.md) · measured results [m0-ph
 | Camera | Fixed view of the whole table. No follow camera. |
 | Launch | Must vary: the ball should land in different spots, not funnel down one wall |
 | Game feel | "Pretty fun now." Next: rebalance the levels after the new flow is in |
-| **Run flow** | **Play → buy (into the inventory) → every few rounds choose 1 of 3 major upgrades (board, balls, parts...) → install → start round.** One streamlined between-rounds screen. **Built** (run-flow-and-balance.md §1-2) |
+| **Run flow** | **Play → buy (into the inventory; lock an offer for next round) → after every boss choose 1 of 3 decals → install → start round.** Twelve bosses (four regular and one final per run). **Built** ([balance-plan.md](balance-plan.md) §3-5) |
 | **Testing** | A proper test environment: every part, no money limit (built as the Test Lab, §2.3) |
 | **Creative parts** | Many, later, drawing on real machines: lights that upgrade bumpers, moving and changing parts, toys. Research is in parts-catalog.md |
 | **Board** | Improvements and randomness at the start of a run (plan: run-flow-and-balance.md §5) |
 | **Art direction** | **Toybox Diorama** (art-direction.md v0.3, approved): sticker props, theme kits as data, sticker particles, object-style HUD, relic decals on the apron, the machine tilts rather than the camera. Build plan: art-implementation-plan.md |
-| Themes | A player choice, no default machine: Funhouse Factory, Short Order, Castle Crash to start. Looks only |
+| Themes | **Picked per run** (no switching mid-run): Funhouse Factory, Short Order, Castle Crash. Each has its own Big Boi with its own ability (Foreman, Cook, Dragon); see [balance-plan.md](balance-plan.md) §1 |
 | Type | Luckiest Guy (display), Nunito (UI), DotGothic16 (DMD), all SIL OFL |
 | Old Dice It! plan | Deleted (still in git history at `eb84abf`) |
 
@@ -113,7 +113,9 @@ Each has a footprint, behaviors and dials with a trade-off shown on the part. Co
 
 **Next parts, in priority order** (full list with sources and effort in [parts-catalog.md](parts-catalog.md)): magic post, standup and bash targets, magnet, teleporter pair, moving parts (roving bumper, spinning disc, swinging gate), then ramps and layers, an upper playfield, and the big toys. The old "rule cards" are now the **Rules** column of the major upgrades.
 
-### 4b. Major upgrades (23 built)
+### 4b. Major upgrades (replaced by decals: see [balance-plan.md](balance-plan.md) §4)
+
+*Superseded*: the three-column upgrades below became 44 decals, and parts gained rarities (§2 there). Kept for history.
 
 After a boss the machine offers three cards, **one per column**, and you take one for the rest of the run or skip it for $4. Offers never include a dead pick (nothing aimed at a part you do not own, nothing that needs a lamp, printer or lane you lack), respect each upgrade's maximum and exclusions, and are weighted by rarity (common 6, rare 3, legendary 1). The **Rules** column and the **legendaries** open from the second offer on. Every card's sentence is generated from the same numbers as its effect (`src/data/upgrades.ts`), and the sentence on every part (`describe`) follows the run's upgrades, so what a part says it does is what it does.
 

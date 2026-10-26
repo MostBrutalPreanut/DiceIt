@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Free Play</title>
+  <title>BIG BOI Pinball Designer</title>
 </head>
 <body>
   <div id="backdrop" aria-hidden="true"></div>
@@ -38,10 +38,7 @@
             <div class="gauge" id="clockBox" data-tip="clock"><span class="lbl">Clock <b id="clockSec" class="num"></b></span><div class="bar"><div id="clockFill"></div></div></div>
           </div>
 
-          <div id="upgradesBox" hidden>
-            <div class="lbl">Upgrades <span class="hint">hover for what each does</span></div>
-            <div id="upgradeChips"></div>
-          </div>
+          <div id="bossBox" class="tile boss"></div>
 
           <section id="ledgerBox" class="receipt-wrap" data-tip="ledger">
             <div class="slot"></div>
@@ -62,6 +59,7 @@
 
     <main id="center">
       <div id="stage"></div>
+      <button id="btnPause" class="pausebtn" title="Pause (Esc)" aria-label="Pause"><i></i><i></i></button>
       <div id="upgradeBox" class="card" hidden></div>
       <div id="overlay" hidden></div>
       <div id="touch" aria-label="Touch controls">
@@ -95,15 +93,14 @@
           <details id="machineBox">
             <summary class="lbl">Machine &amp; options</summary>
             <div class="card">
-              <div class="lbl">Theme</div>
+              <div class="lbl">Machine</div>
               <div id="themeRow" class="themes"></div>
-              <label class="check"><input id="calm" type="checkbox" /> Calm mode: no shake, drift or twinkles</label>
-              <label class="check"><input id="music" type="checkbox" checked /> Music (each machine has its own tune) · <kbd>M</kbd> mutes everything</label>
               <div class="btnrow">
                 <button id="btnUndo" title="Ctrl+Z">Undo</button>
                 <button id="btnRedo" title="Ctrl+Y">Redo</button>
                 <button id="btnTest" title="Space">Test ball</button>
                 <button id="btnReset">New run</button>
+                <button id="btnSettings">Settings</button>
               </div>
               <label>Table tilt (gravity) <b id="gravVal" class="num">50</b>
                 <input id="gravity" type="range" min="30" max="80" step="1" value="50" />
@@ -142,7 +139,7 @@
     </aside>
   </div>
   <div id="tip" hidden></div>
-  <div id="themePick" hidden></div>
+  <div id="menu" hidden></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

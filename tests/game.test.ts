@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { makePart, PARTS, sellPrice } from '../src/data/parts';
-import { Game, rollOffers, START_MONEY } from '../src/game/game';
+import { makePart, MAX_LEVEL, PARTS, sellPrice } from '../src/data/parts';
+import { Game, rollOffers, START_MONEY, UPKEEP } from '../src/game/game';
 import { Rng } from '../src/sim/rng';
 import { NO_INPUT } from '../src/sim/sim';
 
@@ -39,7 +39,7 @@ describe('shop, inventory and money', () => {
   it('places an inventory part on the board, refuses overlaps and walls, and can store it again', () => {
     const g = new Game();
     g.sandbox = true;
-    g.shop.offers = ['coin', 'lane', 'pop', 'mega'];
+    g.shop.offers = ['coin', 'lane', 'pop', 'lamp'];
     const coin = g.buy(0)!;
     expect(g.place(coin.uid, 17, 44.5)).toBe(false); // on top of a pop bumper
     expect(g.place(coin.uid, 1, 30)).toBe(false); // in the wall
@@ -51,11 +51,11 @@ describe('shop, inventory and money', () => {
     expect(g.inventory.map((p) => p.uid)).toEqual([coin.uid]);
   });
 
-  it('selling refunds half the price and removes the part for good', () => {
+  it('scrapping a part that has played costs $1 and removes it for good; one bought this visit goes back for its price', () => {
     const g = new Game();
-    const before = g.money;
-    expect(g.sell(1)).toBe(sellPrice(PARTS.pop));
-    expect(g.money).toBe(before + sellPrice(PARTS.pop));
+    g.money = 10;
+    expect(g.sell(1)).toBe(-UPKEEP.scrap);
+    expect(g.money).toBe(10 - UPKEEP.scrap);
     expect(g.part(1)).toBeUndefined();
     expect(g.placed).toHaveLength(3);
   });
@@ -107,7 +107,7 @@ describe('shop, inventory and money', () => {
   it('survives a save and load, inventory included', () => {
     const g = new Game();
     g.money = 9;
-    g.shop.offers = ['coin', 'lane', 'pop', 'mega'];
+    g.shop.offers = ['coin', 'lane', 'pop', 'lamp'];
     g.buy(0);
     const copy = new Game();
     copy.load(JSON.parse(JSON.stringify(g.save())));
@@ -123,62 +123,88 @@ describe('shop, inventory and money', () => {
 });
 
 describe('levels', () => {
+  // two Level Lights 5 apart (one group), each within reach of the bumpers around them
+  const withLights = (g: Game) => {
+    g.sandbox = true;
+    for (const [x, y] of [[9, 41], [14, 41]]) {
+      g.shop.offers = ['uplight', null, null, null];
+      expect(g.place(g.buy(0)!.uid, x, y)).toBe(true);
+    }
+    return g.placed.filter((p) => p.def === 'uplight');
+  };
+  const hit = (uid: number) => ({ type: 'partHit' as const, t: 0, uid, ballId: 1, x: 0, y: 0, speed: 10 });
+
   it('a test ball in the workshop cannot level up your machine, a real round can', () => {
     const g = new Game();
-    g.sandbox = true;
-    for (const [i, x] of [6, 10, 14].entries()) {
-      g.shop.offers = ['uplight', null, null, null];
-      const p = g.buy(0)!;
-      expect(g.place(p.uid, x, 30 + i * 0)).toBe(true);
-    }
-    const lights = g.placed.filter((p) => p.def === 'uplight');
-    const hit = (uid: number) => ({ type: 'partHit' as const, t: 0, uid, ballId: 1, x: 0, y: 0, speed: 10 });
+    const lights = withLights(g);
+    const pop = g.placed.find((p) => p.def === 'pop')!;
     g.testBall();
     for (const l of lights) g.scorer.consume(hit(l.uid));
-    expect(g.scorer.levelOf('pop')).toBe(1); // the throwaway copy levelled up...
-    expect(g.levels.pop ?? 0).toBe(0); // ...but the run did not
+    expect(g.scorer.levelOf(pop)).toBe(1); // the test ball's scorer levelled it up...
+    expect(pop.level ?? 0).toBe(0); // ...but the machine did not
 
     g.startRound();
     for (const l of lights) g.scorer.consume(hit(l.uid));
-    expect(g.levels.pop).toBe(1);
-    expect(g.scorer.levelOf('pop')).toBe(1);
+    expect(pop.level).toBe(1);
+    expect(g.scorer.levelOf(pop)).toBe(1);
   });
 
-  it('levels survive a save and load, stop at the cap, and reset on a new run', () => {
+  it('only the bumpers within reach of the lights level up, and a bigger group gives more', () => {
     const g = new Game();
-    for (let i = 0; i < 7; i++) g.levelUp('mega');
-    expect(g.levels.mega).toBe(5);
-    expect(g.levelUp('mega')).toBeNull();
+    const lights = withLights(g);
+    const far = makePart('pop', 90, 18, 22, true);
+    g.layout.parts.push(far);
+    g.startRound();
+    for (const l of lights) g.scorer.consume(hit(l.uid));
+    const near = g.placed.filter((p) => p.def === 'pop' && p.uid !== 90);
+    expect(near.every((p) => p.level === 1)).toBe(true);
+    expect(far.level ?? 0).toBe(0);
+    g.layout.parts.push(makePart('uplight', 91, 11.5, 45.5 - 6, true)); // a third light joins the group
+    for (const l of [...lights, g.part(91)!]) g.scorer.consume(hit(l.uid));
+    expect(near.every((p) => p.level === 3)).toBe(true); // +2 for a group of three
+  });
+
+  it('levels live on the part: they survive a save and load, stop at the cap, and reset on a new run', () => {
+    const g = new Game();
+    const mega = g.placed.find((p) => p.def === 'mega')!;
+    expect(g.levelUp(mega, 7)).toBe(7);
+    expect(g.levelUp(mega, 7)).toBe(MAX_LEVEL);
     const copy = new Game();
     copy.load(JSON.parse(JSON.stringify(g.save())));
-    expect(copy.levels.mega).toBe(5);
+    expect(copy.placed.find((p) => p.def === 'mega')!.level).toBe(MAX_LEVEL);
     copy.newRun();
-    expect(copy.levels).toEqual({});
+    expect(copy.layout.parts.every((p) => !p.level)).toBe(true);
+  });
+
+  it('an old save with a level per part type gives each part of that type the level', () => {
+    const g = new Game();
+    const old = JSON.parse(JSON.stringify(g.save()));
+    old.levels = { pop: 2 };
+    const copy = new Game();
+    copy.load(old);
+    expect(copy.placed.filter((p) => p.def === 'pop').map((p) => p.level)).toEqual([2, 2, 2]);
   });
 });
 
 describe('Level Lights end to end (the Space Cadet bumper upgrade)', () => {
-  it('rolling balls over every light levels the bumpers up for the rest of the run, and the lights go out', () => {
+  it('rolling balls over both lights levels the bumpers near them for the rest of the run, and the lights go out', () => {
     const g = new Game();
     g.sandbox = true;
-    for (const x of [6, 10, 14]) {
+    for (const [x, y] of [[9, 41], [14, 41]]) {
       g.shop.offers = ['uplight', null, null, null];
-      g.place(g.buy(0)!.uid, x, 30); // aimed at Pop Bumpers by default
+      g.place(g.buy(0)!.uid, x, y);
     }
     g.startRound();
-    // launch the real ball so the round is live, then rain a ball over each light
     for (let i = 0; i < 240 * 1.2; i++) g.step({ left: false, right: false, plunge: i < 230, nudge: 0 });
-    for (const x of [6, 10, 14]) g.sim.addBall(x, 34, 0, -25);
+    for (const [x, y] of [[9, 41], [14, 41]]) g.sim.addBall(x, y + 3.5, 0, -25);
+    const pop = g.placed.find((p) => p.def === 'pop')!;
     const labels: string[] = [];
-    for (let i = 0; i < 240 * 2 && (g.levels.pop ?? 0) === 0; i++) {
+    for (let i = 0; i < 240 * 2 && (pop.level ?? 0) === 0; i++) {
       for (const e of g.step({ left: false, right: false, plunge: false, nudge: 0 }).score) if (e.label) labels.push(e.label);
     }
-    expect(g.levels.pop).toBe(1);
-    expect(labels).toContain('POP BUMPERS LEVEL 1!');
+    expect(pop.level).toBe(1);
+    expect(labels.some((l) => /BUMPERS? \+1 LEVEL!/.test(l))).toBe(true);
     expect(g.placed.filter((p) => p.def === 'uplight').some((p) => g.scorer.isLit(p.uid))).toBe(false);
-    // the level now shows on the part and in what it pays
-    const pop = g.placed.find((p) => p.def === 'pop')!;
-    expect(g.scorer.label(pop)).toBe('110'); // 100 + 10 for level 1 (no hits yet this ball... or +5 per grown hit)
   });
 });
 

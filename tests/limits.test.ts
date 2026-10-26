@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { computeMods } from '../src/data/upgrades';
+import { computeMods } from '../src/data/decals';
 import { describe as describePart, makePart, PARTS } from '../src/data/parts';
 import { playRounds, type Machine } from '../src/game/autobuild';
 import { Scorer } from '../src/game/scoring';
@@ -21,52 +21,49 @@ describe('scoring limits', () => {
     const s = new Scorer(1e9, () => [makePart('pop', 1, 10, 30, true)]);
     s.startBall();
     const bases = Array.from({ length: 100 }, () => s.consume(hit(1))[0].base);
-    expect(bases[0]).toBe(100);
-    expect(bases[19]).toBe(195);
-    expect(bases[20]).toBe(200);
-    expect(bases[99]).toBe(200);
-    expect(s.label(makePart('pop', 1, 10, 30, true))).toBe('200');
+    expect(bases[0]).toBe(20);
+    expect(bases[19]).toBe(39);
+    expect(bases[20]).toBe(40);
+    expect(bases[99]).toBe(40);
+    expect(s.label(makePart('pop', 1, 10, 30, true))).toBe('40');
     s.startBall(); // growth is per ball
-    expect(s.consume(hit(1))[0].base).toBe(100);
+    expect(s.consume(hit(1))[0].base).toBe(20);
   });
 
-  it('Big Boi adds at most +3 Mult a ball, shared by every Big Boi, and says so when it is maxed', () => {
+  it('Big Boi adds at most +5 Mult a ball, shared by every Big Boi, and says so when it is maxed', () => {
     const s = new Scorer(1e9, () => [makePart('mega', 1, 8, 30, true), makePart('mega', 2, 16, 30, true)]);
     s.startBall();
     let last;
     for (let i = 0; i < 100; i++) last = s.consume(hit(1 + (i % 2)))[0];
-    expect(s.mult).toBeCloseTo(4);
+    expect(s.mult).toBeCloseTo(6);
     expect(last!.notes).toContain('Mult maxed for this ball');
     expect(last!.multAfter).toBe(last!.multBefore); // a maxed hit still scores, it just adds no Mult
     s.startBall();
     expect(s.mult).toBe(1);
     s.consume(hit(1));
-    expect(s.mult).toBeCloseTo(1.1); // a new ball can earn it again
+    expect(s.mult).toBeCloseTo(1.15); // a new ball can earn it again
   });
 
   it('a lane set pays at most 5 times a ball, then says MAXED; the next ball pays again', () => {
-    const lanes = [makePart('lane', 1, 6, 30, true), makePart('lane', 2, 12, 30, true)];
+    const lanes = [makePart('lane', 1, 6, 30, true), makePart('lane', 2, 12, 30, true), makePart('lane', 3, 18, 30, true)];
     const s = new Scorer(1e9, () => lanes);
     s.startBall();
     const labels: string[] = [];
-    for (let i = 0; i < 7; i++) for (const uid of [1, 2]) for (const e of s.consume(hit(uid))) if (e.kind === 'bonus') labels.push(e.label!);
+    for (let i = 0; i < 7; i++) for (const uid of [1, 2, 3]) for (const e of s.consume(hit(uid))) if (e.kind === 'bonus') labels.push(e.label!);
     expect(labels).toEqual(['LANES COMPLETE', 'LANES COMPLETE', 'LANES COMPLETE', 'LANES COMPLETE', 'LANES COMPLETE', 'LANE SETS MAXED', 'LANE SETS MAXED']);
     expect(s.mult).toBeCloseTo(3.5); // 1 + 5 x 0.5
     s.startBall();
-    for (const uid of [1, 2]) s.consume(hit(uid));
+    for (const uid of [1, 2, 3]) s.consume(hit(uid));
     expect(s.mult).toBeCloseTo(1.5);
   });
 
-  it('a bank set pays at most 5 times a ball, and Jackpot Sets doubles what each pays, not how many', () => {
+  it('a bank set has no limit a ball, and Jackpot Sets doubles what each pays', () => {
     const bank = [makePart('bank', 1, 12, 30, true)];
     const s = new Scorer(1e9, () => bank, { mods: computeMods([{ id: 'sets' }]) });
     s.startBall();
     const paid = Array.from({ length: 8 }, () => s.consume(hit(1, { bankComplete: true }))[0]);
-    expect(paid.filter((e) => e.label === 'BANK COMPLETE')).toHaveLength(5);
-    expect(paid.filter((e) => e.label === 'BANK SETS MAXED')).toHaveLength(3);
-    expect(paid[0].base).toBe(600);
-    expect(paid[7].base).toBe(0);
-    expect(s.mult).toBeCloseTo(1 + 5 * 0.6);
+    expect(paid.filter((e) => e.label === 'BANK COMPLETE')).toHaveLength(8);
+    expect(paid[0].base).toBe(120);
   });
 
   it('Cha-Ching pays at most $5 a round, however many balls: a new ball does not refill it, a new round does', () => {
@@ -94,12 +91,11 @@ describe('scoring limits', () => {
 
 describe('the limits are written on the parts', () => {
   it('every cap is in the recipe sentence next to the number it limits', () => {
-    expect(text('pop')).toContain('up to +100');
-    expect(text('mega')).toContain('up to +3 a ball');
+    expect(text('pop')).toContain('up to +20');
+    expect(text('mega')).toContain('up to +5 a ball');
     expect(text('coin')).toContain('up to $5 a round');
-    expect(text('lane')).toContain('at most 5 times a ball');
-    expect(text('bank')).toContain('at most 5 times a ball');
-    expect(text('printer')).toContain('at most 4 printed in one ball');
+    expect(text('lane')).toContain('At most 5 sets a ball');
+    expect(text('printer')).toContain('at most 3 printed in one ball');
   });
 
   it('the Gold Ball card states its cap', () => {
@@ -153,21 +149,23 @@ describe('the ball clock', () => {
 });
 
 describe('the printer limit', () => {
-  it('prints at most 4 balls in one ball, and a new ball lets it print again', () => {
+  it('prints at most 3 balls in one ball, and a new ball lets it print again', () => {
     const sim = createSim({ parts: [makePart('printer', 1, 12, 30, true)], gravity: 50, nextUid: 2 });
     sim.spawnBall();
     let extras = 0;
     for (let i = 0; i < 260; i++) sim.step({ ...NO_INPUT, plunge: i < 230 }); // fire the ball, so the table plays as it does in a round
     const drop = (n: number) => {
       for (let k = 0; k < n; k++) {
-        // let everything from the last drop drain first, so the 4-balls-on-the-table limit is not what stops the printer
+        // let everything from the last drop drain first (firing any ball the printer threw into the plunger lane), so
+        // the 4-balls-on-the-table limit is not what stops the printer
+        for (let i = 0; i < 260; i++) for (const e of sim.step({ ...NO_INPUT, plunge: i < 230 })) if (e.type === 'extraBall') extras++;
         for (let i = 0; i < 240 * 30 && sim.ballStates().some((b) => !b.inLane); i++) for (const e of sim.step(NO_INPUT)) if (e.type === 'extraBall') extras++;
         sim.addBall(12, 33.5, 0, -20);
         for (let i = 0; i < 240 * 1.2; i++) for (const e of sim.step(NO_INPUT)) if (e.type === 'extraBall') extras++;
       }
     };
     drop(10);
-    expect(extras).toBe(4);
+    expect(extras).toBe(3);
     sim.spawnBall();
     const before = extras;
     drop(2);
@@ -182,7 +180,7 @@ describe('the runaway machine that started all this', () => {
     for (const s of samples) {
       expect(s.cumulative[2]).toBeLessThan(1_000_000); // it scored 36,786,362 in one ball before
       expect(s.seconds).toBeLessThan(3 * 100); // three balls on a 90 s clock, plus launches
-      expect(s.coins[2]).toBeLessThanOrEqual(5); // it paid $403 before
+      expect(s.coins[2]).toBeLessThanOrEqual(5 + 3); // it paid $403 before (now: the coin cap, plus its one Ball Saver tipping $1 a ball)
     }
   });
 });

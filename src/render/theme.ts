@@ -2,10 +2,11 @@
 // the same silhouette in every theme (shape carries identity, colour second), so a new machine is a new
 // row here. Every colour the game draws, on the canvas and in the HTML panels, comes from these rows.
 import type { PartId } from '../data/parts';
+import type { MachineId } from '../data/bigboi';
 
 export type Motif = 'awning' | 'cone' | 'rivets';
 export type Debris = 'pea' | 'leaf' | 'bolt';
-export type ThemeId = 'factory' | 'diner' | 'castle';
+export type ThemeId = MachineId;
 
 export interface Theme {
   id: ThemeId;
@@ -33,7 +34,11 @@ export interface Theme {
   /** each part's role colour; must stay distinguishable within the theme */
   role: Record<PartId, string>;
   /** the few colours the surround, floor art and debris need beyond the tokens above */
-  art: { floorAlt: string; debrisA: string; debrisB: string; props: string[]; trunk: string; foliage: string; twinkle: [string, string] };
+  art: {
+    floorAlt: string; debrisA: string; debrisB: string; props: string[]; trunk: string; foliage: string; twinkle: [string, string];
+    /** castle: the flagstones of the floor path (grey-brown rock tones) and the castle's wall stone */
+    rock?: string[]; stone?: string;
+  };
   popMotif: Motif;
   debris: Debris;
   backdrop: 'squiggle' | 'waves' | 'curls'; // the page behind the machine, drifting slowly
@@ -43,7 +48,7 @@ export interface Theme {
 }
 
 export const FACTORY: Theme = {
-  id: 'factory', name: 'FREE PLAY', tagline: 'FUNHOUSE FACTORY',
+  id: 'factory', name: 'BIG BOI', tagline: 'FUNHOUSE FACTORY',
   bg: '#f6d54a', paper: '#fff8e6', ink: '#3b2a4a', shadeTint: '#6a4fa0',
   floor: '#fbe7a1', floor2: '#f2d77a', rail: '#e9e4f0', rim: '#8f7ad6', metal: '#d9dbe6', rubber: '#3b2a4a',
   accent: '#ff5d8f', glow: '#fff4a8', smoke: '#ffffff', dmd: '#ff9a3c', screen: '#241a26',
@@ -51,13 +56,15 @@ export const FACTORY: Theme = {
     pop: '#3cc3b1', coin: '#ffae2b', mega: '#8a63f2', sling: '#ff6b6b', spinner: '#a3d143', lane: '#62b8ff',
     printer: '#ff8fc8', flipper: '#ff6b6b', lamp: '#ffe45c', uplight: '#ffffff', bank: '#c2417a', deflector: '#b8b2cc',
     kickback: '#3050ff', saver: '#c5e84a', vari: '#2c6e49',
+    ding: '#ff9a3c', piggy: '#ffa6c9', magnet: '#e04848', thunder: '#4a6cff', jackpot: '#ff5d8f', xlane: '#00a6e6', golden: '#ffd23f', disco: '#d6dcff', trophy: '#c9d6e8', plate: '#8a6cff', fame: '#ff9f1c',
+    flipperR: '#ff6b6b', duck: '#ffd23f', goal: '#3cc3b1', strip: '#ff5d8f', roller: '#62b8ff',
   },
   art: { floorAlt: '#f2d77a', debrisA: '#d9dbe6', debrisB: '#fff8e6', props: ['#3cc3b1', '#8a63f2', '#ff5d8f', '#3cc3b1'], trunk: '#8f7ad6', foliage: '#3cc3b1', twinkle: ['#fff8e6', '#ffae2b'] },
   popMotif: 'rivets', debris: 'bolt', laneWord: 'FUN', backdrop: 'squiggle', floorArt: 'plates', surround: 'factory',
 };
 
 export const DINER: Theme = {
-  id: 'diner', name: 'FREE PLAY', tagline: 'SHORT ORDER',
+  id: 'diner', name: 'BIG BOI', tagline: 'SHORT ORDER',
   bg: '#d7cfc1', paper: '#f6efdf', ink: '#3a2219', shadeTint: '#7a3a26',
   floor: '#e7b257', floor2: '#d99b3e', rail: '#f6efdf', rim: '#c8553d', metal: '#c3cdd0', rubber: '#3a2219',
   accent: '#d9473b', glow: '#ffe3a0', smoke: '#fbf6ea', dmd: '#ffb347', screen: '#2a1a14',
@@ -65,13 +72,15 @@ export const DINER: Theme = {
     pop: '#d9473b', coin: '#f2c14e', mega: '#f6efdf', sling: '#7f9c3c', spinner: '#5e8c8a', lane: '#f08a4b',
     printer: '#b9c6c9', flipper: '#f6efdf', lamp: '#ffe08a', uplight: '#ffffff', bank: '#7a4a2e', deflector: '#a9b4b6',
     kickback: '#2d4fb3', saver: '#9bb84d', vari: '#2c6e49',
+    ding: '#b35d2a', piggy: '#f5a3b8', magnet: '#a8322a', thunder: '#3e6fb0', jackpot: '#e05f8a', xlane: '#4aa3c8', golden: '#e8b600', disco: '#dcd6ff', trophy: '#d6cdbd', plate: '#7a6a5a', fame: '#c9a227',
+    flipperR: '#f6efdf', duck: '#f2c14e', goal: '#7f9c3c', strip: '#d9473b', roller: '#5e8c8a',
   },
   art: { floorAlt: '#5e8c8a', debrisA: '#8ea547', debrisB: '#c6d77a', props: ['#d9473b', '#f2c14e', '#7f9c3c', '#d9473b', '#f6efdf', '#f2c14e'], trunk: '#7a4a2e', foliage: '#7f9c3c', twinkle: ['#f6efdf', '#f2c14e'] },
   popMotif: 'awning', debris: 'pea', laneWord: 'EAT', backdrop: 'waves', floorArt: 'checker', surround: 'diner',
 };
 
 export const CASTLE: Theme = {
-  id: 'castle', name: 'FREE PLAY', tagline: 'CASTLE CRASH',
+  id: 'castle', name: 'BIG BOI', tagline: 'CASTLE CRASH',
   bg: '#cbbba8', paper: '#f4efe6', ink: '#3d2f2a', shadeTint: '#4f63a6',
   floor: '#9cc25a', floor2: '#bcd776', rail: '#eef1f4', rim: '#b7713e', metal: '#dfe5ec', rubber: '#3d2f2a',
   accent: '#e2704f', glow: '#ffe6a0', smoke: '#ffffff', dmd: '#ffc04d', screen: '#221c22',
@@ -79,8 +88,13 @@ export const CASTLE: Theme = {
     pop: '#e2704f', coin: '#f2c14e', mega: '#eef1f4', sling: '#8b5a35', spinner: '#4c86c6', lane: '#7fc0e8',
     printer: '#d8c3a5', flipper: '#eef1f4', lamp: '#f59ad0', uplight: '#ffffff', bank: '#8e6bb0', deflector: '#6f6a64',
     kickback: '#00a890', saver: '#a6d65a', vari: '#38b860',
+    ding: '#c98a2e', piggy: '#f0a0b8', magnet: '#b53b3b', thunder: '#5b4fc4', jackpot: '#d0557f', xlane: '#3aa0d8', golden: '#f0c419', disco: '#e6e0ff', trophy: '#cfd3da', plate: '#6f8fa8', fame: '#d9a441',
+    flipperR: '#eef1f4', duck: '#f2c14e', goal: '#4c86c6', strip: '#e2704f', roller: '#7fc0e8',
   },
-  art: { floorAlt: '#bcd776', debrisA: '#7aa83f', debrisB: '#eef1f4', props: ['#5b8a3a'], trunk: '#8b5a35', foliage: '#5b8a3a', twinkle: ['#fff6e0', '#ffd36e'] },
+  art: {
+    floorAlt: '#bcd776', debrisA: '#7aa83f', debrisB: '#eef1f4', props: ['#5b8a3a', '#7aa83f'], trunk: '#8b5a35', foliage: '#5b8a3a', twinkle: ['#fff6e0', '#ffd36e'],
+    rock: ['#b8aa96', '#9e8f7b', '#c6bdad', '#918679', '#aaa294'], stone: '#d6ccbc',
+  },
   popMotif: 'cone', debris: 'leaf', laneWord: 'WIN', backdrop: 'curls', floorArt: 'meadow', surround: 'castle',
 };
 

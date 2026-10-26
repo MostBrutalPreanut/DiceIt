@@ -1,8 +1,9 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Texture, type Text } from 'pixi.js';
-import { dialValue, footprint, lampStats, LEVEL_TARGETS, PARTS, type PartId, type PartInstance } from '../data/parts';
+import { dialValue, footprint, lampStats, LEVEL_RADIUS, PARTS, SMALL_FLIPPER, type PartId, type PartInstance } from '../data/parts';
 import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
-import { BALL_R, BUILD_AREA, TABLE_W } from '../sim/constants';
+import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, FLIPPER_REST, TABLE_W } from '../sim/constants';
+import { FLIPPER_PIVOTS, ledgeSeg } from '../sim/table';
 import { flat, label, P, Prop, ribbon, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
 import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
@@ -18,6 +19,8 @@ export interface DrawState {
   showHeat: boolean;
   /** The decal slot under the pointer, if any. */
   hoverDecal?: number | null;
+  /** The wall ledge under the pointer or being dragged: where it would go, and whether it fits there. */
+  ledge?: { y: number; valid: boolean; moving: boolean } | null;
 }
 
 /**
@@ -72,6 +75,8 @@ export class Renderer {
   private staticKey = '';
   private decalKey = '';
   private parts = new Map<number, PartView>();
+  /** The sliding pieces (duck, goalie, roller), one sprite each, drawn where the sim has them. */
+  private movers = new Map<number, PartView>();
   private flippers = new Map<string, Graphics>();
   private plungerG = new Graphics();
   private tags = new Map<number, Tag>();
@@ -108,7 +113,8 @@ export class Renderer {
     this.glowTex = makeGlowTexture();
     this.partLayer.addChild(this.plungerG);
     this.layout();
-    new ResizeObserver(() => this.layout()).observe(host);
+    // Pixi only follows window resizes on its own; the stage can also change size with the page (the score dock)
+    new ResizeObserver(() => { this.app.resize(); this.layout(); }).observe(host);
   }
 
   setTheme(t: Theme) {
@@ -124,6 +130,16 @@ export class Renderer {
     this.calm = on;
     this.particles.calm = on;
     this.dmd.calm = on;
+  }
+
+  /** Graphics quality (settings): low draws at 1x with no particle debris, smoke or glow; high is the full look. */
+  setQuality(low: boolean) {
+    this.particles.lite = low;
+    this.glowLayer.visible = !low;
+    const res = low ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+    if (this.app.renderer.resolution === res) return;
+    this.app.renderer.resolution = res;
+    this.flush(); // every baked texture was made at the old resolution
   }
 
   /** The backbox's dot-matrix display: a comment scrolls in from the right, holds, then clears. */
@@ -265,11 +281,11 @@ export class Renderer {
 
   /** The machine's fixed layers at the current tip, kept for the tips we visit most. */
   private updateStatic(game: Game) {
-    const decals: (StuckDecal | null)[] = [0, 1, 2, 3].map((i) => {
+    const decals: (StuckDecal | null)[] = DECAL_SLOT_POS.map((_, i) => {
       const p = game.decals[i];
       return p ? { look: game.decalLook(p.id)!, rarity: game.decalRarity(p.id) } : null;
     });
-    const dk = JSON.stringify(decals.map((d) => d && [d.look.shape, d.look.icon, d.rarity]));
+    const dk = JSON.stringify([game.layout.ledge ?? null, decals.map((d) => d && [d.look.shape, d.look.icon, d.rarity])]);
     if (dk !== this.decalKey) {
       this.decalKey = dk;
       for (const s of this.statics.values()) s.tex.destroy(true);
@@ -282,7 +298,7 @@ export class Renderer {
     let s = this.statics.get(key);
     if (!s) {
       const v: View = { ...this.view };
-      const c = buildMachine(v, this.theme, decals);
+      const c = buildMachine(v, this.theme, decals, game.layout.ledge);
       const frame = new Rectangle(0, 0, Math.ceil(this.w), Math.ceil(this.h));
       const tex = this.app.renderer.generateTexture({ target: c, frame, resolution: this.app.renderer.resolution, antialias: true });
       c.destroy({ children: true });
@@ -327,6 +343,7 @@ export class Renderer {
     // the arrow inserts crawl up the middle (frozen in Calm mode and dark on TILT)
     arrowInserts(fx, this.view, this.theme, game.sim.tilted ? -1 : this.calm ? 0 : Math.floor(this.time * 3) % 3);
     this.drawParts(game, dt, st);
+    if (st.ledge) this.drawLedge(st.ledge);
     this.drawFlippers(game);
     this.drawPlunger(game);
     this.drawBalls(game);
@@ -390,10 +407,17 @@ export class Renderer {
     const pulse = this.pulses.get(p.uid) ?? 0;
     switch (p.def) {
       case 'mega': return { hit: pulse > 0.35, follow: true, mood: this.moodFor(game, pulse) };
-      case 'pop': case 'coin': case 'sling': return { hit: pulse > 0.35 };
+      case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': case 'trophy': return { hit: pulse > 0.35 };
+      case 'piggy': return { hit: pulse > 0.35, seg: game.scorer.piggies.get(p.uid) ?? 0 };
+      case 'xlane': return { lit: !tilted && !game.mods.lightsOut && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'fame': return { lit: !tilted && !game.mods.lightsOut && !this.discoFired(game, p.uid) };
+      case 'disco': return { lit: !tilted && !game.mods.lightsOut && game.scorer.label(p) !== null && !this.discoFired(game, p.uid) };
+      case 'magnet': case 'jackpot': return { busy: heldNear(p.x, p.y) };
       case 'lane': return { lit, letter: lanes.get(p.uid) };
-      case 'uplight': return { lit, target: LEVEL_TARGETS[Math.round(dialValue(p, 'target'))] ?? 'pop' };
-      case 'lamp': return { lit };
+      case 'uplight': return { lit, target: 'pop' };
+      case 'lamp': return { lit, bright: tilted ? 0 : game.scorer.lampLevel(p.uid) };
+      case 'strip': return { lit };
+      case 'duck': case 'roller': case 'goal': return { part: 'base' };
       case 'bank': return { down: banks.get(p.uid) ?? [false, false, false] };
       case 'spinner': { const sp = this.spin.get(p.uid); return { spin: sp ? Math.floor((sp.angle / (Math.PI / 8)) % 8 + 8) % 8 : 0 }; }
       case 'vari': { const lt = this.lastTier.get(p.uid); return { seg: lt && lt.glow > 0.2 ? lt.tier + 1 : 0 }; }
@@ -402,6 +426,11 @@ export class Renderer {
       case 'printer': return { busy: heldNear(p.x, p.y) };
       default: return {};
     }
+  }
+
+  /** A Disco Ball that has already fired this ball (its ledger row has a hit since the ball started) goes dark. */
+  private discoFired(game: Game, uid: number) {
+    return game.scorer.firedOf(uid) > 0;
   }
 
   private drawParts(game: Game, dt: number, st: DrawState) {
@@ -414,7 +443,10 @@ export class Renderer {
     const heldNear = (x: number, y: number) => held.some((b) => Math.hypot(b.x - x, b.y - y) < 1.8);
     // the lanes spell the theme's word, left to right
     const lanes = new Map<number, string>();
-    game.placed.filter((p) => p.def === 'lane').sort((a, b) => a.x - b.x || a.y - b.y).forEach((p, i) => lanes.set(p.uid, t.laneWord[i % t.laneWord.length]));
+    // each pack of lanes spells the word, left to right (lanes from no pack share one spelling)
+    const packs = new Map<number | undefined, PartInstance[]>();
+    for (const p of game.placed) if (p.def === 'lane') packs.set(p.group, [...(packs.get(p.group) ?? []), p]);
+    for (const ls of packs.values()) ls.sort((a, b) => a.x - b.x || a.y - b.y).forEach((p, i) => lanes.set(p.uid, t.laneWord[i % t.laneWord.length]));
     const tilted = game.sim.tilted;
     const seenEyes = new Set<number>();
     this.twinkleClock -= dt;
@@ -435,16 +467,25 @@ export class Renderer {
       const lt = this.lastTier.get(p.uid);
       if (lt) { lt.glow = Math.max(0, lt.glow - dt * 0.7); if (lt.glow === 0) this.lastTier.delete(p.uid); }
       const ps = this.partState(game, p, lanes, banks, kick, savers, heldNear);
-      if (def.recipe.perLevel) ps.level = game.scorer.levelOf(p.def);
+      if (def.recipe.perLevel) ps.level = game.scorer.levelOf(p);
       // glows live on the floor, under every part: lamps, lit inserts, armed kickbacks, a ready saver
       const r = footprint(def);
       if (!tilted) {
-        if (p.def === 'lamp' && ps.lit) this.glow(p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, 0.5);
+        if (p.def === 'lamp' && ps.bright) this.glow(p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, 0.12 + 0.09 * ps.bright);
+        if (p.def === 'strip' && ps.lit) this.glow(p.x, p.y, 4.6, t.role.strip, 0.5 + 0.2 * Math.sin(this.time * 10));
         if (p.def === 'lane' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.lane, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.7, p.y + 0.5, 0.3, 0.7, false, true); }
-        if (p.def === 'uplight' && ps.lit) this.glow(p.x, p.y, r * 2.3, t.role[ps.target ?? 'pop'], 0.7);
+        if (p.def === 'uplight' && ps.lit) this.glow(p.x, p.y, r * 2.3, t.role.pop, 0.7);
         if (p.def === 'kickback' && ps.armed) this.glow(p.x, p.y, r * 1.7, t.role.kickback, 0.45);
         if (p.def === 'saver' && ps.armed) this.glow(p.x, p.y, r * 2, t.role.saver, 0.55);
+        if ((p.def === 'xlane' || p.def === 'disco') && ps.lit) this.glow(p.x, p.y, r * 2, t.role[p.def], 0.6);
+        if (p.def === 'golden') this.glow(p.x, p.y, r * 1.8, t.role.golden, 0.35);
+        // the Cook's order: the one part he lit glows until it is hit
+        if (game.scorer.order === p.uid) {
+          this.glow(p.x, p.y, r * 2.2, t.accent, 0.55 + 0.25 * Math.sin(this.time * 6));
+          dashedRing(fx, v, p.x, p.y, r + 0.45, t.accent, v.lw * 1.3, t.ink);
+        }
       }
+      if (p.def === 'mega' && game.scorer.bigBoi === 'dragon') this.drawArmour(p, game.scorer.armour, game.scorer.slays);
       if (p.def === 'saver') {
         const s = savers.get(p.uid);
         const left = s ? (s.armed ? s.left : 0) : 0;
@@ -475,8 +516,9 @@ export class Renderer {
       }
       pv.sprite.position.set(X + jx, Y + jy);
       pv.sprite.zIndex = -p.y * 100;
-      pv.sprite.alpha = 1;
-      pv.sprite.tint = 0xffffff;
+      const jammed = game.scorer.jammed.has(p.def);
+      pv.sprite.alpha = jammed ? 0.45 : 1;
+      pv.sprite.tint = jammed ? num(mix(t.shadeTint, '#ffffff', 0.4)) : 0xffffff;
       // a hit squashes a bumper for a moment (presentation only)
       const sq = def.kind === 'bumper' && p.def !== 'mega' ? pulse * 0.12 : 0;
       pv.sprite.scale.set(1 + sq, 1 - sq);
@@ -487,6 +529,8 @@ export class Renderer {
       if (def.kind === 'lamp' && (st.selectedUid === p.uid || st.hoverUid === p.uid)) {
         dashedRing(fx, v, p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, v.lw, t.ink);
       }
+      if (p.def === 'uplight' && (st.selectedUid === p.uid || st.hoverUid === p.uid)) dashedRing(fx, v, p.x, p.y, LEVEL_RADIUS, t.role.pop, v.lw, t.ink);
+      if (def.mover) this.drawMover(game, p, pulse, jx, jy);
       this.drawTag(game, p);
       if (p.def === 'mega') this.drawEyes(game, p, pv.sprite.zIndex + 1, seenEyes, ps.mood ?? 'happy', jx, jy);
     }
@@ -503,6 +547,7 @@ export class Renderer {
     }
     if (st.ghost) seen.add(-1);
     for (const [uid, pv] of this.parts) if (!seen.has(uid)) { pv.sprite.destroy(); this.parts.delete(uid); }
+    for (const [uid, mv] of this.movers) if (!seen.has(uid)) { mv.sprite.destroy(); this.movers.delete(uid); }
     for (const [uid, tag] of this.tags) if (!seen.has(uid)) { tag.c.destroy({ children: true }); this.tags.delete(uid); }
 
     if (st.ghost) {
@@ -523,6 +568,42 @@ export class Renderer {
       const pv = this.parts.get(-1);
       if (pv) { pv.sprite.destroy(); this.parts.delete(-1); }
     }
+  }
+
+  /** A part's sliding piece, where the sim has it now (at the centre of its rail when the sim has none). */
+  private drawMover(game: Game, p: PartInstance, pulse: number, jx: number, jy: number) {
+    const def = PARTS[p.def], m = def.mover!;
+    const at = game.sim.moverStates().get(p.uid) ?? { x: p.x, y: p.y + m.y };
+    const b = this.baked(p.def, 0, { part: 'mover', hit: pulse > 0.35 });
+    let mv = this.movers.get(p.uid);
+    if (!mv) { mv = { sprite: new Sprite() }; this.partLayer.addChild(mv.sprite); this.movers.set(p.uid, mv); }
+    if (mv.sprite.texture !== b.tex) { mv.sprite.texture = b.tex; mv.sprite.anchor.set(b.ax, b.ay); }
+    const [X, Y] = P(this.view, at.x, at.y - m.y);
+    mv.sprite.position.set(X + jx, Y + jy);
+    mv.sprite.zIndex = -at.y * 100 + 2;
+  }
+
+  /** The Dragon's armour: a ring of shield plates round him, one per plate left. */
+  private drawArmour(p: PartInstance, armour: number, slays: number) {
+    const v = this.view, t = this.theme, r = footprint(PARTS.mega) + 0.55, n = armour;
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI / 2 + ((i - (n - 1) / 2) * Math.PI * 1.6) / Math.max(6, n);
+      const [X, Y] = P(v, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 0.3);
+      const w = v.S * 0.36;
+      this.topG.poly([X - w, Y - w * 0.8, X + w, Y - w * 0.8, X + w, Y + w * 0.1, X, Y + w, X - w, Y + w * 0.1]).fill(slays > 0 ? t.role.coin : t.metal).stroke({ width: v.lw * 0.7, color: t.ink, join: 'round' });
+    }
+  }
+
+  /** The wall ledge's handle: a dashed outline where it is (hover) or would go (drag). */
+  private drawLedge(l: { y: number; valid: boolean; moving: boolean }) {
+    const v = this.view, t = this.theme, s = ledgeSeg(l.y);
+    const a = P(v, s.x1, s.y1, 0.8), b = P(v, s.x2, s.y2, 0.8);
+    const color = !l.valid ? t.accent : l.moving ? t.paper : t.role.lane;
+    this.topG.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: v.S * 0.62 + v.lw * 2, color: t.ink, cap: 'round', alpha: 0.85 });
+    this.topG.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: v.S * 0.62, color, cap: 'round', alpha: 0.9 });
+    // grip arrows: it moves up and down the wall
+    const [mx, my] = P(v, (s.x1 + s.x2) / 2 + 0.6, (s.y1 + s.y2) / 2, 0.8);
+    for (const d of [-1, 1]) this.topG.poly([mx - v.S * 0.3, my + d * v.S * 0.55, mx + v.S * 0.3, my + d * v.S * 0.55, mx, my + d * v.S * 0.95]).fill(t.ink);
   }
 
   /** Big Boi watches the ball: pupils inside the baked whites, turned towards the nearest ball (or idling). */
@@ -572,8 +653,8 @@ export class Renderer {
       tag.g.roundRect(-w / 2, -h / 2, w, h, h / 2).fill(t.paper).stroke({ width: v.lw * 0.7, color: t.ink });
     }
     tag.c.visible = true;
-    const floorTag = def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'target' || def.kind === 'bank';
-    const z = p.def === 'mega' ? 2.05 : p.def === 'printer' ? 1.75 : p.def === 'pop' && t.popMotif === 'cone' ? 1.6 : 0.95;
+    const floorTag = def.kind === 'mover' || def.kind === 'goal' || def.kind === 'strip' || def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'target' || def.kind === 'bank' || p.def === 'magnet' || p.def === 'jackpot';
+    const z = p.def === 'mega' ? 2.05 : p.def === 'printer' ? 1.75 : p.def === 'pop' && t.popMotif === 'cone' ? 1.6 : p.def === 'ding' || p.def === 'trophy' ? 1.7 : p.def === 'thunder' || p.def === 'golden' ? 1.2 : 0.95;
     const [X, Y] = floorTag ? P(v, p.x, p.y - footprint(def) - 0.75, 0) : P(v, p.x, p.y, z);
     tag.c.position.set(X, Y);
   }
@@ -586,7 +667,7 @@ export class Renderer {
       let g = this.flippers.get(key);
       if (!g) { g = new Graphics(); this.partLayer.addChild(g); this.flippers.set(key, g); }
       g.clear();
-      drawFlipper(g, this.view, this.theme, f.x, f.y, f.angle, f.side === 'L' ? 1 : -1);
+      drawFlipper(g, this.view, this.theme, f.x, f.y, f.angle, f.side === 'L' ? 1 : -1, f.length);
       g.zIndex = -f.y * 100 + 1;
     }
     for (const [k, g] of this.flippers) if (!seen.has(k)) { g.destroy(); this.flippers.delete(k); }
@@ -678,8 +759,8 @@ export class Renderer {
       const vv = { ...v, S, lw: 2.2 };
       if (id === 'ball') { const g = new Graphics(); drawBall(g, vv, t, 0, 0, BALL_WEAR.plain); const c = new Container(); c.addChild(g); return c; }
       if (id === 'button') return drawButton(vv, t);
-      if (id === 'flipper') { const g = new Graphics(); drawFlipper(g, vv, t, 0, 0, -0.49, 1); const c = new Container(); c.addChild(g); return c; }
-      const a = id === 'sling' ? -0.55 : id === 'spinner' ? 0.3 : id === 'deflector' ? 0.4 : id === 'bank' ? 0.15 : id === 'vari' ? 0.2 : id === 'kickback' ? -0.5 : id === 'printer' ? 0.3 : 0;
+      if (id === 'flipper' || id === 'flipperR') { const g = new Graphics(); drawFlipper(g, vv, t, 0, 0, id === 'flipper' ? -0.49 : 0.49, id === 'flipper' ? 1 : -1, FLIPPER_LENGTH * SMALL_FLIPPER); const c = new Container(); c.addChild(g); return c; }
+      const a = id === 'sling' ? -0.55 : id === 'spinner' ? 0.3 : id === 'deflector' ? 0.4 : id === 'bank' ? 0.15 : id === 'vari' ? 0.2 : id === 'kickback' ? -0.5 : id === 'printer' ? 0.3 : id === 'piggy' ? 0.25 : id === 'magnet' || id === 'jackpot' ? 0.3 : 0;
       return drawPart(vv, t, id, 0, 0, a, { lit: true, letter: t.laneWord[0], target: 'pop', down: [false, false, true], armed: true, seg: 2, ...(opts.st ?? {}) });
     };
     const probe = make(10);
@@ -700,6 +781,27 @@ export class Renderer {
     const holder = new Container();
     holder.addChild(decalSprite(this.theme, { look, rarity }, size / 2, size / 2, size * 0.33, 1, -6));
     return this.toCanvas(holder, size, size, 2);
+  }
+
+  /** A finished build as a small picture of the whole machine, parts where they stood (the scoreboard's thumbnails). */
+  tableShot(parts: { def: PartId; x: number; y: number; angle: number; level?: number }[], w: number, h: number, opts: { theme?: Theme; ledge?: number; decals?: (StuckDecal | null)[] } = {}): HTMLCanvasElement {
+    const t = opts.theme ?? this.theme, k = TIP_K, kz = kzFor(k), ext = machineExtent(k, kz);
+    const S = Math.min((w - 4) / (RIM.hw * 2 + 1.6), (h - 4) / (ext.top + ext.bottom));
+    const v: View = { S, ox: w / 2 - RIM.cx * S, oy: h / 2 + ((ext.top - ext.bottom) / 2) * S, k, kz, shx: 0, lw: Math.max(0.8, S * 0.14) };
+    const holder = new Container();
+    holder.addChild(buildMachine(v, t, opts.decals ?? DECAL_SLOT_POS.map(() => null), opts.ledge));
+    const flips = new Graphics();
+    for (const [side, f] of [[1, FLIPPER_PIVOTS.L], [-1, FLIPPER_PIVOTS.R]] as const) drawFlipper(flips, v, t, f.x, f.y, -side * FLIPPER_REST, side);
+    holder.addChild(flips);
+    // far parts first, as on the table; extra flippers are drawn at rest
+    for (const p of [...parts].sort((a, b) => b.y - a.y)) {
+      if (p.def === 'flipper' || p.def === 'flipperR') {
+        const g = new Graphics(), side = p.def === 'flipper' ? 1 : -1;
+        drawFlipper(g, v, t, p.x, p.y, -side * FLIPPER_REST, side, FLIPPER_LENGTH * SMALL_FLIPPER);
+        holder.addChild(g);
+      } else holder.addChild(drawPart(v, t, p.def, p.x, p.y, p.angle, { level: p.level, letter: t.laneWord[0], mood: 'happy' }));
+    }
+    return this.toCanvas(holder, w, h, 2);
   }
 
   private toCanvas(holder: Container, w: number, h: number, res: number): HTMLCanvasElement {

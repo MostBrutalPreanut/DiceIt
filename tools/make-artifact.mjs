@@ -8,7 +8,7 @@ const html = fs.readFileSync('dist-single/index.html', 'utf8');
 const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]);
 const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 const body = (html.match(/<body[^>]*>([\s\S]*?)<\/body>/)?.[1] ?? '').replace(/<script[\s\S]*?<\/script>/g, '');
-const title = html.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? 'Free Play';
+const title = html.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? 'BIG BOI Pinball Designer';
 
 if (!styles.length || !scripts.length || !body.trim()) throw new Error('unexpected build output');
 for (const s of scripts) if (/<\/script/i.test(s)) throw new Error('bundle contains </script; cannot inline safely');
