@@ -12,9 +12,9 @@ each machine's Big Boi pulls the run towards a different build:
 
 | Machine | Big Boi | What he does |
 |---|---|---|
-| Funhouse Factory | The Foreman | 250 a hit and +0.15 Mult a hit (up to +3 a ball; the limit is to be raised in balancing) |
-| Short Order | The Cook | 150 a hit. **Order Up!** Every hit calls an order: one part on the table lights up, and its next hit pays ×3, then the light goes out |
-| Castle Crash | The Dragon | 200 a hit. **Siege**: 5 armour plates, and every hit knocks one off; when the last goes he pays 2,000 points, and the armour grows back one plate thicker |
+| Funhouse Factory | The Foreman | 50 a hit and +0.15 Mult a hit (up to +5 a ball) |
+| Short Order | The Cook | 40 a hit. **Order Up!** Every hit calls an order: one part on the table lights up, and its next hit pays ×4, then the light goes out |
+| Castle Crash | The Dragon | 40 a hit. **Siege**: 5 armour plates, and every hit knocks one off; when the last goes he pays 400 points, and the armour grows back one plate thicker |
 
 "Big Boi" is a tag on all three. Cards carry no strategy tips: they say what a part does, and nothing about how to use it.
 
@@ -23,44 +23,57 @@ each machine's Big Boi pulls the run towards a different build:
 | Rarity | In the shop from | Weight (× the part's own) | Price | Parts |
 |---|---|---|---|---|
 | Common | round 1 | 1 | $1–4 | Pop Bumper, Cha-Ching Bumper, Slingshot, Spinner, Lane Rollover (pack of 3), Lamp, Vari-Target, Deflector, Kickback |
-| Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $5–6 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, **Glow Strip**, **Roller Pop** |
-| Rare | round 4 | 0.2, +0.08 a round, up to 0.8 | $7–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, X Lane, **Duck Gallery** |
-| Legendary | round 7 | 0.1, +0.05 a round, up to 0.45 | $11–12 | Golden Bumper, Disco Ball, **Goal!** |
+| Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $5–7 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, Glow Strip, Roller Pop, **Power Plate**, X Lane |
+| Rare | round 4 | 0.25, +0.1 a round, up to 1 | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup** |
+| Legendary | round 7 | 0.15, +0.07 a round, up to 0.6 | $11–13 | Golden Bumper, Disco Ball, Goal!, **Hall of Fame** |
 
 Rarer parts are physically bigger and do more. Every part does at least two things, and many feed or starve each other.
 Cards say what a part does; they carry no strategy tips.
 
 | Part | What it does |
 |---|---|
-| Pop Bumper | 100 · grows +5 per Pop hit this ball (up to +100) · kicks |
-| Cha-Ching | 40 · $1 a hit (up to $5 a round) · kicks |
-| Slingshot | 30 · **Hot Shot**: the ball's next hit within 1.2 s pays +50% |
-| Spinner | 10 a spin and +0.01 Mult a spin (up to 10 spins a pass, +0.75 Mult a ball) · slows the ball |
-| Lane Rollover | **sold as a pack of 3** ($4), spelling the machine's word · 50 · light all 3 of a pack: +200 and +0.5 Mult (5 sets a ball) |
-| Lamp | every hit brightens it a step (up to 5) and pays 50 · each step +10% to parts in its glow (a wider glow gives a smaller step) |
-| Vari-Target | 40 × a tier by impact speed (×2 at 12, ×4 at 28, ×8 at 50) · a smash makes the ball hot |
+| Pop Bumper | 20 · grows +1 per Pop hit this ball (up to +20) · kicks |
+| Cha-Ching | 8 · $1 a hit (up to $5 a round) · kicks |
+| Slingshot | 6 · **Hot Shot**: the ball's next hit within 1.2 s pays +50% |
+| Spinner | 2 a spin and +0.01 Mult a spin (up to 10 spins a pass, +1.5 Mult a ball) · slows the ball |
+| Lane Rollover | **sold as a pack of 3** ($4), spelling the machine's word · 10 · light all 3 of a pack: +40 and +0.5 Mult (5 sets a ball) |
+| Lamp | every hit brightens it a step (up to 5) and pays 10 · each step +10% to parts in its glow (a wider glow gives a smaller step) |
+| Vari-Target | 8 × a tier by impact speed (×2 at 12, ×4 at 28, ×8 at 50) · a smash makes the ball hot |
 | Deflector | steers · the next hit pays +25% |
-| Kickback | 150 · fires the ball out the way it faces, then needs 4 s to recharge · the kicked ball is hot |
-| Drop-Target Bank | 60 a target · set: +300 and +0.3 Mult (no limit) · a set lights every Lamp for 5 s |
+| Kickback | 30 · fires the ball out the way it faces, then needs 4 s to recharge · the kicked ball is hot |
+| Drop-Target Bank | 12 a target · set: +60 and +0.3 Mult (no limit) · a set lights every Lamp for 5 s |
 | Level Light | **sold as a pair** ($5) · switches on and off · when it and every Level Light within 5.5 of it are on (it needs at least one), the bumpers within 5.5 of them level up |
 | Ball Saver | saves a drain · pays $1 at the end of a round in which it never had to |
 | Left / Right Flipper | a small extra flipper on that button |
-| Ding-Dong Bell | 60 · +40 for every different part type the ball has hit this ball |
-| Piggy Bank | 25 · stores $1 a hit (holds $5) · a smash breaks it for what it holds +$1 |
-| Mag-Grab | 120 · +0.2 Mult a grab (up to +1) · holds the ball, then throws it the way it faces |
+| Ding-Dong Bell | 12 · +8 for every different part type the ball has hit this ball |
+| Piggy Bank | 5 · stores $1 a hit (holds $5) · a smash breaks it for what it holds +$1 |
+| Mag-Grab | 24 · +0.25 Mult a grab (up to +2) · holds the ball, then throws it the way it faces |
 | Glow Strip | a long strip under the floor that other parts stand on · lights for 5 s whenever anything pays a bonus; parts on it pay +50% |
-| Roller Pop | a bumper rolling along a rail · 150 · hit it near either end of the rail: ×3 |
-| Ball Printer | 200 · prints a ball (multiball) · fires out in a random direction |
-| Thunder Bumper | a wedge: 300 · every hit counts as 3 Pop hits · +0.05 Mult · throws the ball up the table |
-| Jackpot Scoop | 200 + **the pot** (+40 for every scoring hit this ball, up to +6,000), cashed when the ball sinks in |
-| X Lane | ×1.25 Mult (up to ×2 a ball) · lights a lane · dark for 3 s after |
-| Duck Gallery | a duck paddling along a rail · 300, +100 every hit (up to +1,000) · every hit makes it 15% faster |
-| Golden Bumper | 600 · ×1.05 Mult a hit (up to ×2 a ball) · $1 every 5 hits |
-| Disco Ball | 1,000 · doubles the Mult once a ball · lights every Lamp for 8 s |
-| Goal! | score past the sliding goalie: 1,500 and Mult ×1.5 (up to ×3 a ball) |
+| Roller Pop | a bumper rolling along a rail · 30 · hit it near either end of the rail: ×3 |
+| Ball Printer | 40 · prints a ball (multiball, up to 3 a ball; $9) · fires out in a random direction |
+| Thunder Bumper | a wedge: 60 · every hit counts as 3 Pop hits · +0.05 Mult (up to +2) · throws the ball up the table |
+| Jackpot Scoop | 40 + **the pot** (+8 for every scoring hit this ball, up to +3,000), cashed when the ball sinks in |
+| X Lane | uncommon, $7 · ×1.25 Mult (up to ×3 a ball) · lights a lane · dark for 3 s after |
+| Duck Gallery | a duck paddling along a rail · 60, +20 every hit (up to +200) · every hit makes it 15% faster |
+| Golden Bumper | 120 · ×1.05 Mult a hit (up to ×3 a ball) · $1 every 5 hits |
+| Disco Ball | 200 · ×2.5 Mult once a ball · lights every Lamp for 8 s |
+| Goal! | score past the sliding goalie: 300 and Mult ×1.5 (up to ×4 a ball) |
+| Trophy Cup | 20 · every hit keeps +0.04 Mult for the rest of the run (up to +5): every ball starts higher |
+| Power Plate | a floor plate: bumpers on or near it pay ×1.5, and plates multiply |
+| Hall of Fame | 150 · once a ball, Mult ×1.1 for every different part type on the table |
 
 Multiplicative Mult (X Lane, Golden Bumper, Disco Ball, the Dragon, Glass Cannon-style decals) is what lets a late
 machine reach millions; each is capped per ball, like everything else that compounds.
+
+## 2b. Kept Mult, the Tune-up, and moving costs
+
+- **Kept Mult** is Mult every ball starts with, kept from round to round: the Trophy Cup's polish, and two decals,
+  Momentum (+0.5 for every round you clear) and Afterglow (keeps 15% of each round's best Mult).
+- **The Tune-up**: between rounds, pay to level a part up by one: $2 for the first level, $2 more each level
+  after, up to level 10. It is the late-game money sink.
+- **Moving and removing cost money** instead of selling for money: a part that has played a round costs $1 to
+  move (once a visit) and $1 to scrap; one bought this visit moves freely and goes back for what it cost. Free
+  Hands (the decal that was Full Refund) makes it free.
 
 ## 3. Shop locks
 
@@ -111,10 +124,10 @@ Beating the final boss wins the run; you can keep going (endless, every boss bac
 | Crossed Wires | the flipper buttons are swapped | your hands (and a table that plays itself) |
 | Short Fuse | every ball's clock is 25 s | fast scorers, multiball |
 | The Jammer | your most numerous part type scores nothing | a mixed table |
-| Flat Rate | every Mult gain is halved | flat points: levels, Overclock, Bumper Car |
+| Flat Rate | every Mult gain is 30% smaller | flat points: levels, Overclock, Bumper Car |
 | The Magnet | a magnet under the drain pulls the balls in | savers, kickbacks, extra flippers |
-| **The Auditor** (final) | decals off until half the goal; goal +20% | a table that scores on its own |
-| **The Overlord** (final) | a random part type is off every ball; Mult gains halved | depth: no single point of failure |
+| **The Auditor** (final) | decals off until half the goal; goal +10% | a table that scores on its own |
+| **The Overlord** (final) | a random part type is off every ball; Mult gains 30% smaller | depth: no single point of failure |
 | **The Whirlpool** (final) | drags balls to the drain, steeper table, 40 s clock | everything that keeps a ball alive |
 
 The inspiration is Balatro's boss blinds (The Wall, The Needle, The Club, The Plant, The Flint, and the final
@@ -137,9 +150,11 @@ the curve instead of the curve following the content.
 
 | Round | 1 | 2 | 3 (boss) | 4 | 5 | 6 (boss) | 7 | 8 | 9 (boss) | 10 | 11 | 12 (boss) | 13 | 14 | 15 (final) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Goal | 1,000 | 2,000 | 3,500 | 6,000 | 10,000 | 18,000 | 30,000 | 50,000 | 85,000 | 150,000 | 250,000 | 400,000 | 700,000 | 1.2M | 2.5M |
+| Goal | 1,000 | 2,000 | 3,000 | 5,000 | 8,000 | 12,000 | 20,000 | 35,000 | 55,000 | 90,000 | 150,000 | 250,000 | 450,000 | 900,000 | 2M |
 
-About ×1.7 a round. The Auditor adds 20% (3M). Endless rounds after 15 grow ×1.6 a round.
+About ×1.6–1.8 a round, and the final round more than doubles. The Auditor adds 10% (2.2M). Endless rounds after 15 grow ×1.6 a round.
+
+Base points were cut to a fifth in the overnight pass (a Pop pays 20, growing +1 a hit), so a starter table fits round 1's 1,000. Each level adds about a quarter of a part's base points, up to level 10.
 
 ### What "makes sense" means (the targets to tune to)
 Measured with the par player (`npm run balance -- --verify`): a sensible bot builder at flipper skill 0.6.
