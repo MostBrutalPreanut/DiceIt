@@ -695,42 +695,324 @@ export function decalOutline(shape: DecalShape, R: number): Pt[] {
   }
 }
 
+/**
+ * Every decal's own picture, drawn on its colour field in the sticker style: paper and theme colours, ink lines. Kept
+ * to bold, simple silhouettes, because on the apron a decal is only a couple of dozen pixels across.
+ */
 function decalIcon(g: Graphics, c: Container, t: Theme, icon: DecalIcon, R: number) {
-  const st = { width: R * 0.07, color: t.ink, join: 'round' as const, cap: 'round' as const };
-  const s = R * 0.5;
+  const s = R * 0.5, lw = R * 0.07, st = { width: lw, color: t.ink, join: 'round' as const, cap: 'round' as const };
+  const thin = { ...st, width: lw * 0.7 };
+  const P2 = (pts: number[]) => pts.map((q) => q * s);
+  const ball = (x: number, y: number, r: number, fill: string) => {
+    g.circle(x * s, y * s, r * s).fill(fill).stroke(st);
+    g.ellipse((x - r * 0.35) * s, (y - r * 0.38) * s, r * 0.3 * s, r * 0.2 * s).fill(WHITE);
+  };
+  const text = (str: string, x: number, y: number, size: number, fill = t.ink, stroke?: string) => {
+    const L = label(str, size * s, fill, stroke ? { stroke, strokeW: s * 0.14 } : {});
+    L.position.set(x * s, y * s);
+    c.addChild(L);
+  };
+  const coin = t.role.coin, paper = t.paper, hot = t.accent;
   switch (icon) {
-    case 'cup':
-      g.poly([-s * 0.7, -s * 0.6, s * 0.7, -s * 0.6, s * 0.5, s, -s * 0.5, s]).fill(t.paper).stroke(st);
-      g.moveTo(s * 0.1, -s * 0.6).lineTo(s * 0.45, -s * 1.3).stroke(st);
-      g.circle(-s * 0.15, s * 0.1, s * 0.14).fill(t.role.lane).stroke(st);
+    // ---- cash ----
+    case 'moneybag':
+      g.poly(P2([-0.35, -0.55, 0.35, -0.55, 0.15, -0.3, 0.75, 0.15, 0.7, 0.85, -0.7, 0.85, -0.75, 0.15, -0.15, -0.3])).fill(mix('#c9a46a', paper, 0.25)).stroke(st);
+      g.poly(P2([-0.5, -0.95, 0.5, -0.95, 0.3, -0.55, -0.3, -0.55])).fill(mix('#c9a46a', paper, 0.25)).stroke(st);
+      g.moveTo(-0.32 * s, -0.42 * s).lineTo(0.32 * s, -0.42 * s).stroke({ ...st, width: lw * 1.4, color: hot });
+      text('$', 0, 0.3, 0.95, coin, t.ink);
       break;
-    case 'jar':
-      g.roundRect(-s * 0.7, -s * 0.55, s * 1.4, s * 1.5, s * 0.3).fill(mix(t.paper, t.role.lane, 0.25)).stroke(st);
-      g.roundRect(-s * 0.8, -s * 0.85, s * 1.6, s * 0.35, s * 0.1).fill(t.metal).stroke(st);
-      g.circle(0, s * 0.25, s * 0.38).fill(t.role.coin).stroke(st);
+    case 'shelf':
+      g.roundRect(-1.05 * s, 0.35 * s, 2.1 * s, 0.25 * s, 0.06 * s).fill(t.rim).stroke(st);
+      for (const [x, w, h, col] of [[-0.75, 0.42, 0.62, t.role.pop], [-0.25, 0.42, 0.9, t.role.sling], [0.25, 0.42, 0.5, t.role.lane]] as const) g.roundRect(x * s - (w / 2) * s, (0.35 - h) * s, w * s, h * s, 0.06 * s).fill(col).stroke(st);
+      g.roundRect(0.52 * s, -0.28 * s, 0.46 * s, 0.63 * s, 0.06 * s).fill(paper).stroke({ ...st, width: lw * 0.8 });
+      text('+', 0.75, 0.05, 0.7, t.ink);
       break;
-    case 'duck':
-      g.ellipse(s * 0.05, s * 0.45, s * 0.95, s * 0.55).fill(t.role.coin).stroke(st);
-      g.circle(-s * 0.25, -s * 0.3, s * 0.5).fill(t.role.coin).stroke(st);
-      g.poly([-s * 0.72, -s * 0.3, -s * 1.17, -s * 0.18, -s * 0.72, -s * 0.02]).fill(t.accent).stroke(st);
-      g.circle(-s * 0.3, -s * 0.42, s * 0.09).fill(t.ink);
+    case 'sprout':
+      for (let i = 0; i < 3; i++) { g.ellipse(0, (0.75 - i * 0.24) * s, 0.62 * s, 0.2 * s).fill(coin).stroke(st); }
+      g.moveTo(0, 0.2 * s).quadraticCurveTo(0.05 * s, -0.3 * s, 0, -0.55 * s).stroke({ ...st, width: lw * 1.2, color: '#3f8f3a' });
+      g.poly(P2([0, -0.35, -0.6, -0.75, -0.75, -0.3, -0.25, -0.15])).fill('#5fc25a').stroke(st);
+      g.poly(P2([0, -0.55, 0.45, -1.0, 0.7, -0.6, 0.2, -0.35])).fill('#5fc25a').stroke(st);
       break;
-    case 'star':
-      g.poly(flat(star(0, 0, s * 1.05, s * 0.45, 5, -Math.PI / 2))).fill(t.role.coin).stroke(st);
+    case 'scissors':
+      for (const k of [-1, 1]) {
+        g.moveTo(k * 0.15 * s, 0.2 * s).lineTo(-k * 0.55 * s, -0.95 * s).stroke({ ...st, width: lw * 3.2 });
+        g.moveTo(k * 0.15 * s, 0.2 * s).lineTo(-k * 0.55 * s, -0.95 * s).stroke({ ...st, width: lw * 1.6, color: t.metal });
+        g.circle(k * 0.42 * s, 0.6 * s, 0.3 * s).fill(hot).stroke(st);
+        g.circle(k * 0.42 * s, 0.6 * s, 0.13 * s).fill(t.ink);
+      }
+      g.circle(0, -0.08 * s, 0.07 * s).fill(t.ink);
       break;
-    case 'clock':
-      g.circle(0, 0, s).fill(t.paper).stroke(st);
-      g.moveTo(0, 0).lineTo(0, -s * 0.65).moveTo(0, 0).lineTo(s * 0.45, s * 0.2).stroke(st);
+    case 'glove':
+      g.roundRect(-0.6 * s, -0.25 * s, 1.1 * s, 0.95 * s, 0.35 * s).fill(WHITE).stroke(st);
+      for (let i = 0; i < 3; i++) g.roundRect((-0.55 + i * 0.36) * s, -0.95 * s, 0.32 * s, 0.85 * s, 0.16 * s).fill(WHITE).stroke(st);
+      g.roundRect(0.3 * s, -0.05 * s, 0.6 * s, 0.3 * s, 0.15 * s).fill(WHITE).stroke(st);
+      g.roundRect(-0.5 * s, 0.68 * s, 0.9 * s, 0.25 * s, 0.08 * s).fill(hot).stroke(st);
+      for (let i = 0; i < 3; i++) g.moveTo((-0.35 + i * 0.25) * s, 0.0).lineTo((-0.35 + i * 0.25) * s, 0.35 * s).stroke(thin);
       break;
-    case 'receipt':
-      g.poly([-s * 0.6, -s, s * 0.6, -s, s * 0.6, s, s * 0.3, s * 0.8, 0, s, -s * 0.3, s * 0.8, -s * 0.6, s]).fill(t.paper).stroke(st);
-      break;
-    case 'seven': {
-      g.circle(0, 0, s * 0.95).fill(t.paper).stroke(st);
-      const L = label('7', s * 1.5, t.accent, { stroke: t.ink, strokeW: s * 0.14 });
-      c.addChild(L);
+    case 'pig': {
+      const pink = t.role.piggy;
+      for (const k of [-1, 1]) g.poly(P2([k * 0.35, -0.6, k * 0.85, -0.95, k * 0.8, -0.3])).fill(pink).stroke(st);
+      g.circle(0, 0, 0.85 * s).fill(pink).stroke(st);
+      g.ellipse(0, 0.25 * s, 0.42 * s, 0.3 * s).fill(mix(pink, WHITE, 0.35)).stroke(st);
+      for (const k of [-1, 1]) { g.ellipse(k * 0.14 * s, 0.25 * s, 0.07 * s, 0.11 * s).fill(t.ink); g.circle(k * 0.36 * s, -0.28 * s, 0.1 * s).fill(t.ink); }
       break;
     }
+    case 'die':
+      g.roundRect(-0.8 * s, -0.8 * s, 1.6 * s, 1.6 * s, 0.32 * s).fill(WHITE).stroke(st);
+      for (const [a, b] of [[-0.42, -0.42], [0.42, -0.42], [0, 0], [-0.42, 0.42], [0.42, 0.42]]) g.circle(a * s, b * s, 0.15 * s).fill(t.ink);
+      g.arc(0, 0, 1.12 * s, -1.25, -0.25).stroke({ ...st, width: lw * 1.1 });
+      g.poly(P2([1.12 * Math.cos(-0.25) + 0.22, 1.12 * Math.sin(-0.25) - 0.12, 1.12 * Math.cos(-0.25) - 0.22, 1.12 * Math.sin(-0.25) - 0.1, 1.12 * Math.cos(-0.25) + 0.05, 1.12 * Math.sin(-0.25) + 0.25])).fill(t.ink);
+      break;
+    case 'padlock':
+      g.moveTo(-0.45 * s, -0.1 * s).lineTo(-0.45 * s, -0.45 * s).arc(0, -0.45 * s, 0.45 * s, Math.PI, 0).lineTo(0.45 * s, -0.1 * s).stroke({ ...st, width: lw * 3.4 });
+      g.moveTo(-0.45 * s, -0.1 * s).lineTo(-0.45 * s, -0.45 * s).arc(0, -0.45 * s, 0.45 * s, Math.PI, 0).lineTo(0.45 * s, -0.1 * s).stroke({ ...st, width: lw * 1.8, color: t.metal });
+      g.roundRect(-0.75 * s, -0.15 * s, 1.5 * s, 1.05 * s, 0.18 * s).fill(coin).stroke(st);
+      g.circle(0, 0.25 * s, 0.14 * s).fill(t.ink);
+      g.poly(P2([-0.07, 0.3, 0.07, 0.3, 0.1, 0.62, -0.1, 0.62])).fill(t.ink);
+      break;
+    case 'toolbox':
+      g.moveTo(-0.35 * s, -0.35 * s).lineTo(-0.35 * s, -0.7 * s).lineTo(0.35 * s, -0.7 * s).lineTo(0.35 * s, -0.35 * s).stroke({ ...st, width: lw * 2.6 });
+      g.moveTo(-0.35 * s, -0.35 * s).lineTo(-0.35 * s, -0.7 * s).lineTo(0.35 * s, -0.7 * s).lineTo(0.35 * s, -0.35 * s).stroke({ ...st, width: lw * 1.2, color: t.metal });
+      g.roundRect(-1.0 * s, -0.4 * s, 2.0 * s, 1.2 * s, 0.14 * s).fill(t.role.sling === paper ? hot : t.role.sling).stroke(st);
+      g.moveTo(-1.0 * s, 0.05 * s).lineTo(1.0 * s, 0.05 * s).stroke(st);
+      g.roundRect(-0.2 * s, -0.08 * s, 0.4 * s, 0.26 * s, 0.05 * s).fill(t.metal).stroke(thin);
+      text('+2', 0, 0.5, 0.55, paper, t.ink);
+      break;
+    case 'tag':
+      g.poly(P2([-0.95, -0.25, -0.45, -0.85, 0.95, -0.85, 0.95, 0.85, -0.45, 0.85, -0.95, 0.25])).fill(paper).stroke(st);
+      g.circle(-0.5 * s, 0, 0.13 * s).fill(t.ink);
+      text('½', 0.3, 0.02, 1.1, hot);
+      break;
+    case 'shades':
+      g.moveTo(-1.0 * s, -0.25 * s).lineTo(1.0 * s, -0.25 * s).stroke({ ...st, width: lw * 1.4 });
+      for (const k of [-1, 1]) { g.roundRect((k < 0 ? -0.98 : 0.1) * s, -0.35 * s, 0.88 * s, 0.7 * s, 0.3 * s).fill(t.ink).stroke(st); g.moveTo((k < 0 ? -0.75 : 0.33) * s, -0.15 * s).lineTo((k < 0 ? -0.5 : 0.58) * s, -0.15 * s).stroke({ ...thin, color: WHITE }); }
+      g.star(0.75 * s, -0.75 * s, 4, 0.3 * s, 0.1 * s).fill(WHITE).stroke(thin);
+      g.moveTo(-0.3 * s, 0.6 * s).quadraticCurveTo(0.1 * s, 0.85 * s, 0.45 * s, 0.5 * s).stroke({ ...st, width: lw * 1.2 });
+      break;
+    case 'crown':
+      g.poly(P2([-0.9, 0.6, -0.95, -0.55, -0.45, -0.05, 0, -0.8, 0.45, -0.05, 0.95, -0.55, 0.9, 0.6])).fill(coin).stroke(st);
+      g.rect(-0.9 * s, 0.35 * s, 1.8 * s, 0.25 * s).fill(mix(coin, t.ink, 0.15)).stroke(st);
+      for (const [a, b, col] of [[-0.95, -0.6, hot], [0, -0.85, t.role.pop], [0.95, -0.6, hot]] as const) g.circle(a * s, b * s, 0.13 * s).fill(col).stroke(thin);
+      break;
+    case 'magnifier':
+      g.moveTo(0.3 * s, 0.3 * s).lineTo(0.9 * s, 0.9 * s).stroke({ ...st, width: lw * 4 });
+      g.moveTo(0.3 * s, 0.3 * s).lineTo(0.9 * s, 0.9 * s).stroke({ ...st, width: lw * 2.2, color: t.rim });
+      g.circle(-0.18 * s, -0.18 * s, 0.68 * s).fill(mix(paper, '#9fd6ff', 0.5)).stroke({ ...st, width: lw * 1.6 });
+      g.star(-0.18 * s, -0.18 * s, 5, 0.35 * s, 0.15 * s, -Math.PI / 2).fill(coin).stroke(thin);
+      break;
+    case 'scroll':
+      g.roundRect(-0.85 * s, -0.75 * s, 1.7 * s, 1.35 * s, 0.1 * s).fill(paper).stroke(st);
+      for (let i = 0; i < 3; i++) g.moveTo(-0.6 * s, (-0.45 + i * 0.25) * s).lineTo(0.55 * s, (-0.45 + i * 0.25) * s).stroke(thin);
+      g.poly(P2([0.2, 0.45, 0.1, 1.0, 0.33, 0.85, 0.5, 1.0, 0.45, 0.45])).fill(hot).stroke(thin);
+      g.circle(0.33 * s, 0.4 * s, 0.25 * s).fill(t.role.redseal).stroke(st);
+      break;
+    // ---- score ----
+    case 'flag':
+      g.moveTo(-0.7 * s, 1.0 * s).lineTo(-0.7 * s, -0.95 * s).stroke({ ...st, width: lw * 1.6 });
+      g.rect(-0.7 * s, -0.95 * s, 1.55 * s, 1.0 * s).fill(WHITE).stroke(st);
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) if ((i + j) % 2 === 0) g.rect((-0.7 + i * 0.3875) * s, (-0.95 + j * 0.333) * s, 0.3875 * s, 0.333 * s).fill(t.ink);
+      g.rect(-0.7 * s, -0.95 * s, 1.55 * s, 1.0 * s).stroke(st);
+      break;
+    case 'seven':
+      g.roundRect(-0.75 * s, -0.95 * s, 1.5 * s, 1.9 * s, 0.25 * s).fill(paper).stroke(st);
+      text('7', 0, 0.02, 1.5, hot, t.ink);
+      break;
+    case 'gauge':
+      g.moveTo(-0.95 * s, 0.35 * s).arc(0, 0.35 * s, 0.95 * s, Math.PI, 0).closePath().fill(paper).stroke(st);
+      g.moveTo(0.95 * s * Math.cos(-0.75), 0.35 * s + 0.95 * s * Math.sin(-0.75)).arc(0, 0.35 * s, 0.95 * s, -0.75, 0).lineTo(0, 0.35 * s).closePath().fill(hot).stroke(thin);
+      for (let i = 0; i <= 4; i++) { const a = Math.PI + (i / 4) * Math.PI; g.moveTo(Math.cos(a) * 0.7 * s, 0.35 * s + Math.sin(a) * 0.7 * s).lineTo(Math.cos(a) * 0.88 * s, 0.35 * s + Math.sin(a) * 0.88 * s); }
+      g.stroke(thin);
+      g.moveTo(0, 0.35 * s).lineTo(0.62 * s, -0.25 * s).stroke({ ...st, width: lw * 1.6 });
+      g.circle(0, 0.35 * s, 0.14 * s).fill(t.ink);
+      break;
+    case 'chevrons':
+      for (const dy of [0.45, -0.25]) { g.poly(P2([-0.8, dy + 0.3, 0, dy - 0.5, 0.8, dy + 0.3, 0.8, dy + 0.6, 0, dy - 0.2, -0.8, dy + 0.6])).fill(paper).stroke(st); }
+      break;
+    case 'bulb':
+      for (let i = 0; i < 7; i++) { const a = -Math.PI + 0.25 + (i / 6) * (Math.PI - 0.5); g.moveTo(Math.cos(a) * 0.82 * s, -0.2 * s + Math.sin(a) * 0.82 * s).lineTo(Math.cos(a) * 1.05 * s, -0.2 * s + Math.sin(a) * 1.05 * s); }
+      g.stroke({ ...st, width: lw * 0.9 });
+      g.circle(0, -0.2 * s, 0.6 * s).fill('#ffe45c').stroke(st);
+      g.roundRect(-0.3 * s, 0.32 * s, 0.6 * s, 0.5 * s, 0.08 * s).fill(t.metal).stroke(st);
+      g.moveTo(-0.3 * s, 0.57 * s).lineTo(0.3 * s, 0.57 * s).stroke(thin);
+      g.ellipse(-0.22 * s, -0.4 * s, 0.14 * s, 0.1 * s).fill(WHITE);
+      break;
+    case 'targets':
+      g.roundRect(-1.05 * s, 0.4 * s, 2.1 * s, 0.3 * s, 0.08 * s).fill(t.metal).stroke(st);
+      for (const k of [-0.68, 0, 0.68]) { g.roundRect((k - 0.27) * s, -0.6 * s, 0.54 * s, 1.0 * s, 0.08 * s).fill(t.role.bank).stroke(st); g.moveTo((k - 0.15) * s, -0.25 * s).lineTo((k + 0.15) * s, -0.25 * s).stroke({ ...thin, color: paper }); }
+      g.circle(0.82 * s, -0.75 * s, 0.26 * s).fill(coin).stroke(thin);
+      break;
+    case 'laurel':
+      for (const k of [-1, 1]) {
+        g.moveTo(0, 0.85 * s).quadraticCurveTo(k * 1.0 * s, 0.5 * s, k * 0.6 * s, -0.8 * s).stroke({ ...st, width: lw * 1.2, color: '#3f8f3a' });
+        for (let i = 0; i < 4; i++) { const u = 0.2 + i * 0.22, qx = k * (0.85 - 0.25 * u) * s * (1 - (u - 0.5) ** 2), qy = (0.75 - u * 1.5) * s; g.ellipse(qx + k * 0.15 * s, qy, 0.17 * s, 0.1 * s).fill('#5fc25a').stroke(thin); }
+      }
+      g.star(0, -0.05 * s, 5, 0.38 * s, 0.16 * s, -Math.PI / 2).fill(coin).stroke(st);
+      break;
+    case 'cannon':
+      g.poly(P2([-0.8, -0.55, 0.55, 0.05, 0.4, 0.45, -0.95, -0.15])).fill(mix(t.metal, '#9fd6ff', 0.5)).stroke(st);
+      g.moveTo(-0.3 * s, -0.25 * s).lineTo(-0.1 * s, -0.05 * s).lineTo(-0.25 * s, 0.05 * s).stroke({ ...thin, color: WHITE });
+      g.circle(0.05 * s, 0.5 * s, 0.4 * s).fill(t.rim).stroke(st);
+      g.circle(0.05 * s, 0.5 * s, 0.1 * s).fill(t.ink);
+      g.star(-0.95 * s, -0.55 * s, 6, 0.35 * s, 0.15 * s).fill(coin).stroke(thin);
+      break;
+    case 'flame':
+      g.moveTo(0, -1.0 * s).bezierCurveTo(0.35 * s, -0.5 * s, 0.85 * s, -0.25 * s, 0.7 * s, 0.35 * s).bezierCurveTo(0.6 * s, 0.85 * s, -0.6 * s, 0.85 * s, -0.7 * s, 0.35 * s).bezierCurveTo(-0.8 * s, -0.1 * s, -0.4 * s, -0.25 * s, -0.35 * s, -0.55 * s).bezierCurveTo(-0.15 * s, -0.35 * s, -0.05 * s, -0.6 * s, 0, -1.0 * s).closePath().fill('#ff9f1c').stroke(st);
+      g.moveTo(0, -0.25 * s).bezierCurveTo(0.2 * s, 0.0, 0.45 * s, 0.2 * s, 0.35 * s, 0.45 * s).bezierCurveTo(0.25 * s, 0.7 * s, -0.3 * s, 0.7 * s, -0.35 * s, 0.4 * s).bezierCurveTo(-0.4 * s, 0.15 * s, -0.1 * s, 0.05 * s, 0, -0.25 * s).closePath().fill('#ffe45c').stroke(thin);
+      break;
+    case 'swirl': {
+      const pts: number[] = [];
+      for (let i = 0; i <= 40; i++) { const a = i * 0.32, rr = 0.06 + i * 0.022; pts.push(Math.cos(a) * rr * s, Math.sin(a) * rr * s); }
+      g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]);
+      g.stroke({ ...st, width: lw * 3 });
+      g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]);
+      g.stroke({ ...st, width: lw * 1.4, color: paper });
+      break;
+    }
+    case 'balls':
+      ball(-0.5, 0.35, 0.42, WHITE); ball(0.5, 0.35, 0.42, WHITE); ball(0, -0.45, 0.42, WHITE);
+      break;
+    case 'mug':
+      g.roundRect(0.35 * s, -0.35 * s, 0.6 * s, 0.75 * s, 0.3 * s).stroke({ ...st, width: lw * 3 });
+      g.roundRect(0.35 * s, -0.35 * s, 0.6 * s, 0.75 * s, 0.3 * s).stroke({ ...st, width: lw * 1.2, color: mix(coin, WHITE, 0.4) });
+      g.roundRect(-0.75 * s, -0.55 * s, 1.25 * s, 1.45 * s, 0.15 * s).fill(coin).stroke(st);
+      for (const k of [-0.35, 0.1]) g.moveTo(k * s, -0.3 * s).lineTo(k * s, 0.65 * s).stroke({ ...thin, color: mix(coin, WHITE, 0.5) });
+      g.circle(-0.55 * s, -0.65 * s, 0.28 * s).fill(WHITE).stroke(st); g.circle(-0.1 * s, -0.75 * s, 0.3 * s).fill(WHITE).stroke(st); g.circle(0.32 * s, -0.62 * s, 0.24 * s).fill(WHITE).stroke(st);
+      g.rect(-0.7 * s, -0.66 * s, 1.15 * s, 0.2 * s).fill(WHITE);
+      break;
+    case 'purse':
+      for (const k of [-1, 1]) g.circle(k * 0.18 * s, -0.62 * s, 0.17 * s).fill(t.metal).stroke(st);
+      g.moveTo(-0.85 * s, -0.35 * s).lineTo(0.85 * s, -0.35 * s).quadraticCurveTo(1.0 * s, 0.85 * s, 0, 0.85 * s).quadraticCurveTo(-1.0 * s, 0.85 * s, -0.85 * s, -0.35 * s).closePath().fill(hot).stroke(st);
+      g.roundRect(-0.9 * s, -0.48 * s, 1.8 * s, 0.22 * s, 0.1 * s).fill(t.metal).stroke(st);
+      text('$', 0, 0.28, 0.75, coin, t.ink);
+      break;
+    case 'bigboi': {
+      const bb = t.role.mega === paper ? hot : t.role.mega;
+      g.moveTo(-1.0 * s, 0.6 * s).lineTo(-0.95 * s, 0.05 * s).quadraticCurveTo(-0.9 * s, -1.0 * s, 0, -1.0 * s).quadraticCurveTo(0.9 * s, -1.0 * s, 0.95 * s, 0.05 * s).lineTo(1.0 * s, 0.6 * s).closePath().fill(bb).stroke(st);
+      g.roundRect(-1.05 * s, 0.5 * s, 2.1 * s, 0.35 * s, 0.12 * s).fill(t.rim).stroke(st);
+      for (const k of [-1, 1]) { g.ellipse(k * 0.32 * s, -0.2 * s, 0.18 * s, 0.22 * s).fill(WHITE).stroke(thin); g.circle(k * 0.32 * s, -0.15 * s, 0.09 * s).fill(t.ink); g.ellipse(k * 0.6 * s, 0.15 * s, 0.15 * s, 0.08 * s).fill(hot); }
+      g.moveTo(-0.2 * s, 0.15 * s).quadraticCurveTo(0, 0.38 * s, 0.2 * s, 0.15 * s).stroke(st);
+      g.ellipse(-0.45 * s, -0.7 * s, 0.18 * s, 0.1 * s).fill({ color: WHITE, alpha: 0.7 });
+      break;
+    }
+    case 'trend':
+      g.moveTo(-0.95 * s, 0.75 * s).lineTo(-0.35 * s, 0.15 * s).lineTo(0.0, 0.4 * s).lineTo(0.75 * s, -0.55 * s).stroke({ ...st, width: lw * 3.4 });
+      g.moveTo(-0.95 * s, 0.75 * s).lineTo(-0.35 * s, 0.15 * s).lineTo(0.0, 0.4 * s).lineTo(0.75 * s, -0.55 * s).stroke({ ...st, width: lw * 1.6, color: paper });
+      g.poly(P2([1.0, -0.9, 0.95, -0.2, 0.35, -0.75])).fill(paper).stroke(st);
+      break;
+    case 'sunset':
+      for (let i = 0; i < 7; i++) { const a = -Math.PI + 0.2 + (i / 6) * (Math.PI - 0.4); g.moveTo(Math.cos(a) * 0.72 * s, 0.25 * s + Math.sin(a) * 0.72 * s).lineTo(Math.cos(a) * 1.0 * s, 0.25 * s + Math.sin(a) * 1.0 * s); }
+      g.stroke({ ...st, width: lw * 1.1 });
+      g.moveTo(-0.58 * s, 0.25 * s).arc(0, 0.25 * s, 0.58 * s, Math.PI, 0).closePath().fill(coin).stroke(st);
+      g.roundRect(-1.0 * s, 0.25 * s, 2.0 * s, 0.18 * s, 0.09 * s).fill(t.ink);
+      for (const [w, y] of [[1.3, 0.62], [0.8, 0.86]]) g.moveTo((-w / 2) * s, y * s).lineTo((w / 2) * s, y * s).stroke({ ...st, width: lw * 1.2, color: paper });
+      break;
+    // ---- ball ----
+    case 'bounce':
+      g.moveTo(-1.0 * s, 0.85 * s).quadraticCurveTo(-0.75 * s, -0.2 * s, -0.45 * s, 0.85 * s).quadraticCurveTo(-0.2 * s, 0.1 * s, 0.05 * s, 0.85 * s).stroke({ ...thin, width: lw * 1.1 });
+      g.moveTo(-1.0 * s, 0.9 * s).lineTo(0.55 * s, 0.9 * s).stroke(st);
+      ball(0.45, -0.25, 0.55, WHITE);
+      g.moveTo(0.0, -0.05 * s).quadraticCurveTo(0.45 * s, 0.1 * s, 0.95 * s, -0.4 * s).stroke({ ...st, width: lw * 1.2, color: hot });
+      break;
+    case 'anvil':
+      g.poly(P2([-1.0, -0.55, 0.85, -0.55, 0.95, -0.2, 0.45, -0.05, 0.3, 0.35, 0.6, 0.65, 0.6, 0.85, -0.6, 0.85, -0.6, 0.65, -0.3, 0.35, -0.35, -0.1, -0.7, -0.2])).fill(mix(t.ink, t.metal, 0.35)).stroke(st);
+      g.moveTo(-0.85 * s, -0.42 * s).lineTo(0.75 * s, -0.42 * s).stroke({ ...thin, color: mix(t.metal, WHITE, 0.4) });
+      text('1T', 0.12, 0.62, 0.42, paper);
+      break;
+    case 'marble':
+      g.circle(0, 0, 0.85 * s).fill(mix('#9fd6ff', WHITE, 0.45)).stroke(st);
+      g.moveTo(-0.55 * s, 0.4 * s).quadraticCurveTo(0, -0.1 * s, 0.6 * s, 0.35 * s).stroke({ ...st, width: lw * 1.6, color: '#62b8ff' });
+      g.ellipse(-0.35 * s, -0.4 * s, 0.25 * s, 0.15 * s).fill(WHITE);
+      g.circle(0.4 * s, -0.5 * s, 0.07 * s).fill(WHITE);
+      break;
+    case 'goldball':
+      ball(0, 0.05, 0.8, coin);
+      g.star(0.65 * s, -0.7 * s, 4, 0.35 * s, 0.11 * s).fill(WHITE).stroke(thin);
+      text('$', 0.05, 0.12, 0.8, mix(coin, t.ink, 0.35));
+      break;
+    case 'twins':
+      for (const k of [-1, 1]) {
+        g.circle(k * 0.48 * s, 0.1 * s, 0.55 * s).fill(WHITE).stroke(st);
+        for (const e of [-1, 1]) g.circle((k * 0.48 + e * 0.17) * s, 0.0, 0.07 * s).fill(t.ink);
+        g.moveTo((k * 0.48 - 0.15) * s, 0.25 * s).quadraticCurveTo(k * 0.48 * s, 0.42 * s, (k * 0.48 + 0.15) * s, 0.25 * s).stroke(thin);
+      }
+      g.star(0, -0.75 * s, 5, 0.25 * s, 0.1 * s, -Math.PI / 2).fill(hot).stroke(thin);
+      break;
+    case 'plusball':
+      ball(-0.2, 0.15, 0.7, WHITE);
+      g.circle(0.6 * s, -0.55 * s, 0.38 * s).fill(t.role.saver).stroke(st);
+      g.moveTo(0.4 * s, -0.55 * s).lineTo(0.8 * s, -0.55 * s).moveTo(0.6 * s, -0.75 * s).lineTo(0.6 * s, -0.35 * s).stroke({ ...st, width: lw * 1.3 });
+      break;
+    case 'net':
+      g.moveTo(-1.0 * s, -0.3 * s).quadraticCurveTo(0, 1.2 * s, 1.0 * s, -0.3 * s).closePath().fill(mix(paper, t.ink, 0.06)).stroke(st);
+      for (let i = 1; i < 5; i++) { const u = -1 + i * 0.4; g.moveTo(u * s, -0.3 * s).lineTo(u * 0.55 * s, (0.15 + (1 - Math.abs(u)) * 0.45) * s); }
+      for (const y of [0.05, 0.35]) g.moveTo(-0.85 * s, y * s).quadraticCurveTo(0, (y + 0.3) * s, 0.85 * s, y * s);
+      g.stroke(thin);
+      for (const k of [-1, 1]) g.circle(k * 1.0 * s, -0.3 * s, 0.1 * s).fill(t.ink);
+      ball(0.0, -0.55, 0.32, WHITE);
+      break;
+    case 'fuse':
+      g.moveTo(-0.85 * s, 0.75 * s).bezierCurveTo(-0.2 * s, 1.0 * s, 0.6 * s, 0.6 * s, 0.1 * s, 0.15 * s).bezierCurveTo(-0.35 * s, -0.25 * s, 0.1 * s, -0.75 * s, 0.6 * s, -0.55 * s).stroke({ ...st, width: lw * 2.6 });
+      g.moveTo(-0.85 * s, 0.75 * s).bezierCurveTo(-0.2 * s, 1.0 * s, 0.6 * s, 0.6 * s, 0.1 * s, 0.15 * s).bezierCurveTo(-0.35 * s, -0.25 * s, 0.1 * s, -0.75 * s, 0.6 * s, -0.55 * s).stroke({ ...st, width: lw * 1.1, color: paper });
+      g.star(0.65 * s, -0.6 * s, 7, 0.42 * s, 0.18 * s).fill('#ffd23f').stroke(thin);
+      g.circle(0.65 * s, -0.6 * s, 0.1 * s).fill(WHITE);
+      break;
+    case 'boot':
+      g.poly(P2([-0.45, -0.9, 0.2, -0.9, 0.25, 0.1, 0.95, 0.3, 1.0, 0.75, -0.55, 0.75])).fill(t.ink).stroke(st);
+      g.poly(P2([-0.42, -0.85, 0.17, -0.85, 0.18, -0.55, -0.43, -0.55])).fill(paper);
+      for (const k of [-0.3, 0.1, 0.5, 0.85]) g.rect(k * s, 0.75 * s, 0.12 * s, 0.15 * s).fill(t.ink);
+      g.moveTo(-0.1 * s, -0.2 * s).lineTo(0.1 * s, -0.1 * s).moveTo(-0.1 * s, 0.05 * s).lineTo(0.1 * s, 0.15 * s).stroke({ ...thin, color: paper });
+      break;
+    case 'printer':
+      g.roundRect(-0.85 * s, -0.75 * s, 1.5 * s, 1.25 * s, 0.2 * s).fill(t.role.printer).stroke(st);
+      for (const k of [-1, 1]) { g.circle((-0.1 + k * 0.28) * s, -0.35 * s, 0.13 * s).fill(WHITE).stroke(thin); g.circle((-0.1 + k * 0.28) * s, -0.33 * s, 0.06 * s).fill(t.ink); }
+      g.ellipse(-0.1 * s, 0.15 * s, 0.38 * s, 0.18 * s).fill(t.ink);
+      ball(0.6, 0.55, 0.32, WHITE);
+      ball(0.0, 0.75, 0.25, WHITE);
+      break;
+    // ---- build ----
+    case 'car':
+      g.roundRect(-1.0 * s, -0.15 * s, 2.0 * s, 0.75 * s, 0.35 * s).fill(hot).stroke(st);
+      g.roundRect(-0.5 * s, -0.75 * s, 0.9 * s, 0.7 * s, 0.25 * s).fill(mix(hot, WHITE, 0.45)).stroke(st);
+      g.circle(-0.05 * s, -0.45 * s, 0.18 * s).fill(paper).stroke(thin);
+      g.roundRect(-1.08 * s, 0.38 * s, 2.16 * s, 0.32 * s, 0.16 * s).fill(t.ink);
+      g.moveTo(0.55 * s, -0.35 * s).lineTo(0.75 * s, -0.95 * s).stroke({ ...st, width: lw * 0.9 });
+      g.star(0.78 * s, -0.95 * s, 5, 0.16 * s, 0.07 * s).fill(coin).stroke({ ...thin, width: lw * 0.5 });
+      break;
+    case 'bullseye':
+      for (const [rr, col] of [[0.9, paper], [0.65, hot], [0.4, paper], [0.17, hot]] as const) g.circle(0, 0, rr * s).fill(col).stroke(thin);
+      g.moveTo(0.95 * s, -0.95 * s).lineTo(0.05 * s, -0.05 * s).stroke({ ...st, width: lw * 1.4 });
+      g.poly(P2([0.95, -0.95, 0.72, -1.0, 1.0, -0.72])).fill(t.ink);
+      break;
+    case 'beams':
+      for (const k of [-1, 1]) {
+        g.poly(P2([k * 0.9, 0.7, k * 0.6, 0.6, -k * 0.55, -0.95, -k * 0.05, -0.95])).fill(WHITE).stroke(st);
+        g.roundRect((k * 0.75 - 0.25) * s, 0.5 * s, 0.5 * s, 0.38 * s, 0.1 * s).fill(t.ink);
+      }
+      g.star(0, -0.55 * s, 4, 0.3 * s, 0.1 * s).fill(WHITE).stroke(thin);
+      break;
+    case 'drop':
+      g.moveTo(0, -1.0 * s).bezierCurveTo(0.35 * s, -0.4 * s, 0.75 * s, 0.0, 0.75 * s, 0.35 * s).arc(0, 0.35 * s, 0.75 * s, 0, Math.PI).bezierCurveTo(-0.75 * s, 0.0, -0.35 * s, -0.4 * s, 0, -1.0 * s).closePath().fill('#62b8ff').stroke(st);
+      text('4', 0.0, 0.38, 0.85, paper, t.ink);
+      g.ellipse(-0.4 * s, -0.05 * s, 0.1 * s, 0.18 * s).fill(WHITE);
+      break;
+    case 'crowd':
+      for (const [x, y, col] of [[-0.62, -0.1, t.role.pop], [0.62, -0.1, t.role.lane], [0, 0.05, coin]] as const) {
+        g.roundRect((x - 0.38) * s, (y + 0.42) * s, 0.76 * s, 0.6 * s, 0.3 * s).fill(col).stroke(st);
+        g.circle(x * s, y * s, 0.32 * s).fill(paper).stroke(st);
+        g.moveTo((x - 0.12) * s, (y + 0.08) * s).quadraticCurveTo(x * s, (y + 0.2) * s, (x + 0.12) * s, (y + 0.08) * s).stroke(thin);
+      }
+      for (const k of [-1, 1]) g.moveTo(k * 0.95 * s, -0.55 * s).lineTo(k * 1.05 * s, -0.95 * s).stroke({ ...st, width: lw * 1.2 });
+      break;
+    case 'empty':
+      g.roundRect(-0.75 * s, -0.75 * s, 1.5 * s, 1.5 * s, 0.2 * s).fill(mix(paper, t.ink, 0.08));
+      for (let i = 0; i < 12; i++) {
+        const side = Math.floor(i / 3), k = (i % 3) / 3 + 0.04, L = 0.2;
+        const [ax, ay] = [[-0.75 + 1.5 * k, -0.75], [0.75, -0.75 + 1.5 * k], [0.75 - 1.5 * k, 0.75], [-0.75, 0.75 - 1.5 * k]][side];
+        const [dx, dy] = [[1, 0], [0, 1], [-1, 0], [0, -1]][side];
+        g.moveTo(ax * s, ay * s).lineTo((ax + dx * L) * s, (ay + dy * L) * s);
+      }
+      g.stroke({ ...st, width: lw * 1.1 });
+      break;
   }
 }
 
