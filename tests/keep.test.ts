@@ -11,6 +11,7 @@ function clearRound(g: Game, mult = 1) {
   g.startRound();
   g.scorer.mult = mult;
   g.scorer.peakMult = mult;
+  g.scorer.peakGain = Math.max(0, mult - g.scorer.ballStart);
   g.scorer.score = g.scorer.goal;
   g.scorer.goalReached = true;
   g.cashOut();

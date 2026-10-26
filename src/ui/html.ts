@@ -5,6 +5,17 @@ import { bigBoiOf, type MachineId } from '../data/bigboi';
 import type { BossDef } from '../data/bosses';
 import { SCORE_CEIL, type Scorer } from '../game/scoring';
 
+/**
+ * A number for the hover card: round, so it reads like a price tag, not a sum (no "127 points"): to 5 up to 100,
+ * two significant figures above. The exact number is in the ledger.
+ */
+export function roundShow(n: number): number {
+  if (n < 10) return Math.round(n);
+  if (n <= 100) return Math.round(n / 5) * 5;
+  const mag = 10 ** (Math.floor(Math.log10(n)) - 1);
+  return Math.round(n / mag) * mag;
+}
+
 export const fmt = (n: number) =>
   !(n < SCORE_CEIL) ? 'MAXED' : n >= 1e12 ? (n / 1e12).toFixed(2) + 'T' : n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : Math.round(n).toLocaleString('en-US');
 
@@ -79,7 +90,7 @@ export function partCard(def: PartDef, inst: PartInstance | undefined, c: TipCtx
     const base = live ? c.scorer!.baseNow(inst!)! : Math.round((r.points + lvl) * dial * upg);
     const tiers = r.tiers;
     const per = r.per ?? 'hit';
-    const pays = (b: number) => Math.round(b * mult);
+    const pays = (b: number) => roundShow(b * mult).toLocaleString('en-US');
     const top = tiers ? tiers[tiers.length - 1].x : 1;
     const now = tiers ? `${pays(base)}–${pays(base * top)}` : String(pays(base));
     const chips: [string, string][] = [[String(r.points + lvl), 'base']];
@@ -145,5 +156,5 @@ export const HUD_TIPS: Record<string, string> = {
   map: '<b>The run</b>: fifteen rounds on the path, a boss every third (the big stops) and the final boss at the end. The lit stop is where you are; the next boss is named below.',
   boss: '<b>Boss</b>: every third round a boss breaks one thing your machine relies on. You see it coming: build for it. Beat it and you pick one of three decals.',
   ledger: '<b>This round</b>: every point of the round, by the part type that scored it ($ is coins paid). Hover a part on the table for its own numbers.',
-  clock: '<b>Ball clock</b>: one clock per ball (with every ball it turns into). When it runs out the flippers go dead and the balls roll out.',
+  clock: '<b>Ball clock</b>: one clock per ball you launch; extra balls (printed, twins, Wizard, Gumball) share it. When it runs out it is closing time: the flippers go dead, the bumpers stop kicking, catchers let the balls roll over them, and the balls roll out. A ball still up after 15 s is swallowed by Big Boi, for a small bonus.',
 };

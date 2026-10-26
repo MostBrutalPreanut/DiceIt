@@ -79,27 +79,23 @@ describe('Bank Ring', () => {
 });
 
 describe('Helping Hand', () => {
-  it('flips by itself when a ball comes near it from above, and never on TILT', () => {
-    const hand = makePart('hand', 1, 6, 22, true);
-    const sim = createSim(layoutOf(hand), { seed: 3 });
-    const f0 = sim.flipperStates().find((f) => f.uid === 1)!;
-    sim.addBall(7.5, 23.2, 0, -2);
-    run(sim, 0.08);
-    const f1 = sim.flipperStates().find((f) => f.uid === 1)!;
-    expect(f1.angle).not.toBeCloseTo(f0.angle, 2);
-    expect(sim.flipperStates().filter((f) => f.uid === undefined).every((f) => Math.abs(f.angle) > 0.3)).toBe(true); // the main flippers stay down
-  });
-
-  it('half the time it means the shot: the ball goes straight at the nearest scoring part', () => {
-    let aimed = 0;
-    for (let seed = 1; seed <= 20; seed++) {
-      const sim = createSim(layoutOf(makePart('hand', 1, 6, 22, true), makePart('pop', 2, 9, 34, true)), { seed });
-      sim.addBall(7.5, 23.4, 0, -2);
-      const evs = run(sim, 0.8);
-      if (evs.some((e) => e.type === 'partHit' && e.uid === 2)) aimed++;
-    }
-    expect(aimed).toBeGreaterThanOrEqual(5);
-    expect(aimed).toBeLessThanOrEqual(17);
+  it('is a small flipper worked by the button of the way it faces', () => {
+    const left = makePart('hand', 1, 6, 22, true), right = { ...makePart('hand', 2, 18, 22, true), dials: { side: 1 } };
+    const sim = createSim(layoutOf(left, right), { seed: 3 });
+    const angle = (uid: number) => sim.flipperStates().find((f) => f.uid === uid)!.angle;
+    run(sim, 0.3); // they settle at rest
+    const a0 = angle(1), b0 = angle(2);
+    run(sim, 0.3);
+    expect(angle(1)).toBeCloseTo(a0, 2); // no button, no flip: it never flips by itself
+    for (let i = 0; i < 20; i++) sim.step({ ...NO_INPUT, left: true });
+    expect(angle(1)).not.toBeCloseTo(a0, 2);
+    expect(angle(2)).toBeCloseTo(b0, 2); // the right-facing one waits for →
+    for (let i = 0; i < 20; i++) sim.step({ ...NO_INPUT, right: true });
+    expect(angle(2)).not.toBeCloseTo(b0, 2);
+    const fl = sim.flipperStates();
+    expect(fl.find((f) => f.uid === 2)!.side).toBe('R');
+    expect(fl.find((f) => f.uid === 1)!.length).toBeLessThan(fl.find((f) => f.uid === undefined)!.length * 0.7);
+    expect(PARTS.hand.cost).toBe(2);
   });
 });
 

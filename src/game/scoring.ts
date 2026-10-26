@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, GREMLIN, grownPoints, hasTag, HOT_WINDOW, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, WHEEL, wizardNeed, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, GREMLIN, grownPoints, hasTag, HOT_WINDOW, LEAF_STEP, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, WHEEL, wizardNeed, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { TABLE_H, TABLE_W } from '../sim/constants';
@@ -116,6 +116,8 @@ export interface ScorerOpts {
   mods?: Mods;
   /** Overrides the Mult every ball starts with (default: the mods' `startMult`). */
   baseMult?: number;
+  /** The part of `baseMult` the decals have kept from earlier rounds (Momentum, Afterglow): Afterglow never counts it again. */
+  decalKept?: number;
   /** The machine: decides what Big Boi does. */
   machine?: MachineId;
   /** Seed for the Cook's orders and the Overlord's picks. */
@@ -126,8 +128,10 @@ export interface ScorerOpts {
   lastBall?: () => boolean;
   /** The money you hold (Thrifty). */
   cash?: () => number;
-  /** A boss jams part types: the most numerous one for the round, or a random one every ball. */
-  jam?: 'mostNumerous' | 'randomEachBall';
+  /** A boss jams: the part that scored most last round (`jamUid`), or a random part type, for the round. */
+  jam?: 'topPart' | 'randomEachRound';
+  /** The Jammer: the part (by uid) that scored most last round. */
+  jamUid?: number | null;
   /** The Auditor: these mods (with the decals) take over once the score reaches `at`. */
   later?: { mods: Mods; at: number; baseMult: number };
 }
@@ -136,6 +140,8 @@ export interface ScorerOpts {
 export const SCORE_CEIL = 1e15;
 /** A part counts at most this many Power Plates, and at most this many Spotlights (the strongest ones). */
 export const STACK_MAX = 2;
+/** Closing time: Big Boi's cash-in pays this share of the ball's points for a ball the run-out could not end. */
+export const CASH_IN = 0.05;
 /** The product of the `n` biggest multipliers. */
 const strongest = (xs: number[], n: number) => xs.sort((a, b) => b - a).slice(0, n).reduce((a, x) => a * x, 1);
 const ceil = (n: number) => (Number.isFinite(n) ? Math.min(SCORE_CEIL, n) : SCORE_CEIL);
@@ -223,8 +229,13 @@ export class Scorer {
   /** Spider Wheel: when each wheel caught its ball (it is spinning), and until when its ×2 lasts. */
   private spinning = new Map<number, number>();
   private wheelXUntil = -1;
-  /** The Whale: sparks each one has swallowed this ball, and how often it spouted. */
-  private whaleFed = new Map<number, { fed: number; spouts: number }>();
+  /** Points this ball has scored, and whether Big Boi has cashed it in (closing time). */
+  private ballPoints = 0;
+  private cashedIn = false;
+  /** Wheel Mania has gone off this round (at most once a round). */
+  private maniaDone = false;
+  /** The Whale: sparks each one has swallowed this ball, since its last spout, and until when it rests after one. */
+  private whaleFed = new Map<number, { fed: number; since: number; restUntil: number }>();
   /** Wrecking Ball: until when each ball is a wrecking ball. */
   private wrecking = new Map<number, number>();
   /** Echo Caves: the caves each ball has gone through in a row (any other part it hits breaks the chain). */
@@ -248,6 +259,12 @@ export class Scorer {
   slays = 0;
   /** Part types a boss has switched off. */
   readonly jammed = new Set<PartId>();
+  /** The one part a boss has switched off (the Jammer), by uid. */
+  jammedUid: number | null = null;
+  /** Is this part switched off by the boss (its type, or the part itself)? */
+  isJammed(p: PartInstance): boolean {
+    return this.jammed.has(p.def) || p.uid === this.jammedUid;
+  }
   private rng: Rng;
   private opts: ScorerOpts;
 
@@ -292,6 +309,7 @@ export class Scorer {
   /** Called when a round (not a ball) starts: the Level Lights go dark, the piggies are empty, a jam is decided. */
   resetRound() {
     this.peakMult = this.baseMult;
+    this.peakGain = 0;
     this.roundLit.clear();
     this.saversUsed.clear();
     this.roundHits = 0;
@@ -301,15 +319,21 @@ export class Scorer {
     this.firedThisRound.clear();
     this.rockHits.clear();
     this.clockMin = 0;
+    this.maniaDone = false;
     this.burst.clear();
     this.wizNeed = wizardNeed(this.getParts());
     this.wizFired = false;
     this.jammed.clear();
-    if (this.opts.jam === 'mostNumerous') {
-      const n = new Map<PartId, number>();
-      for (const p of this.placed()) if (!p.fixed && this.recipe(p.def).points) n.set(p.def, (n.get(p.def) ?? 0) + 1);
-      const top = [...n.entries()].sort((a, b) => b[1] - a[1] || PARTS[b[0]].cost - PARTS[a[0]].cost)[0];
-      if (top) this.jammed.add(top[0]);
+    this.jammedUid = null;
+    const scoring = this.placed().filter((p) => this.recipe(p.def).points);
+    if (this.opts.jam === 'topPart') {
+      // the Jammer: the one part that scored most last round (failing that, the dearest part that scores)
+      const top = scoring.find((p) => p.uid === this.opts.jamUid) ?? scoring.filter((p) => !p.fixed).sort((a, b) => PARTS[b.def].cost - PARTS[a.def].cost || a.uid - b.uid)[0];
+      if (top) this.jammedUid = top.uid;
+    }
+    if (this.opts.jam === 'randomEachRound') {
+      const types = [...new Set(scoring.filter((p) => !p.fixed).map((p) => p.def))].sort();
+      if (types.length) this.jammed.add(types[Math.floor(this.rng.next() * types.length)]);
     }
     this.startBall();
   }
@@ -339,9 +363,19 @@ export class Scorer {
     this.ringX = Math.round(this.gainX(x) ** this.rings * 1000) / 1000;
   }
 
-  /** The Mult every ball of this round starts at (Afterglow keeps a share of what the round gained over it). */
+  /** The Mult every ball of this round starts at. */
   get ballStart() {
     return this.ballStartMult();
+  }
+
+  /**
+   * Afterglow's measure: the most Mult a ball gained this round, counted as if the ball had started without the Mult
+   * the decals have kept (so what they kept, multiplied by ×Mults, is never counted again: it cannot compound).
+   */
+  peakGain = 0;
+  private fresh = 1;
+  private freshStart() {
+    return Math.max(0, this.baseMult - (this.opts.decalKept ?? 0)) * this.ringX;
   }
 
   /** The Mult a ball starts at: the base, times the Old Bells' rings. */
@@ -351,6 +385,9 @@ export class Scorer {
 
   startBall() {
     this.mult = this.ballStartMult();
+    this.fresh = this.freshStart();
+    this.ballPoints = 0;
+    this.cashedIn = false;
     this.clockStruck = false;
     this.madUntil = -1;
     this.echoes.clear();
@@ -384,35 +421,27 @@ export class Scorer {
     this.armour = DRAGON.armour;
     this.slays = 0;
     this.order = null;
-    if (this.opts.jam === 'randomEachBall') {
-      this.jammed.clear();
-      const types = [...new Set(this.placed().filter((p) => !p.fixed && this.recipe(p.def).points).map((p) => p.def))].sort();
-      if (types.length) this.jammed.add(types[Math.floor(this.rng.next() * types.length)]);
-    }
   }
 
   /** The Cook calls an order: one scoring part on the table other than himself (and not the one already lit). */
   private pickOrder(not: number | null): number | null {
-    const parts = this.placed().filter((p) => p.def !== 'mega' && this.recipe(p.def).points && !this.jammed.has(p.def)).sort((a, b) => a.uid - b.uid);
+    const parts = this.placed().filter((p) => p.def !== 'mega' && this.recipe(p.def).points && !this.isJammed(p)).sort((a, b) => a.uid - b.uid);
     const pool = parts.length > 1 ? parts.filter((p) => p.uid !== not) : parts;
     return pool.length ? pool[Math.floor(this.rng.next() * pool.length)].uid : null;
   }
 
   isLit(uid: number) {
-    if (this.mods.lightsOut) return false;
     return this.lit.has(uid) || this.roundLit.has(uid) || this.lampLevel(uid) > 0 || (this.stripUntil.get(uid) ?? -1) > this.now;
   }
 
   /** How many steps bright a Lamp is right now (all of them while the lamps flash). */
   lampLevel(uid: number) {
-    if (this.mods.lightsOut) return 0;
     if (this.lampFlashUntil > this.now && this.getParts().some((p) => p.uid === uid && p.def === 'lamp')) return PARTS.lamp.recipe.brighten?.steps ?? 5;
     return this.lampSteps.get(uid) ?? 0;
   }
 
   /** A lit Glow Strip under this part: what it adds (0 if none). */
   stripBonusAt(inst: PartInstance): number {
-    if (this.mods.lightsOut) return 0;
     let b = 0;
     for (const st of this.placed()) {
       const r = PARTS[st.def].recipe.strip;
@@ -421,7 +450,7 @@ export class Scorer {
       if (sh.type !== 'box') continue;
       if (Math.abs(inst.x - st.x) <= sh.hw + 0.3 && Math.abs(inst.y - st.y) <= sh.hh + r.reach) b += r.bonus;
     }
-    return b;
+    return b * this.mods.lightsDim;
   }
 
   /** Power Plates under this part: what they multiply it by (1 if none, or if it is not a bumper). */
@@ -430,7 +459,7 @@ export class Scorer {
     const xs: number[] = [];
     for (const pl of this.placed()) {
       const r = PARTS[pl.def].recipe.plate;
-      if (r && Math.hypot(pl.x - inst.x, pl.y - inst.y) <= r.reach) xs.push(r.x);
+      if (r && Math.hypot(pl.x - inst.x, pl.y - inst.y) <= r.reach) xs.push(this.dimX(r.x));
     }
     return strongest(xs, STACK_MAX);
   }
@@ -474,7 +503,7 @@ export class Scorer {
     const xs: number[] = [];
     for (const sp of this.placed()) {
       const r = PARTS[sp.def].recipe.spot;
-      if (r && !this.jammed.has(sp.def) && !this.coolingDown(sp.uid, t) && Math.hypot(sp.x - inst.x, sp.y - inst.y) <= r.reach) xs.push(r.x);
+      if (r && !this.isJammed(sp) && !this.coolingDown(sp.uid, t) && Math.hypot(sp.x - inst.x, sp.y - inst.y) <= r.reach) xs.push(this.dimX(r.x));
     }
     return strongest(xs, STACK_MAX);
   }
@@ -482,7 +511,7 @@ export class Scorer {
   /** Hall of Fame: ×(1 + per) for every different part type on the table (Big Boi too). */
   typeXNow(per: number): number {
     const types = new Set(this.placed().map((p) => p.def)).size;
-    return Math.round(this.gainX(1 + per) ** types * 1000) / 1000;
+    return Math.round(this.dimX(this.gainX(1 + per)) ** types * 1000) / 1000;
   }
 
   /** How often a part has fired this ball (Disco Ball). */
@@ -519,14 +548,13 @@ export class Scorer {
   /** Sum of the bonuses of every lit lamp whose glow reaches this part (each lamp's bonus grows with its brightness). */
   lampBonusAt(inst: PartInstance): { sum: number; count: number } {
     let sum = 0, count = 0;
-    if (this.mods.lightsOut) return { sum, count };
     for (const l of this.placed()) {
       if (PARTS[l.def].kind !== 'lamp') continue;
       const steps = this.lampLevel(l.uid);
       if (!steps) continue;
       const lamp = lampStats(dialValue(l, 'radius'), this.mods);
       if (Math.hypot(l.x - inst.x, l.y - inst.y) <= lamp.radius) {
-        sum += lamp.bonus * steps;
+        sum += lamp.bonus * steps * this.mods.lightsDim;
         count++;
       }
     }
@@ -538,7 +566,7 @@ export class Scorer {
     const rk = this.ranks.get(ballId);
     if (!rk || rk.until <= t) return null;
     const steps = PARTS.rank.recipe.rank!.steps;
-    return { step: rk.step, x: Math.round(this.gainX(steps[rk.step - 1]) * 1000) / 1000, name: RANK_NAMES[rk.step - 1], left: rk.until - t };
+    return { step: rk.step, x: Math.round(this.dimX(this.gainX(steps[rk.step - 1])) * 1000) / 1000, name: RANK_NAMES[rk.step - 1], left: rk.until - t };
   }
 
   /** Multipliers that depend on the moment, not the part: the ball's rank, Thrifty, Multiball Madness, Last Call, Purist. */
@@ -561,6 +589,11 @@ export class Scorer {
     return { x, notes };
   }
 
+  /** The Vault: +points for every $1 you hold, up to its cap. */
+  private vaultOf(r: Recipe): number {
+    return r.vault ? Math.min(r.vault.cap, r.vault.per * Math.max(0, Math.floor(this.opts.cash?.() ?? 0))) : 0;
+  }
+
   /** Purist: the table holds few enough part types (Big Boi does not count). */
   puristOk(): boolean {
     return new Set(this.placed().filter((p) => !p.fixed).map((p) => p.def)).size <= this.mods.puristTypes;
@@ -576,17 +609,17 @@ export class Scorer {
     const order = this.order === inst.uid ? ORDER.x : 1;
     const leaf = inst.inlay === 'goldleaf' ? this.leafOf(inst) : 0, ruby = inst.inlay === 'ruby' ? RUBY_X : 1;
     const pts = points ?? (r.ice ? inst.ice ?? r.points : r.points);
-    const extra = (r.bonsai ?? 0) * (inst.age ?? 0) + (r.well ? r.well.points * (inst.well ?? 0) : 0);
+    const extra = (r.bonsai ?? 0) * (inst.age ?? 0) + (r.well ? r.well.points * (inst.well ?? 0) : 0) + this.vaultOf(r);
     return Math.round((pts + leaf + lvl + grown + variety + this.potOf(inst) + extra) * ruby * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * (1 + this.stripBonusAt(inst)) * this.plateXAt(inst) * this.grapeX(inst) * this.spotXAt(inst) * order);
   }
 
   /** The short number drawn on the part itself ("100", "10/spin", "+25%", "x1.25"). */
   label(inst: PartInstance): string | null {
     const def = PARTS[inst.def];
-    if (this.jammed.has(inst.def)) return 'JAMMED';
-    if (def.kind === 'lamp') return this.mods.lightsOut ? 'OFF' : `+${Math.round(lampStats(dialValue(inst, 'radius'), this.mods).bonus * this.lampLevel(inst.uid) * 100)}%`;
+    if (this.isJammed(inst)) return 'JAMMED';
+    if (def.kind === 'lamp') return `+${Math.round(lampStats(dialValue(inst, 'radius'), this.mods).bonus * this.mods.lightsDim * this.lampLevel(inst.uid) * 100)}%`;
     if (def.recipe.plate) return `x${def.recipe.plate.x}`;
-    if (def.kind === 'strip') return this.mods.lightsOut ? 'OFF' : `+${Math.round((def.recipe.strip?.bonus ?? 0) * 100)}%`;
+    if (def.kind === 'strip') return `+${Math.round((def.recipe.strip?.bonus ?? 0) * this.mods.lightsDim * 100)}%`;
     const r = this.recipe(inst.def);
     if (r.clock) {
       // the clock's face: the time (9 PM to midnight), MIDNIGHT while it strikes
@@ -599,10 +632,10 @@ export class Scorer {
       const now = this.ritualNow();
       return now ? RITUAL_NAMES[now.kind].toUpperCase() : `${this.altarOf(inst).sets}/${r.altar.sets}`;
     }
-    if (r.boom && !this.jammed.has(inst.def)) return `${(this.gongHits.get(inst.uid) ?? 0) % r.boom.every}/${r.boom.every}`; // hits towards the boom
-    if (r.bell && !this.firedThisRoundOf(inst.uid) && !this.jammed.has(inst.def)) return String(this.baseNow(inst, 1, 1, r.bell.first)); // its toll is waiting
-    if (r.typeX) return this.mods.lightsOut ? 'OFF' : `x${this.typeXNow(r.typeX).toFixed(2)}`;
-    if (r.xmult && !r.points) return this.mods.lightsOut ? 'OFF' : `x${(1 + (r.xmult - 1) * this.mods.multGain).toFixed(2)}`;
+    if (r.boom && !this.isJammed(inst)) return `${(this.gongHits.get(inst.uid) ?? 0) % r.boom.every}/${r.boom.every}`; // hits towards the boom
+    if (r.bell && !this.firedThisRoundOf(inst.uid) && !this.isJammed(inst)) return String(this.baseNow(inst, 1, 1, r.bell.first)); // its toll is waiting
+    if (r.typeX) return `x${this.typeXNow(r.typeX).toFixed(2)}`;
+    if (r.xmult && !r.points) return `x${this.lightX(inst.def, this.gainX(r.xmult)).toFixed(2)}`;
     const n = this.baseNow(inst);
     if (n === null) return null;
     const tiers = r.tiers;
@@ -624,7 +657,7 @@ export class Scorer {
     const multBefore = this.mult;
     let points = Math.round(base * multBefore);
     // a Bank Ring on the table holds part of every hit back as the ball's heat, until it is banked
-    const ring = kind === 'hit' && points > 0 && !PARTS[inst.def].recipe.ring ? this.placed().find((p) => PARTS[p.def].recipe.ring && !this.jammed.has(p.def)) : undefined;
+    const ring = kind === 'hit' && points > 0 && !PARTS[inst.def].recipe.ring ? this.placed().find((p) => PARTS[p.def].recipe.ring && !this.isJammed(p)) : undefined;
     let held = 0;
     if (ring) {
       held = Math.round(points * PARTS[ring.def].recipe.ring!.hold);
@@ -634,8 +667,11 @@ export class Scorer {
     // the Old Bells' rings multiply the whole Mult, so every +Mult a ball gains counts ×ringX too
     this.mult = ceil(Math.round((this.mult + multGain * this.ringX) * xmult * 1000) / 1000);
     this.peakMult = Math.max(this.peakMult, this.mult);
+    this.fresh = ceil((this.fresh + multGain * this.ringX) * xmult);
+    this.peakGain = Math.max(this.peakGain, this.fresh - this.freshStart());
     points = Math.min(ceil(points), SCORE_CEIL - this.score);
     this.score = ceil(this.score + points);
+    this.ballPoints += points;
     this.money += money;
     if (this.score >= this.goal) this.goalReached = true;
     if (kind === 'bonus') this.flashStrips(t);
@@ -669,6 +705,11 @@ export class Scorer {
   /** A Mult gain after the boss's Flat Rate. */
   private gain(n: number) { return n * this.mods.multGain; }
   private gainX(x: number) { return 1 + (x - 1) * this.mods.multGain; }
+  /** Night Shift: a ×Mult moves half as far from ×1 (dimX), and a light's Mult gains are halved (lightGain, lightX). */
+  private dimX(x: number) { return 1 + (x - 1) * this.mods.lightsDim; }
+  private isLight(id: PartId) { return PARTS[id].tags.includes('light'); }
+  private lightGain(id: PartId, n: number) { return this.isLight(id) ? n * this.mods.lightsDim : n; }
+  private lightX(id: PartId, x: number) { return this.isLight(id) ? this.dimX(x) : x; }
 
   /** Turn one physical event into zero or more attributed score events. */
   consume(ev: SimEvent): ScoreEvent[] {
@@ -682,6 +723,7 @@ export class Scorer {
       return [];
     }
     if (ev.type === 'gremlin') { this.curBall = ev.ballId; return this.gremlin(ev); }
+    if (ev.type === 'cashIn') { this.curBall = ev.ballId; return this.cashIn(ev); }
     if (ev.type === 'partRelease') { this.curBall = ev.ballId; return this.wheelStop(ev); }
     if (ev.type !== 'partHit') return [];
     this.now = ev.t;
@@ -699,8 +741,7 @@ export class Scorer {
     const r = this.recipe(inst.def);
     const m = this.mods;
     const out: ScoreEvent[] = [];
-    if (this.jammed.has(inst.def)) return out;
-    if (m.lightsOut && def.tags.includes('light')) return out;
+    if (this.isJammed(inst)) return out;
 
     // lamps only light up
     if (def.kind === 'lamp') {
@@ -727,9 +768,12 @@ export class Scorer {
       if (!ev.goal || this.coolingDown(inst.uid, ev.t)) return out;
       this.coolUntil.set(inst.uid, ev.t + (r.cooldown ?? 1.5) * this.coolX(inst));
       const situ = this.situational(ev);
-      const pts = Math.round(((r.points ?? 0) + (r.perLevel ?? 0) * this.effLevel(inst)) * modFactor(inst.def, m) * (1 + this.lampBonusAt(inst).sum) * situ.x);
+      // the Cook's order applies to a goal like to any other part: it pays triple, and the order is done
+      const order = this.order === inst.uid ? ORDER.x : 1;
+      if (order > 1) this.order = null;
+      const pts = Math.round(((r.points ?? 0) + (r.perLevel ?? 0) * this.effLevel(inst)) * modFactor(inst.def, m) * (1 + this.lampBonusAt(inst).sum) * situ.x * order);
       const x = this.takeX(inst.def, this.gainX(r.goal!.xmult), this.gainX(r.goal!.xmultCap));
-      out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, 0, 0, [`${pts} goal`, ...situ.notes], 'GOAL!', undefined, x));
+      out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, 0, 0, [`${pts} goal`, ...(order > 1 ? [`x${order} order`] : []), ...situ.notes], 'GOAL!', undefined, x));
       return out;
     }
     // a moving part scores only when its moving piece is hit (the duck, the roller), not its rail
@@ -749,14 +793,16 @@ export class Scorer {
 
     // the Whale swallows a spark; every so often it spouts them back out
     if (r.whale && ev.swallow) {
-      const w = this.whaleFed.get(inst.uid) ?? { fed: 0, spouts: 0 };
+      const w = this.whaleFed.get(inst.uid) ?? { fed: 0, since: 0, restUntil: -1 };
       w.fed++;
+      w.since++;
       this.whaleFed.set(inst.uid, w);
       const situ = this.situational(ev);
       const pts = Math.round(r.whale.swallow * modFactor(inst.def, m) * situ.x);
       out.push(this.award(inst, ev.t, ev.x, ev.y, 'hit', pts, 0, 0, [`${pts} swallowed`, ...situ.notes]));
-      if (w.fed % r.whale.every === 0 && w.spouts < r.whale.perBall) {
-        w.spouts++;
+      if (w.since >= r.whale.every && ev.t >= w.restUntil) {
+        w.since = 0;
+        w.restUntil = ev.t + r.whale.rest;
         const big = Math.round(r.whale.points * modFactor(inst.def, m) * situ.x);
         const e = this.award(inst, ev.t, inst.x, inst.y, 'bonus', big, 0, 0, [`${big} spout`, ...situ.notes], 'THAR SHE BLOWS!');
         e.sparks = [{ n: r.whale.sparks, x: inst.x, y: inst.y + footprint(def) * 0.5, r: footprint(def) + 0.45, parent: ev.ballId }];
@@ -783,7 +829,7 @@ export class Scorer {
     if (!r.points && r.xmult) {
       if (this.coolingDown(inst.uid, ev.t)) return out;
       if (r.cooldown) this.coolUntil.set(inst.uid, ev.t + r.cooldown * this.coolX(inst));
-      const x = this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined);
+      const x = this.takeX(inst.def, this.lightX(inst.def, this.gainX(r.xmult)), r.xmultCap ? this.gainX(r.xmultCap) : undefined);
       out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [], x > 1.0001 ? `MULT x${x.toFixed(2)}` : 'X LANE MAXED', undefined, x));
       if (r.lightsLane) { const lane = this.lightNextLane(); if (lane) out.push(...this.checkLaneSet(lane, ev, inst)); }
       return out;
@@ -826,9 +872,10 @@ export class Scorer {
       if (plate > 1) notes.push(`x${Math.round(plate * 100) / 100} power plate`);
       const edge = r.edgeShot && ev.edge ? r.edgeShot.x : 1;
       if (edge > 1) notes.push(`x${edge} edge shot`);
-      const bonsai = (r.bonsai ?? 0) * (inst.age ?? 0), well = r.well ? r.well.points * (inst.well ?? 0) : 0;
+      const bonsai = (r.bonsai ?? 0) * (inst.age ?? 0), wish = r.well ? r.well.points * (inst.well ?? 0) : 0, vault = this.vaultOf(r), well = wish + vault;
       if (bonsai) notes.push(`+${bonsai} bonsai`);
-      if (well) notes.push(`+${well} wishes`);
+      if (vault) notes.push(`+${vault} vault`);
+      if (wish) notes.push(`+${wish} wishes`);
       const bunch = this.grapeX(inst);
       if (bunch > 1) notes.push(`x${bunch} bunch`);
       const echo = this.echoX(inst, ev);
@@ -874,12 +921,12 @@ export class Scorer {
       // Mult: plus, times, and per spin
       // a zap scores the part's points but never raises the Mult: Mult comes from the ball itself
       const zapped = !!ev.zap;
-      let multGain = zapped ? 0 : this.gain(this.take(this.multPaid, inst.def, r.mult ?? 0, r.multCap));
+      let multGain = zapped ? 0 : this.lightGain(inst.def, this.gain(this.take(this.multPaid, inst.def, r.mult ?? 0, r.multCap)));
       if (r.mult && !zapped && multGain < this.gain(r.mult) - 1e-9) notes.push('Mult maxed for this ball');
       if (r.well && inst.well && !zapped) multGain += this.gain(this.take(this.multPaid, 'well', r.well.mult * inst.well, r.well.multCap));
       if (r.spinMult && !zapped) multGain += this.gain(this.take(this.multPaid, 'spin', r.spinMult * m.spinMult * spins, (r.spinMultCap ?? 0) * m.spinMult));
       if (zapped && (r.mult || r.spinMult || (r.well && inst.well))) notes.push('zapped: no Mult');
-      const xmult = zapped ? 1 : r.typeX ? this.takeX(inst.def, this.typeXNow(r.typeX), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : r.xmult ? this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
+      const xmult = zapped ? 1 : r.typeX ? this.takeX(inst.def, this.typeXNow(r.typeX), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : r.xmult ? this.takeX(inst.def, this.lightX(inst.def, this.gainX(r.xmult)), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
       const base = Math.round((pts + leaf + level + grown + variety + pot + bonsai + well) * spins * tierX * factor * mf * ruby * (1 + lamp.sum) * (1 + strip) * plate * edge * bunch * echo * spot * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
       const twice = gem === 'opal' ? 2 : 1; // an Opal counts every hit twice for growth
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + twice);
@@ -896,7 +943,7 @@ export class Scorer {
       const rang = toll && r.bell ? this.notch(inst, r.bell.notches) : false;
       if (toll && r.bell) notes.push(rang ? 'the bell rings' : `notch ${this.notchesOf(inst)}/${r.bell.notches}`);
       if (r.lightsLamps) this.flashLamps(ev.t, r.lightsLamps);
-      const label = r.perBall && xmult > 1 ? `MULT x${xmult.toFixed(2)}` : r.jackpot && pot ? 'JACKPOT!' : edge > 1 ? 'EDGE SHOT!' : undefined;
+      const label = ev.time ? `+${ev.time} S` : r.perBall && xmult > 1 ? `MULT x${xmult.toFixed(2)}` : r.jackpot && pot ? 'JACKPOT!' : edge > 1 ? 'EDGE SHOT!' : undefined;
       const scored = this.award(inst, ev.t, ev.x, ev.y, r.perBall || (r.jackpot && pot) ? 'bonus' : 'hit', base, multGain, money, notes, label, ev.spins, xmult);
       if (tier && inst.def === 'vari') scored.tier = r.tiers!.indexOf(tier);
       if (hotBonus) scored.hot = true;
@@ -979,7 +1026,7 @@ export class Scorer {
         this.gongHits.set(inst.uid, n);
         if (n % r.boom.every === 0) out.push(...this.boom(inst, ev));
       }
-      // Gold Leaf: this part is worth +1 more from now on (up to LEAF_CAP times its points)
+      // Gold Leaf: this part is worth +LEAF_STEP more from now on (up to LEAF_CAP times its points)
       if (gem === 'goldleaf') this.addLeaf(inst, LEAF_CAP * r.points);
       // Red Seal: the hit scores a second time, then the part is dark for a moment
       if (gem === 'redseal' && !this.sealing) {
@@ -1040,7 +1087,7 @@ export class Scorer {
     if (this.take(this.setsPaid, 'lane', 1, r.setCap) === 0) return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`${r.setCap} sets this ball`], 'LANE SETS MAXED')];
     const situ = this.situational(ev);
     const pts = Math.round(r.setBonus.points * m.setFactor * modFactor('lane', m) * situ.x);
-    return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, ev.zap ? 0 : this.gain(r.setBonus.mult * m.setFactor), 0, [`${pts} set bonus`, ...situ.notes], 'LANES COMPLETE'), ...this.setDone(ev)];
+    return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, ev.zap ? 0 : this.lightGain('lane', this.gain(r.setBonus.mult * m.setFactor)), 0, [`${pts} set bonus`, ...situ.notes], 'LANES COMPLETE'), ...this.setDone(ev)];
   }
 
   /**
@@ -1092,10 +1139,10 @@ export class Scorer {
     return this.leafed.get(inst.uid) ?? inst.leaf ?? 0;
   }
 
-  /** Gold Leaf: +1 for good (the run's, through onLeaf; a test ball's, in this scorer only). */
+  /** Gold Leaf: +LEAF_STEP for good (the run's, through onLeaf; a test ball's, in this scorer only). */
   private addLeaf(inst: PartInstance, cap: number) {
     if (this.opts.onLeaf) this.opts.onLeaf(inst, cap);
-    else this.leafed.set(inst.uid, Math.min(cap, this.leafOf(inst) + 1));
+    else this.leafed.set(inst.uid, Math.min(cap, this.leafOf(inst) + LEAF_STEP));
   }
 
   /**
@@ -1119,7 +1166,7 @@ export class Scorer {
     const need = this.wizardNeedNow();
     if (this.wizFired || need === 0 || this.wizTypes.size < need) return null;
     const lamp = this.placed().find((p) => this.recipe(p.def).wizard);
-    if (!lamp || this.jammed.has(lamp.def)) return null;
+    if (!lamp || this.isJammed(lamp)) return null;
     const w = this.recipe(lamp.def).wizard!;
     this.wizFired = true;
     this.wizUntil = ev.t + w.seconds;
@@ -1137,7 +1184,7 @@ export class Scorer {
 
   /** The segments, less any a boss has jammed (a jammed type cannot be hit). */
   private wizardNeedNow(): number {
-    return this.jammed.size ? Math.min(this.wizNeed, wizardNeed(this.getParts().filter((p) => !this.jammed.has(p.def)))) : this.wizNeed;
+    return this.jammed.size || this.jammedUid !== null ? Math.min(this.wizNeed, wizardNeed(this.getParts().filter((p) => !this.isJammed(p)))) : this.wizNeed;
   }
 
   /** A Piñata takes a hit (1 to 4 by the ball's speed, 1 from a zap or a spark); at zero it bursts. */
@@ -1158,10 +1205,30 @@ export class Scorer {
     const hutch = this.getParts().find((p) => p.uid === ev.uid && p.placed);
     if (!hutch) return [];
     this.now = ev.t;
+    // a gremlin is a scoring hit: it counts for the Midnight Clock, Lucky Seven and the Jackpot pot
+    this.roundHits++;
+    this.ballHits++;
+    const midnight = this.clockHit(ev);
+    const lucky = this.mods.luckyEvery > 0 && this.ballHits % this.mods.luckyEvery === 0;
     const situ = this.situational(ev);
-    const base = Math.round(GREMLIN.points * this.mods.pointsFactor * situ.x);
+    const base = Math.round(GREMLIN.points * this.mods.pointsFactor * situ.x * (lucky ? this.mods.luckyX : 1));
     const money = this.mods.noCoins ? 0 : this.take(this.moneyPaid, 'gremlin', GREMLIN.money, GREMLIN.moneyCap);
-    return [this.award(hutch, ev.t, ev.x, ev.y, 'hit', base, 0, money, [`${base} gremlin`, ...situ.notes], 'GOTCHA!')];
+    const out = [this.award(hutch, ev.t, ev.x, ev.y, 'hit', base, 0, money, [`${base} gremlin`, ...(lucky ? [`x${this.mods.luckyX} lucky seven`] : []), ...situ.notes], 'GOTCHA!')];
+    if (midnight) out.push(midnight);
+    return out;
+  }
+
+  /**
+   * Closing time's cash-in: a ball still on the table when the run-out ends is swallowed by Big Boi, who pays
+   * CASH_IN of the points this ball has scored (rounded to 5), once a ball.
+   */
+  private cashIn(ev: { t: number; x: number; y: number }): ScoreEvent[] {
+    const boi = this.placed().find((p) => p.def === 'mega');
+    this.now = ev.t;
+    if (!boi || this.cashedIn) return boi ? [this.award(boi, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, ['gulp'], 'GULP!')] : [];
+    this.cashedIn = true;
+    const bonus = Math.round((this.ballPoints * CASH_IN) / 5) * 5;
+    return [this.award(boi, ev.t, boi.x, boi.y, 'bonus', bonus / Math.max(1e-9, this.mult), 0, 0, [`${Math.round(CASH_IN * 100)}% of the ball's points`], `GULP! +${bonus.toLocaleString('en-US')}`)];
   }
 
   /** A Marble Jar's marbles (every ball launched brings one spark per marble). */
@@ -1199,8 +1266,9 @@ export class Scorer {
     this.now = ev.t;
     const spun = this.spunOf(inst);
     const situ = this.situational(ev);
-    if (spun.length >= WHEEL.length) {
-      // Wheel Mania: a 4-ball multiball, and every hit ×2 for a while
+    if (spun.length >= WHEEL.length && !this.maniaDone) {
+      // Wheel Mania (at most once a round): a 4-ball multiball, and every hit ×2 for a while
+      this.maniaDone = true;
       this.keep(inst, { spun: [] });
       this.wheelXUntil = ev.t + 20;
       const e = this.award(inst, ev.t, inst.x, inst.y, 'bonus', 0, 0, 0, ['3 more balls, every hit x2 for 20 s'], 'WHEEL MANIA!');
@@ -1310,14 +1378,14 @@ export class Scorer {
 
   /** The parts a zap from `src` could reach right now: zappable, not jammed, not zapped in the last ZAP_COOLDOWN s. */
   private zapTargets(src: PartInstance, t: number): PartInstance[] {
-    return this.placed().filter((p) => p.uid !== src.uid && zappable(p.def) && !this.jammed.has(p.def) && (this.zapCool.get(p.uid) ?? -1) <= t);
+    return this.placed().filter((p) => p.uid !== src.uid && zappable(p.def) && !this.isJammed(p) && (this.zapCool.get(p.uid) ?? -1) <= t);
   }
 
   /** Zap these parts: each scores as if the ball of `ev` had hit it, and its events say where the zap came from. */
   private zap(src: PartInstance, targets: PartInstance[], ev: ZapCause, by: ZapKind): ScoreEvent[] {
     const out: ScoreEvent[] = [];
     for (const p of targets) {
-      this.zapCool.set(p.uid, ev.t + ZAP_COOLDOWN);
+      this.zapCool.set(p.uid, ev.t + ZAP_COOLDOWN * this.coolX(src)); // a Garnet in the zapping part halves the rest
       const zev = { type: 'partHit' as const, t: ev.t, uid: p.uid, ballId: ev.ballId, x: p.x, y: p.y, speed: ev.speed, zap: true, depth: (ev.depth ?? 0) + 1, mover: PARTS[p.def].kind === 'mover' || undefined };
       for (const e of this.hit(p, zev)) out.push({ ...e, zap: { x: src.x, y: src.y, by } });
     }
@@ -1350,7 +1418,7 @@ export class Scorer {
       const inst = this.placed().find((p) => p.uid === uid);
       k.spent = true;
       k.at = t + (inst ? (this.recipe(inst.def).keg?.rearm ?? 0) * this.coolX(inst) : 0);
-      if (!inst || this.jammed.has(inst.def)) continue;
+      if (!inst || this.isJammed(inst)) continue;
       const r = this.recipe(inst.def).keg!, m = this.mods;
       this.now = t;
       this.curBall = k.ballId; // its heat goes to the ball that lit it

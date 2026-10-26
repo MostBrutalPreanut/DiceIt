@@ -34,9 +34,9 @@ describe('gems (inlays)', () => {
     }
     expect(['disco', 'fame'].every((id) => gemFits('emerald', id as PartId))).toBe(true);
     expect(gemFits('emerald', 'pop')).toBe(false);
-    expect(['xlane', 'goal', 'laser', 'keg'].every((id) => gemFits('garnet', id as PartId))).toBe(true);
-    expect(gemFits('garnet', 'pop') || gemFits('garnet', 'kickback')).toBe(false);
-    expect(['pop', 'duck', 'trophy'].every((id) => gemFits('opal', id as PartId))).toBe(true);
+    expect(['xlane', 'goal', 'laser', 'keg', 'sparkler', 'rocks', 'split', 'kickback', 'tesla'].every((id) => gemFits('garnet', id as PartId))).toBe(true);
+    expect(gemFits('garnet', 'pop')).toBe(false);
+    expect(['pop', 'duck', 'trophy', 'bonsai'].every((id) => gemFits('opal', id as PartId))).toBe(true);
     expect(gemFits('opal', 'coin')).toBe(false);
   });
 
@@ -112,21 +112,21 @@ describe('what each gem does', () => {
     expect(s.label(set('pop', 1, 'ruby'))).toBe(String(Math.round((PARTS.pop.recipe.points! + 1) * RUBY_X)));
   });
 
-  it('Gold Leaf: +1 every time its part scores, for the run (a test ball only in its own scorer), up to 5× its points', () => {
+  it('Gold Leaf: +2 every time its part scores, for the run (a test ball only in its own scorer), up to 5× its points', () => {
     const { g, pop } = workshop();
     pop.inlay = 'goldleaf';
     const test = g.scorer;
     test.resetRound();
     test.consume(hit(50));
-    expect(test.leafOf(pop)).toBe(1);
+    expect(test.leafOf(pop)).toBe(2);
     expect(pop.leaf).toBeUndefined();
     g.startRound();
     const a = g.scorer.consume(hit(50))[0];
     g.scorer.consume(hit(50));
-    expect(pop.leaf).toBe(2);
+    expect(pop.leaf).toBe(4);
     const b = g.scorer.consume(hit(50))[0];
-    expect(b.notes).toContain('+2 gold leaf');
-    expect(b.base - a.base).toBe(2 + 2 * PARTS.pop.recipe.grow!); // +2 leaf, and the Pops have grown twice
+    expect(b.notes).toContain('+4 gold leaf');
+    expect(b.base - a.base).toBe(4 + 2 * PARTS.pop.recipe.grow!); // +4 leaf, and the Pops have grown twice
     pop.leaf = LEAF_CAP * PARTS.pop.recipe.points! - 1;
     g.scorer.consume(hit(50));
     g.scorer.consume(hit(50));
@@ -175,7 +175,7 @@ describe('what each gem does', () => {
 
   it("a part's card says which gem is set in it", () => {
     const text = describePart(PARTS.pop, { ...set('pop', 1, 'goldleaf'), leaf: 4 }).map((l) => l.text).join(' ');
-    expect(text).toContain('Set with a Gold Leaf: every time it scores, it is worth +1 more');
+    expect(text).toContain('Set with a Gold Leaf: every time it scores, it is worth +2 more');
     expect(text).toContain('(+4 so far)');
     expect(describePart(PARTS.ruby).map((l) => l.text).join(' ')).toContain('drop it on a part on your table');
   });

@@ -75,7 +75,6 @@ export class Human implements Player {
     for (const b of balls) {
       if (b.inLane || b.held) continue;
       for (const f of sim.flipperStates()) {
-        if (f.auto) continue;
         const sign = f.side === 'L' ? 1 : -1;
         const dx = (b.x - f.pivotX) * sign, dy = b.y - f.pivotY;
         if (dx > 0.3 && dx < f.length + 0.6 && dy > -1 && dy < 2.4 && b.vy < 8) {
@@ -333,7 +332,7 @@ export function refreshMods(g: Game, s: Setup) {
 /** After a measured round: age parts, grow Momentum/Afterglow as if cleared, and ready the next round on the same Game. */
 export function nextRound(g: Game, s: Setup, cleared = true) {
   for (const d of g.decals) {
-    const gr = decalGrowth(d, cleared, g.scorer.peakMult, g.scorer.ballStart);
+    const gr = decalGrowth(d, cleared, g.scorer.peakGain);
     if (gr) d.grown = Math.round(((d.grown ?? 0) + gr) * 100) / 100;
   }
   const r = g.round;

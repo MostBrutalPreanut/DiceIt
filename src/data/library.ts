@@ -129,7 +129,7 @@ export const PART_HINTS: Partial<Record<PartId, Hint>> = {
   nest: 'egg', ice: 'snow', well: 'drop', bonsai: 'leaf', wreck: { text: 'XL' }, gumball: 'marbles', whale: 'drop',
   fame: 'star', disco: 'sparkle', xlane: { text: '×' }, rank: 'chevron', jackpot: { text: '7' }, magnet: 'magnet',
   saver: 'plus', kickback: 'arrow', plate: 'ring', ring: { text: '%' }, split: 'fork', echo: { text: ')))' }, spot: 'sun',
-  capsule: 'hourglass', pinata: 'candy', insure: 'shield', jar: 'dots', broom: 'moon', wizard: 'hat', piggy: 'coin',
+  capsule: 'hourglass', hourglass: 'hourglass', vault: 'coin', pinata: 'candy', insure: 'shield', jar: 'dots', broom: 'moon', wizard: 'hat', piggy: 'coin',
   // every gem is the same oval in black: its first letter
   ruby: { text: 'R' }, garnet: { text: 'G' }, opal: { text: 'O' }, goldleaf: 'leaf', redseal: { text: 'S' }, topaz: 'sparkle', emerald: { text: 'E' },
 };

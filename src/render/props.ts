@@ -90,6 +90,35 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       }
       break;
     }
+    case 'vault': {
+      // the Vault: a squat steel safe of a bumper, its dial on top
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      const steel = st.hit ? mat(t, mix(t.role.vault, WHITE, 0.4)) : role;
+      p.cyl(x, y, r, 0, 0.2, mat(t, mix(t.role.vault, t.shadeTint, 0.3)));
+      const top = p.cyl(x, y, r * 0.9, 0.2, 0.55, steel);
+      void top;
+      p.face(ring(x, y, r * 0.5).map(([a, b]) => P(v, a, b, 0.76)), steel.light, { sil: false, line: 0.35 });
+      p.op((g) => {
+        for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2, [X, Y] = P(v, x + Math.cos(a) * r * 0.42, y + Math.sin(a) * r * 0.42, 0.76); g.circle(X, Y, S * 0.035).fill(t.ink); }
+        const [cx, cy] = P(v, x, y, 0.76), [hx, hy] = P(v, x + r * 0.3, y + r * 0.12, 0.76);
+        g.moveTo(cx, cy).lineTo(hx, hy).stroke({ width: v.lw * 1.4, color: t.ink, cap: 'round' });
+        g.circle(cx, cy, S * 0.09).fill(t.ink);
+      });
+      break;
+    }
+    case 'hourglass': {
+      // the Hourglass: two glass bulbs on a wooden base and cap, sand running from top to bottom
+      shadow(under, v, t, x, y, r * 1.0, r * 0.95);
+      const wood = mat(t, t.role.hourglass), glass = mat(t, st.hit ? WHITE : mix(t.paper, '#bfe9ff', 0.5));
+      p.cyl(x, y, r, 0, 0.18, wood);
+      p.cyl(x, y, r * 0.62, 0.18, 0.42, glass);
+      p.cyl(x, y, r * 0.2, 0.6, 0.18, glass);
+      p.cyl(x, y, r * 0.62, 0.78, 0.42, glass);
+      p.cyl(x, y, r, 1.2, 0.16, wood);
+      const sand = mix(t.role.hourglass, '#ffd23f', 0.6);
+      p.op((g) => { const [ax, ay] = P(v, x, y, 0.35), [bx, by] = P(v, x, y, 0.95); g.ellipse(ax, ay, S * r * 0.45, S * r * 0.2).fill(sand); g.ellipse(bx, by, S * r * 0.3, S * r * 0.12).fill(sand); });
+      break;
+    }
     case 'mega': {
       shadow(under, v, t, x, y, r * 1.05, r * 1.05, 0.24);
       const skin = st.hit ? mat(t, mix(t.role.mega, WHITE, 0.3)) : role;

@@ -1,4 +1,4 @@
-import { CASCADE, footprint, gemFits, isDecor, isInlay, makePart, MAX_LEVEL, PARTS, PART_IDS, rarityOdds, sellPrice, SHOP_IDS, type PartDef, type PartId, type PartInstance, type Rarity } from '../data/parts';
+import { CASCADE, LEAF_STEP, footprint, gemFits, isDecor, isInlay, makePart, MAX_LEVEL, PARTS, PART_IDS, rarityOdds, sellPrice, SHOP_IDS, type PartDef, type PartId, type PartInstance, type Rarity } from '../data/parts';
 import { neutralMods, simModsOf, type Mods } from '../data/mods';
 import {
   BOSS_EVERY, computeMods, DECAL_SLOTS, DECALS, rollDecalPick, SKIP_PAY,
@@ -9,9 +9,9 @@ import { BOSSES, bossOf, FINAL_ROUND, planBosses, type BossDef, type BossId } fr
 import type { MachineId } from '../data/bigboi';
 import { canPlace, canPlaceLedge, decorParts, WALL_GAP, ensureBigBoi, inventoryParts, loadLayout, placedParts, settleDecor, starterLayout, type Layout } from '../sim/layout';
 import { decorSpot } from '../sim/cabinet';
-import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
+import { BUILD_AREA, MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
 import { clampLedge, LEDGE } from '../sim/table';
-import { GOALS, GOAL_GROWTH } from '../data/goals';
+import { ENDLESS_GOALS, GOALS, GOAL_GROWTH, LAST_ROUND } from '../data/goals';
 import { Rng } from '../sim/rng';
 import { createSim, NO_INPUT, type Input, type Sim, type SimEvent } from '../sim/sim';
 import { Scorer, SCORE_CEIL, type ScoreEvent, type SparkBurst } from './scoring';
@@ -21,7 +21,7 @@ export type Mode = 'workshop' | 'round' | 'roundEnd' | 'runOver';
 export type GameEvent =
   | { type: 'goal' }
   | { type: 'ballEnd'; ballsLeft: number }
-  | { type: 'roundWon'; payout: Payout; runWon: boolean }
+  | { type: 'roundWon'; payout: Payout; runWon: boolean; allDone?: boolean }
   | { type: 'runOver' }
   | { type: 'tilt' };
 
@@ -51,10 +51,11 @@ export function niceGoal(n: number): number {
   return Math.round(n / mag) * mag;
 }
 
-/** The goal for a round: the table (src/data/goals.ts), then GOAL_GROWTH a round beyond it. */
+/** The goal for a round: the table (src/data/goals.ts), then endless's list to round 30 (tools past it: GOAL_GROWTH a round). */
 export function goalFor(round: number): number {
   if (round <= GOALS.length) return GOALS[Math.max(1, round) - 1];
-  return niceGoal(GOALS[GOALS.length - 1] * Math.pow(GOAL_GROWTH, round - GOALS.length));
+  if (round <= LAST_ROUND) return ENDLESS_GOALS[round - GOALS.length - 1];
+  return niceGoal(ENDLESS_GOALS[ENDLESS_GOALS.length - 1] * Math.pow(GOAL_GROWTH, round - LAST_ROUND));
 }
 
 export interface StepResult {
@@ -102,6 +103,8 @@ export interface RunSave {
   rings?: number;
   /** Free rerolls won in play, not yet spent. */
   bonusRerolls?: number;
+  /** The part (by uid) that scored most in the last round played (The Jammer jams it). */
+  lastTop?: number | null;
 }
 
 /** Validate a saved run from storage. Returns null for anything that is not a v2 save. */
@@ -217,6 +220,8 @@ export class Game {
   lastInlaid: number | null = null;
   /** Old Bell rings this run: every ball's Mult is ×1.2 for each, for the rest of the run (selling the bell keeps them). */
   rings = 0;
+  /** The part (by uid) that scored most in the last round played: The Jammer jams it. */
+  lastTop: number | null = null;
   /** Parts the toolbox had no room for and that were sold instead; the UI reports these and clears the list. */
   soldOverflow: { def: PartId; refund: number }[] = [];
 
@@ -232,13 +237,13 @@ export class Game {
    */
   private newScorer(goal: number, persistent = false) {
     const base = {
-      mods: this.mods, machine: this.machine, seed: this.seed * 31 + this.round, baseMult: this.startMult(this.mods), rings: this.rings,
-      balls: () => this.sim.ballCount, lastBall: () => this.mode === 'round' && this.ballsLeft <= 1, cash: () => this.money,
+      mods: this.mods, machine: this.machine, seed: this.seed * 31 + this.round, baseMult: this.startMult(this.mods), rings: this.rings, decalKept: this.decals.reduce((a, d) => a + (d.grown ?? 0), 0),
+      balls: () => this.sim.ballsInPlay, lastBall: () => this.mode === 'round' && this.ballsLeft <= 1, cash: () => this.money,
     };
     if (persistent) {
       const boss = this.boss;
       const later = boss?.decalsOffUntilHalf && !this.fixedMods ? (() => { const m = this.roundMods(true); return { mods: m, at: goal / 2, baseMult: this.startMult(m) }; })() : undefined;
-      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), onPolish: (inst, by, cap) => this.polish(inst, by, cap), onNotch: (inst, n) => this.notch(inst, n), onLeaf: (inst, cap) => this.leaf(inst, cap), onKeep: (inst, patch) => Object.assign(inst, patch), onPrize: () => { this.prizeDue = true; }, jam: boss?.jam, later });
+      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), onPolish: (inst, by, cap) => this.polish(inst, by, cap), onNotch: (inst, n) => this.notch(inst, n), onLeaf: (inst, cap) => this.leaf(inst, cap), onKeep: (inst, patch) => Object.assign(inst, patch), onPrize: () => { this.prizeDue = true; }, jam: boss?.jam, jamUid: this.lastTop, later });
     }
     return new Scorer(goal, () => this.layout.parts, base); // a test ball's level-ups stay in its own scorer
   }
@@ -250,7 +255,8 @@ export class Game {
   startMult(m: Mods): number {
     const onTable = this.layout.parts.filter((p) => p.placed && !p.fixed).length;
     const empty = Math.max(0, m.toolboxSlots - this.inventory.length);
-    return Math.round((m.startMult + m.startMultPerPart * onTable + m.startMultPerEmpty * empty + this.keptMult) * 100) / 100;
+    const nest = Math.min(m.startMultPerFiveCap, m.startMultPerFive * Math.floor(Math.max(0, this.money) / 5));
+    return Math.round((m.startMult + m.startMultPerPart * onTable + m.startMultPerEmpty * empty + nest + this.keptMult) * 100) / 100;
   }
 
   /** Mult kept from round to round: the polish of the Trophy Cups on the table, and what Momentum and Afterglow have kept. */
@@ -277,7 +283,7 @@ export class Game {
 
   /** Gold Leaf: its part is worth +1 more (at most `cap`), for the rest of the run. Returns what it adds now. */
   leaf(inst: PartInstance, cap: number): number {
-    inst.leaf = Math.min(cap, (inst.leaf ?? 0) + 1);
+    inst.leaf = Math.min(cap, (inst.leaf ?? 0) + LEAF_STEP);
     return inst.leaf;
   }
 
@@ -314,6 +320,12 @@ export class Game {
   }
 
   /** The toolbox has room for a whole pack of this part (three Lane Rollovers need three free slots). */
+  /** Is there a free spot for this part anywhere on the table as it stands (the big rail parts need a wide one)? */
+  tableRoomFor(id: PartId): boolean {
+    for (let y = BUILD_AREA.y0; y <= BUILD_AREA.y1; y += 0.5) for (let x = BUILD_AREA.x0; x <= BUILD_AREA.x1; x += 0.5) if (canPlace(this.layout, id, x, y)) return true;
+    return false;
+  }
+
   hasRoomFor(id: PartId): boolean {
     return this.sandbox || this.inventory.length + (PARTS[id].pack ?? 1) <= this.toolboxSlots;
   }
@@ -474,7 +486,7 @@ export class Game {
 
   continueAfterRound() {
     // a round played: the Bonsai Bumpers and Time Capsules on the table are a round older
-    for (const p of this.placed) if (PARTS[p.def].recipe.bonsai || PARTS[p.def].recipe.capsule) p.age = (p.age ?? 0) + 1;
+    for (const p of this.placed) if (PARTS[p.def].recipe.bonsai || PARTS[p.def].recipe.capsule) p.age = (p.age ?? 0) + (PARTS[p.def].recipe.bonsai && p.inlay === 'opal' ? 2 : 1); // an Opal ages a Bonsai twice as fast
     this.round++;
     this.mods = this.workshopMods(); // the new round's shop (the Side Mirror counts the rounds)
     this.shop = this.freshShop(new Rng(this.runSeed * 1000 + this.round), this.shop);
@@ -633,6 +645,7 @@ export class Game {
     this.rings = 0;
     this.prizeDue = false;
     this.bonusRerolls = 0;
+    this.lastTop = null;
     this.machine = machine;
     this.layout = starterLayout();
     // the starting bumpers wait in the toolbox: put them wherever you like, free to place and to move this visit
@@ -810,7 +823,7 @@ export class Game {
   save(): RunSave {
     return {
       v: 2, layout: this.layout, money: this.money, round: this.round, shop: this.shop, sandbox: this.sandbox, runSeed: this.runSeed,
-      picks: this.decals, pending: this.pending, runScore: this.runScore, machine: this.machine, bosses: this.bossPlan, won: this.won, rings: this.rings, bonusRerolls: this.bonusRerolls,
+      picks: this.decals, pending: this.pending, runScore: this.runScore, machine: this.machine, bosses: this.bossPlan, won: this.won, rings: this.rings, bonusRerolls: this.bonusRerolls, lastTop: this.lastTop,
     };
   }
 
@@ -831,6 +844,7 @@ export class Game {
     this.runScore = s.runScore ?? 0;
     this.rings = s.rings ?? 0;
     this.bonusRerolls = s.bonusRerolls ?? 0;
+    this.lastTop = s.lastTop ?? null;
     this.history = [];
     this.future = [];
     this.layout.parts = this.layout.parts.filter((p) => p.def in PARTS);
@@ -1298,24 +1312,28 @@ export class Game {
     this.pendingSparks = [];
     this.claim = false;
     this.wizardBalls = null;
-    if (this.scorer.goalReached || this.ballsLeft <= 0) this.runScore = Math.min(SCORE_CEIL, this.runScore + this.scorer.score);
+    if (this.scorer.goalReached || this.ballsLeft <= 0) {
+      this.runScore = Math.min(SCORE_CEIL, this.runScore + this.scorer.score);
+      this.lastTop = this.scorer.ledgerRows().find((r) => r.points > 0)?.uid ?? null; // The Jammer's next target
+    }
     if (this.scorer.goalReached) {
       this.payout = this.computePayout();
       this.money += this.payout.total;
       for (const d of this.decals) {
-        const g = decalGrowth(d, true, this.scorer.peakMult, this.scorer.ballStart);
+        const g = decalGrowth(d, true, this.scorer.peakGain);
         if (g) d.grown = Math.round(((d.grown ?? 0) + g) * 100) / 100; // Momentum and Afterglow keep Mult for the next rounds
       }
       this.mode = 'roundEnd';
       const runWon = this.round === FINAL_ROUND && !this.won;
       if (runWon) this.won = true;
-      out.push({ type: 'roundWon', payout: this.payout, runWon });
+      // round 30, the last round there is: the run is beaten for good, no more rounds
+      out.push({ type: 'roundWon', payout: this.payout, runWon, ...(this.round >= LAST_ROUND ? { allDone: true } : {}) });
     } else if (this.ballsLeft <= 0) {
       this.mode = 'runOver';
       out.push({ type: 'runOver' });
     } else {
       this.scorer.startBall();
-      this.sim.spawnBall();
+      this.sim.spawnBall(false); // a Twin Ball comes with the first ball of a round only
     }
   }
 
@@ -1350,11 +1368,14 @@ export function migrateParts(l: Layout, typeLevels?: Partial<Record<PartId, numb
   }
 }
 
+/** A cleared round pays this, flat, whatever the round (every purchase should count). */
+export const ROUND_PAY = 4;
+
 /** What a cleared round pays. One formula, used by the game and by the balance tool's economy check. */
 export function payoutFor(i: { round: number; ballsLeft: number; score: number; goal: number; coins: number; money: number; mods: Mods; boss?: boolean; types?: number; decals?: number; unusedSavers?: number }): Payout {
   const lines: Payout['lines'] = [];
   const m = i.mods;
-  lines.push({ label: `Round ${i.round} cleared`, amount: Math.max(0, 3 + i.round - m.payCut) });
+  lines.push({ label: `Round ${i.round} cleared`, amount: Math.max(0, ROUND_PAY - m.payCut) });
   if (i.boss) lines.push({ label: 'Boss beaten', amount: 2 + m.bossBonus });
   if (m.roundBonus > 0) lines.push({ label: 'Sponsor', amount: m.roundBonus });
   if (m.cabinetPay > 0) lines.push({ label: 'Coin Tray', amount: m.cabinetPay });

@@ -1,5 +1,5 @@
 import * as B from 'phaser-box2d/dist/PhaserBox2D.js';
-import { dialValue, footprint, PARTS, SMALL_FLIPPER, triPoints, zappable, type PartInstance } from '../data/parts';
+import { dialValue, footprint, GARNET_X, PARTS, SMALL_FLIPPER, triPoints, zappable, type PartInstance } from '../data/parts';
 import {
   BALL_R, BALL_SEARCH_AFTER, BALL_SEARCH_AGAIN, BALL_SEARCH_KICKS, BALL_SPAWN, BALL_TIMEOUT, CAT, DT, FLIPPER_LENGTH, FLIPPER_REST,
   FLIPPER_SPEED_DOWN, FLIPPER_SPEED_UP, FLIPPER_TORQUE, FLIPPER_UP, LANE_FLOOR_Y, LANE_TOP_Y,
@@ -24,7 +24,7 @@ export const NO_INPUT: Input = { left: false, right: false, plunge: false, nudge
 /** Physical things that happened. Scoring and presentation both consume this stream; neither feeds back. */
 export type SimEvent =
   /** `zap`: no ball touched it; the scorer made it score (a Tesla Coil's arc, a keg's blast...), `depth` zaps down a chain of kegs. The sim never sends one. */
-  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean; depth?: number; spark?: boolean; ride?: boolean; bucket?: boolean; swallow?: boolean }
+  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean; depth?: number; spark?: boolean; ride?: boolean; bucket?: boolean; swallow?: boolean; time?: number }
   | { type: 'partRelease'; t: number; uid: number; ballId: number }
   | { type: 'extraBall'; t: number; uid: number; ballId: number }
   | { type: 'retired'; t: number; ballId: number; x: number; y: number }
@@ -36,6 +36,8 @@ export type SimEvent =
   | { type: 'drain'; t: number; ballId: number; reason: 'drain' | 'timeout' }
   /** The ball clock ran out: the flippers, the nudge and the plunger go dead and the balls in play roll out. */
   | { type: 'timeUp'; t: number }
+  /** Closing time's last word: a ball still on the table RUNOUT_MAX s after the clock ran out is swallowed by Big Boi. */
+  | { type: 'cashIn'; t: number; ballId: number; x: number; y: number }
   | { type: 'ballSpawn'; t: number; ballId: number }
   | { type: 'flipper'; t: number; side: 'L' | 'R'; on: boolean }
   | { type: 'nudge'; t: number; dir: number; tilt: number }
@@ -74,7 +76,7 @@ export interface SparkState {
 }
 
 export interface FlipperState {
-  /** A Helping Hand: it flips by itself. */
+  /** A Helping Hand (drawn with its glove): a smaller flipper on its side's button. */
   auto?: boolean;
   x: number;
   y: number;
@@ -111,6 +113,10 @@ interface BallRef {
   slowTime: number;
   prevLocal: Map<number, Local>;
   held: { uid: number; until: number; since?: number } | null;
+  /** When it last touched a flipper (the Hourglass pays only for a flipper shot). */
+  flipAt?: number;
+  /** Mag-Grab: the one that just threw this ball ignores it until `until` (no grab-and-throw loops). */
+  ignore?: { uid: number; until: number };
   /** Sim time until which a drain of this ball is saved (set when the plunger launches it; 0 = not saveable). */
   saveUntil: number;
   /** Speed just before the last step: the impact speed, since the contact has already bounced it by the time we see it. */
@@ -138,8 +144,8 @@ interface FlipperRef {
   on: boolean;
   uid?: number;
   length: number;
-  /** Helping Hand: it flips itself. Up until `until`, ready again at `ready`; `aim` is where it means to send the ball. */
-  auto?: { until: number; ready: number; aim: { x: number; y: number } | null };
+  /** A Helping Hand (drawn as one): a smaller flipper on its side's button. */
+  hand?: boolean;
 }
 interface BankState {
   shapes: any[];
@@ -163,6 +169,10 @@ interface PartRef {
   locks?: number;
   quietUntil?: number;
   spent?: boolean;
+  /** A catcher that rests: until when a ball rolls over it instead of being caught (a Ball Printer after printing). */
+  restUntil?: number;
+  /** Spider Wheel: it has spun this ball (one spin a ball; the ball rolls over it until the next ball). */
+  spunBall?: boolean;
   /** Gremlin Hutch: its gremlins, each a little sensor body that wanders the table (`out` until it is back). */
   gremlins?: { body: any; ph: number; out: number }[];
 }
@@ -172,11 +182,8 @@ export const GREMLIN_OUT = 10;
 const GREMLIN_R = 0.6;
 /** A gremlin's path at time t: two slow, different sines, so the pair never walk in step. */
 const gremlinAt = (t: number, ph: number) => ({ x: 12 + 8.5 * Math.sin(t * 0.31 + ph), y: 31 + 13.5 * Math.sin(t * 0.19 + ph * 1.7) });
-/** Helping Hand: how long a flip lasts, how long it rests after one, how often it means to make the shot, and how hard. */
-const HAND_FLIP = 0.18;
-const HAND_REST = 0.6;
-const HAND_AIM = 0.5;
-const HAND_SPEED = 34;
+/** Helping Hand: how long it is next to an extra flipper. */
+const HAND_SIZE = 0.75;
 /** Broomstick: how long a ride lasts at most, and how fast it flies. */
 const RIDE_TIME = 1;
 const RIDE_SPEED = 32;
@@ -253,6 +260,8 @@ export class Sim {
   private ballClock = BALL_TIMEOUT;
   /** When the current ball was first launched (null until it is). The clock runs for the whole ball, so a Ball Printer cannot keep it alive forever by printing fresh balls. */
   private clockStart: number | null = null;
+  /** Seconds the Hourglasses have added to the current ball's clock. */
+  private clockBonus = 0;
   /** When the ball clock ran out (null while it has not): the run-out, until no ball is left in play. */
   private runoutAt: number | null = null;
   /** Balls the printers have printed in the current ball. */
@@ -315,6 +324,7 @@ export class Sim {
     this.saversUsed.clear();
     this.netsUsed = 0;
     this.clockStart = null;
+    this.clockBonus = 0;
     this.runoutAt = null;
     this.printed = 0;
     this.ledge = layout.ledge;
@@ -419,8 +429,10 @@ export class Sim {
     if (def.kind === 'decor' || def.kind === 'inlay') return;
 
     if (def.kind === 'flipper') {
-      const f = this.buildFlipper(inst.def === 'flipperR' ? 'R' : 'L', inst.x, inst.y, inst.uid, FLIPPER_LENGTH * SMALL_FLIPPER);
-      if (def.recipe.hand) f.auto = { until: 0, ready: 0, aim: null };
+      // a Helping Hand is a smaller flipper, on the button of the way it faces (its Faces dial)
+      const side = inst.def === 'flipperR' || (def.recipe.hand && dialValue(inst, 'side') >= 0.5) ? 'R' : 'L';
+      const f = this.buildFlipper(side, inst.x, inst.y, inst.uid, FLIPPER_LENGTH * SMALL_FLIPPER * (def.recipe.hand ? HAND_SIZE : 1));
+      if (def.recipe.hand) f.hand = true;
       this.flippers.push(f);
       this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body: f.body, flipper: f });
       return;
@@ -572,10 +584,10 @@ export class Sim {
   // ---- balls -----------------------------------------------------------------
 
   /** Put a ball in the plunger lane, ready to launch. */
-  spawnBall(): number {
+  spawnBall(withTwin = true): number {
     const id = this.addBall(BALL_SPAWN.x, BALL_SPAWN.y, 0, 0);
-    // a Twin Ball waits right behind the first one; the plunger fires whichever is on top
-    if (this.mods.twin) this.addBall(BALL_SPAWN.x, BALL_SPAWN.y + BALL_R * 2.2, 0, 0);
+    // a Twin Ball waits right behind the first ball of a round; the plunger fires whichever is on top
+    if (this.mods.twin && withTwin) this.addBall(BALL_SPAWN.x, BALL_SPAWN.y + BALL_R * 2.2, 0, 0);
     this.awaitingPlunge = true;
     this.plungeCharge = 0;
     this.tilted = false;
@@ -583,6 +595,7 @@ export class Sim {
     for (const p of this.parts.values()) if (p.bank && p.bank.down.some(Boolean)) this.resetBank(p);
     this.rearm();
     this.clockStart = null; // a new ball: a new clock, and the printers may print again
+    this.clockBonus = 0;
     this.runoutAt = null;
     this.printed = 0;
     this.events.push({ type: 'ballSpawn', t: this.time, ballId: id });
@@ -596,6 +609,8 @@ export class Sim {
     for (const p of this.parts.values()) {
       if (p.armed !== undefined) { p.armed = true; p.readyAt = 0; }
       if (p.mover) p.mover.speedX = 1; // a new ball: the duck calms down
+      p.spunBall = false; // and a Spider Wheel may spin again
+      p.restUntil = 0;
     }
   }
 
@@ -653,7 +668,17 @@ export class Sim {
   /** Seconds left on the ball clock, or null before the ball is launched. */
   get clockLeft(): number | null {
     if (this.timeUp) return 0;
-    return this.clockStart === null ? null : Math.max(0, this.ballClock - (this.time - this.clockStart));
+    return this.clockStart === null ? null : Math.max(0, this.ballClock + this.clockBonus - (this.time - this.clockStart));
+  }
+
+  /** How hard bumpers and slings kick right now: not at all at closing time (the ball clock ran out). */
+  private get kickNow(): number {
+    return this.timeUp ? 0 : this.mods.kickFactor;
+  }
+
+  /** Closing time: seconds since the ball clock ran out (null while it has not); the renderer dims the table with it. */
+  get runoutFor(): number | null {
+    return this.runoutAt === null ? null : this.time - this.runoutAt;
   }
 
   /** The ball clock has run out: no flippers, nudge or plunger until the balls in play are gone. */
@@ -662,11 +687,16 @@ export class Sim {
   }
 
   get clockTotal() {
-    return this.ballClock;
+    return this.ballClock + this.clockBonus;
   }
 
   get ballCount() {
     return this.balls.length;
+  }
+
+  /** Balls in play: on the table, not one waiting in the plunger lane (Multiball Madness counts these). */
+  get ballsInPlay() {
+    return this.balls.filter((b) => b.held || !this.inLane(b)).length;
   }
 
   ballStates(): BallState[] {
@@ -680,7 +710,7 @@ export class Sim {
   flipperStates(): FlipperState[] {
     return this.flippers.map((f) => {
       const p = B.b2Body_GetPosition(f.body);
-      return { x: p.x, y: p.y, angle: B.b2RevoluteJoint_GetAngle(f.joint), side: f.side, pivotX: f.pivotX, pivotY: f.pivotY, uid: f.uid, length: f.length, auto: !!f.auto };
+      return { x: p.x, y: p.y, angle: B.b2RevoluteJoint_GetAngle(f.joint), side: f.side, pivotX: f.pivotX, pivotY: f.pivotY, uid: f.uid, length: f.length, auto: !!f.hand };
     });
   }
 
@@ -731,9 +761,8 @@ export class Sim {
         if (want) for (const b of this.balls) if (b.held && b.held.since !== undefined && this.tick > b.held.since && PARTS[this.parts.get(b.held.uid)?.inst.def ?? 'pop'].recipe.wheel) b.held.until = this.tick;
       }
     }
-    this.stepHands(t);
     for (const f of this.flippers) {
-      f.on = f.auto ? t < f.auto.until : this.sideOn[f.side];
+      f.on = this.sideOn[f.side];
       B.b2RevoluteJoint_SetMotorSpeed(f.joint, f.sign * (f.on ? FLIPPER_SPEED_UP : -FLIPPER_SPEED_DOWN));
     }
 
@@ -972,55 +1001,17 @@ export class Sim {
     this.events.push({ type: 'partRelease', t: this.time, uid: pr.inst.uid, ballId: b.id });
 
     const def = PARTS[pr.inst.def];
+    if (def.recipe.grabRest) b.ignore = { uid: pr.inst.uid, until: this.time + def.recipe.grabRest };
+    if (def.recipe.wheel) pr.spunBall = true;
+    let printedNow = false;
     for (let k = 0; def.recipe.spawn && k < def.recipe.spawn + this.mods.printerExtra && this.balls.length < MAX_BALLS && this.printed < (def.recipe.printCap ?? Infinity) && !this.timeUp; k++) {
+      printedNow = true;
       this.printed++;
       const a2 = a + this.rng.range(0.3, 0.6) * (this.rng.next() < 0.5 ? -1 : 1);
       const id = this.addBall(pr.inst.x, pr.inst.y, -Math.sin(a2) * s * 0.9, Math.cos(a2) * s * 0.9);
       this.events.push({ type: 'extraBall', t: this.time, uid: pr.inst.uid, ballId: id });
     }
-  }
-
-  /**
-   * Helping Hand: a small flipper that flips itself when a ball comes near it from above. Half the time it means to
-   * make the shot: the ball goes straight at the nearest part that scores.
-   */
-  private stepHands(t: number) {
-    for (const f of this.flippers) {
-      const a = f.auto;
-      if (!a || t < a.ready || this.tilted || this.timeUp) continue;
-      const near = this.balls.find((b) => {
-        if (b.held) return false;
-        const p = B.b2Body_GetPosition(b.body), v = B.b2Body_GetLinearVelocity(b.body);
-        const along = (p.x - f.pivotX) * f.sign;
-        return along > -0.3 && along < f.length + 0.3 && p.y > f.pivotY - 0.4 && p.y < f.pivotY + 1.6 && v.y < 1;
-      });
-      if (!near) continue;
-      a.until = t + HAND_FLIP;
-      a.ready = t + HAND_REST;
-      a.aim = null;
-      if (this.rng.next() < HAND_AIM) {
-        const p = B.b2Body_GetPosition(near.body);
-        let best: { x: number; y: number } | null = null, bd = Infinity;
-        for (const pr of this.parts.values()) {
-          const d = PARTS[pr.inst.def];
-          if (!d.recipe.points || d.kind === 'flipper' || d.kind === 'decor' || pr.inst.y < p.y + 2) continue;
-          const dist = Math.hypot(pr.inst.x - p.x, pr.inst.y - p.y);
-          if (dist < bd) { bd = dist; best = { x: pr.inst.x, y: pr.inst.y }; }
-        }
-        a.aim = best;
-      }
-    }
-  }
-
-  private handShot(uid: number, ballId: number) {
-    const f = this.flippers.find((q) => q.uid === uid), b = this.balls.find((q) => q.id === ballId);
-    if (!f?.auto?.aim || !b || !f.on) return;
-    // aim above the target by as much as the ball will drop on its way there
-    const p = B.b2Body_GetPosition(b.body), g = -B.b2World_GetGravity(this.worldId).y * this.mods.ballGravity;
-    const d0 = Math.hypot(f.auto.aim.x - p.x, f.auto.aim.y - p.y), drop = (g * d0 * d0) / (2 * HAND_SPEED * HAND_SPEED);
-    const dx = f.auto.aim.x - p.x, dy = f.auto.aim.y + drop - p.y, d = Math.hypot(dx, dy) || 1;
-    B.b2Body_SetLinearVelocity(b.body, V((dx / d) * HAND_SPEED, (dy / d) * HAND_SPEED));
-    f.auto.aim = null;
+    if (printedNow && def.recipe.printRest) pr.restUntil = this.time + def.recipe.printRest;
   }
 
   /** Gumball Machine: a ball shot in is locked and a new one comes to the plunger; the last lock sets them all loose. */
@@ -1192,9 +1183,8 @@ export class Sim {
       const part = a?.kind === 'part' ? a : b?.kind === 'part' ? b : null;
       // a Broomstick ride ends at the first thing the ball touches: a wall, a part, a flipper
       if (ball) { const rb = this.balls.find((x) => x.id === ball.id); if (rb?.ride) this.endRide(rb); }
-      // a Helping Hand that means to make the shot sends the ball at its target
       const fl = a?.kind === 'flipper' ? a : b?.kind === 'flipper' ? b : null;
-      if (ball && fl?.uid !== undefined) this.handShot(fl.uid, ball.id);
+      if (ball && fl) { const rb = this.balls.find((x) => x.id === ball.id); if (rb) rb.flipAt = this.time; }
       const spark = a?.kind === 'spark' ? a : b?.kind === 'spark' ? b : null;
       if (spark && part) {
         // a spark bounces off what it hits (a bumper still kicks it) and scores on it; it never drops a target
@@ -1230,7 +1220,7 @@ export class Sim {
         if (m.kick) {
           const dx = bp.x - mp.x, dy = bp.y - mp.y, len = Math.hypot(dx, dy) || 1;
           const v = B.b2Body_GetLinearVelocity(br.body);
-          B.b2Body_SetLinearVelocity(br.body, V(v.x + (dx / len) * m.kick * this.mods.kickFactor, v.y + (dy / len) * m.kick * this.mods.kickFactor));
+          B.b2Body_SetLinearVelocity(br.body, V(v.x + (dx / len) * m.kick * this.kickNow, v.y + (dy / len) * m.kick * this.kickNow));
         }
         const up = def.recipe.speedUp;
         if (up) pr.mover.speedX = Math.min(up.max, pr.mover.speedX * (1 + up.by));
@@ -1255,14 +1245,18 @@ export class Sim {
       }
       if (def.kind === 'target' || def.kind === 'deflector') {
         // a passive standup (or a deflector bar): it just bounces the ball, and reports how hard it was hit
-        this.events.push({ type: 'partHit', t: this.time, uid: pr.inst.uid, ballId: br.id, x: pr.inst.x, y: pr.inst.y, speed: br.preSpeed });
+        const hg = def.recipe.hourglass;
+        // the Hourglass: a flipper shot into it buys the ball clock more time (never once it has run out)
+        const time = hg && !this.timeUp && br.flipAt !== undefined && this.time - br.flipAt <= hg.window && this.clockBonus < hg.cap ? Math.min(hg.per, hg.cap - this.clockBonus) : 0;
+        this.clockBonus += time;
+        this.events.push({ type: 'partHit', t: this.time, uid: pr.inst.uid, ballId: br.id, x: pr.inst.x, y: pr.inst.y, speed: br.preSpeed, ...(time ? { time } : {}) });
         continue;
       }
       if (def.kind !== 'bumper' && def.kind !== 'kicker') continue;
 
       const bp = B.b2Body_GetPosition(br.body);
       const v = B.b2Body_GetLinearVelocity(br.body);
-      const kickSpeed = dialValue(pr.inst, 'kick') * def.kickUnit * this.mods.kickFactor;
+      const kickSpeed = dialValue(pr.inst, 'kick') * def.kickUnit * this.kickNow;
       let nx: number, ny: number;
       if (def.shape.type === 'circle') {
         const dx = bp.x - pr.inst.x, dy = bp.y - pr.inst.y;
@@ -1324,9 +1318,9 @@ export class Sim {
       if (s.goal) {
         this.events.push({ ...hit, goal: true });
       } else if (s.mover && def.recipe.bucket) {
-        // the Free Ball Bucket: a ball dropping in from above goes back to the plunger (it is not lost)
+        // the Free Ball Bucket: a ball dropping in from above goes back to the plunger (it is not lost); off at closing time
         const bp = B.b2Body_GetPosition(br.body), mp = B.b2Body_GetPosition(pr.mover!.body);
-        if (vel.y > -1 || bp.y < mp.y) continue;
+        if (vel.y > -1 || bp.y < mp.y || this.timeUp) continue;
         B.b2DestroyBody(br.body);
         this.balls = this.balls.filter((x) => x !== br);
         const at = this.laneSpot();
@@ -1348,6 +1342,9 @@ export class Sim {
         if (!pr.spent && !this.timeUp && this.balls.every((o) => o === br || this.inLane(o))) this.lockBall(br, pr, hit);
         else this.events.push(hit);
       } else if (def.kind === 'saucer') {
+        if (br.ignore?.uid === pr.inst.uid && this.time < br.ignore.until) continue; // a Mag-Grab ignores the ball it just threw
+        // closing time (the ball clock ran out), a resting catcher, a wheel that has spun this ball: the ball rolls over it for its points
+        if (this.timeUp || this.time < (pr.restUntil ?? 0) || (def.recipe.wheel && pr.spunBall)) { this.events.push(hit); continue; }
         if ([...this.balls].some((o) => o.held?.uid === pr.inst.uid)) continue; // one at a time
         const hold = def.recipe.wheel ? def.recipe.wheel.seconds : dialValue(pr.inst, 'hold'); // a Spider Wheel spins until a flipper stops it
         br.held = { uid: pr.inst.uid, until: this.tick + Math.round(hold / this.dt), since: this.tick };
@@ -1356,10 +1353,10 @@ export class Sim {
         B.b2Body_SetGravityScale(br.body, 0);
         this.events.push({ ...hit, caught: true });
       } else if (def.kind === 'kickback') {
-        if (!pr.armed) continue;
+        if (!pr.armed || this.timeUp) continue; // closing time: Kickbacks are off
         // like the saucer's throw: never exactly the same shot twice
         pr.armed = false;
-        pr.readyAt = this.time + (PARTS[pr.inst.def].recipe.cooldown ?? 4) * this.mods.kickbackCooldown;
+        pr.readyAt = this.time + (PARTS[pr.inst.def].recipe.cooldown ?? 4) * this.mods.kickbackCooldown * (pr.inst.inlay === 'garnet' ? GARNET_X : 1);
         const a = pr.inst.angle + this.rng.range(-0.08, 0.08);
         const s = dialValue(pr.inst, 'power') * (1 + this.rng.range(-0.05, 0.05));
         B.b2Body_SetLinearVelocity(br.body, V(-Math.sin(a) * s, Math.cos(a) * s));
@@ -1375,9 +1372,11 @@ export class Sim {
     const t = this.time;
     // the ball clock: once it runs out the player's hands come off (no flippers, nudge or plunger) and the balls in
     // play roll out on their own. A run-out that will not end (a ball the table keeps up) is cut short: those balls go.
-    if (!this.timeUp && this.clockStart !== null && t - this.clockStart > this.ballClock) {
+    if (!this.timeUp && this.clockStart !== null && t - this.clockStart > this.ballClock + this.clockBonus) {
       this.runoutAt = t;
       this.events.push({ type: 'timeUp', t });
+      // closing time: every catcher lets its ball go at once (from now on balls roll over them for their points)
+      for (const b of this.balls) if (b.held) b.held.until = this.tick;
     }
     const cut = this.runoutAt !== null && t - this.runoutAt > RUNOUT_MAX;
     for (const b of [...this.balls]) {
@@ -1390,12 +1389,14 @@ export class Sim {
       let reason: 'drain' | 'timeout' | null = null;
       if (p.y < 2.2 && !inLane) reason = 'drain';
       else if (cut && !inLane) reason = 'timeout';
-      else if (b.age > this.ballClock + RUNOUT_MAX) reason = 'timeout';
+      else if (b.age > this.ballClock + this.clockBonus + RUNOUT_MAX) reason = 'timeout';
       // a ball that leaves the table any other way is a bug; treat it as a drain so a run can't soft-lock
       else if (p.x < -1 || p.x > TABLE_W + 1 || p.y > TABLE_H + 2) reason = 'drain';
 
       if (reason === 'drain' && this.trySave(b)) continue;
       if (reason) {
+        // the cash-in: a ball the run-out could not end is swallowed by Big Boi (the scorer pays a small bonus)
+        if (cut && reason === 'timeout') this.events.push({ type: 'cashIn', t, ballId: b.id, x: p.x, y: p.y });
         B.b2DestroyBody(b.body);
         this.balls = this.balls.filter((x) => x !== b);
         this.events.push({ type: 'drain', t, ballId: b.id, reason });
@@ -1420,8 +1421,15 @@ export class Sim {
         b.slowTime = 0;
       }
     }
-    // the run-out is over once no ball is in play; one still waiting in the lane is fired as a new ball, on a new clock
+    // the run-out is over once no ball is in play. One clock per ball you launch: a ball still waiting in the lane (a
+    // twin) leaves with the ball, it never gets a clock of its own
     if (this.timeUp && this.balls.every((b) => !b.held && this.inLane(b))) {
+      for (const b of [...this.balls]) {
+        B.b2DestroyBody(b.body);
+        this.balls = this.balls.filter((x) => x !== b);
+        this.events.push({ type: 'drain', t, ballId: b.id, reason: 'timeout' });
+      }
+      this.awaitingPlunge = false;
       this.runoutAt = null;
       this.clockStart = null;
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOSS_IDS, BOSSES, bossOf, FINAL_BOSSES, planBosses, REGULAR_BOSSES, type BossId } from '../src/data/bosses';
+import { BOSS_IDS, BOSSES, bossOf, FINAL_BOSSES, GENTLE_BOSSES, planBosses, REGULAR_BOSSES, type BossId } from '../src/data/bosses';
 import { makePart } from '../src/data/parts';
 import { Game, goalFor } from '../src/game/game';
 import { createSim, NO_INPUT, type SimEvent } from '../src/sim/sim';
@@ -33,7 +33,10 @@ describe('the bosses', () => {
       expect(new Set(p.slice(0, 4)).size).toBe(4);
       for (const b of p.slice(0, 4)) expect(BOSSES[b].final).toBe(false);
       expect(BOSSES[p[4]].final).toBe(true);
+      expect(GENTLE_BOSSES).toContain(p[0]); // round 3 is always a gentle one
     }
+    expect(new Set(plans.map((p) => p[0])).size).toBe(GENTLE_BOSSES.length);
+    expect(new Set(plans.flatMap((p) => p.slice(1, 4))).size).toBeGreaterThan(6); // the others come from all of them
     expect(new Set(plans.map((p) => p.join())).size).toBeGreaterThan(30);
   });
 
@@ -97,11 +100,15 @@ describe('what each boss does', () => {
     expect(speed(0.5)).toBeLessThan(speed(1) * 0.8);
   });
 
-  it('Night Shift: lights do nothing (lamps stay dark, lanes score nothing)', () => {
-    const g = bossRound('nightShift', (x) => { x.layout.parts.push(makePart('lamp', 50, 12, 28, true), makePart('lane', 51, 6, 40, true)); });
-    expect(g.scorer.consume(hit(50))).toEqual([]);
-    expect(g.scorer.consume(hit(51))).toEqual([]);
-    expect(g.scorer.isLit(50)).toBe(false);
+  it('Night Shift: lights pay half (lamps, lanes, X Lanes, Disco Balls, Spotlights)', () => {
+    const night = bossRound('nightShift', (x) => { x.layout.parts.push(makePart('lamp', 50, 12, 28, true), makePart('lane', 51, 6, 40, true), makePart('xlane', 52, 18, 40, true), makePart('spot', 53, 2, 20, true)); });
+    expect(night.scorer.consume(hit(51))[0].base).toBe(5); // half of 10
+    night.scorer.consume(hit(50));
+    expect(night.scorer.isLit(50)).toBe(true); // dim, but on
+    expect(night.scorer.lampBonusAt(makePart('pop', 98, 12, 30, true)).sum).toBeCloseTo(0.05); // half of a step's +10%
+    night.scorer.consume(hit(52));
+    expect(night.scorer.mult).toBeCloseTo(1.125); // the X Lane's ×1.25 moves half as far
+    expect(night.scorer.spotXAt(makePart('pop', 99, 2, 22, true))).toBeCloseTo(1.25);
   });
 
   it('Crossed Wires: the left button works the right flippers', () => {
@@ -112,15 +119,25 @@ describe('what each boss does', () => {
     expect(f.find((q) => q.side === 'L')!.angle).toBeLessThan(0); // left stays down
   });
 
-  it('Short Fuse: every ball has a 30 s clock', () => {
-    expect(bossRound('shortFuse').sim.clockTotal).toBe(30);
+  it('Short Fuse: every ball has a 40 s clock', () => {
+    expect(bossRound('shortFuse').sim.clockTotal).toBe(40);
   });
 
-  it('The Jammer: your most numerous part type scores nothing', () => {
-    const g = bossRound('jammer', (x) => { x.layout.parts.push(makePart('coin', 50, 12, 28, true)); });
-    expect([...g.scorer.jammed]).toEqual(['pop']); // three Pops beat one Cha-Ching
-    expect(g.scorer.consume(hit(1))).toEqual([]);
-    expect(g.scorer.consume(hit(50))[0].base).toBe(8);
+  it('The Jammer: the one part that scored most last round scores nothing', () => {
+    const g = bossRound('jammer', (x) => { x.layout.parts.push(makePart('coin', 50, 12, 28, true)); x.lastTop = 50; });
+    expect(g.scorer.jammedUid).toBe(50);
+    expect(g.scorer.consume(hit(50))).toEqual([]);
+    expect(g.scorer.consume(hit(1))[0].base).toBe(20); // the other parts (the Pops too) still score
+  });
+
+  it('a round played remembers its best part for The Jammer', () => {
+    const g = new Game();
+    g.startRound();
+    for (let i = 0; i < 5; i++) g.scorer.consume(hit(2));
+    g.scorer.score = g.scorer.goal;
+    g.scorer.goalReached = true;
+    g.cashOut();
+    expect(g.lastTop).toBe(2);
   });
 
   it('Flat Rate: Mult gains are 30% smaller', () => {
@@ -151,11 +168,11 @@ describe('what each boss does', () => {
     expect(g.scorer.consume(hit(3))[0].base).toBe(Math.round((20 + 2) * 1.5));
   });
 
-  it('The Overlord: a random part type is switched off every ball, and Mult gains are 30% smaller', () => {
+  it('The Overlord: a random part type is switched off for the whole round, and Mult gains are 30% smaller', () => {
     const g = bossRound('overlord', (x) => { x.layout.parts.push(makePart('coin', 50, 12, 28, true), makePart('sling', 51, 8, 22, true)); });
-    const seen = new Set<string>();
-    for (let i = 0; i < 12; i++) { g.scorer.startBall(); expect(g.scorer.jammed.size).toBe(1); seen.add([...g.scorer.jammed][0]); }
-    expect(seen.size).toBeGreaterThan(1);
+    expect(g.scorer.jammed.size).toBe(1);
+    const off = [...g.scorer.jammed][0];
+    for (let i = 0; i < 6; i++) { g.scorer.startBall(); expect([...g.scorer.jammed]).toEqual([off]); } // the same all round
     expect(g.mods.multGain).toBe(0.7);
   });
 

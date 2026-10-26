@@ -129,27 +129,27 @@ describe('the new parts', () => {
     const s = scorer(parts);
     s.consume(hit(1, { t: 0 }));
     const hot = s.consume(hit(2, { t: 0.5 }))[0];
-    expect(hot.base).toBe(12);
+    expect(hot.base).toBe(15);
     expect(hot.hot).toBe(true);
-    expect(s.consume(hit(2, { t: 0.6 }))[0].base).toBe(8); // used up
+    expect(s.consume(hit(2, { t: 0.6 }))[0].base).toBe(10); // used up
     s.consume(hit(1, { t: 1 }));
-    expect(s.consume(hit(2, { t: 3 }))[0].base).toBe(8); // too late
+    expect(s.consume(hit(2, { t: 3 }))[0].base).toBe(10); // too late
   });
 
-  it('a Deflector bank shot adds +25% to the next hit, and scores nothing itself', () => {
+  it('a Deflector scores 5 and its bank shot adds +50% to the next hit', () => {
     const parts = [makePart('deflector', 1, 6, 30, true), makePart('coin', 2, 12, 30, true)];
     const s = scorer(parts);
-    expect(s.consume(hit(1))).toEqual([]);
-    expect(s.consume(hit(2))[0].base).toBe(10);
+    expect(s.consume(hit(1))[0].base).toBe(5);
+    expect(s.consume(hit(2))[0].base).toBe(15);
   });
 
   it('only a smash on a Vari-Target makes the ball hot', () => {
     const parts = [makePart('vari', 1, 6, 30, true), makePart('coin', 2, 12, 30, true)];
     const s = scorer(parts);
     s.consume(hit(1, { speed: 20 }));
-    expect(s.consume(hit(2))[0].base).toBe(8);
+    expect(s.consume(hit(2))[0].base).toBe(10);
     s.consume(hit(1, { speed: 60 }));
-    expect(s.consume(hit(2))[0].base).toBe(12);
+    expect(s.consume(hit(2))[0].base).toBe(15);
   });
 
   it('a Spinner raises the Mult per spin, up to +1.5 a ball', () => {
@@ -163,10 +163,10 @@ describe('the new parts', () => {
   it('a Ding-Dong Bell pays more for every different part type the ball has hit', () => {
     const parts = [makePart('ding', 1, 6, 30, true), makePart('pop', 2, 12, 30, true), makePart('coin', 3, 18, 30, true)];
     const s = scorer(parts);
-    expect(s.consume(hit(1))[0].base).toBe(12);
+    expect(s.consume(hit(1))[0].base).toBe(10);
     s.consume(hit(2));
     s.consume(hit(3));
-    expect(s.consume(hit(1))[0].base).toBe(12 + 3 * 8); // ding, pop and coin
+    expect(s.consume(hit(1))[0].base).toBe(10 + 3 * 10); // ding, pop and coin
   });
 
   it('a Thunder Bumper feeds the Pops: each hit counts as three Pop hits for their growth', () => {
@@ -187,12 +187,12 @@ describe('the new parts', () => {
     expect(s.piggies.get(1)).toBe(5); // it holds five
   });
 
-  it('a Jackpot Scoop pays the pot: +8 for every scoring hit this ball, then it starts again', () => {
+  it('a Jackpot Scoop pays the pot: +10 for every scoring hit this ball, then it starts again', () => {
     const parts = [makePart('jackpot', 1, 6, 30, true), makePart('coin', 2, 12, 30, true)];
     const s = scorer(parts);
     for (let i = 0; i < 10; i++) s.consume(hit(2));
     const jp = s.consume(hit(1, { caught: true }))[0];
-    expect(jp.base).toBe(40 + 80);
+    expect(jp.base).toBe(40 + 100);
     expect(jp.label).toBe('JACKPOT!');
     expect(s.consume(hit(1, { caught: true }))[0].base).toBe(40);
   });

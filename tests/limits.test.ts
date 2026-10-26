@@ -96,7 +96,7 @@ describe('the limits are written on the parts', () => {
     expect(text('mega')).toContain('up to +5 a ball');
     expect(text('coin')).toContain('up to $5 a round');
     expect(text('lane')).toContain('At most 5 sets a ball');
-    expect(text('printer')).toContain('at most 3 printed in one ball');
+    expect(text('printer')).toContain('at most 2 printed in one ball');
   });
 
   it('the Gold Ball card states its cap', () => {
@@ -163,7 +163,7 @@ describe('the ball clock', () => {
     expect(goneAt - upAt).toBeLessThan(RUNOUT_MAX + 0.1);
   });
 
-  it('a ball waiting in the plunger lane is not lost: it cannot be fired during the run-out, then it is a new ball on a new clock', () => {
+  it('one clock per ball you launch: a twin still waiting in the lane when the clock runs out leaves with the ball', () => {
     const sim = createSim(empty(), { ballClock: 0.5, mods: { twin: true } });
     sim.spawnBall();
     let launches = 0, sawUp = false;
@@ -174,19 +174,15 @@ describe('the ball clock', () => {
       }
     }
     expect(sawUp).toBe(true);
-    expect(launches).toBe(1);
+    expect(launches).toBe(1); // it could not be fired during the run-out
     expect(sim.timeUp).toBe(false);
-    expect(sim.ballStates().length).toBe(1);
-    expect(sim.ballStates()[0].inLane).toBe(true);
-    expect(sim.awaitingPlunge).toBe(true);
-    expect(sim.clockLeft).toBeNull();
-    for (let i = 0; i < 240 && launches < 2; i++) for (const e of sim.step({ ...NO_INPUT, plunge: i < 120 })) if (e.type === 'launch') launches++;
-    expect(launches).toBe(2);
+    expect(sim.ballCount).toBe(0); // and it never gets a clock of its own
+    expect(sim.awaitingPlunge).toBe(false);
   });
 });
 
 describe('the printer limit', () => {
-  it('prints at most 3 balls in one ball, and a new ball lets it print again', () => {
+  it('prints at most 2 balls in one ball, and a new ball lets it print again', () => {
     const sim = createSim({ parts: [makePart('printer', 1, 12, 30, true)], gravity: 50, nextUid: 2 });
     sim.spawnBall();
     let extras = 0;
@@ -202,7 +198,7 @@ describe('the printer limit', () => {
       }
     };
     drop(10);
-    expect(extras).toBe(3);
+    expect(extras).toBe(2);
     sim.spawnBall();
     const before = extras;
     drop(2);

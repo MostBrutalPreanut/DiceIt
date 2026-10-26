@@ -1203,6 +1203,15 @@ export class AudioFx {
     this.noise(o, t, 0.6, 0.05, { f: 1200, type: 'lowpass', to: 300, attack: 0.1 });
   }
 
+  /** Closing time's cash-in: Big Boi swallows a ball, a low gulp that drops. */
+  gulp() {
+    const v = this.voice('gulp', 0.5, 0.8, 0.3, 2);
+    if (!v) return;
+    const { o, t } = v;
+    this.osc(o, t, 220, 0.25, 0.18, { type: 'sine', to: 70, glide: 0.2, attack: 0.01, lp: 900 });
+    this.osc(o, t + 0.12, 160, 0.2, 0.12, { type: 'sine', to: 60, glide: 0.15, attack: 0.01, lp: 700 });
+  }
+
   /** The round's goal reached: a warm chime arpeggio. */
   goal() {
     const v = this.voice('goalReached', 0.7, 1.6, 0.3, 1, true);

@@ -512,9 +512,9 @@ export class Renderer {
       case 'rocks': return { hit: pulse > 0.35, seg: game.scorer.rocksOf(p) };
       case 'firecracker': return { hit: pulse > 0.35, armed: !game.scorer.rocketSpent(p) };
       case 'piggy': return { hit: pulse > 0.35, seg: game.scorer.piggies.get(p.uid) ?? 0 };
-      case 'xlane': return { lit: !tilted && !game.mods.lightsOut && !game.scorer.coolingDown(p.uid, game.sim.time) };
-      case 'fame': return { lit: !tilted && !game.mods.lightsOut && !this.discoFired(game, p.uid) };
-      case 'disco': return { lit: !tilted && !game.mods.lightsOut && game.scorer.label(p) !== null && !this.discoFired(game, p.uid) };
+      case 'xlane': return { lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'fame': return { lit: !tilted && !this.discoFired(game, p.uid) };
+      case 'disco': return { lit: !tilted && game.scorer.label(p) !== null && !this.discoFired(game, p.uid) };
       case 'magnet': case 'jackpot': return { busy: heldNear(p.x, p.y) };
       case 'lane': return { lit, letter: lanes.get(p.uid) };
       case 'rank': return { lit };
@@ -572,6 +572,9 @@ export class Renderer {
     for (const p of game.placed) if (p.def === 'lane') packs.set(p.group, [...(packs.get(p.group) ?? []), p]);
     for (const ls of packs.values()) ls.sort((a, b) => a.x - b.x || a.y - b.y).forEach((p, i) => lanes.set(p.uid, t.laneWord[i % t.laneWord.length]));
     const tilted = game.sim.tilted;
+    // closing time: the table's lights go out part by part over the first 3 s of the run-out
+    const ro = game.sim.runoutFor;
+    const closed = (uid: number) => ro !== null && ((uid * 0.6180339887) % 1) < ro / 3;
     const wizard = !this.calm && game.scorer.wizardState(game.sim.time).left > 0;
     const seenEyes = new Set<number>();
     this.twinkleClock -= dt;
@@ -597,7 +600,8 @@ export class Renderer {
       if (p.inlay) ps.gem = p.inlay;
       // glows live on the floor, under every part: lamps, lit inserts, armed kickbacks, a ready saver
       const r = footprint(def);
-      if (!tilted && !decor) {
+      const dark = closed(p.uid);
+      if (!tilted && !decor && !dark) {
         if (p.def === 'lamp' && ps.bright) this.glow(p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, 0.12 + 0.09 * ps.bright);
         if (p.def === 'strip' && ps.lit) this.glow(p.x, p.y, 4.6, t.role.strip, 0.5 + 0.2 * Math.sin(this.time * 10));
         if (p.def === 'lane' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.lane, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.7, p.y + 0.5, 0.3, 0.7, false, true); }
@@ -649,9 +653,9 @@ export class Renderer {
       }
       pv.sprite.position.set(X + jx, Y + jy);
       pv.sprite.zIndex = decor ? -1e7 : -p.y * 100; // the decor screen is under everything on the table
-      const jammed = game.scorer.jammed.has(p.def);
+      const jammed = game.scorer.isJammed(p);
       pv.sprite.alpha = jammed ? 0.45 : 1;
-      pv.sprite.tint = jammed ? num(mix(t.shadeTint, '#ffffff', 0.4)) : 0xffffff;
+      pv.sprite.tint = jammed ? num(mix(t.shadeTint, '#ffffff', 0.4)) : dark && !decor ? num(mix(t.shadeTint, '#ffffff', 0.62)) : 0xffffff;
       // a hit squashes a bumper for a moment (presentation only)
       const sq = def.kind === 'bumper' && p.def !== 'mega' ? pulse * 0.12 : 0;
       pv.sprite.scale.set(1 + sq, 1 - sq);

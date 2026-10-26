@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { GOAL_GROWTH, GOALS } from '../src/data/goals';
+import { ENDLESS_GOALS, GOAL_GROWTH, GOALS } from '../src/data/goals';
 import { niceGoal, payoutFor } from '../src/game/game';
 import { clearBall, failRate, fitLogQuadratic, goalCandidate, quantile, type ParOptions, type ParRound, type ParRun } from './par';
 
@@ -160,6 +160,9 @@ async function main() {
  * do not edit by hand. See docs/run-flow-and-balance.md §4. Past the table the goal grows by GOAL_GROWTH a round.
  */
 export const GOALS: number[] = [${goals.join(', ')}];
+/** Endless: rounds 16 to 30 (kept as designed by --write). */
+export const ENDLESS_GOALS: number[] = [${ENDLESS_GOALS.join(', ')}];
+export const LAST_ROUND = GOALS.length + ENDLESS_GOALS.length;
 export const GOAL_GROWTH = ${growth};
 `);
     console.log(`wrote src/data/goals.ts (${goals.length} rounds, then x${growth} a round)`);

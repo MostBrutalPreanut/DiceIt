@@ -21,7 +21,7 @@ describe('part blurbs', () => {
     const says = (id: PartId, word: string) => expect(PARTS[id].blurb, id).toContain(word);
     says('gumball', 'three'); expect(r('gumball').lock!.n).toBe(3);
     says('gong', 'eighth'); expect(r('gong').boom!.every).toBe(8);
-    says('capsule', 'six'); expect(r('capsule').capsule!.rounds).toBe(6);
+    says('capsule', 'four'); expect(r('capsule').capsule!.rounds).toBe(4);
     says('bell', 'three'); expect(r('bell').bell!.notches).toBe(3);
     says('roller', 'triple'); expect(r('roller').edgeShot!.x).toBe(3);
     says('wreck', 'double'); expect(r('wreck').wreck!.x).toBe(2);
