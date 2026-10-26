@@ -11,7 +11,7 @@ import { TABLES } from './tables';
  * 4 rounds on the same Game (so things that grow over rounds grow) by the pro, avg and poor players. Gems are set into a
  * host part and compared with the host alone.
  */
-export interface Task { context: string; part: PartId | null; gem?: PartId; host?: PartId; segs: Record<string, number> }
+export interface Task { context: string; part: PartId | null; gem?: PartId; host?: PartId; segs: Record<string, number>; seedOff?: number }
 export interface ProfileStats {
   rounds: { score: number; ballSeconds: number[]; saves: number; presses: number; peak: number; seg: number; idx: number; part?: { points: number; hits: number; zaps: number; sparkHits: number; events: number; triggers: Record<string, number> }; money: number; maxSparks: number; maxBalls: number; zapBy: Record<string, { n: number; points: number }>; sparkPoints: number; wallMs: number; steps: number; worstStepMs: number }[];
   levelsGained: number;
@@ -42,12 +42,12 @@ function run(t: Task): Result {
       l.parts.push(p);
     }
   };
-  const target = t.gem ? t.host : t.part;
+  const target = t.host ?? t.part;
   const isGemBase = !!t.host; // gem tasks: the host is added (with or without the gem)
   if (target && !(t.host && l.parts.some((p) => p.def === t.host && p.placed))) add(target);
   let placeGain = 1;
   if (l.parts.some((p) => !p.placed)) {
-    const r = place(s, { profile: 'avg', seed: 41, evalRounds: 1, tries: 6, steps: 0 });
+    const r = place(s, { profile: 'avg', seed: 41 + (t.seedOff ?? 0), evalRounds: 1, tries: 6, steps: 0 });
     s.layout = r.layout;
     placeGain = r.before > 0 ? r.after / r.before : 1;
   }
@@ -63,7 +63,7 @@ function run(t: Task): Result {
         g.money = 30;
         for (const p of g.layout.parts.filter((q) => q.placed && PARTS[q.def].recipe.well)) for (let k = 0; k < 5; k++) g.wish(p.uid);
         const m0 = g.money;
-        const r: RoundTrace = playRound(g, { profile, seed: 1000 + seg * 10 + i, detail: true });
+        const r: RoundTrace = playRound(g, { profile, seed: 1000 + seg * 10 + i + (t.seedOff ?? 0) * 100000, detail: true });
         const tr = t.host ? r.parts[t.host] : t.part ? r.parts[t.part] : undefined;
         st.rounds.push({ score: r.score, ballSeconds: r.ballSeconds, saves: r.saves, presses: r.presses, peak: r.peakMult, seg, idx: i, part: tr, money: r.coins, maxSparks: r.maxSparks, maxBalls: r.maxBalls, zapBy: r.zapBy, sparkPoints: r.sparkPoints, wallMs: r.wallMs, steps: r.steps, worstStepMs: r.worstStepMs });
         void m0;
@@ -84,13 +84,14 @@ if (arg && !arg.startsWith('--')) {
   const args = new Map(process.argv.slice(2).map((a) => { const [k, v] = a.replace(/^--/, '').split('='); return [k, v ?? 'true'] as [string, string]; }));
   const parts = (args.get('parts')?.split(',') as PartId[] | undefined) ?? SHOP_IDS.filter((id) => PARTS[id].kind !== 'inlay');
   const segs = { avg: 3, pro: 2, poor: 2 };
+  const seedOff = Number(args.get('seed-off') ?? 0);
   const tasks: Task[] = [];
   for (const context of ['mid', 'late']) {
-    tasks.push({ context, part: null, segs: { avg: 6, pro: 4, poor: 4 } });
-    for (const p of parts) tasks.push({ context, part: p, segs });
+    tasks.push({ context, part: null, segs: { avg: 6, pro: 4, poor: 4 }, seedOff });
+    for (const p of parts) tasks.push({ context, part: p, segs, seedOff });
     if (!args.get('parts')) for (const [gem, hosts] of Object.entries(GEM_HOSTS)) for (const host of hosts) {
-      tasks.push({ context, part: null, host, segs }); // the host alone
-      tasks.push({ context, part: null, gem: gem as PartId, host, segs });
+      tasks.push({ context, part: null, host, segs, seedOff }); // the host alone
+      tasks.push({ context, part: null, gem: gem as PartId, host, segs, seedOff });
     }
   }
   const t0 = Date.now();
