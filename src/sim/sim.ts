@@ -22,8 +22,8 @@ export const NO_INPUT: Input = { left: false, right: false, plunge: false, nudge
 
 /** Physical things that happened. Scoring and presentation both consume this stream; neither feeds back. */
 export type SimEvent =
-  /** `zap`: no ball touched it; the scorer made it score (a Tesla Coil's arc). The sim never sends one. */
-  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean }
+  /** `zap`: no ball touched it; the scorer made it score (a Tesla Coil's arc, a keg's blast...), `depth` zaps down a chain of kegs. The sim never sends one. */
+  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean; depth?: number }
   | { type: 'partRelease'; t: number; uid: number; ballId: number }
   | { type: 'extraBall'; t: number; uid: number; ballId: number }
   | { type: 'ballSaved'; t: number; uid: number; ballId: number }

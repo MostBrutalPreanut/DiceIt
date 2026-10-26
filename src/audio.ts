@@ -476,6 +476,9 @@ export class AudioFx {
       case 'spinner': this.spin(opts.spins ?? 3); break;
       case 'lane': case 'rank': this.laneRoll(); break;
       case 'tesla': this.zap(true); this.bop(mult, 0.8); break;
+      case 'keg': if (opts.label === 'FUSE LIT!') this.fuse(); else this.bop(mult, 0.7); break;
+      case 'laser': this.bop(mult, 0.9); if (opts.label === 'PEW!') this.pew(); break;
+      case 'gong': this.gongHit(false); break;
       case 'bell': if (notes.some((n) => n.endsWith(' toll'))) this.toll(false); else this.bop(mult, 0.95); break;
       case 'uplight': this.levelLight(this.ladder(mult, 1047, 12)); break;
       case 'lamp': this.lampGlow(opts.label); break;
@@ -847,6 +850,8 @@ export class AudioFx {
     else if (label === 'JACKPOT!' || id === 'jackpot') this.jackpotFanfare();
     else if (label === 'ARMOUR BROKEN!') this.dragonRoar();
     else if (label?.startsWith('THE BELL RINGS')) this.toll(true);
+    else if (label === 'KABOOM!') this.kaboom();
+    else if (label === 'BOOM!') this.gongHit(true);
     else if (id === 'rank') this.rankUp(label?.startsWith('DIAMOND') ? 3 : label?.startsWith('GOLD') ? 2 : 1);
     else if (id === 'disco') this.disco();
     else if (id === 'xlane') this.swoosh(!label?.includes('MAXED'));
@@ -900,6 +905,36 @@ export class AudioFx {
     const { o, t } = v;
     this.noise(o, t, big ? 0.2 : 0.12, 0.22, { f: 3800, type: 'highpass', trem: [70, 0.9] });
     this.osc(o, t, 110, big ? 0.18 : 0.1, 0.07, { to: 90, attack: 0.002 });
+  }
+
+  /** Powder Keg: the fuse catches and hisses. */
+  private fuse() {
+    const v = this.voice('fuse', 0.6, 0.6, 0.2, 2);
+    if (v) this.noise(v.o, v.t, 0.55, 0.18, { f: 5000, type: 'highpass', attack: 0.02, trem: [30, 0.6] });
+  }
+
+  /** Powder Keg: the bang, a thump under a rush of noise. */
+  private kaboom() {
+    const v = this.voice('kaboom', 0.9, 1.2, 0.15, 2, true);
+    if (!v) return;
+    this.duck(0.5, 0.6);
+    this.noise(v.o, v.t, 0.9, 0.5, { f: 700, type: 'lowpass' });
+    this.osc(v.o, v.t, 90, 0.6, 0.4, { to: 32, attack: 0.002 });
+  }
+
+  /** Laser Turret: a falling "pew". */
+  private pew() {
+    const v = this.voice('pew', 0.5, 0.3, 0.08, 3);
+    if (v) this.osc(v.o, v.t, 1900, 0.22, 0.12, { to: 260, type: 'square', attack: 0.002 });
+  }
+
+  /** Shockwave Gong: a brassy bong; the boom is a long, deep crash. */
+  private gongHit(boom: boolean) {
+    const v = this.voice(boom ? 'gongBoom' : 'gong', boom ? 0.9 : 0.55, boom ? 3 : 1.2, boom ? 0.3 : 0.12, boom ? 1 : 3, boom);
+    if (!v) return;
+    if (boom) this.duck(0.5, 1.2);
+    this.bell(v.o, v.t, boom ? 82 : 147, boom ? 2.8 : 1.1, boom ? 0.3 : 0.16, 1.41, boom ? 2.2 : 1.2);
+    if (boom) this.noise(v.o, v.t, 1.4, 0.18, { f: 1800, type: 'lowpass', attack: 0.01 });
   }
 
   /** Old Bell: one deep bronze toll; when it rings for the run, three, over a low hum. */

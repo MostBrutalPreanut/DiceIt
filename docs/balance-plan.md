@@ -23,8 +23,8 @@ each machine's Big Boi pulls the run towards a different build:
 | Rarity | In the shop from | Weight (× the part's own) | Price | Parts |
 |---|---|---|---|---|
 | Common | round 1 | 1 | $1–4 | Pop Bumper, Cha-Ching Bumper, Slingshot, Spinner, Lane Rollover (pack of 3), Lamp, Vari-Target, Deflector, Kickback |
-| Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $5–7 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, Glow Strip, Roller Pop, **Power Plate**, X Lane |
-| Rare | round 4 | 0.25, +0.1 a round, up to 1 | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup**, **Rank Lights** (pack of 3), **Old Bell**, **Tesla Coil** |
+| Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $5–7 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, Glow Strip, Roller Pop, **Power Plate**, X Lane, **Shockwave Gong** |
+| Rare | round 4 | 0.25, +0.1 a round, up to 1 | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup**, **Rank Lights** (pack of 3), **Old Bell**, **Tesla Coil**, **Powder Keg**, **Laser Turret** |
 | Legendary | round 7 | 0.15, +0.07 a round, up to 0.6 | $11–13 | Golden Bumper, Disco Ball, Goal!, **Hall of Fame** |
 
 Rarer parts are physically bigger and do more. Every part does at least two things, and many feed or starve each other.
@@ -63,6 +63,9 @@ Cards say what a part does; they carry no strategy tips.
 | Hall of Fame | 150 · once a ball, Mult ×1.1 for every different part type on the table |
 | Rank Lights | **sold as a pack of 3** ($8) · 10 · light all 3 and the ball that lit the last one ranks up: Silver (every hit it makes ×1.2), Gold (×1.4), Diamond (×1.6), for 40 s; a drain loses it. Ranks count as Mult gains for Flat Rate and the Overlord |
 | Tesla Coil | $9 · 30 · every hit arcs lightning to the 2 nearest parts that can be zapped (3 at level 3, 4 at level 6), and each scores as if the ball had hit it. A part can be zapped once every 0.5 s; a zap never arcs on, never spends or earns a Hot Shot, never pays the Old Bell's toll; ×Mult parts, saucers, the goal, the Kickback and drop targets cannot be zapped |
+| Powder Keg | $8 · 10 · a hit lights the fuse; 2.5 s later it blows: 80, and every part within 6 is zapped; a blast lights other kegs it reaches (4 kegs in a row at most); spent for 6 s after |
+| Laser Turret | $9 · 40 · a hit fires a beam through it in a random direction, wall to wall; every part on it is zapped; recharges for 3 s |
+| Shockwave Gong | uncommon, $5 · 25 · every 8th hit of a ball booms: every part on the table is zapped once |
 | Old Bell | 20 a hit · its first hit each round pays a 150 toll instead and adds a notch · at 3 notches it rings: every ball's Mult ×1.2 for the rest of the run (rings stack, and stay if the bell is sold) |
 
 Multiplicative Mult (X Lane, Golden Bumper, Disco Ball, the Old Bell, the Dragon, Glass Cannon-style decals) is what lets a late

@@ -9,7 +9,7 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 337 pass, 0 fail (24 files) |
+| Unit tests | 345 pass, 0 fail (24 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
 | Browser smoke test | 104 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.5 ms a frame |
@@ -54,6 +54,11 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
 - **Zaps and the Tesla Coil** (rare, $9): every hit arcs lightning to the 2 nearest parts (3 and 4 with levels),
   which score as if hit. Measured: 328 a $ mid, 1,043 late, on the power tool's small table (about Lane
   Rollovers per dollar; a plain Pop Bumper there measures -1,205 / -3,176). It should do more on a full board.
+- **Powder Keg, Laser Turret, Shockwave Gong** (the rest of step 2): a keg's fuse burns 2.5 s, then it blows and
+  zaps everything within 6 (kegs chain, 4 at most, and re-arm after 6 s); the turret fires a wall-to-wall beam in a
+  random direction; the gong's 8th hit of a ball zaps the whole table. Gain per round over a plain Pop Bumper on
+  the power tool's table, mid / late: Tesla +6,568 / +18,913, Laser +1,935 / +9,678, Keg +3,337 / +7,989, Gong
+  +1,068 / +3,730.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

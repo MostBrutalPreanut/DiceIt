@@ -1,6 +1,7 @@
-import { dialFactor, dialValue, effectiveLevel, grownPoints, hasTag, HOT_WINDOW, lampStats, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, RANK_NAMES, tierOf, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, footprint, grownPoints, hasTag, HOT_WINDOW, lampStats, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, RANK_NAMES, tierOf, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
+import { TABLE_H, TABLE_W } from '../sim/constants';
 import { Rng } from '../sim/rng';
 import type { SimEvent } from '../sim/sim';
 
@@ -30,8 +31,22 @@ export interface ScoreEvent {
   tier?: number;
   /** This hit was a Hot Shot (the ball was hot). */
   hot?: boolean;
-  /** A zap: no ball touched the part; lightning from here (a Tesla Coil) made it score. */
-  zap?: { x: number; y: number };
+  /** A zap: no ball touched the part; something at (x, y) made it score: a Tesla Coil's arc, a keg's blast, a beam, the gong's boom. */
+  zap?: { x: number; y: number; by: ZapKind };
+  /** A Laser Turret fired: the beam, end to end. */
+  beam?: { x1: number; y1: number; x2: number; y2: number };
+  /** A blast or a boom went off here: how far its shockwave reaches. */
+  blast?: number;
+}
+
+export type ZapKind = 'arc' | 'blast' | 'beam' | 'boom';
+
+/** What a zap needs to know about the moment: when, whose ball, how fast it was, how far down a chain of kegs. */
+interface ZapCause {
+  t: number;
+  ballId: number;
+  speed: number;
+  depth?: number;
 }
 
 export interface LedgerRow {
@@ -130,6 +145,10 @@ export class Scorer {
   private potFrom = new Map<number, number>();
   /** Zaps: until when each part cannot be zapped again. */
   private zapCool = new Map<number, number>();
+  /** Powder Kegs this ball: lit (blowing at `at`) or spent (until `at`), whose ball lit it and how far down a chain it is. */
+  private kegs = new Map<number, { at: number; spent: boolean; ballId: number; depth: number }>();
+  /** Shockwave Gongs: the ball's hits on each. */
+  private gongHits = new Map<number, number>();
   /** Per part: how often it fired this round (the Old Bell). */
   private firedThisRound = new Map<number, number>();
   /** Rank Lights: each ranked ball's rank (1 = Silver) and until when it lasts. */
@@ -238,6 +257,8 @@ export class Scorer {
     this.mult = this.ballStartMult();
     this.ranks.clear();
     this.zapCool.clear();
+    this.kegs.clear();
+    this.gongHits.clear();
     this.ballHits = 0;
     this.multPaid.clear();
     this.xPaid.clear();
@@ -408,6 +429,7 @@ export class Scorer {
     if (def.recipe.plate) return `x${def.recipe.plate.x}`;
     if (def.kind === 'strip') return this.mods.lightsOut ? 'OFF' : `+${Math.round((def.recipe.strip?.bonus ?? 0) * 100)}%`;
     const r = this.recipe(inst.def);
+    if (r.boom && !this.jammed.has(inst.def)) return `${(this.gongHits.get(inst.uid) ?? 0) % r.boom.every}/${r.boom.every}`; // hits towards the boom
     if (r.bell && !this.firedThisRoundOf(inst.uid) && !this.jammed.has(inst.def)) return String(this.baseNow(inst, 1, 1, r.bell.first)); // its toll is waiting
     if (r.typeX) return this.mods.lightsOut ? 'OFF' : `x${this.typeXNow(r.typeX).toFixed(2)}`;
     if (r.xmult && !r.points) return this.mods.lightsOut ? 'OFF' : `x${(1 + (r.xmult - 1) * this.mods.multGain).toFixed(2)}`;
@@ -634,6 +656,11 @@ export class Scorer {
       if (tier && inst.def === 'vari') scored.tier = r.tiers!.indexOf(tier);
       if (hotBonus) scored.hot = true;
       out.push(scored);
+      // a Powder Keg's fuse is lit (by the ball, or by a zap no further down a chain than it allows)
+      if (r.keg && !this.kegState(inst.uid, ev.t) && (ev.depth ?? 0) < r.keg.chain) {
+        this.kegs.set(inst.uid, { at: ev.t + r.keg.fuse, spent: false, ballId: ev.ballId, depth: ev.depth ?? 0 });
+        scored.label ??= 'FUSE LIT!';
+      }
       // the third notch rings the bell: ×1.2 on the Mult of this ball and every ball after it, for the rest of the run
       if (rang) out.push(this.ring(inst, ev));
       // this hit makes the ball hot for its next one
@@ -642,6 +669,13 @@ export class Scorer {
       if (inst.def === 'mega') out.push(...this.bigBoiHit(inst, ev));
       // a Tesla Coil arcs to the parts nearest it (a zapped coil does not: a zap never arcs on)
       if (r.zap && !ev.zap) out.push(...this.arc(inst, ev));
+      // a Laser Turret fires across the table; a Shockwave Gong's tenth hit booms (a zap sets off neither)
+      if (r.beam && !ev.zap && !this.coolingDown(inst.uid, ev.t)) out.push(...this.fire(inst, scored, ev));
+      if (r.boom && !ev.zap) {
+        const n = (this.gongHits.get(inst.uid) ?? 0) + 1;
+        this.gongHits.set(inst.uid, n);
+        if (n % r.boom.every === 0) out.push(...this.boom(inst, ev));
+      }
     }
 
     // Level Lights (Space Cadet's bumper upgrade lanes): each pass switches the light on or off. When every light
@@ -746,20 +780,85 @@ export class Scorer {
    * Lightning from a Tesla Coil to the nearest parts that can be zapped (not ones zapped in the last ZAP_COOLDOWN s,
    * nor jammed ones): each scores as if the ball had hit it, as that ball, at that ball's speed.
    */
-  private arc(coil: PartInstance, ev: { t: number; ballId: number; speed: number }): ScoreEvent[] {
-    const n = this.arcsOf(coil);
-    const targets = this.placed()
-      .filter((p) => p.uid !== coil.uid && zappable(p.def) && !this.jammed.has(p.def) && (this.zapCool.get(p.uid) ?? -1) <= ev.t)
+  private arc(coil: PartInstance, ev: ZapCause): ScoreEvent[] {
+    const targets = this.zapTargets(coil, ev.t)
       .map((p) => ({ p, d: Math.hypot(p.x - coil.x, p.y - coil.y) }))
       .sort((a, b) => a.d - b.d || a.p.uid - b.p.uid)
-      .slice(0, n);
+      .slice(0, this.arcsOf(coil))
+      .map((a) => a.p);
+    return this.zap(coil, targets, ev, 'arc');
+  }
+
+  /** The parts a zap from `src` could reach right now: zappable, not jammed, not zapped in the last ZAP_COOLDOWN s. */
+  private zapTargets(src: PartInstance, t: number): PartInstance[] {
+    return this.placed().filter((p) => p.uid !== src.uid && zappable(p.def) && !this.jammed.has(p.def) && (this.zapCool.get(p.uid) ?? -1) <= t);
+  }
+
+  /** Zap these parts: each scores as if the ball of `ev` had hit it, and its events say where the zap came from. */
+  private zap(src: PartInstance, targets: PartInstance[], ev: ZapCause, by: ZapKind): ScoreEvent[] {
     const out: ScoreEvent[] = [];
-    for (const { p } of targets) {
+    for (const p of targets) {
       this.zapCool.set(p.uid, ev.t + ZAP_COOLDOWN);
-      const zev = { type: 'partHit' as const, t: ev.t, uid: p.uid, ballId: ev.ballId, x: p.x, y: p.y, speed: ev.speed, zap: true, mover: PARTS[p.def].kind === 'mover' || undefined };
-      for (const e of this.hit(p, zev)) out.push({ ...e, zap: { x: coil.x, y: coil.y } });
+      const zev = { type: 'partHit' as const, t: ev.t, uid: p.uid, ballId: ev.ballId, x: p.x, y: p.y, speed: ev.speed, zap: true, depth: (ev.depth ?? 0) + 1, mover: PARTS[p.def].kind === 'mover' || undefined };
+      for (const e of this.hit(p, zev)) out.push({ ...e, zap: { x: src.x, y: src.y, by } });
     }
     return out;
+  }
+
+  /**
+   * Time passes: a Powder Keg whose fuse has burnt down blows. Called every sim step (the game does); the blast
+   * zaps every part within reach, and lights the kegs it reaches one step further down the chain.
+   */
+  tick(t: number): ScoreEvent[] {
+    const out: ScoreEvent[] = [];
+    for (const [uid, k] of [...this.kegs]) {
+      if (k.spent || k.at > t) continue;
+      const inst = this.placed().find((p) => p.uid === uid);
+      k.spent = true;
+      k.at = t + (inst ? this.recipe(inst.def).keg?.rearm ?? 0 : 0);
+      if (!inst || this.jammed.has(inst.def)) continue;
+      const r = this.recipe(inst.def).keg!, m = this.mods;
+      this.now = t;
+      const situ = this.situational({ ballId: k.ballId, t });
+      const pts = Math.round(r.blast * modFactor(inst.def, m) * situ.x);
+      const e = this.award(inst, t, inst.x, inst.y, 'bonus', pts, 0, 0, [`${pts} blast`, ...situ.notes], 'KABOOM!');
+      e.blast = r.radius;
+      out.push(e);
+      const near = this.zapTargets(inst, t).filter((p) => Math.hypot(p.x - inst.x, p.y - inst.y) <= r.radius + footprint(PARTS[p.def]) * 0.5);
+      out.push(...this.zap(inst, near, { t, ballId: k.ballId, speed: 20, depth: k.depth }, 'blast'));
+    }
+    return out;
+  }
+
+  /** Is this Powder Keg lit (fuse burning), spent (re-arming), or ready? */
+  kegState(uid: number, t = this.now): 'lit' | 'spent' | null {
+    const k = this.kegs.get(uid);
+    return !k ? null : !k.spent ? 'lit' : k.at > t ? 'spent' : null;
+  }
+
+  /** A Laser Turret fires: a beam through it at a random angle, wall to wall; every part on the line is zapped. */
+  private fire(laser: PartInstance, scored: ScoreEvent, ev: ZapCause): ScoreEvent[] {
+    const r = this.recipe(laser.def).beam!;
+    this.coolUntil.set(laser.uid, ev.t + r.cooldown);
+    const a = this.rng.next() * Math.PI, dx = Math.cos(a), dy = Math.sin(a);
+    // the beam runs until it leaves the table, both ways
+    const reach = (sx: number, sy: number) => {
+      const tx = sx > 0 ? (TABLE_W - laser.x) / sx : sx < 0 ? -laser.x / sx : Infinity;
+      const ty = sy > 0 ? (TABLE_H - laser.y) / sy : sy < 0 ? -laser.y / sy : Infinity;
+      return Math.min(tx, ty);
+    };
+    const f = reach(dx, dy), b = reach(-dx, -dy);
+    scored.beam = { x1: laser.x - dx * b, y1: laser.y - dy * b, x2: laser.x + dx * f, y2: laser.y + dy * f };
+    scored.label ??= 'PEW!';
+    const on = this.zapTargets(laser, ev.t).filter((p) => Math.abs((p.x - laser.x) * dy - (p.y - laser.y) * dx) <= footprint(PARTS[p.def]) + 0.3);
+    return this.zap(laser, on, ev, 'beam');
+  }
+
+  /** A Shockwave Gong booms: every part on the table that can be zapped is. */
+  private boom(gong: PartInstance, ev: ZapCause & { x: number; y: number }): ScoreEvent[] {
+    const e = this.award(gong, ev.t, gong.x, gong.y, 'bonus', 0, 0, 0, [], 'BOOM!');
+    e.blast = 30;
+    return [e, ...this.zap(gong, this.zapTargets(gong, ev.t), ev, 'boom')];
   }
 
   /** Every Lamp at full glow for a while (a drop-target set, the Disco Ball). */

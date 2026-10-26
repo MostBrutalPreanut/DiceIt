@@ -63,6 +63,9 @@ export class Renderer {
   private topG = new Graphics();
   /** Zaps: lightning from a Tesla Coil to each part it made score, for a moment. */
   private arcs: { x1: number; y1: number; x2: number; y2: number; age: number; seed: number }[] = [];
+  /** Laser Turret beams and the shockwave rings of blasts and booms, for a moment each. */
+  private beams: { x1: number; y1: number; x2: number; y2: number; age: number }[] = [];
+  private rings: { x: number; y: number; r: number; age: number; color: string }[] = [];
   private tiltLayer = new Container();
   particles!: Particles;
   dmd!: DotMatrix;
@@ -230,13 +233,24 @@ export class Renderer {
   onScore(ev: ScoreEvent) {
     const t = this.theme, def = PARTS[ev.def], color = roleFill(t, ev.def);
     this.pulses.set(ev.uid, 1);
+    if (ev.beam) {
+      this.beams.push({ ...ev.beam, age: 0 });
+      if (this.beams.length > 6) this.beams.shift();
+    }
+    if (ev.blast) {
+      // a keg's blast or the gong's boom: a shockwave ring across the floor (and, for a keg, the bang itself)
+      this.rings.push({ x: ev.x, y: ev.y, r: ev.blast, age: 0, color: roleFill(t, ev.def) });
+      if (this.rings.length > 8) this.rings.shift();
+      if (ev.def === 'keg') { this.particles.debris(ev.x, ev.y, 10, 1.3); this.particles.smokeAt(ev.x, ev.y + 0.2, 2.2, 1.4); this.particles.puff(ev.x, ev.y, 0.4, 2); }
+      if (!this.calm) this.trauma = Math.min(1, this.trauma + (ev.def === 'keg' ? 0.5 : 0.3));
+    }
     if (ev.zap) {
-      // a zap: an arc of lightning and a crackle of sparks on the part; no debris, no shake (there can be many)
-      this.arcs.push({ x1: ev.zap.x, y1: ev.zap.y, x2: ev.x, y2: ev.y, age: 0, seed: this.arcs.length + ev.uid * 7 + ev.t });
+      // a zap: a crackle of sparks on the part (and an arc of lightning from a coil); no debris, no shake (there can be many)
+      if (ev.zap.by === 'arc') this.arcs.push({ x1: ev.zap.x, y1: ev.zap.y, x2: ev.x, y2: ev.y, age: 0, seed: this.arcs.length + ev.uid * 7 + ev.t });
       if (this.arcs.length > ARCS_DRAWN * 2) this.arcs.shift();
       this.particles.sparkle(ev.x + (Math.random() - 0.5), ev.y + (Math.random() - 0.5) * 0.6, 0.8, 0.7, false, true);
       if (ev.label) this.particles.sticker(ev.label, '', color, ev.x, ev.y, 2.2, 1, 0);
-      else this.particles.sticker(ev.points.toLocaleString('en-US'), '', roleFill(t, 'tesla'), ev.x, ev.y, 1.4, 0.55, ev.points);
+      else this.particles.sticker(ev.points.toLocaleString('en-US'), '', roleFill(t, ev.zap.by === 'arc' ? 'tesla' : ev.zap.by === 'beam' ? 'laser' : ev.zap.by === 'blast' ? 'keg' : 'gong'), ev.x, ev.y, 1.4, 0.55, ev.points);
       return;
     }
     if (ev.tier !== undefined) this.lastTier.set(ev.uid, { tier: ev.tier, glow: 1 });
@@ -366,6 +380,8 @@ export class Renderer {
     this.drawPlunger(game);
     this.drawBalls(game);
     this.drawArcs(dt);
+    this.drawBeams(dt);
+    this.drawRings(dt);
     for (let i = this.glowUsed; i < this.glowPool.length; i++) this.glowPool[i].visible = false;
     this.particles.update(dt, this.view);
     this.dmd.update(dt);
@@ -426,7 +442,9 @@ export class Renderer {
     const pulse = this.pulses.get(p.uid) ?? 0;
     switch (p.def) {
       case 'mega': return { hit: pulse > 0.35, follow: true, mood: this.moodFor(game, pulse) };
-      case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': case 'trophy': case 'tesla': return { hit: pulse > 0.35 };
+      case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': case 'trophy': case 'tesla': case 'gong': return { hit: pulse > 0.35 };
+      case 'keg': { const k = game.scorer.kegState(p.uid, game.sim.time); return { hit: pulse > 0.35, lit: !tilted && k === 'lit', armed: k !== 'spent' }; }
+      case 'laser': return { hit: pulse > 0.35, lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
       case 'piggy': return { hit: pulse > 0.35, seg: game.scorer.piggies.get(p.uid) ?? 0 };
       case 'xlane': return { lit: !tilted && !game.mods.lightsOut && !game.scorer.coolingDown(p.uid, game.sim.time) };
       case 'fame': return { lit: !tilted && !game.mods.lightsOut && !this.discoFired(game, p.uid) };
@@ -501,6 +519,8 @@ export class Renderer {
         if (p.def === 'saver' && ps.armed) this.glow(p.x, p.y, r * 2, t.role.saver, 0.55);
         if ((p.def === 'xlane' || p.def === 'disco') && ps.lit) this.glow(p.x, p.y, r * 2, t.role[p.def], 0.6);
         if (p.def === 'golden') this.glow(p.x, p.y, r * 1.8, t.role.golden, 0.35);
+        if (p.def === 'keg' && ps.lit) this.glow(p.x, p.y, r * 2.2, t.role.coin, 0.4 + 0.25 * Math.sin(this.time * 30));
+        if (p.def === 'laser' && ps.lit) this.glow(p.x, p.y, r * 1.6, t.role.laser, 0.3);
         // the Cook's order: the one part he lit glows until it is hit
         if (game.scorer.order === p.uid) {
           this.glow(p.x, p.y, r * 2.2, t.accent, 0.55 + 0.25 * Math.sin(this.time * 6));
@@ -614,7 +634,7 @@ export class Renderer {
     this.arcs = this.arcs.filter((a) => a.age < ARC_LIFE);
     const v = this.view, g = this.topG, col = this.theme.role.tesla, beat = this.calm ? 0 : Math.floor(this.time * 30);
     for (const a of this.arcs.slice(-ARCS_DRAWN)) {
-      const fade = 1 - a.age / ARC_LIFE, n = 8;
+      const fade = Math.min(1, Math.max(0, 1 - a.age / ARC_LIFE)), n = 8;
       const [x1, y1] = P(v, a.x1, a.y1, 1.9), [x2, y2] = P(v, a.x2, a.y2, 0.9);
       const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
       const amp = Math.min(v.S * 0.7, len * 0.12);
@@ -630,6 +650,31 @@ export class Renderer {
       };
       line(v.S * 0.38, col, 0.45 * fade);
       line(v.S * 0.12, WHITE, 0.95 * fade);
+    }
+  }
+
+  /** Laser beams: a straight bar of light across the table, a wide glow under a white core, fading fast. */
+  private drawBeams(dt: number) {
+    const LIFE = 0.3;
+    for (const b of this.beams) b.age += dt;
+    this.beams = this.beams.filter((b) => b.age < LIFE);
+    const v = this.view, g = this.topG, col = this.theme.role.laser;
+    for (const b of this.beams) {
+      const fade = Math.min(1, Math.max(0, 1 - b.age / LIFE));
+      const [x1, y1] = P(v, b.x1, b.y1, 1.2), [x2, y2] = P(v, b.x2, b.y2, 1.2);
+      g.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: v.S * 0.55 * fade + v.S * 0.1, color: col, alpha: 0.5 * fade, cap: 'round' });
+      g.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: v.S * 0.12, color: WHITE, alpha: fade, cap: 'round' });
+    }
+  }
+
+  /** Shockwave rings: from a blast or a boom, racing out across the floor to their reach and fading. */
+  private drawRings(dt: number) {
+    const LIFE = 0.45;
+    for (const r of this.rings) r.age += dt;
+    this.rings = this.rings.filter((r) => r.age < LIFE);
+    for (const r of this.rings) {
+      const u = Math.min(1, Math.max(0, r.age / LIFE)), ease = 1 - (1 - u) * (1 - u);
+      groundRing(this.floorFx, this.view, this.theme, r.x, r.y, Math.max(0.3, r.r * ease), r.color, this.view.lw * 3.4, 1 - u);
     }
   }
 

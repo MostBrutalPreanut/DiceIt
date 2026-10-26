@@ -24,6 +24,9 @@ const STATES: Partial<Record<PartId, [string, PartState][]>> = {
   vari: [['idle', {}], ['tier 2', { seg: 2 }], ['smash', { seg: 4 }]],
   rank: [['dark', {}], ['lit', { lit: true }]],
   tesla: [['idle', {}], ['hit', { hit: true }]],
+  keg: [['idle', {}], ['lit', { lit: true }], ['spent', { armed: false }]],
+  laser: [['ready', {}], ['recharging', { lit: false }]],
+  gong: [['idle', {}], ['hit', { hit: true }]],
   bell: [['idle', {}], ['hit', { hit: true }], ['2 notches', { seg: 2 }], ['rung', { lit: false, seg: 1 }]],
 };
 const ANGLE: Partial<Record<PartId, number>> = { sling: -0.55, spinner: 0.3, deflector: 0.4, bank: 0.15, vari: 0.2, kickback: -0.5, printer: 0.3 };

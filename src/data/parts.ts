@@ -11,7 +11,7 @@ import { bigBoiOf, DRAGON, ORDER, type MachineId } from './bigboi';
 export type PartId =
   | 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver' | 'vari'
   | 'ding' | 'piggy' | 'magnet' | 'thunder' | 'jackpot' | 'xlane' | 'golden' | 'disco' | 'trophy' | 'plate' | 'fame'
-  | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell' | 'tesla';
+  | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell' | 'tesla' | 'keg' | 'laser' | 'gong';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip';
 
@@ -152,6 +152,15 @@ export interface Recipe {
    * levels, up to `maxArcs`), and each scores as if the ball had hit it. A zap never arcs on.
    */
   zap?: { arcs: number; perLevels: number; maxArcs: number };
+  /**
+   * Powder Keg: a hit lights the fuse, and `fuse` seconds later it blows: `blast` points, and every part within
+   * `radius` is zapped. A blast lights the other kegs it reaches, at most `chain` kegs deep. Spent for `rearm` s after.
+   */
+  keg?: { fuse: number; radius: number; blast: number; chain: number; rearm: number };
+  /** Laser Turret: a hit fires a beam right across the table in a random direction; every part on it is zapped. Dark for `cooldown` s after. */
+  beam?: { cooldown: number };
+  /** Shockwave Gong: every `every`th hit of a ball booms, and every part on the table is zapped. */
+  boom?: { every: number };
 }
 
 /** A zapped part cannot be zapped again for this long (seconds). */
@@ -420,6 +429,21 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 12,
     recipe: { points: 30, per: 'hit', zap: { arcs: 2, perLevels: 3, maxArcs: 4 }, perLevel: 8 }, dials: [kickDial(2)],
   },
+  keg: {
+    id: 'keg', name: 'Powder Keg', blurb: 'Light the fuse. Stand back.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
+    shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 8,
+    recipe: { points: 10, per: 'hit', keg: { fuse: 2.5, radius: 6, blast: 80, chain: 4, rearm: 6 }, perLevel: 3 }, dials: [kickDial(1.5)],
+  },
+  laser: {
+    id: 'laser', name: 'Laser Turret', blurb: 'Pew. Somewhere across the table, something scores.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 9, weight: 2,
+    shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 10,
+    recipe: { points: 40, per: 'hit', beam: { cooldown: 3 }, perLevel: 10 }, dials: [kickDial(2)],
+  },
+  gong: {
+    id: 'gong', name: 'Shockwave Gong', blurb: 'Bang it eight times. The whole table hears it.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
+    shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 11,
+    recipe: { points: 25, per: 'hit', boom: { every: 8 }, perLevel: 6 }, dials: [kickDial(2)],
+  },
   duck: {
     id: 'duck', name: 'Duck Gallery', blurb: 'A tin duck paddles back and forth. Knock it over. It gets cross.', kind: 'mover', rarity: 'rare', tags: ['target'], cost: 8, weight: 2,
     shape: { type: 'box', hw: 3.9, hh: 0.75 }, rotatable: false, kickUnit: 0,
@@ -656,6 +680,10 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     const at = (k: number) => k * r.zap!.perLevels;
     lines.push({ tag: 'combo', text: `Every hit arcs lightning to the ${r.zap.arcs} nearest parts that score when the ball touches them (one more at level ${at(1)}${r.zap.maxArcs - r.zap.arcs > 1 ? ` and ${at(2)}` : ''}): each one scores as if the ball had hit it. A part can be zapped at most once every ${ZAP_COOLDOWN} s, a zap never arcs on, and saucers, the goal, the Kickback, drop targets and ×Mult parts cannot be zapped.` });
   }
+  if (r.keg) lines.push({ tag: 'combo', text: `A hit lights the fuse. ${r.keg.fuse} s later it blows: ${f(r.keg.blast)} points, and every part within ${r.keg.radius} units is zapped (it scores as if the ball had hit it). A blast lights any other Powder Keg it reaches, up to ${r.keg.chain} kegs in a row. Then it is spent for ${r.keg.rearm} s.` });
+  if (r.beam) lines.push({ tag: 'combo', text: `Every hit fires a laser beam through it in a random direction, right across the table: every part on the beam is zapped. Then it needs ${r.beam.cooldown} s to recharge.` });
+  if (r.boom) lines.push({ tag: 'combo', text: `Every ${r.boom.every}th hit of a ball, it booms: every part on the table is zapped once. Nothing moves.` });
+  if (r.keg || r.beam || r.boom) lines.push({ tag: 'note', text: `A part can be zapped at most once every ${ZAP_COOLDOWN} s; saucers, the goal, the Kickback, drop targets and ×Mult parts cannot be zapped.` });
   if (r.bell) lines.push({ tag: 'mult', text: `Its first hit each round pays ${f(r.bell.first)} instead, and adds a notch${inst?.notches ? ` (${inst.notches} of ${r.bell.notches} now)` : ''}. At ${r.bell.notches} notches it rings: your Mult ×${xg(r.bell.x)} on every ball for the rest of the run (rings stack), and the notches start again. Sell it and its notches go; the rings stay.` });
   if (r.tiers && def.id === 'vari') {
     const stiff = (inst ? dialValue(inst, 'stiff') : 1) * mods.tierEase;

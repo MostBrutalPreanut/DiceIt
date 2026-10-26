@@ -279,6 +279,61 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.cyl(x, y, 0.14, 1.46, 0.22, metal);
       break;
     }
+    case 'keg': {
+      // a powder keg: a wooden barrel with two iron hoops and a fuse; lit, the fuse sparks; spent, it is charred
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      const spent = st.armed === false;
+      const wood = spent ? mat(t, mix(t.role.keg, t.ink, 0.55)) : st.hit ? mat(t, mix(t.role.keg, WHITE, 0.35)) : role;
+      const iron = spent ? mat(t, mix(t.metal, t.ink, 0.5)) : metal;
+      p.cyl(x, y, r * 0.84, 0, 0.18, wood);
+      p.cyl(x, y, r * 0.88, 0.18, 0.06, iron);
+      p.cyl(x, y, r * 0.95, 0.24, 0.5, wood);
+      p.cyl(x, y, r * 0.88, 0.74, 0.06, iron);
+      p.cyl(x, y, r * 0.84, 0.8, 0.2, wood);
+      p.face(ring(x, y, r * 0.6, 20).map(([a, b]) => P(v, a, b, 1.0)), wood.shade, { sil: false, line: 0.35 });
+      if (!spent) {
+        const [fx0, fy0] = P(v, x + r * 0.15, y, 1.0), [fx1, fy1] = P(v, x + r * 0.4, y + r * 0.1, 1.8);
+        p.op((g) => {
+          g.moveTo(fx0, fy0).quadraticCurveTo(fx0 - v.S * 0.1, (fy0 + fy1) / 2, fx1, fy1).stroke({ width: v.lw * 1.4 + v.S * 0.06, color: t.ink, cap: 'round' });
+          g.moveTo(fx0, fy0).quadraticCurveTo(fx0 - v.S * 0.1, (fy0 + fy1) / 2, fx1, fy1).stroke({ width: v.S * 0.06, color: t.paper, cap: 'round' });
+          if (st.lit) g.star(fx1, fy1, 7, v.S * 0.38, v.S * 0.16).fill(t.role.coin).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' });
+        });
+      }
+      break;
+    }
+    case 'laser': {
+      // a little laser turret: a domed head on a post, one big lens on top; dark while it recharges
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      p.cyl(x, y, r * 0.42, 0.16, 0.36, metal);
+      const head = st.hit ? mat(t, mix(t.role.laser, WHITE, 0.4)) : role;
+      const dome = [0, 0.4, 0.75, 1].flatMap((u) => ring(x, y, r * 0.78 * Math.cos((u * Math.PI) / 2.4), 24).map(([a, b]) => P(v, a, b, 0.52 + u * 0.7)));
+      p.face(hull(dome), head.base);
+      const ready = st.lit !== false;
+      p.face(ring(x, y - r * 0.08, r * 0.3, 18).map(([a, b]) => P(v, a, b, 1.2)), ready ? WHITE : mix(t.role.laser, t.ink, 0.5), { sil: false, line: 0.45 });
+      if (ready) p.face(ring(x, y - r * 0.08, r * 0.16, 14).map(([a, b]) => P(v, a, b, 1.22)), t.role.laser, { sil: false, line: 0 });
+      break;
+    }
+    case 'gong': {
+      // a brass gong hung upright in a wooden frame
+      shadow(under, v, t, x, y, r * 1.05, r * 0.7);
+      const brass = st.hit ? mat(t, mix(t.role.gong, WHITE, 0.45)) : role, wood = mat(t, t.rim);
+      p.cyl(x, y, r * 0.9, 0, 0.14, mat(t, t.paper));
+      p.cyl(x - r * 0.95, y, 0.13, 0.14, 3.1, wood);
+      // the view squashes height, so the upright disc is drawn taller than it is wide to read as round
+      const R = r * 0.78, zc = 1.75, tall = 1.9;
+      const disc = (k: number): Pt[] => Array.from({ length: 28 }, (_, i) => { const a = (i / 28) * Math.PI * 2; return P(v, x + Math.cos(a) * R * k, y - 0.05, zc + Math.sin(a) * R * k * tall); });
+      p.face(disc(1), brass.shade, { line: 0.5 });
+      p.face(disc(0.86), brass.base, { sil: false, line: 0.3 });
+      p.face(disc(0.32), brass.light, { sil: false, line: 0.3 });
+      p.cyl(x + r * 0.95, y, 0.13, 0.14, 3.1, wood);
+      p.op((g) => {
+        const [ax, ay] = P(v, x - r * 0.95, y, 3.2), [bx, by] = P(v, x + r * 0.95, y, 3.2);
+        g.moveTo(ax, ay).lineTo(bx, by).stroke({ width: v.S * 0.2 + v.lw, color: t.ink, cap: 'round' });
+        g.moveTo(ax, ay).lineTo(bx, by).stroke({ width: v.S * 0.2, color: t.rim, cap: 'round' });
+      });
+      break;
+    }
     case 'tesla': {
       // a Tesla coil: a copper winding on a bumper skirt, under a round terminal that crackles when hit
       shadow(under, v, t, x, y, r * 1.05, r * 1.05);

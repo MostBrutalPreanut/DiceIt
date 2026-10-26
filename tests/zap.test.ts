@@ -22,7 +22,7 @@ describe('zaps and the Tesla Coil', () => {
     const zapped = out.filter((e) => e.zap);
     // the Jackpot Scoop is nearest but needs the ball itself; the far Ding-Dong Bell is third
     expect(zapped.map((e) => e.def)).toEqual(['pop', 'sling']);
-    expect(zapped[0].zap).toEqual({ x: 12, y: 30 });
+    expect(zapped[0].zap).toEqual({ x: 12, y: 30, by: 'arc' });
     expect(zapped[0].base).toBe(PARTS.pop.recipe.points);
     expect(s.hitsOf('pop')).toBe(1); // a zap counts for growth
     expect(s.variety).toBe(3); // and for the Ding-Dong Bell's variety: the coil, the Pop, the Slingshot
@@ -91,5 +91,94 @@ describe('zaps and the Tesla Coil', () => {
     expect(text).toContain('2 nearest parts');
     expect(text).toContain(`once every ${ZAP_COOLDOWN} s`);
     expect(text).toContain('×Mult parts cannot be zapped');
+  });
+});
+
+describe('Powder Keg', () => {
+  it('a hit lights the fuse; when it has burnt down the keg blows, zapping every part within reach, then it re-arms', () => {
+    const parts = [at('keg', 1, 12, 30), at('pop', 2, 15, 30), at('sling', 3, 12, 25), at('pop', 4, 22, 40)];
+    const s = scorer(parts);
+    const lit = s.consume(hit(1));
+    expect(lit[0].label).toBe('FUSE LIT!');
+    expect(s.kegState(1)).toBe('lit');
+    const fuse = PARTS.keg.recipe.keg!.fuse;
+    expect(s.tick(fuse - 0.01)).toEqual([]);
+    const boom = s.tick(fuse);
+    expect(boom[0].label).toBe('KABOOM!');
+    expect(boom[0].base).toBe(PARTS.keg.recipe.keg!.blast);
+    expect(boom[0].blast).toBe(PARTS.keg.recipe.keg!.radius);
+    expect(boom.filter((e) => e.zap).map((e) => e.uid).sort()).toEqual([2, 3]); // the far Pop is out of reach
+    expect(boom.every((e) => !e.zap || e.zap.by === 'blast')).toBe(true);
+    const rearm = PARTS.keg.recipe.keg!.rearm;
+    expect(s.kegState(1, fuse + 0.1)).toBe('spent');
+    expect(s.tick(fuse + 1)).toEqual([]);
+    expect(s.consume(hit(1, { t: fuse + 1 }))[0].label).toBeUndefined(); // spent: it scores, but lights no fuse
+    expect(s.kegState(1, fuse + rearm)).toBeNull();
+    expect(s.consume(hit(1, { t: fuse + rearm }))[0].label).toBe('FUSE LIT!');
+    s.startBall();
+    expect(s.kegState(1)).toBeNull();
+  });
+
+  it('a blast lights the kegs it reaches, at most four kegs in a row; a ball that ends puts the fuses out', () => {
+    const kegs = [0, 1, 2, 3, 4].map((i) => at('keg', i + 1, 3 + i * 4, 30));
+    const s = scorer(kegs);
+    s.consume(hit(1));
+    const fuse = PARTS.keg.recipe.keg!.fuse;
+    let t = 0;
+    const blown: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      t += fuse;
+      for (const e of s.tick(t)) if (e.label === 'KABOOM!') blown.push(e.uid);
+    }
+    expect(blown).toEqual([1, 2, 3, 4]);
+    expect(s.kegState(5)).toBeNull(); // the fifth is out of the chain
+    s.consume(hit(5, { t }));
+    s.startBall();
+    expect(s.tick(t + fuse * 2)).toEqual([]);
+  });
+});
+
+describe('Laser Turret', () => {
+  it('a hit fires a beam across the table; every part on the line is zapped, then it recharges for 3 s', () => {
+    const parts = [at('laser', 1, 12, 30)];
+    // a ring of Pops around it: whatever the angle, the beam crosses some and misses others
+    for (let i = 0; i < 12; i++) parts.push(at('pop', 10 + i, 12 + Math.cos((i / 12) * Math.PI * 2) * 6, 30 + Math.sin((i / 12) * Math.PI * 2) * 6));
+    const s = scorer(parts);
+    const out = s.consume(hit(1));
+    const beam = out[0].beam!;
+    expect(beam).toBeDefined();
+    const len = Math.hypot(beam.x2 - beam.x1, beam.y2 - beam.y1);
+    const off = (p: PartInstance) => Math.abs((p.x - beam.x1) * (beam.y2 - beam.y1) - (p.y - beam.y1) * (beam.x2 - beam.x1)) / len;
+    const zapped = new Set(out.filter((e) => e.zap).map((e) => e.uid));
+    expect(zapped.size).toBeGreaterThanOrEqual(2); // a line through the middle of a ring meets it twice
+    for (const p of parts.slice(1)) expect(zapped.has(p.uid), `pop ${p.uid}`).toBe(off(p) <= 1.2 + 0.3);
+    expect(Math.min(beam.x1, beam.x2)).toBeGreaterThanOrEqual(-1e-9);
+    expect(s.consume(hit(1, { t: 1 })).some((e) => e.beam || e.zap)).toBe(false);
+    expect(s.consume(hit(1, { t: PARTS.laser.recipe.beam!.cooldown })).some((e) => e.beam)).toBe(true);
+  });
+
+  it('a zapped turret scores but does not fire', () => {
+    const parts = [at('tesla', 1, 12, 30), at('laser', 2, 14, 30)];
+    const s = scorer(parts);
+    expect(s.consume(hit(1)).some((e) => e.beam)).toBe(false);
+  });
+});
+
+describe('Shockwave Gong', () => {
+  it('every 8th hit of a ball booms: every part on the table that can be zapped is; zaps do not count', () => {
+    const parts = [at('gong', 1, 12, 30), at('pop', 2, 4, 20), at('lane', 3, 20, 46), at('jackpot', 4, 12, 40), at('tesla', 5, 14, 30)];
+    const s = scorer(parts);
+    const every = PARTS.gong.recipe.boom!.every;
+    expect(every).toBe(8);
+    for (let i = 0; i < every - 1; i++) expect(s.consume(hit(1, { t: i })).some((e) => e.label === 'BOOM!')).toBe(false);
+    expect(s.label(parts[0])).toBe(`${every - 1}/${every}`);
+    s.consume(hit(5, { t: 9.5 })); // the coil zaps the gong: that is not a hit of the gong
+    const out = s.consume(hit(1, { t: 10 }));
+    expect(out.some((e) => e.label === 'BOOM!')).toBe(true);
+    expect(out.filter((e) => e.zap).map((e) => e.uid).sort()).toEqual([2, 3, 5]);
+    expect(out.filter((e) => e.zap).every((e) => e.zap!.by === 'boom')).toBe(true);
+    s.startBall();
+    for (let i = 0; i < every - 1; i++) s.consume(hit(1, { t: 20 + i }));
+    expect(s.consume(hit(1, { t: 30 })).some((e) => e.label === 'BOOM!')).toBe(true);
   });
 });

@@ -989,6 +989,7 @@ export class Game {
       for (const s of this.scorer.consume(ev)) result.score.push(s);
       if (ev.type === 'tilt') result.game.push({ type: 'tilt' });
     }
+    for (const s of this.scorer.tick(this.sim.time)) result.score.push(s); // a Powder Keg's fuse burns down
     if (!wasGoal && this.scorer.goalReached) result.game.push({ type: 'goal' });
     // a ball ends when the LAST ball on the table is gone (the Ball Printer makes multiball)
     if (this.mode === 'round' && this.sim.ballCount === 0 && !this.sim.awaitingPlunge) this.endBall(false, result);
