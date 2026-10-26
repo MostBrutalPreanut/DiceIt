@@ -12,7 +12,6 @@
 body.inmenu #left, body.inmenu #right, body.inmenu #keys, body.inmenu #touch, body.inmenu #btnPause, body.inmenu #upgradeBox, body.inmenu #overlay { display: none; }
 body.inmenu #app { grid-template-columns: minmax(0, 1fr); }
 body.inmenu #center { height: 100%; min-height: 0; padding-left: min(340px, 28vw); }
-body.inmenu #scoreDock { display: none; }
 @media (max-width: 1000px) {
   body.inmenu { overflow: hidden; }
   body.inmenu #app { height: 100%; }

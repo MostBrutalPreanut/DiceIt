@@ -1,30 +1,22 @@
 // Points and coins that fly from the part that earned them to where they are counted (art-direction §5.4:
 // every effect points at its cause and its consequence). A hit throws a burst of sticker chips in the part's
-// colour that arc to the score dock beside the table; the dock's drums count them in as they land and bump.
+// colour that arc to the score on the scoreboard panel; its drums count them in as they land and bump.
 // Coins fly to the money stack, which bounces and ticks. The chips run in one pooled ParticleContainer on
 // the page-wide FX overlay, so multiball with many hits stays cheap.
-//
-// The score dock sits next to the backbox while you play when there is room for it (wide screens), and
-// otherwise in the top corner over the machine, all the time: it never takes room from the table.
 import { Container, Graphics, Particle, ParticleContainer, Rectangle, Texture } from 'pixi.js';
 import type { PartId } from '../data/parts';
 import type { ScoreEvent } from '../game/scoring';
 import { flat, label, star } from '../render/draw';
 import type { FxOverlay } from '../render/overlay';
 import type { Renderer } from '../render/renderer';
-import { CAB, RIM } from '../render/scene';
 import { mix, roleFill, type Theme } from '../render/theme';
 
-/** What the HUD knows each frame; the dock shows it (the score lags until its chips land). */
-export interface DockFeed {
+/** What the HUD knows each frame (the score it shows lags until the chips land: shownScore). */
+export interface HudFeed {
   /** Changes when a new round starts (the scorer): chips still flying from the last one are dropped. */
   round: unknown;
   score: number;
-  goal: number;
   mult: number;
-  /** Money as the HUD would show it before coins in flight are taken off; null in the Test Lab ($∞). */
-  money: number | null;
-  playing: boolean;
   theme: Theme;
 }
 
@@ -42,8 +34,6 @@ const reduceMQ = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced
 const MAX_CHIPS = 160;
 const MAX_COINS = 24;
 const MAX_RINGS = 14;
-/** The side dock's width range: it takes the room beside the backbox, up to the larger one. */
-const DOCK_MIN = 160, DOCK_MAX = 220;
 const CELL = 64, R0 = 22;
 
 interface Chip { p: Particle; tr: Particle; on: boolean; age: number; delay: number; dur: number; x0: number; y0: number; x1: number; y1: number; x2: number; y2: number; jx: number; jy: number; size: number; spin: number; pts: number; px: number; py: number }
@@ -67,29 +57,6 @@ class Bump {
   }
 }
 
-/** The dock's own drums: one per digit, a strip of 0-9 moved by percent so any drum size works. */
-class Drums {
-  private text = '';
-  constructor(private el: HTMLElement, private width: () => number) {}
-  set(score: number) {
-    const text = String(Math.max(0, Math.floor(score))).padStart(4, '0');
-    if (text === this.text) return;
-    const grow = text.length !== this.text.length;
-    this.text = text;
-    if (grow) {
-      const n = text.length, w = this.width();
-      const dw = Math.max(13, Math.min(30, Math.floor((w - 12 - (n - 1) * 3) / n)));
-      this.el.style.setProperty('--ddw', `${dw}px`);
-      this.el.innerHTML = [...text].map(() => `<span class="ddrum"><span class="dstrip">${[...'0123456789'].map((d) => `<span>${d}</span>`).join('')}</span></span>`).join('');
-    }
-    [...text].forEach((ch, i) => {
-      const strip = this.el.children[i]?.firstElementChild as HTMLElement | null;
-      if (strip) strip.style.transform = `translateY(${-Number(ch) * 10}%)`;
-    });
-  }
-  reset() { this.text = ''; }
-}
-
 export class Flyers {
   private pc: ParticleContainer;
   private atlas: Texture | null = null;
@@ -99,9 +66,9 @@ export class Flyers {
   private rings: Ring[] = [];
   private themeId = '';
   private theme: Theme | null = null;
-  private feed: DockFeed | null = null;
+  private feed: HudFeed | null = null;
   private round: unknown = null;
-  /** Points thrown but not landed yet: the dock shows the score without them. */
+  /** Points thrown but not landed yet: the score shows without them. */
   private owed = 0;
   private shown = 0;
   private lastMult = 1;
@@ -111,20 +78,11 @@ export class Flyers {
   private multBump = new Bump();
   private moneyBump = new Bump();
   private stackBump = new Bump();
-  // the dock
-  readonly dock: HTMLElement;
-  private drums: Drums;
-  private odoEl: HTMLElement;
-  private multEl: HTMLElement;
-  private moneyEl: HTMLElement;
-  private stackEl: HTMLElement;
-  private tickEl: HTMLElement;
-  private goalEl: HTMLElement;
-  private mode: 'side' | 'top' = innerWidth > 1000 ? 'side' : 'top';
-  private dockW = DOCK_MIN;
-  private want: { mode: 'side' | 'top'; n: number } = { mode: 'top', n: 0 };
-  private sizeKey = '';
-  private shownKey = '';
+  // where things land, on the scoreboard and shop panels: the score's drums, the Mult, the money and its coin stack
+  private odoEl = document.getElementById('score')!;
+  private multEl = document.getElementById('mult')!;
+  private moneyEl = document.getElementById('shopMoney')!;
+  private stackEl = document.getElementById('coinStack')!;
   /** Targets measured once a frame. */
   private aim: { score: Pt | null; money: Pt | null; stackEl: HTMLElement | null } = { score: null, money: null, stackEl: null };
   private tickN = 0;
@@ -135,27 +93,6 @@ export class Flyers {
   constructor(private overlay: FxOverlay, private renderer: Renderer, private opts: { coinLand?: () => void } = {}) {
     this.pc = new ParticleContainer({ dynamicProperties: { position: true, rotation: true, vertex: true, color: true, uvs: true } });
     overlay.app.stage.addChildAt(this.pc, 0);
-    // the dock: a small scoreboard housing in the centre column
-    const d = document.createElement('div');
-    d.id = 'scoreDock';
-    d.className = innerWidth > 1000 ? 'side' : 'top';
-    d.dataset.tip = 'score';
-    d.innerHTML = `<div class="dinner"><div class="dhead"><span class="lbl">Score</span><b class="dmult disp">×1.00</b></div>
-      <div class="dodo"></div>
-      <div class="dgoal"><i></i></div>
-      <span class="dmoney"><span class="coins"><i></i><i></i><i></i></span><b class="disp">$0</b><span class="tick"></span></span></div>`;
-    const center = document.getElementById('center')!;
-    center.insertBefore(d, center.firstChild);
-    this.dock = d;
-    this.odoEl = d.querySelector('.dodo')!;
-    this.multEl = d.querySelector('.dmult')!;
-    this.moneyEl = d.querySelector('.dmoney b')!;
-    this.stackEl = d.querySelector('.dmoney .coins')!;
-    this.tickEl = d.querySelector('.dmoney .tick')!;
-    this.goalEl = d.querySelector('.dgoal i')!;
-    this.drums = new Drums(this.odoEl, () => (this.mode === 'side' ? this.dockW - 36 : Math.min(150, innerWidth * 0.3)));
-    // the scoreboard's own score label goes when the dock takes over
-    document.getElementById('score')?.previousElementSibling?.classList.add('scoreLbl');
     for (let i = 0; i < MAX_CHIPS; i++) {
       const p = new Particle({ texture: Texture.EMPTY, anchorX: 0.5, anchorY: 0.5, alpha: 0 });
       const tr = new Particle({ texture: Texture.EMPTY, anchorX: 0.92, anchorY: 0.5, alpha: 0 });
@@ -177,7 +114,7 @@ export class Flyers {
   get flying() { return flyOn && !reduceMQ?.matches; }
   /** Coins on their way to the stack (the balance counts them when they land). */
   get coinsInFlight() { return this.coinsLive; }
-  /** The score the dock shows right now (it trails the real score while chips fly). */
+  /** The score to show right now (it trails the real score while chips fly). */
   get shownScore() { return this.shown; }
 
   // ---- the atlas: chips in every part's colour, a soft trail, a ring, a coin --------------------------------
@@ -225,8 +162,8 @@ export class Flyers {
     for (const c of this.coins) c.p.texture = coin;
   }
 
-  // ---- the HUD feeds the dock every frame -------------------------------------------------------------------
-  hud(f: DockFeed) {
+  // ---- the HUD feeds it every frame --------------------------------------------------------------------------
+  hud(f: HudFeed) {
     if (f.theme.id !== this.themeId) this.bake(f.theme);
     if (f.round !== this.round) {
       this.round = f.round;
@@ -239,7 +176,7 @@ export class Flyers {
     this.feed = f;
   }
 
-  /** A part scored: chips carry its points to the dock, coins its money to the stack. */
+  /** A part scored: chips carry its points to the score, coins its money to the stack. */
   onScore(s: ScoreEvent) {
     if (!this.feed || !this.theme) return;
     if (!this.flying) {
@@ -329,19 +266,13 @@ export class Flyers {
     tick.classList.remove('go'); void tick.offsetWidth; tick.classList.add('go');
   }
 
-  /** Where a Mult stamp should fly: the dock's Mult when it shows, else the scoreboard's dial. */
-  multTarget(): Pt | null { return this.dockShown ? centre(this.multEl) : centre(document.getElementById('multDial')); }
+  /** Where a Mult stamp should fly: the scoreboard's dial. */
+  multTarget(): Pt | null { return centre(document.getElementById('multDial')); }
   /** A stamp landed on the Mult: a big bump. */
   kickMult() { this.multBump.kick(3); }
 
-  private get dockShown() { return this.mode === 'top' || !!this.feed?.playing; }
-  private scoreTarget(): Pt | null { return this.dockShown ? centre(this.odoEl) : centre(document.getElementById('score')); }
-  private stackTarget(): { at: Pt | null; el: HTMLElement | null } {
-    const own = centre(this.stackEl);
-    if (own) return { at: own, el: this.stackEl };
-    const el = document.getElementById('coinStack');
-    return { at: centre(el), el };
-  }
+  private scoreTarget(): Pt | null { return centre(this.odoEl); }
+  private stackTarget(): { at: Pt | null; el: HTMLElement | null } { return { at: centre(this.stackEl), el: this.stackEl }; }
 
   private dropAll() {
     for (const c of this.chips) { c.on = false; c.p.alpha = 0; c.tr.alpha = 0; }
@@ -352,59 +283,13 @@ export class Flyers {
     this.coinsLive = 0;
   }
 
-  // ---- where the dock goes ----------------------------------------------------------------------------------
-  /** Beside the backbox when the side room fits it at the machine's full size, otherwise on top of the machine. */
-  private place() {
-    const center = document.getElementById('center'), stage = document.getElementById('stage');
-    if (!center || !stage) return;
-    const cr = center.getBoundingClientRect(), sr = stage.getBoundingClientRect();
-    const key = `${innerWidth}x${innerHeight}|${Math.round(sr.width)}x${Math.round(sr.height)}|${this.renderer.view.S.toFixed(3)}|${this.mode}`;
-    if (key === this.sizeKey && this.want.n === 0) { if (this.mode === 'side') this.position(cr); return; }
-    this.sizeKey = key;
-    let next: 'side' | 'top' = 'top';
-    if (innerWidth > 1000) {
-      // the machine is fitted to the stage (the dock takes no room from it either way)
-      const bbLeft = sr.left + sr.width / 2 - (RIM.hw - 0.8) * this.renderer.view.S;
-      if (bbLeft - 14 - (cr.left - 4) >= DOCK_MIN) next = 'side';
-    }
-    // a resize lays the machine out a frame later: a new mode has to hold for a few frames first
-    if (next !== this.mode) {
-      this.want = next === this.want.mode ? { mode: next, n: this.want.n + 1 } : { mode: next, n: 1 };
-      if (this.want.n >= 4) { this.mode = next; this.want.n = 0; this.dock.className = next; this.drums.reset(); this.sizeKey = ''; }
-    } else this.want.n = 0;
-    this.drums.reset();
-    if (this.mode === 'side') this.position(cr);
-    else { this.dock.style.left = ''; this.dock.style.top = ''; this.dock.style.width = ''; }
-  }
-
-  private position(cr: DOMRect) {
-    const v = this.renderer.view;
-    const tl = this.renderer.toClient(RIM.cx - RIM.hw + 0.8, CAB.boxY + CAB.boxHH, CAB.wallH + CAB.boxScreenH / v.kz);
-    const sr = document.getElementById('stage')!.getBoundingClientRect();
-    // hug the backbox (not its shove): the machine's centre line is the stage's
-    const bbLeft = sr.left + sr.width / 2 - (RIM.hw - 0.8) * v.S;
-    const w = Math.max(DOCK_MIN, Math.min(DOCK_MAX, bbLeft - 14 - (cr.left - 4)));
-    if (w !== this.dockW) { this.dockW = w; this.drums.reset(); }
-    this.dock.style.width = `${Math.round(w)}px`;
-    this.dock.style.left = `${Math.round(bbLeft - 14 - w - cr.left)}px`;
-    this.dock.style.top = `${Math.round(Math.max(0, tl.y - cr.top))}px`;
-  }
-
   // ---- every frame ------------------------------------------------------------------------------------------
   private update(dt: number) {
     const f = this.feed;
     if (!f) return;
-    this.place();
-    const shownNow = this.dockShown;
-    const key = `${this.mode}|${shownNow}`;
-    if (key !== this.shownKey) {
-      this.shownKey = key;
-      this.dock.classList.toggle('show', shownNow);
-      document.body.classList.toggle('dock-on', shownNow);
-    }
     // targets, once a frame
     const score = this.scoreTarget(), stack = this.stackTarget();
-    this.aimW = (this.dockShown ? this.odoEl : document.getElementById('score'))?.getBoundingClientRect().width || 60;
+    this.aimW = this.odoEl.getBoundingClientRect().width || 60;
     this.aim = { score, money: stack.at, stackEl: stack.el };
 
     // chips: pop out of the part, arc to the drums, land with a ring
@@ -479,26 +364,16 @@ export class Flyers {
       if (u >= 1) { c.on = false; c.p.alpha = 0; this.coinsLive = Math.max(0, this.coinsLive - 1); this.landCoin(1); }
     }
 
-    // the dock's numbers: the score counts up to what has landed, quickly but not at once
+    // the score counts up to what has landed, quickly but not at once (the HUD's drums show shownScore)
     const target = Math.max(0, f.score - (this.flying ? this.owed : 0));
     if (!this.flying || target < this.shown) this.shown = target;
     else { this.shown += (target - this.shown) * Math.min(1, dt * 14); if (target - this.shown < 0.5) this.shown = target; }
-    this.drums.set(Math.round(this.shown));
-    const multTxt = `×${f.mult.toFixed(2)}`;
-    if (this.multEl.textContent !== multTxt) this.multEl.textContent = multTxt;
-    this.multEl.classList.toggle('hot', f.mult >= 2);
-    const money = f.money === null ? '$∞' : `$${Math.max(0, f.money - this.coinsLive)}`;
-    if (this.moneyEl.textContent !== money) this.moneyEl.textContent = money;
-    this.goalEl.style.width = `${f.playing && f.goal > 0 ? Math.min(100, (this.shown / f.goal) * 100) : 0}%`;
-    this.goalEl.parentElement!.classList.toggle('hit', f.playing && this.shown >= f.goal);
     // the bumps (none for reduced motion)
     const still = !!reduceMQ?.matches;
     setScale(this.odoEl, still ? 0 : this.scoreBump.step(dt));
-    setScale(this.multEl, still ? 0 : this.multBump.step(dt));
-    setScale(this.moneyEl, still ? 0 : this.moneyBump.step(dt));
-    const sb = still ? 0 : this.stackBump.step(dt);
-    const shop = document.getElementById('shopMoney');
-    if (shop) setScale(shop, sb * 0.7, 'translateY(2px) ');
+    setScale(this.multEl, still ? 0 : this.multBump.step(dt), 'translateY(2px) ');
+    const mb = this.moneyBump.step(dt), sb = this.stackBump.step(dt);
+    setScale(this.moneyEl, still ? 0 : Math.max(mb, sb * 0.7), 'translateY(2px) ');
   }
 
   /** Test hook: move the flights on by dt and draw the overlay now (with its ticker stopped, for frame-by-frame shots). */

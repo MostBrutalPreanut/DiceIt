@@ -22,7 +22,6 @@ import { applyBackdrop, chase, makeBulbs, MultDial, Odometer } from './ui/hud';
 import { DecalPicker } from './ui/decalPick';
 import './ui/decalPick.css';
 import { Flyers, setFlyEffects } from './ui/flyers';
-import './ui/flyers.css';
 import { Menu, type SavedRunInfo } from './ui/menu';
 import { keyLabel, loadSettings, saveSettings, type Settings } from './ui/settings';
 import { Scoreboard, sourceOfSave, type RunResult } from './ui/scoreboard';
@@ -67,7 +66,7 @@ async function main() {
   const overlay = new FxOverlay(theme);
   await overlay.init();
   const audio = new AudioFx();
-  /** Points and coins fly from the part to the score dock and the money stack. */
+  /** Points and coins fly from the part to the score and the money stack. */
   const flyers = new Flyers(overlay, renderer, { coinLand: () => audio.coinLand() });
   const odometer = new Odometer($('score'));
   // the demo machine behind the main menu: it plays, it never saves
@@ -924,7 +923,7 @@ async function main() {
   };
   const onScore = (s: ScoreEvent) => {
     renderer.onScore(s);
-    // points fly to the score dock, coins to the money stack, a rising Mult stamps and flies to the dial: effects point at their consequence
+    // points fly to the score, coins to the money stack, a rising Mult stamps and flies to the dial: effects point at their consequence
     if (!simulating) flyers.onScore(s);
     if (s.multAfter > s.multBefore + 1e-9 && !simulating) {
       const now = performance.now();
@@ -1121,7 +1120,7 @@ async function main() {
     audio.setIntensity(game.mode === 'round' ? 0.55 + 0.45 * Math.min(1, sc.score / Math.max(1, sc.goal)) : 0);
     $('phaseTitle').textContent = playing ? 'PLAY' : 'WORKSHOP';
     document.body.classList.toggle('playing', playing);
-    odometer.set(sc.score);
+    odometer.set(Math.round(flyers.shownScore)); // the drums count the points in as they land
     renderer.idle(playing ? fmt(sc.score) : `ROUND ${game.round}  GOAL ${fmt(goalFor(game.round))}`);
     $('mult').textContent = `×${sc.mult.toFixed(2)}`;
     $('mult').classList.toggle('hot', sc.mult >= 2);
@@ -1134,7 +1133,7 @@ async function main() {
     $('toGo').textContent = inRound ? (sc.goalReached ? 'GOAL HIT!' : `${fmt(Math.max(0, goal - sc.score))} to go`) : 'next round';
     $('goalFill').style.width = inRound ? `${Math.min(100, (sc.score / goal) * 100)}%` : '0%';
     $('goalFill').parentElement!.classList.toggle('hit', inRound && sc.goalReached);
-    flyers.hud({ round: sc, score: sc.score, goal, mult: sc.mult, money: game.sandbox ? null : game.money + (inRound ? sc.money : 0), playing, theme });
+    flyers.hud({ round: sc, score: sc.score, mult: sc.mult, theme });
     updateBalls(inRound);
     $('tiltFill').style.width = `${Math.min(100, game.sim.tiltMeter * 100)}%`;
     $('tiltFill').classList.toggle('danger', game.sim.tiltMeter > 0.55 || game.sim.tilted);
