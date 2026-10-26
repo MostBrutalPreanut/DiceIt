@@ -1,5 +1,5 @@
 // The menus: the main menu over the attract table, the machine picker (the three cabinets from the key art),
-// the personal scoreboard, settings, and the pause menu. Plain DOM like the rest of the UI; main.ts owns the
+// the Library (src/ui/library.ts), the personal scoreboard, settings, and the pause menu. Plain DOM like the rest of the UI; main.ts owns the
 // game and passes in what the menus need as hooks. Keyboard: Enter or Space activate, arrows move, Esc goes back.
 import { BIG_BOI_FOR, BIG_BOIS, defOn, type MachineId } from '../data/bigboi';
 import { DECALS } from '../data/decals';
@@ -9,6 +9,8 @@ import type { Mood } from '../render/props';
 import { themeById, themeVars, THEMES, type Theme } from '../render/theme';
 import { fmt } from './html';
 import { backdropTile } from './hud';
+import { LibraryView, type LibIconKind } from './library';
+import { progress, partIsNew, decalIsNew, LIBRARY_PARTS, LIBRARY_DECALS, type Library } from '../data/library';
 import { RESULT_NAMES, rankOf, shortDate, type RunRecord } from './scoreboard';
 import { ACTIONS, DEFAULT_KEYS, keyLabel, rebind, type Action, type Settings } from './settings';
 
@@ -39,9 +41,17 @@ export interface MenuHooks {
   setSettings(s: Settings): void;
   /** Any key or click in a menu (browsers only start sound after one). */
   wake(): void;
+  /** The Library as it stands, a picture for one of its entries, and "the player has looked" (clears the NEW badges). */
+  library(): Library;
+  libIcon(kind: LibIconKind, id: string, locked: boolean, cachedOnly?: boolean): string;
+  librarySeen(): void;
+  /** The machine whose colours the menus are wearing. */
+  machine(): MachineId;
+  /** Open the feedback form. */
+  feedback(): void;
 }
 
-type Screen = 'main' | 'picker' | 'scores' | 'settings' | 'pause';
+type Screen = 'main' | 'picker' | 'scores' | 'settings' | 'pause' | 'library';
 
 /** The machine picker's cabinets: generated from the concept art code (npm run concept), loaded on demand. */
 const CABINETS: Record<MachineId, () => Promise<{ default: string }>> = {
@@ -74,6 +84,7 @@ export class Menu {
   private root: HTMLElement;
   /** The machine the attract table is showing: the title's Big Boi wears it. */
   private machine: MachineId = 'factory';
+  private lib: LibraryView;
   /** The title's Big Boi: when he next blinks, and the face he is pulling after a poke. */
   private blinkTimer = 0;
   private faceTimer = 0;
@@ -81,6 +92,7 @@ export class Menu {
 
   constructor(private hooks: MenuHooks) {
     this.root = document.getElementById('menu')!;
+    this.lib = new LibraryView({ library: () => hooks.library(), icon: (k, id, locked, cachedOnly) => hooks.libIcon(k, id, locked, cachedOnly), machine: () => hooks.machine() });
     // the menu sees every key first while it is open, and the game sees none of them
     addEventListener('keydown', (e) => this.onKey(e), true);
     this.root.addEventListener('pointerdown', () => hooks.wake());
@@ -88,8 +100,10 @@ export class Menu {
   }
 
   get open() { return this.screen !== null; }
-  /** The game is paused under the pause menu (or under settings opened from it). */
-  get paused() { return this.screen === 'pause' || (this.screen === 'settings' && this.from === 'pause'); }
+  /** The game is paused under the pause menu (or under settings or the Library opened from it). */
+  get paused() { return this.screen === 'pause' || ((this.screen === 'settings' || this.screen === 'library') && this.from === 'pause'); }
+  /** A key is being rebound or a question is open: P is just a key then. */
+  get busy() { return this.binding !== null || this.confirmOpen !== null; }
   /** The main menu and its screens hide the game and show the attract table. */
   get inMenu() { return this.open && !this.paused; }
 
@@ -98,6 +112,8 @@ export class Menu {
   showPause() { this.from = 'pause'; this.show('pause'); }
   /** Settings, opened over the screen you are on (Back returns to it). */
   showSettings() { this.show('settings'); }
+  /** The Library, the same way. */
+  showLibrary() { this.show('library'); }
   close() {
     this.stopBoi();
     this.screen = null;
@@ -132,9 +148,12 @@ export class Menu {
     this.root.className = `m-${s}`;
     document.body.classList.toggle('inmenu', this.inMenu);
     document.body.classList.toggle('paused', this.paused);
+    if (s === 'library') this.lib.open();
+    this.root.scrollTop = 0;
     this.root.innerHTML = this.render(s);
     this.bind(s);
     this.focusFirst();
+    if (s === 'library') this.hooks.librarySeen();
   }
 
   // ---- screens ------------------------------------------------------------------------------------------------
@@ -156,10 +175,11 @@ export class Menu {
           <nav class="mpanel in" aria-label="Main menu" ${n()}>
             ${resume.replace('class="mbtn primary"', () => `class="mbtn primary in" ${n()}`)}
             <button class="mbtn ${run ? '' : 'primary'} in" ${n()} data-act="new"><span class="disp">New Game</span><small>${run ? 'ends the run above' : 'pick a machine and build it up'}</small></button>
+            <button class="mbtn in" ${n()} data-act="library" data-hue="coin"><span class="disp">Library</span><small>${this.libLine()}</small></button>
             <button class="mbtn in" ${n()} data-act="scores" data-hue="lane"><span class="disp">Scoreboard</span><small>${best ? `best: ${best.cleared} rounds, ${fmt(best.score)}` : 'your finished runs'}</small></button>
             <button class="mbtn in" ${n()} data-act="settings" data-hue="pop"><span class="disp">Settings</span><small>sound, graphics, buttons</small></button>
           </nav>
-          <div class="mfoot in" ${n()}><kbd>↑</kbd><kbd>↓</kbd> choose <kbd>Enter</kbd> go</div>
+          <div class="mfoot in" ${n()}><span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> go</span><button class="mfb" data-act="feedback"><kbd>P</kbd> feedback</button></div>
         </div>
       </section>`;
     }
@@ -200,6 +220,7 @@ export class Menu {
           : `<div class="card sbempty"><h3>No runs yet</h3><p>A run lands here when it ends: won, lost or abandoned. Go and break something.</p><button class="primary disp" data-act="new">New Game</button></div>`}
       </section>`;
     }
+    if (s === 'library') return this.lib.html(back(this.from === 'pause' ? 'Back to pause' : 'Back'));
     if (s === 'settings') {
       const st = this.hooks.settings();
       const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -230,9 +251,11 @@ export class Menu {
         <div class="pbody">
           ${run && t ? `<p class="pinfo">${esc(title(t.tagline))} · round ${run.round}</p>` : ''}
           <button class="mbtn primary" data-act="unpause"><span class="disp">Resume</span><small>back to the table <kbd>Esc</kbd></small></button>
+          <button class="mbtn" data-act="library" data-hue="coin"><span class="disp">Library</span><small>${this.libLine()}</small></button>
           <button class="mbtn" data-act="settings" data-hue="pop"><span class="disp">Settings</span><small>sound, graphics, buttons</small></button>
           <button class="mbtn" data-act="quit" data-hue="lane"><span class="disp">Quit to Main Menu</span><small>${run ? 'the run stays saved; a round in play starts over' : 'this run is over and on the scoreboard'}</small></button>
           ${run ? '<button class="mbtn danger" data-act="abandon"><span class="disp">Abandon Run</span><small>ends it, onto the scoreboard</small></button>' : ''}
+          <button class="mfb" data-act="feedback"><kbd>P</kbd> feedback</button>
         </div>
       </div>
     </section>`;
@@ -247,6 +270,8 @@ export class Menu {
         else if (act === 'new') this.askNewGame();
         else if (act === 'resume') this.hooks.resume();
         else if (act === 'scores') this.show('scores');
+        else if (act === 'library') this.show('library');
+        else if (act === 'feedback') this.hooks.feedback();
         else if (act === 'settings') this.show('settings');
         else if (act === 'unpause') this.hooks.unpause();
         else if (act === 'quit') this.hooks.quit();
@@ -270,6 +295,7 @@ export class Menu {
         if (!el.innerHTML) void CABINETS[id]().then((m) => { cabinetSvg.set(id, m.default); if (el.isConnected) el.innerHTML = m.default; });
       }
     }
+    if (s === 'library') this.lib.bind(this.root, () => this.rerenderLibrary());
     if (s === 'scores') {
       for (const b of q<HTMLButtonElement>('.sbrow')) {
         b.onclick = () => this.detail(b.dataset.id!);
@@ -304,14 +330,32 @@ export class Menu {
       img.onclick = () => this.pokeBoi(img);
       this.blinkLater(img);
     }
-    // the scoreboard and settings close with a click anywhere outside them
-    if (s === 'scores' || s === 'settings') {
+    // the scoreboard, settings and the Library close with a click anywhere outside them
+    if (s === 'scores' || s === 'settings' || s === 'library') {
       this.root.onclick = (e) => {
         if (this.screen !== s || this.confirmOpen || this.binding) return;
-        if (!(e.target as HTMLElement).closest('.setcard, .sblist, .sbdetail, .sbempty, .mhead h2, .mhead p, button, input, label')) this.back();
+        if (!(e.target as HTMLElement).closest('.setcard, .sblist, .sbdetail, .sbempty, .lbwrap, .lbtools, .lbtotal, .mhead h2, .mhead p, button, input, label')) this.back();
       };
     } else this.root.onclick = null;
     if (s === 'pause') this.root.querySelector('.bulbs')!.innerHTML = Array.from({ length: 13 }, (_, i) => `<i class="${i % 2 ? 'on' : ''}"></i>`).join('');
+  }
+
+  /** "23 of 126 found · 2 new": the Library button's small print. */
+  private libLine() {
+    const lib = this.hooks.library(), p = progress(lib);
+    const fresh = LIBRARY_PARTS.filter((id) => partIsNew(lib, id)).length + LIBRARY_DECALS.filter((id) => decalIsNew(lib, id)).length;
+    return `${p.parts.known + p.decals.known + 3} of ${p.parts.total + p.decals.total + 3} found${fresh ? ` · <b>${fresh} new</b>` : ''}`;
+  }
+
+  /** The Library after a tab or filter change: same scroll, focus kept on the control that was used. */
+  private rerenderLibrary() {
+    const active = document.activeElement as HTMLElement | null;
+    const key = active?.dataset ? ['libtab', 'libr', 'lib'].map((k) => active.dataset[k] && `[data-${k}="${active.dataset[k]}"]`).find(Boolean) : undefined;
+    const top = this.root.scrollTop;
+    this.root.innerHTML = this.render('library');
+    this.bind('library');
+    this.root.scrollTop = top;
+    if (key) this.root.querySelector<HTMLElement>(key)?.focus({ preventScroll: true });
   }
 
   private tutSeg() {
@@ -406,7 +450,7 @@ export class Menu {
 
   private back() {
     if (this.screen === 'pause') this.hooks.unpause();
-    else if (this.screen === 'settings' && this.from === 'pause') this.show('pause');
+    else if ((this.screen === 'settings' || this.screen === 'library') && this.from === 'pause') this.show('pause');
     else if (this.screen !== 'main') this.show('main');
   }
 

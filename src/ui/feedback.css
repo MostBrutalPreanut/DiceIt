@@ -1,0 +1,32 @@
+/* The feedback form (src/ui/feedback.ts): a marquee card over everything, like the pause menu. */
+
+.fbwrap { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: var(--drop); overflow: auto; }
+.fbcard { width: min(480px, 100%); margin: 0; padding: 0; overflow: hidden; background: var(--paper); animation: fbIn .32s cubic-bezier(.3,1.5,.55,1) both; }
+@keyframes fbIn { from { translate: 0 40px; scale: .9; opacity: 0; } to { translate: 0 0; scale: 1; opacity: 1; } }
+.fbcard .marquee { height: 64px; justify-content: center; }
+.fbcard .marquee h2 { font-size: 34px; }
+.fbbody { display: grid; gap: 10px; padding: 14px 18px 18px; }
+.fbintro { margin: 0; font-size: 13.5px; font-weight: 700; }
+.fbfield { display: grid; gap: 4px; }
+.fbfield > span { font: 800 12px var(--ui); letter-spacing: 1.6px; text-transform: uppercase; color: var(--faint); }
+.fbfield input, .fbfield textarea, .fbfield select { width: 100%; font: 600 14px/1.4 var(--ui); color: var(--ink); background: var(--paper); border: var(--lw-widget) solid var(--ink); border-radius: 10px; padding: 7px 10px; }
+.fbfield textarea { resize: vertical; min-height: 110px; }
+.fbfield input:focus-visible, .fbfield textarea:focus-visible, .fbfield select:focus-visible { outline: 3px solid var(--glow); outline-offset: 1px; }
+.fbcard.empty textarea { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent); animation: fbShake .35s; }
+@keyframes fbShake { 25% { translate: -6px 0; } 50% { translate: 5px 0; } 75% { translate: -3px 0; } }
+.fbhint { display: flex; gap: 10px; justify-content: space-between; font-size: 11.5px; color: var(--faint); margin-top: -4px; }
+.fbcount { flex: none; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fbbody .btnrow { justify-content: flex-end; margin-top: 2px; }
+.fbbody .btnrow button { flex: 0 1 auto; min-width: 110px; }
+.fbcard.sending .btnrow button[type=submit] { animation: ready 1s ease-in-out infinite; }
+.fbdone { display: flex; align-items: center; gap: 14px; }
+.fbdone img { width: 96px; height: auto; flex: none; filter: drop-shadow(3px 4px 0 var(--drop)); animation: fbBounce .6s cubic-bezier(.3,1.6,.5,1) both; }
+.fbdone h3 { margin: 0 0 4px; font-size: 26px; }
+.fbdone p { margin: 0; font-size: 13.5px; }
+@keyframes fbBounce { 0% { scale: .4; rotate: -15deg; } 70% { scale: 1.1; rotate: 6deg; } 100% { scale: 1; rotate: 0deg; } }
+@media (prefers-reduced-motion: reduce) { .fbcard, .fbdone img, .fbcard.empty textarea { animation: none; } }
+
+/* the small "P feedback" pill in the main menu's footer and on the pause card */
+#menu .mfb { display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px 3px 5px; border-radius: 99px; font: 800 12px var(--ui); box-shadow: 0 3px 0 var(--ink); }
+#menu .mfb:hover { background: var(--glow); }
+.pbody .mfb { justify-self: center; margin-top: 2px; }
