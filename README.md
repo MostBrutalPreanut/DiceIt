@@ -11,6 +11,8 @@ A rogue-lite where you **build, tune and rebuild a pinball machine** to hit a sc
 - How to build that look, phase by phase: [docs/art-implementation-plan.md](docs/art-implementation-plan.md)
 - Rarities, decals, bosses, the three Big Bois, and the balance plan (1,000 to millions): [docs/balance-plan.md](docs/balance-plan.md)
 
+**Play it:** https://mostbrutalpreanut.github.io/DiceIt/ (rebuilt from `main` on every push by `.github/workflows/deploy.yml`)
+
 ## Run it
 
 ```bash
