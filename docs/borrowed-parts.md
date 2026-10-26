@@ -15,7 +15,9 @@ https://claude.ai/artifact/UMabyQfo79xB2nmhH6c1fv (private to its owner; the dec
 Laser Turret (was Laser Cross: one beam is not a cross) and the Shockwave Gong (step 2); the inlays: Ruby, Garnet,
 Opal, Gold Leaf, Red Seal and Emerald (step 3); sparks with the Sparkler, the Rock Pile, the Firecracker, the
 Powder Keg's spark and the Topaz, plus the effects budget of §7 (step 4, see §7.3). Decor (step 5, see §6.4): the Midnight Clock, the Ritual
-Altar and four cabinet upgrades (Spare Bulb, Rubber Feet, Coin Tray, Side Mirror). See [balance-plan.md](balance-plan.md) §2 for their numbers.
+Altar and four cabinet upgrades (Spare Bulb, Rubber Feet, Coin Tray, Side Mirror). The Wizard Lamp (step 6): a legendary
+rollover with one segment per scoring part type on the table (up to 8); the ball lighting them all starts WIZARD
+MODE (2 more balls, no ×Mult limits and every Lamp ablaze for 30 s, once a round). See [balance-plan.md](balance-plan.md) §2 for their numbers.
 
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show

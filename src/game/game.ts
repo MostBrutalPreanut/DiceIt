@@ -188,6 +188,8 @@ export class Game {
   runScore = 0;
   /** Sparks owed to the table later (a Firecracker's burst): when, and what. */
   private pendingSparks: (SparkBurst & { at: number })[] = [];
+  /** WIZARD MODE's extra balls, and when they leave: it is a 30 s multiball, not two balls for keeps. */
+  private wizardBalls: { ids: number[]; until: number } | null = null;
   /** The part the last gem from the toolbox went into (the UI selects it). */
   lastInlaid: number | null = null;
   /** Old Bell rings this run: every ball's Mult is ×1.2 for each, for the rest of the run (selling the bell keeps them). */
@@ -384,10 +386,16 @@ export class Game {
   private resetSim() {
     this.sim.reset(this.layout, { seed: this.seed++, mods: simModsOf(this.mods), ballClock: this.mods.ballClock });
     this.pendingSparks = [];
+    this.wizardBalls = null;
   }
 
   /** The scorer asked for sparks: shoot them out now, or keep them for later (a firework bursts after its flight). */
   private spawnSparks(score: ScoreEvent[]) {
+    for (const s of score) if (s.balls) this.wizardBalls = { ids: this.sim.launchBalls(s.balls.n, s.balls.x, s.balls.y, s.balls.uid), until: s.t + (PARTS[s.def].recipe.wizard?.seconds ?? 0) };
+    if (this.wizardBalls && this.sim.time >= this.wizardBalls.until) {
+      for (const id of this.wizardBalls.ids) this.sim.retireBall(id);
+      this.wizardBalls = null;
+    }
     for (const s of score) for (const b of s.sparks ?? []) {
       if (b.delay) this.pendingSparks.push({ ...b, at: this.sim.time + b.delay });
       else this.sim.addSparks(b.n, b.x, b.y, b.parent, { r: b.r, top: b.top });
@@ -1144,6 +1152,7 @@ export class Game {
     out.push({ type: 'ballEnd', ballsLeft: this.ballsLeft });
     this.sim.clearSparks(); // a ball's sparks go out with it
     this.pendingSparks = [];
+    this.wizardBalls = null;
     if (this.scorer.goalReached || this.ballsLeft <= 0) this.runScore += this.scorer.score;
     if (this.scorer.goalReached) {
       this.payout = this.computePayout();

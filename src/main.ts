@@ -1,7 +1,7 @@
 import './style.css';
 import './ui/menu.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { dialValue, footprint, isDecor, isInlay, PARTS, RITUAL_NAMES, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
+import { dialValue, footprint, isDecor, isInlay, PARTS, RITUAL_NAMES, wizardNeed, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
 import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, KIND_NAMES, type DecalId, type DecalPick } from './data/decals';
 import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
 import { FINAL_ROUND } from './data/bosses';
@@ -117,7 +117,7 @@ async function main() {
   say('INSERT COIN');
 
   /** What the recipe sentences need to know: this part type's level and the run's upgrades. */
-  const ctxFor = (def: PartDef, inst?: PartInstance) => ({ level: inst ? game.scorer.levelOf(inst) : 0, mods: game.mods, machine: game.machine, types: new Set(game.placed.map((p) => p.def)).size });
+  const ctxFor = (def: PartDef, inst?: PartInstance) => ({ level: inst ? game.scorer.levelOf(inst) : 0, mods: game.mods, machine: game.machine, types: new Set(game.placed.map((p) => p.def)).size, wizardNeed: wizardNeed(game.layout.parts) });
   /** A part's definition on this run's machine (Big Boi's recipe depends on it). */
   const defFor = (id: PartId) => defOn(id, game.machine);
 
@@ -190,6 +190,11 @@ async function main() {
   };
   /** A part's live line: what it did this round; decor says how it stands instead (it is never hit). */
   const liveLine = (inst: PartInstance) => {
+    if (PARTS[inst.def].recipe.wizard && inst.placed) {
+      const w = game.scorer.wizardState();
+      const now = w.left > 0 ? `WIZARD MODE: ${Math.ceil(w.left)} s left` : w.fired ? 'Wizard Mode done this round' : `${w.lit} of ${w.need || wizardNeed(game.layout.parts)} types hit this ball`;
+      return `${now}. ${statsLine(game.scorer.ledger.get(inst.uid))}`;
+    }
     if (!isDecor(inst.def)) return statsLine(game.scorer.ledger.get(inst.uid));
     if (!inst.placed) return 'In the toolbox: decor works only on the cabinet.';
     const r = PARTS[inst.def].recipe;
@@ -937,6 +942,7 @@ async function main() {
       case 'tilt': audio.tilt(); renderer.onTilt(); sayKey('tilt'); renderer.bigBoiMood('sad', 3); break;
       case 'ballSearch': sayKey('search'); break;
       case 'rescue': sayKey('rescue'); break;
+      case 'retired': renderer.onRelease(ev.x, ev.y); break;
       case 'extraBall': sayKey('printed'); renderer.onBigMoment(); audio.printed(); renderer.bigBoiMood('shocked', 1.6); break;
       case 'partRelease': { const p = game.part(ev.uid); if (p) { renderer.onRelease(p.x, p.y); audio.release(p.def); } break; }
       case 'ballSaved': {

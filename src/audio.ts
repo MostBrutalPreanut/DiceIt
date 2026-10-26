@@ -489,7 +489,7 @@ export class AudioFx {
       case 'ding': this.dingDong(this.ladder(mult, 784, 7)); break;
       case 'sling': this.twang(this.ladder(mult, 165, 12)); break;
       case 'spinner': this.spin(opts.spins ?? 3); break;
-      case 'lane': case 'rank': this.laneRoll(); break;
+      case 'lane': case 'rank': case 'wizard': this.laneRoll(); break;
       case 'tesla': this.zap(true); this.bop(mult, 0.8); break;
       case 'keg': if (opts.label === 'FUSE LIT!') this.fuse(); else this.bop(mult, 0.7); break;
       case 'laser': this.bop(mult, 0.9); if (opts.label === 'PEW!') this.pew(); break;
@@ -871,6 +871,7 @@ export class AudioFx {
     else if (label === 'KABOOM!') this.kaboom();
     else if (label === 'BOOM!') this.gongHit(true);
     else if (id === 'clock') this.midnight();
+    else if (id === 'wizard') this.wizardMode();
     else if (id === 'altar') this.ritual(label === 'TEMPEST!' ? 0 : label === 'INFERNO!' ? 1 : 2);
     else if (id === 'rank') this.rankUp(label?.startsWith('DIAMOND') ? 3 : label?.startsWith('GOLD') ? 2 : 1);
     else if (id === 'disco') this.disco();
@@ -957,6 +958,15 @@ export class AudioFx {
     if (!v) return;
     this.noise(v.o, v.t, 0.06, 0.3, { f: 1800, q: 4 });
     this.osc(v.o, v.t, 320, 0.07, 0.12, { to: 180, attack: 0.001 });
+  }
+
+  /** Wizard Lamp: WIZARD MODE, a long rising run of bells over a big chord. */
+  private wizardMode() {
+    const v = this.voice('wizard', 0.9, 2.6, 0.5, 1, true);
+    if (!v) return;
+    this.duck(0.4, 1.6);
+    for (let i = 0; i < 14; i++) this.bell(v.o, v.t + i * 0.06, midi(67 + pent(i)), 0.6, 0.1, 3.5, 0.7);
+    for (const n of [55, 59, 62, 67]) this.osc(v.o, v.t + 0.85, midi(n), 1.6, 0.05, { type: 'sawtooth', lp: 1600, attack: 0.05, hold: 0.6, detune: 5 });
   }
 
   /** Midnight Clock: twelve quick chimes over a low gong, then the madness. */

@@ -28,6 +28,7 @@ const STATES: Partial<Record<PartId, [string, PartState][]>> = {
   gong: [['idle', {}], ['hit', { hit: true }]],
   sparkler: [['ready', {}], ['hit', { hit: true }], ['recharging', { lit: false }]],
   firecracker: [['ready', {}], ['hit', { hit: true }], ['spent', { armed: false }]],
+  wizard: [['6 types', { bright: 6 }], ['4 of 6', { bright: 6, seg: 4 }], ['wizard mode', { bright: 8, seg: 8, lit: true }]],
   clock: [['9 PM', {}], ['10:30', { seg: 6 }], ['midnight', { seg: 12, lit: true }]],
   altar: [['idle', {}], ['5 sets', { seg: 5 }], ['ritual', { lit: true, seg: 8 }]],
   rocks: [['1 rock', {}], ['3 rocks', { seg: 3 }], ['5 rocks', { seg: 5 }], ['hit', { hit: true, seg: 2 }]],

@@ -17,7 +17,7 @@ export type PartId =
   | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell' | 'tesla' | 'keg' | 'laser' | 'gong'
   | 'ruby' | 'garnet' | 'emerald' | 'opal' | 'goldleaf' | 'redseal' | 'topaz'
   | 'sparkler' | 'firecracker' | 'rocks'
-  | 'clock' | 'altar' | 'bulb' | 'feet' | 'tray' | 'mirror';
+  | 'clock' | 'altar' | 'bulb' | 'feet' | 'tray' | 'mirror' | 'wizard';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip' | 'inlay' | 'decor';
 
@@ -180,6 +180,12 @@ export interface Recipe {
    * for `seconds` every hit pays `x` times and every Lamp is at full glow. Once a ball; the hands go back each round.
    */
   clock?: { hits: number; seconds: number; x: number };
+  /**
+   * Wizard Lamp: a segment for every different part type the ball itself hits (one for each scoring type on the
+   * table when the round starts, at most `max`). All lit: WIZARD MODE for `seconds`: `balls` more balls, every
+   * ×Mult cap lifted, every Lamp at full glow. Once a round.
+   */
+  wizard?: { max: number; seconds: number; balls: number };
   /** Ritual Altar (decor): every `sets` sets completed start a `seconds` s ritual (see RITUALS). */
   altar?: { sets: number; seconds: number };
   /**
@@ -202,6 +208,14 @@ export const INFERNO_REACH = 5;
 export const tempestRate = (s: number) => 2 + s;
 export const infernoReach = (s: number) => 1 + s;
 export const swarmSparks = (s: number) => 8 + 4 * s;
+/**
+ * How many segments a Wizard Lamp has: one for every different scoring part type on the table (Big Boi and the lamp
+ * itself too), up to its most. Fixed when the round starts, so the player knows exactly what to hit.
+ */
+export function wizardNeed(parts: PartInstance[]): number {
+  const types = new Set(parts.filter((p) => p.placed && PARTS[p.def].kind !== 'decor' && PARTS[p.def].recipe.points).map((p) => p.def));
+  return Math.min(PARTS.wizard.recipe.wizard!.max, types.size);
+}
 /** Is this decor (it stands on the cabinet, never on the table)? */
 export const isDecor = (id: PartId) => PARTS[id].kind === 'decor';
 
@@ -607,6 +621,12 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'onceABall' }, dials: [],
   },
 
+  wizard: {
+    id: 'wizard', name: 'Wizard Lamp', blurb: 'Hit every kind of part. Then: magic.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 1,
+    shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 30, per: 'roll-over', wizard: { max: 8, seconds: 30, balls: 2 }, perLevel: 5 }, dials: [],
+  },
+
   // ---- decor: it stands on the cabinet (the apron, the corners above the dome), never on the table; balls never touch it ----
   clock: {
     id: 'clock', name: 'Midnight Clock', blurb: 'Every hit moves it on a minute. At midnight: madness.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1,
@@ -793,6 +813,8 @@ export interface DescribeCtx {
   machine?: MachineId;
   /** Different part types on the table (Hall of Fame). */
   types?: number;
+  /** The segments a Wizard Lamp has on the table as it stands (see wizardNeed). */
+  wizardNeed?: number;
 }
 
 export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {}): DescLine[] {
@@ -841,6 +863,11 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
   if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
   if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
+  if (r.wizard) {
+    const need = ctx.wizardNeed;
+    lines.push({ tag: 'combo', text: `It lights a segment for every different part type the ball itself hits this ball (zaps and sparks do not count): one segment for each part type on your table that scores, up to ${r.wizard.max}, counted when the round starts${need ? `. Right now: hit ${need} types` : ''}.` });
+    lines.push({ tag: 'spawn', text: `Light them all and WIZARD MODE starts: for ${r.wizard.seconds} s, ${r.wizard.balls} more balls fly out of it (they leave again when it ends), every ×Mult limit is lifted and every Lamp is at full glow. Once a round.` });
+  }
   if (r.typeX) lines.push({ tag: 'mult', text: `The first time a ball rolls over it each ball: your Mult ×${xg(1 + r.typeX)} for every different part type on your table (Big Boi too)${ctx.types ? `, ×${num(Math.round((1 + (r.typeX) * mods.multGain) ** ctx.types * 100) / 100)} now` : ''}.` });
   if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} the first time a ball rolls over it each ball.` });
   if (r.money && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.money} per ${per}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
