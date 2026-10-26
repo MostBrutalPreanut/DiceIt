@@ -18,7 +18,7 @@ export interface BigBoiDef {
   machine: MachineId;
   /** "The Foreman" (every one of them is a Big Boi: that is his tag) */
   title: string;
-  /** The ability's name, as a chip on his card ('' when his plain recipe says it all). */
+  /** The ability's name, as a chip on his card. */
   ability: string;
   blurb: string;
   recipe: Recipe;
@@ -31,7 +31,7 @@ export const DRAGON = { armour: 5, regrow: 1, jackpotX: 10 } as const;
 
 export const BIG_BOIS: Record<BigBoiId, BigBoiDef> = {
   foreman: {
-    id: 'foreman', machine: 'factory', title: 'The Foreman', ability: '',
+    id: 'foreman', machine: 'factory', title: 'The Foreman', ability: 'Overtime',
     blurb: 'Heavy, rude, hard to miss.',
     recipe: { points: 50, per: 'hit', mult: 0.15, multCap: 5, perLevel: 12 },
   },
