@@ -1,0 +1,93 @@
+
+DECALS: score with the decal alone vs the same table with no decals (mean of rounds; avg player unless noted)
+decal            kind    late             foreman-elevator xmult-ladder     light-show-lane- cook-target-prac factory-spotlit-  late pro / poor    ball s Δ (late avg)
+sponsor          cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+bigShelf         cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+interest         cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+coupon           cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+fullRefund       cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+ballHog          cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+freeReroll       cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+layaway          cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+bigToolbox       cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+bargain          cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+overshoot        cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+goldenTicket     cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+collector        cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+savingsBond      cash    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+headStart        score   +20%             -1%              -4%              +29%             +34%             -1%                 +30% / -28%      3.4
+lucky            score   +39%             +18%             -5%              +23%             +17%             +19%                +51% / -20%      3.4
+overclock        score   +32% thunder     -7% tesla        -6% golden       +13% echo        +26% bank        +2% ding            +40% / -24%      3.4
+levelUp          score   +22% thunder     -7% tesla        -6% golden       +10% echo        +11% bank        -5% ding            +31% / -29%      3.4
+lamps            score   +35%             -8%              -17%             +36%             +35%             -6%                 +45% / -24%      3.4
+sets             score   +33%             -8%              -22%             +27%             +46%             +5%                 +49% / -26%      3.4
+goldenAge        score   +23%             +1%              -4%              +20%             +15%             +14%                +34% / -28%      3.4
+glassCannon      score   +22%             -9%              -28%             +9%              -7%              -10%                +10% / -31%      5.7
+comboKing        score   +19%             -8%              -18%             -2%              -1%              -6%                 +28% / -31%      3.4
+spinDoctor       score   +20%             -8%              -22%             -2%              -1%              -6%                 +31% / -33%      3.4
+multiball        score   +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+lastCall         score   +37%             +18%             +7%              +22%             +34%             +24%                +66% / -19%      3.4
+thrifty          score   +25%             +5%              -11%             +12%             +13%             +8%                 +37% / -27%      3.4
+fanClub          score   +24%             +168%            +18%             +46%             +10%             +91%                +38% / -28%      3.4
+momentum         score   +21%             +1%              +2%              +35%             +33%             -1%                 +31% / -29%      3.4
+afterglow        score   +36%             +15%             +959%            +654%            +472%            +40%                +48% / -25%      3.4
+rubber           ball    +6%              +46%             +89%             -5%              +15%             +74%                 -4% / +28%      -5.1
+heavy            ball    +37%             +15%             -3%              +23%             +24%             +17%                +50% / -21%      3.4
+glass            ball    +24%             +21%             +79%             -18%             -4%              +9%                  -1% / +56%      3.4
+gold             ball    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+twin             ball    +112%            +58%             +416%            +98%             +111%            +132%              +144% / +141%     8.1
+extraBall        ball    +47%             +35%             +6%              +33%             +42%             +44%                +59% / -13%      3.5
+safetyNet        ball    +16%             +4%              -13%             +13%             -1%              -3%                 +20% / +9%       5.4
+longFuse         ball    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+freeKick         ball    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+printerPlus      ball    +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+bumperCar        build   +48%             +36%             +5%              -8%              -21%             +38%                +62% / -16%      3.4
+targetPractice   build   -10%             -31%             -35%             -26%             +55%             -29%                 -2% / -47%      3.4
+lightShow        build   +22%             -31%             -38%             +89%             +22%             -18%                +35% / -32%      3.4
+purist           build   +9%              -8%              -22%             -2%              -1%              -6%                 +20% / -36%      3.4
+crowd            build   +22%             -1%              -1%              +64%             +53%             +3%                 +33% / -27%      3.4
+minimalist       build   +31%             +6%              +14%             +61%             +70%             +3%                 +41% / -20%      3.4
+
+BOSSES: pass rate against a goal the table (with its decals) clears ~70% of the time without the boss (x the boss goal factor), and the score ratio with every ball out
+boss           late                   foreman-elevator       xmult-ladder           light-show-lane-echo   cook-target-practice-b factory-spotlit-tesla- 
+-- avg
+taxMan         89% (base 89%) x1.15   33% (base 33%) x0.48   44% (base 44%) x0.57   56% (base 56%) x0.73   56% (base 56%) x0.92   67% (base 67%) x0.56   
+cheapRubber    22% (base 89%) x0.42   0% (base 33%) x0.40    56% (base 44%) x1.14   56% (base 56%) x1.02   56% (base 56%) x1.14   22% (base 67%) x0.30   
+slippery       67% (base 89%) x0.72   33% (base 33%) x0.59   89% (base 44%) x2.40   67% (base 56%) x0.98   67% (base 56%) x1.44   33% (base 67%) x0.28   
+nightShift     78% (base 89%) x0.87   11% (base 33%) x0.32   0% (base 44%) x0.09    0% (base 56%) x0.00    0% (base 56%) x0.21    56% (base 67%) x0.40   
+crossedWires   78% (base 89%) x0.85   44% (base 33%) x0.64   67% (base 44%) x1.08   44% (base 56%) x0.60   56% (base 56%) x0.91   56% (base 67%) x0.56   
+shortFuse      11% (base 89%) x0.64   0% (base 33%) x0.22    22% (base 44%) x0.34   0% (base 56%) x0.39    0% (base 56%) x0.29    11% (base 67%) x0.23   
+jammer         78% (base 89%) x0.88   0% (base 33%) x0.00    44% (base 44%) x0.44   0% (base 56%) x0.41    0% (base 56%) x0.09    56% (base 67%) x0.30   
+flatRate       78% (base 89%) x0.98   0% (base 33%) x0.36    22% (base 44%) x0.28   11% (base 56%) x0.38   0% (base 56%) x0.48    67% (base 67%) x0.44   
+magnet         56% (base 89%) x0.78   44% (base 33%) x0.68   89% (base 44%) x1.70   56% (base 56%) x0.84   44% (base 56%) x0.87   33% (base 67%) x0.24   
+auditor        22% (base 89%) x0.75   0% (base 33%) x0.07    22% (base 44%) x0.39   0% (base 56%) x0.22    0% (base 56%) x0.23    44% (base 67%) x0.24   
+overlord       67% (base 89%) x0.84   0% (base 33%) x0.22    11% (base 44%) x0.17   0% (base 56%) x0.27    0% (base 56%) x0.31    78% (base 67%) x0.46   
+whirlpool      44% (base 89%) x0.71   0% (base 33%) x0.31    56% (base 44%) x1.16   67% (base 56%) x0.90   11% (base 56%) x0.44   11% (base 67%) x0.15   
+-- pro
+taxMan         78% (base 78%) x1.08   11% (base 11%) x0.50   67% (base 67%) x0.83   56% (base 56%) x0.81   44% (base 44%) x0.83   56% (base 56%) x0.73   
+cheapRubber    11% (base 78%) x0.59   0% (base 11%) x0.27    100% (base 67%) x1.27  67% (base 56%) x0.80   22% (base 44%) x0.67   22% (base 56%) x0.43   
+slippery       56% (base 78%) x0.90   0% (base 11%) x0.56    89% (base 67%) x1.05   89% (base 56%) x1.59   22% (base 44%) x0.62   89% (base 56%) x1.08   
+nightShift     78% (base 78%) x0.90   0% (base 11%) x0.31    0% (base 67%) x0.09    0% (base 56%) x0.00    0% (base 44%) x0.16    11% (base 56%) x0.52   
+crossedWires   78% (base 78%) x1.09   11% (base 11%) x0.56   78% (base 67%) x1.02   44% (base 56%) x0.63   11% (base 44%) x0.50   56% (base 56%) x1.21   
+shortFuse      11% (base 78%) x0.53   0% (base 11%) x0.19    33% (base 67%) x0.31   22% (base 56%) x0.51   0% (base 44%) x0.21    0% (base 56%) x0.30    
+jammer         78% (base 78%) x0.84   0% (base 11%) x0.00    67% (base 67%) x0.79   0% (base 56%) x0.44    0% (base 44%) x0.07    11% (base 56%) x0.40   
+flatRate       78% (base 78%) x0.94   0% (base 11%) x0.37    44% (base 67%) x0.39   0% (base 56%) x0.42    0% (base 44%) x0.41    33% (base 56%) x0.55   
+magnet         56% (base 78%) x0.83   33% (base 11%) x0.54   89% (base 67%) x1.25   67% (base 56%) x1.04   22% (base 44%) x0.75   89% (base 56%) x1.05   
+auditor        33% (base 78%) x0.67   0% (base 11%) x0.08    44% (base 67%) x0.39   0% (base 56%) x0.27    0% (base 44%) x0.23    0% (base 56%) x0.26    
+overlord       67% (base 78%) x0.80   0% (base 11%) x0.22    0% (base 67%) x0.30    0% (base 56%) x0.28    0% (base 44%) x0.23    11% (base 56%) x0.39   
+whirlpool      22% (base 78%) x0.63   0% (base 11%) x0.32    33% (base 67%) x0.39   67% (base 56%) x0.81   0% (base 44%) x0.33    11% (base 56%) x0.36   
+-- poor
+taxMan         56% (base 56%) x0.89   33% (base 33%) x0.37   56% (base 56%) x0.59   67% (base 67%) x0.94   44% (base 44%) x0.55   67% (base 67%) x0.95   
+cheapRubber    89% (base 56%) x0.87   11% (base 33%) x0.27   11% (base 56%) x0.13   67% (base 67%) x1.05   67% (base 44%) x1.06   0% (base 67%) x0.32    
+slippery       67% (base 56%) x1.25   0% (base 33%) x0.31    33% (base 56%) x0.09   78% (base 67%) x1.02   22% (base 44%) x0.42   11% (base 67%) x0.37   
+nightShift     56% (base 56%) x0.73   11% (base 33%) x0.27   0% (base 56%) x0.11    0% (base 67%) x0.00    0% (base 44%) x0.14    67% (base 67%) x1.04   
+crossedWires   78% (base 56%) x1.17   22% (base 33%) x0.38   11% (base 56%) x0.08   67% (base 67%) x1.32   56% (base 44%) x1.18   56% (base 67%) x1.07   
+shortFuse      56% (base 56%) x0.89   0% (base 33%) x0.24    44% (base 56%) x0.33   78% (base 67%) x0.93   22% (base 44%) x0.53   56% (base 67%) x0.73   
+jammer         56% (base 56%) x0.79   0% (base 33%) x0.00    56% (base 56%) x0.59   33% (base 67%) x0.40   0% (base 44%) x0.09    33% (base 67%) x0.54   
+flatRate       56% (base 56%) x0.84   22% (base 33%) x0.28   33% (base 56%) x0.30   33% (base 67%) x0.49   11% (base 44%) x0.32   67% (base 67%) x0.85   
+magnet         67% (base 56%) x0.77   33% (base 33%) x0.43   44% (base 56%) x0.17   44% (base 67%) x0.61   56% (base 44%) x0.95   67% (base 67%) x0.80   
+auditor        22% (base 56%) x0.41   0% (base 33%) x0.06    33% (base 56%) x0.29   22% (base 67%) x0.29   11% (base 44%) x0.18   33% (base 67%) x0.41   
+overlord       44% (base 56%) x0.59   11% (base 33%) x0.24   22% (base 56%) x0.16   22% (base 67%) x0.32   11% (base 44%) x0.25   56% (base 67%) x0.90   
+whirlpool      56% (base 56%) x0.89   0% (base 33%) x0.24    22% (base 56%) x0.28   67% (base 67%) x0.79   22% (base 44%) x0.37   56% (base 67%) x0.64   
+-- avgConfused
+crossedWires   0% (base 89%) x0.22    0% (base 33%) x0.31    11% (base 44%) x0.06   0% (base 56%) x0.10    0% (base 56%) x0.03    0% (base 67%) x0.05    

@@ -1,0 +1,1820 @@
+[
+ {
+  "id": "foreman-overtime-additive",
+  "archetype": "Fill every additive Mult cap first (Foreman 5, Thunder 2, Mag-Grab 2, Spin Doctor spinners 3, Jackpot-Sets lanes 5, uncapped bank sets), then multiply once with X Lanes",
+  "machine": "factory",
+  "kind": "realistic",
+  "thesis": "scoring.ts award(): mult = (mult + gain*ringX) * xmult, and each hit scores at the Mult BEFORE its own gain, so additive Mult must be banked before any xMult fires. Additive caps are per part TYPE per ball (multPaid keyed by def): Foreman 5, Thunder 2, Mag-Grab 2, Spinner 1.5 (x2 = 3 with Spin Doctor, which also doubles the cap), lane sets 5 per ball at 0.5 x setFactor (Jackpot Sets -> +1.0 each, +5 total) and drop-target sets with NO cap (0.3 x setFactor each). A Tesla Coil between the Foreman and the Thunder Bumper zaps both (zaps go through hit() and take Mult), so both caps fill about twice as fast. Expected peak per ball: 1 + 0.5 (Head Start) + ~0.8 (Crowd, 20 parts) + 5 + 2 + 2 + 3 + 5 + ~2 (banks) = ~21 Mult, x3 from the shared X Lane cap = ~63.",
+  "synergies": [
+   {
+    "a": "tesla",
+    "b": "mega",
+    "claim": "The Foreman reaches its +5 cap (34 hits) in about half the ball time when the Tesla Coil is his nearest zappable neighbour, because zapped Foreman hits add +0.15 Mult each."
+   },
+   {
+    "a": "tesla",
+    "b": "thunder",
+    "claim": "Zaps of the Thunder Bumper add Mult (+0.05) and feed Pop growth (+3 hits); the Thunder cap of +2 fills in under 20 ball+zap hits with the Red Seal doubling every ball hit."
+   },
+   {
+    "a": "spinDoctor",
+    "b": "spinner",
+    "claim": "Spin Doctor doubles both the per-spin Mult (0.02) and the cap (spinMultCap 1.5 x spinMult 2 = 3.0); a pass is up to 15 spins (10 x spinBoost 1.5), so ~10 passes per ball reach +3 Mult."
+   },
+   {
+    "a": "sets",
+    "b": "lane",
+    "claim": "Each completed lane set pays +1.0 Mult (0.5 x setFactor 2), capped at 5 sets per ball (setCap shared by every lane pack) = +5 Mult."
+   },
+   {
+    "a": "sets",
+    "b": "bank",
+    "claim": "Drop-target bank sets have no setCap at all (checkLaneSet caps lanes, the bank branch does not); each set adds +0.6 Mult with Jackpot Sets and the bank resets 0.8 s later, so bank Mult grows without limit over a long ball."
+   },
+   {
+    "a": "xlane",
+    "b": "mega",
+    "claim": "Peak Mult per ball is higher when the X Lanes fire late in the ball (after the Foreman cap) than when they sit on the plunge path: X Lanes on the plunge path multiply a ~2 Mult, X Lanes in the lower inlanes multiply ~20."
+   },
+   {
+    "a": "crowd",
+    "b": "lane",
+    "claim": "Crowd Pleaser counts each piece of a pack: this 20-part table starts every ball at +0.8 Mult."
+   }
+  ],
+  "decor": "clock",
+  "decals": [
+   {
+    "id": "headStart"
+   },
+   {
+    "id": "spinDoctor"
+   },
+   {
+    "id": "sets"
+   },
+   {
+    "id": "crowd"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "tesla",
+    "magnet",
+    "bank",
+    "plate"
+   ],
+   "keepDecals": [
+    "headStart",
+    "sets"
+   ],
+   "note": "Without the Tesla, Mag-Grab and bank: Foreman + Thunder + lanes + spinners + X Lanes (~$55): about 1.5 + 5 + 2 + 1.5 + 5 = 15 Mult x3 = 45 per ball if the ball lives long enough to fill the Foreman cap."
+  },
+  "placementNotes": "Tesla at (12,31.6) sits 4.4 under Big Boi and 4.7 from the Thunder Bumper so those two are its two nearest zappable parts (pops, lanes and spinners are all further away; Mag-Grab, X Lane and banks are not zappable). One Power Plate under Big Boi also reaches the Tesla (2.6), a second sits under the Thunder. Mag-Grab at (17.6,29.6) is rotated 0.72 rad so its throw (direction (-sin a, cos a)) points straight at Big Boi, and its line clears the Tesla. Lanes across the top at y~45 are rolled over by every plunge (they are the first Mult of the ball, which is fine because they are additive). The two X Lanes are deliberately LOW (y 21.5, the inlane returns) so they are reached after the ball has worked the upper table. Spinners on both orbits. Level Lights (8,38.6)/(5.6,34.6) are 4.7 apart (one group) and within 5.5 of Big Boi and the Thunder, so each completed pair levels both.",
+  "risks": "Flat Rate / Overlord scale every gain by 0.7 (Foreman effective cap 3.5, X Lane cap 2.4). Jammer jams the most numerous type (the pops or lanes, fine). Night Shift kills lanes and X Lanes (-5 Mult, no x3). The Foreman cap needs 34 hits: short balls (Short Fuse, Whirlpool) never fill it. Spinners are slow to fill if the orbits are not shot.",
+  "parts": [
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 31.6,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "thunder",
+    "x": 7.4,
+    "y": 30.8,
+    "angle": 0,
+    "dials": {},
+    "inlay": "redseal",
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 12,
+    "y": 34.2,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 8.4,
+    "y": 32.3,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "magnet",
+    "x": 17.6,
+    "y": 29.6,
+    "angle": 0.72,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "spinner",
+    "x": 4.6,
+    "y": 40.5,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "spinner",
+    "x": 20.4,
+    "y": 33.5,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 9,
+    "y": 45.2,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 12,
+    "y": 45.6,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 15,
+    "y": 45.2,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "pop",
+    "x": 16.5,
+    "y": 41.5,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "pop",
+    "x": 20,
+    "y": 41.5,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "pop",
+    "x": 18.25,
+    "y": 38.3,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "xlane",
+    "x": 8.0,
+    "y": 21.5,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 16.0,
+    "y": 21.5,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bank",
+    "x": 4.9,
+    "y": 25.2,
+    "angle": 1.5708,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "sling",
+    "x": 5.2,
+    "y": 17.8,
+    "angle": -1.05,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "sling",
+    "x": 18.8,
+    "y": 17.8,
+    "angle": 1.05,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "uplight",
+    "x": 8.0,
+    "y": 38.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "uplight",
+    "x": 5.6,
+    "y": 34.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   }
+  ]
+ },
+ {
+  "id": "xmult-ladder",
+  "archetype": "Every capped xMult at once: X Lane x3, Golden Bumper x3, Goal! x4, Disco Ball + Emerald x6.25, on top of the Foreman",
+  "machine": "factory",
+  "kind": "realistic",
+  "thesis": "The xMult caps are per type per ball (xPaid keyed by def, cap divided by what was already paid): X Lane 3, Golden 3 (23 hits of x1.05), Goal! 4 (about 3.4 goals of x1.5). The Disco Ball has NO xmultCap, so it pays its full x2.5 on every firing, and an Emerald lets it fire twice a ball (x6.25). Product of the ladder = 3 x 3 x 4 x 6.25 = 225 on top of the ~7 additive Mult the Foreman and Head Start give, i.e. ~1,500 Mult per ball when the ball lives long enough. Three legendaries, all from round 7 on.",
+  "synergies": [
+   {
+    "a": "emerald",
+    "b": "disco",
+    "claim": "An Emerald Disco Ball fires twice a ball (perBall check is perBall*2) and both passes are a full x2.5 (no cap): x6.25 a ball, and the lamps flash 8 s each time."
+   },
+   {
+    "a": "garnet",
+    "b": "goal",
+    "claim": "A Garnet halves the Goal cooldown to 0.75 s; the x4 cap (1.5^3.42) is reached in 4 goals."
+   },
+   {
+    "a": "garnet",
+    "b": "xlane",
+    "claim": "Two X Lanes share one cap of x3 per ball (5 passes); with Garnets each re-arms in 1.5 s, so the cap is reached in a couple of orbits."
+   },
+   {
+    "a": "redseal",
+    "b": "golden",
+    "claim": "Red Seal makes every Golden hit score twice, taking x1.05 twice, so the x3 cap needs 12 hits instead of 23; the double also pays 120+ points twice."
+   },
+   {
+    "a": "ruby",
+    "b": "goal",
+    "claim": "NEGATIVE TEST: a Ruby (or Gold Leaf / Red Seal / Topaz) set in Goal! does nothing; the goal branch in hit() ignores inlays except the Garnet cooldown."
+   },
+   {
+    "a": "plate",
+    "b": "golden",
+    "claim": "The Golden Bumper (bumper tag) on a Power Plate pays 120 x1.5 = 180+ points a hit."
+   },
+   {
+    "a": "levelUp",
+    "b": "golden",
+    "claim": "Level Up on Golden adds +60 points per hit (perLevel 30 x 2)."
+   }
+  ],
+  "decor": "mirror",
+  "decals": [
+   {
+    "id": "headStart"
+   },
+   {
+    "id": "momentum"
+   },
+   {
+    "id": "levelUp",
+    "target": "golden"
+   },
+   {
+    "id": "lastCall"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "goal",
+    "disco"
+   ],
+   "keepDecals": [
+    "headStart",
+    "momentum"
+   ],
+   "note": "Only Golden Bumper + 2 X Lanes + Foreman: (1.5 + momentum ~3 + 5) x 3 x 3 = ~85 Mult per ball; one legendary."
+  },
+  "placementNotes": "Golden Bumper heads a three-pop cluster in the top right where the plunged ball arrives, on Plate A (18.8,41.6), which also reaches the right pop; Plate B is under the left pop. Goal! sits top-left (8,43.5), clear of Big Boi by 8.5, so flipper shots up the left side go past the goalie. The Disco Ball and one X Lane are on the left orbit (x 4.5, y 28-33) and the other X Lane on the right orbit (20.6,34.5): orbit shots come after the ball has worked the bumpers, so the xMults land on a Mult the Foreman has already pumped. Mag-Grab (17.6,29.6) throws at Big Boi to fill the Foreman early. The lamp (dial 6, radius 6, +40% at full) sits between Big Boi, the Golden cluster and the Goal (all within 6; Goal! uses the lamp bonus too) and is lit to full by each Disco pass.",
+  "risks": "Order: if the ball goes through the Disco on its first orbit before touching the Foreman, x6.25 is wasted on ~1.5 Mult (it fires only twice a ball). Night Shift turns off X Lanes and the Disco (lights). Flat Rate/Overlord: every x shrinks (X Lane 2.4, Golden 2.4, Goal 3.1, Disco 2.05 each). Needs three legendaries by ~round 10.",
+  "parts": [
+   {
+    "def": "goal",
+    "x": 8,
+    "y": 43.5,
+    "angle": 0,
+    "dials": {},
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "golden",
+    "x": 18,
+    "y": 40,
+    "angle": 0,
+    "dials": {},
+    "inlay": "redseal",
+    "role": "core"
+   },
+   {
+    "def": "pop",
+    "x": 20.3,
+    "y": 43.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "pop",
+    "x": 15.6,
+    "y": 43.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "pop",
+    "x": 17.9,
+    "y": 46.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "plate",
+    "x": 18.8,
+    "y": 41.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "plate",
+    "x": 14.9,
+    "y": 42.3,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "disco",
+    "x": 4.5,
+    "y": 33,
+    "angle": 0,
+    "dials": {},
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 4.5,
+    "y": 28.5,
+    "angle": 0,
+    "dials": {},
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 20.6,
+    "y": 34.5,
+    "angle": 0,
+    "dials": {},
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "magnet",
+    "x": 17.6,
+    "y": 29.6,
+    "angle": 0.72,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "sling",
+    "x": 5.2,
+    "y": 17.8,
+    "angle": -1.05,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "sling",
+    "x": 18.8,
+    "y": 17.8,
+    "angle": 1.05,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "lamp",
+    "x": 12.6,
+    "y": 40.6,
+    "angle": 0,
+    "dials": {
+     "radius": 6
+    },
+    "role": "support"
+   }
+  ]
+ },
+ {
+  "id": "hall-of-fame-zoo",
+  "archetype": "29 different part types for an uncapped Hall of Fame (x1.1 per type, twice a ball with an Emerald) plus Wizard Mode and Crowd Pleaser",
+  "machine": "diner",
+  "kind": "realistic",
+  "thesis": "Hall of Fame's xMult is typeXNow() = 1.1^(distinct placed types), computed directly, never through takeX: no per-ball cap, Wizard Mode irrelevant. Every placed non-decor type counts, including non-scoring ones (Deflector $1, Saver, Plate, Strip, Spotlight) and Big Boi. 29 types = x15.9 a pass; an Emerald fires it twice = x251 a ball. Crowd Pleaser gives +0.04 per placed piece (36 here = +1.44) and the Cook calls x4 orders all over the busy table. The Wizard Lamp needs the ball to hit 8 types (max 8) and then lifts the X Lane cap for 30 s.",
+  "synergies": [
+   {
+    "a": "fame",
+    "b": "deflector",
+    "claim": "Adding any new type, even a non-scoring $1 Deflector, raises every Hall of Fame pass by x1.1."
+   },
+   {
+    "a": "emerald",
+    "b": "fame",
+    "claim": "Emerald Hall of Fame fires twice a ball, each the full 1.1^types (no cap): x251 with 29 types."
+   },
+   {
+    "a": "wizard",
+    "b": "xlane",
+    "claim": "During Wizard Mode (30 s) the X Lane cap is lifted: ~10 passes at 1.25 every 3 s = x9.3 instead of x3."
+   },
+   {
+    "a": "gong",
+    "b": "lamp",
+    "claim": "Every 8th gong hit zaps every zappable part; the lamp brightens, lanes/echoes/Level Lights toggle or light (zaps light lanes, rollovers are zappable), filling sets without the ball."
+   },
+   {
+    "a": "echo",
+    "b": "echo",
+    "claim": "Three caves in a row on the top return pay x1, x2, x4 (cap x8 needs four); worth only 15-ish points each, so the chain is a type count, not a scorer."
+   },
+   {
+    "a": "collector",
+    "b": "fame",
+    "claim": "Collector pays $29 a cleared round here, funding the next type."
+   }
+  ],
+  "decor": "altar",
+  "decals": [
+   {
+    "id": "crowd"
+   },
+   {
+    "id": "headStart"
+   },
+   {
+    "id": "momentum"
+   },
+   {
+    "id": "collector"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "wizard",
+    "gong",
+    "well",
+    "bonsai",
+    "rocks",
+    "piggy",
+    "spot",
+    "strip",
+    "plate"
+   ],
+   "keepDecals": [
+    "crowd",
+    "collector"
+   ],
+   "note": "20 types and a plain Hall of Fame (no Emerald): x6.7 once a ball on ~3 Mult = ~20 Mult per ball; one legendary."
+  },
+  "placementNotes": "Hall of Fame on the right orbit (19.6,43.4) where the plunged ball comes over the top, and the Wizard Lamp on the upper left (6.8,44.0). The echo caves sit in a row on the top arc (y~45.5, 3.1 apart) which a plunge crosses right to left. The three Grape Bunches are packed (2.8-3 apart, under the 3.1 touch) so each pays x3. The rest fills the table on a 3-4 unit grid with the 1.1/0.9 gaps checked; the Level Light pair (8.6,31.2)/(8.2,36.6) is 5.4 apart and within 5.5 of Big Boi, the sparkler, rocks and grapes. The kickback guards the left outlane edge.",
+  "risks": "Overlord: a random type is off each ball (one Fame type less, x0.91) and Mult gains 0.7 (Fame 1.07^29 = 7.1). Jammer jams lanes or grapes (3 each). A crowded table hurts ball flow; the Hall of Fame must still be rolled over. Wizard Mode needs 8 types hit by the ball itself.",
+  "parts": [
+   {
+    "def": "echo",
+    "x": 16.4,
+    "y": 45.4,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "echo",
+    "x": 13.3,
+    "y": 45.8,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "echo",
+    "x": 10.2,
+    "y": 45.5,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "fame",
+    "x": 19.6,
+    "y": 43.4,
+    "angle": 0,
+    "dials": {},
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "wizard",
+    "x": 6.8,
+    "y": 44.0,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 4.3,
+    "y": 40.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 7.2,
+    "y": 40.8,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 9.9,
+    "y": 41.4,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "pop",
+    "x": 15.0,
+    "y": 41.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "ding",
+    "x": 18.6,
+    "y": 39.4,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "lamp",
+    "x": 16.9,
+    "y": 36.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "plate",
+    "x": 16.8,
+    "y": 40.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "spinner",
+    "x": 20.4,
+    "y": 34.3,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "xlane",
+    "x": 20.6,
+    "y": 30.4,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "grape",
+    "x": 4.1,
+    "y": 34.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "grape",
+    "x": 6.9,
+    "y": 34.0,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "grape",
+    "x": 5.5,
+    "y": 31.4,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "uplight",
+    "x": 8.6,
+    "y": 31.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "uplight",
+    "x": 8.2,
+    "y": 36.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "coin",
+    "x": 16.5,
+    "y": 31.0,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "sparkler",
+    "x": 13.2,
+    "y": 31.0,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 9.9,
+    "y": 27.8,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "bonsai",
+    "x": 17.4,
+    "y": 27.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "well",
+    "x": 14.0,
+    "y": 27.8,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "gong",
+    "x": 20.6,
+    "y": 25.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "magnet",
+    "x": 4.6,
+    "y": 28.0,
+    "angle": -0.75,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 7.3,
+    "y": 24.4,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "bank",
+    "x": 12.0,
+    "y": 23.25,
+    "angle": 0.0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "piggy",
+    "x": 17.8,
+    "y": 23.0,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "vari",
+    "x": 4.0,
+    "y": 23.6,
+    "angle": 1.2,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "saver",
+    "x": 21.0,
+    "y": 21.2,
+    "angle": 0,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "strip",
+    "x": 12.0,
+    "y": 19.1,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "sling",
+    "x": 6.9,
+    "y": 17.8,
+    "angle": -1.05,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "sling",
+    "x": 17.1,
+    "y": 17.8,
+    "angle": 1.05,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "deflector",
+    "x": 12.0,
+    "y": 17.25,
+    "angle": 0,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "kickback",
+    "x": 3.2,
+    "y": 16.4,
+    "angle": 0,
+    "dials": {},
+    "role": "guard"
+   }
+  ]
+ },
+ {
+  "id": "foreman-furnace",
+  "archetype": "Base-point multipliers stacked on Big Boi: 4 Power Plates (x5.06), 4 Spotlights (x5.06), 2 tight Lamps with Bright Lamps + Spare Bulb, Bumper Car x Fan Club x Overclock",
+  "machine": "factory",
+  "kind": "realistic",
+  "thesis": "Power Plates and Spotlights multiply with no cap (plateXAt and spotXAt are plain products over every plate within 3 / lit spotlight within 5), and Big Boi is a bumper, so plates count for him. Plates must be 3.9 apart (floor-to-floor gap), so four plates fit 2.76 from Big Boi in a cross (x1.5^4 = 5.06); four Spotlights fit 4.9 out on the axes (x5.06). modFactor gives Big Boi Bumper Car 1.5 x Fan Club 3 x Overclock 1.5 = 6.75, and two Lamps at dial 4 with Bright Lamps and Spare Bulb give +90% each at full. One Foreman hit = 50 x 6.75 x 2.8 x 25.6 = ~24,000 points before Mult, and he still pumps +5 Mult. No legendary needed.",
+  "synergies": [
+   {
+    "a": "plate",
+    "b": "mega",
+    "claim": "Four plates 2.76 from Big Boi multiply his points x5.0625 (plates multiply; reach 3)."
+   },
+   {
+    "a": "spot",
+    "b": "mega",
+    "claim": "Four lit Spotlights 4.9 from Big Boi multiply him x5.0625; a ball hit darkens one for 10 s (x1.5 lost), sparks and zaps never do."
+   },
+   {
+    "a": "fanClub",
+    "b": "bumperCar",
+    "claim": "Fan Club (x3) and Bumper Car (x1.5, Big Boi has the bumper tag) multiply in modFactor: Big Boi x4.5, x6.75 with Overclock on Big Boi."
+   },
+   {
+    "a": "lamps",
+    "b": "bulb",
+    "claim": "A Lamp at dial 4 with Bright Lamps and the Spare Bulb gives 0.18 a step (+90% at 5 steps) with radius 7; at dial 3 it is +100% with radius 6."
+   },
+   {
+    "a": "plate",
+    "b": "pop",
+    "claim": "The four diagonal pops (4.21 from Big Boi) are within 3 of two plates each (x2.25) and within 5 of two spotlights (x2.25)."
+   },
+   {
+    "a": "magnet",
+    "b": "mega",
+    "claim": "Both Mag-Grabs aim at Big Boi; each grab is +0.25 Mult (shared cap 2) and sends the ball into the furnace."
+   }
+  ],
+  "decor": "bulb",
+  "decals": [
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "fanClub"
+   },
+   {
+    "id": "overclock",
+    "target": "mega"
+   },
+   {
+    "id": "lamps"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "spot",
+    "lamp"
+   ],
+   "keepDecals": [
+    "bumperCar",
+    "fanClub"
+   ],
+   "note": "Only the 4 plates + Bumper Car + Fan Club: 50 x 4.5 x 5.06 = 1,140 a Foreman hit before Mult (vs 225 without the plates), still the best per-hit number on the table for ~$36 of plates."
+  },
+  "placementNotes": "Plates at (12+-2.76,36) and (12,36+-2.76): 3.90 apart (the floor-floor minimum), 2.76 from Big Boi (reach 3). Pops at the four diagonals (12+-2.98, 36+-2.98) are 4.21 from Big Boi (min 4.2) and 2.99 from two plates. Spotlights on the axes 4.9 out are within 5 of Big Boi and of their two neighbouring pops, and 3.55 from the pops (min 3.05). Lamps at (17.9,39.5) and (6.1,39.5) reach Big Boi (6.9 < 7) and the upper pop on their side. Mag-Grabs low on both sides throw along the line to Big Boi.",
+  "risks": "The ball will hit the spotlights in such a dense cluster (each hit costs x1.5 for 10 s); lamps need 5 hits each per ball to reach full (or a lamp flash). Placement is at the exact minimum distances, so if the harness nudges a plate past 3.0 from Big Boi it loses x1.5. Night Shift kills the lamps, but NOT the Spotlights: spotXAt() never checks lightsOut, and hit() returns early for light-tagged parts, so under Night Shift the spots keep multiplying AND can no longer be knocked dark (test it). Jammer jams the pops (4, most numerous) only.",
+  "parts": [
+   {
+    "def": "plate",
+    "x": 14.76,
+    "y": 36,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 9.24,
+    "y": 36,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 12,
+    "y": 38.76,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 12,
+    "y": 33.24,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "pop",
+    "x": 14.98,
+    "y": 38.98,
+    "angle": 0,
+    "dials": {},
+    "inlay": "ruby",
+    "role": "core"
+   },
+   {
+    "def": "pop",
+    "x": 9.02,
+    "y": 38.98,
+    "angle": 0,
+    "dials": {},
+    "inlay": "ruby",
+    "role": "core"
+   },
+   {
+    "def": "pop",
+    "x": 14.98,
+    "y": 33.02,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "pop",
+    "x": 9.02,
+    "y": 33.02,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 16.9,
+    "y": 36,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 7.1,
+    "y": 36,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 12,
+    "y": 40.9,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 12,
+    "y": 31.1,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "lamp",
+    "x": 17.9,
+    "y": 39.5,
+    "angle": 0,
+    "dials": {
+     "radius": 4
+    },
+    "role": "core"
+   },
+   {
+    "def": "lamp",
+    "x": 6.1,
+    "y": 39.5,
+    "angle": 0,
+    "dials": {
+     "radius": 4
+    },
+    "role": "core"
+   },
+   {
+    "def": "magnet",
+    "x": 18.5,
+    "y": 27.0,
+    "angle": 0.625,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "magnet",
+    "x": 5.5,
+    "y": 27.0,
+    "angle": -0.625,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "xlane",
+    "x": 12,
+    "y": 24.5,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 9,
+    "y": 45.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 12,
+    "y": 45.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 15,
+    "y": 45.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "sling",
+    "x": 5.2,
+    "y": 17.8,
+    "angle": -1.05,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "sling",
+    "x": 18.8,
+    "y": 17.8,
+    "angle": 1.05,
+    "dials": {},
+    "role": "guard"
+   }
+  ]
+ },
+ {
+  "id": "multiball-madness-castle",
+  "archetype": "Always two+ balls: Twin Ball + Multiball Madness, Ball Printers with Printer Plus, Gumball lock, Free Ball Bucket, Spider Wheel, Fan Club Dragon",
+  "machine": "castle",
+  "kind": "realistic",
+  "thesis": "Multiball Madness (multiballX 2) applies whenever sim.ballCount >= 2, and ballCount is balls.length, which includes a Twin Ball still waiting in the plunger lane: with Twin Ball the x2 is on from the first hit. Printers stop at printCap 3 balls a ball shared by ALL printers (sim.printed) and MAX_BALLS 4, so Printer Plus only gets to 4 balls in two catches instead of three. Every extra ball hits Big Boi too: the Dragon's armour jackpots (10 x 40 x Fan Club 3 x multiball 2 = 2,400) come faster. Mult per ball is not raised by multiball (one shared Mult and the same caps) but the caps fill faster.",
+  "synergies": [
+   {
+    "a": "twin",
+    "b": "multiball",
+    "claim": "With Twin Ball, every hit pays x2 even while the second ball is still in the plunger lane (ballCount counts it)."
+   },
+   {
+    "a": "printerPlus",
+    "b": "printer",
+    "claim": "A catch prints 2 balls with Printer Plus; the second printer adds nothing once 3 balls were printed this ball (shared printCap) or 4 are on the table."
+   },
+   {
+    "a": "gumball",
+    "b": "twin",
+    "claim": "The Gumball Machine still locks while the twin waits in the lane (inLane balls do not count), but never in multiball, and once a round."
+   },
+   {
+    "a": "bucket",
+    "b": "multiball",
+    "claim": "A ball falling into the Free Ball Bucket returns to the plunger (not lost), so the ball clock, not drains, ends most balls."
+   },
+   {
+    "a": "fanClub",
+    "b": "mega",
+    "claim": "Dragon armour breaks pay 400 x Fan Club 3 x multiball 2 = 2,400 base each, and the armour regrows one plate thicker."
+   },
+   {
+    "a": "wheel",
+    "b": "multiball",
+    "claim": "Spider Wheel \"extra ball\" and (after all 8 awards) Wheel Mania (3 balls, x2 for 20 s) stack with Multiball Madness for x4 on hits."
+   }
+  ],
+  "decor": "clock",
+  "decals": [
+   {
+    "id": "multiball"
+   },
+   {
+    "id": "printerPlus"
+   },
+   {
+    "id": "twin"
+   },
+   {
+    "id": "fanClub"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "bucket",
+    "wheel",
+    "gumball"
+   ],
+   "keepDecals": [
+    "multiball",
+    "printerPlus"
+   ],
+   "note": "Without Twin Ball (legendary decal) and the bucket: x2 only after a printer catch; still ~1.6x the points of the same table without the decal."
+  },
+  "placementNotes": "Printers on both sides at y 29.5 where balls roll down the orbits; the Gumball low-centre (12,27.6) catches a lone ball coming down the middle; the Free Ball Bucket (12,19.2) slides over the drain gap so falling balls drop into it from above. Spider Wheel on the right (19.6,37.2) beside the pop cluster. Pops share one plate (18.25,43.2) 2.0-2.1 from all three. Thunder top-left throws balls up into the lanes. X Lanes on both orbits for the per-ball x3.",
+  "risks": "Twin Ball is a legendary decal (offered only from the 2nd boss). The ball clock still ends every ball at 60 s (40 s Whirlpool, 30 s Short Fuse). Multiball makes the Gumball dead weight after its round lock. Cheap Rubber halves bumper kicks.",
+  "parts": [
+   {
+    "def": "printer",
+    "x": 6.2,
+    "y": 29.5,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "printer",
+    "x": 17.8,
+    "y": 29.5,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "gumball",
+    "x": 12,
+    "y": 27.6,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bucket",
+    "x": 12,
+    "y": 19.2,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "wheel",
+    "x": 19.6,
+    "y": 37.2,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "pop",
+    "x": 16.5,
+    "y": 42.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "pop",
+    "x": 20,
+    "y": 42.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "pop",
+    "x": 18.25,
+    "y": 45.3,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "plate",
+    "x": 18.25,
+    "y": 43.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "thunder",
+    "x": 7.2,
+    "y": 40.5,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "xlane",
+    "x": 4.4,
+    "y": 33.5,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "xlane",
+    "x": 20.6,
+    "y": 32.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 9,
+    "y": 45.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 12,
+    "y": 45.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 15,
+    "y": 45.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "sling",
+    "x": 5.2,
+    "y": 17.8,
+    "angle": -1.05,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "sling",
+    "x": 18.8,
+    "y": 17.8,
+    "angle": 1.05,
+    "dials": {},
+    "role": "guard"
+   }
+  ]
+ },
+ {
+  "id": "dream-disco-fame-singularity",
+  "archetype": "DREAM: uncapped xMult stacking (3 Emerald Disco Balls, 2 Emerald Halls of Fame) + capped xMults lifted by Wizard Mode + Afterglow compounding across rounds",
+  "machine": "factory",
+  "kind": "dream",
+  "thesis": "Two xMults are capped by nothing: the Disco Ball (no xmultCap, perBall counted per instance) and the Hall of Fame (typeXNow bypasses takeX). Three Emerald Discos = 2.5^6 = x244 a ball, two Emerald Halls of Fame with 18 types = (1.1^18)^4 = x955. With Golden x3, Goal x4, X Lane x3 (all uncapped during Wizard Mode) and ~10 additive Mult, one ball can reach ~10 x 36 x 244 x 955 = ~8e7 Mult. Afterglow then adds 15% of that peak to every later ball's START Mult, so the next round starts at ~1e7 and every round multiplies by ~(1 + 0.15 x 2e6): the score overflows a double in endless play. Old Bells and Trophy Cups add a permanent floor.",
+  "synergies": [
+   {
+    "a": "disco",
+    "b": "disco",
+    "claim": "Each Disco Ball instance fires its own x2.5 (no type cap): three Emerald Discos give x244 per ball, six firings."
+   },
+   {
+    "a": "fame",
+    "b": "fame",
+    "claim": "Two Halls of Fame each pay 1.1^types per firing, uncapped, even outside Wizard Mode."
+   },
+   {
+    "a": "wizard",
+    "b": "golden",
+    "claim": "In Wizard Mode (30 s) takeX ignores caps: Golden x1.05 per hit (x2 per hit with Red Seal) runs past x3, Goal past x4, X Lane past x3."
+   },
+   {
+    "a": "afterglow",
+    "b": "disco",
+    "claim": "Afterglow grows by 0.15 x peakMult with no cap, so the start Mult of round n+1 is at least 0.15 x the peak of round n: geometric growth across rounds."
+   },
+   {
+    "a": "emerald",
+    "b": "redseal",
+    "claim": "NEGATIVE TEST: a Red Seal in a Disco/Fame adds nothing (the recursive second hit is stopped by the perBall check); the Emerald is the only gem for them."
+   },
+   {
+    "a": "clock",
+    "b": "lamp",
+    "claim": "Midnight Clock (180 hits) gives x2 points and full lamps for 20 s once a ball."
+   }
+  ],
+  "decor": "clock",
+  "decals": [
+   {
+    "id": "afterglow"
+   },
+   {
+    "id": "momentum"
+   },
+   {
+    "id": "headStart"
+   },
+   {
+    "id": "crowd"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "fame",
+    "wizard",
+    "goal",
+    "golden"
+   ],
+   "keepDecals": [
+    "afterglow",
+    "headStart"
+   ],
+   "note": "Three Emerald Discos + 2 X Lanes + Afterglow: ~(start + 7) x 3 x 244 per ball, and Afterglow still compounds the start Mult x(1 + 0.15 x 730) a round."
+  },
+  "placementNotes": "xMult rollovers sit LOW (Hall of Fame (12,21) over the drain line, Discos at the inlane returns (8.6,24)/(15.4,24) and the left orbit (4.4,27.2), X Lanes (4.4,31.5)/(20.4,23.6)) so they fire after the upper table (Foreman, Golden cluster, Tesla/cups, Goal) has built the additive Mult. The Wizard Lamp (12,25.6) is also on the drain line. Golden cluster top-right on two plates as in xmult-ladder; Goal top-left; bells on the left upper path; Tesla with three Opal Trophy Cups 3.45-3.5 away.",
+  "risks": "Order: a Disco or Fame firing before the Foreman fills wastes most of it; low rollovers are also passed by fresh balls coming down. 8 legendaries (dream). Overlord jams one type a ball and makes every x move 30% less; Night Shift switches off every light-tagged part (hit() returns early): Disco Balls, Halls of Fame, X Lanes, the Wizard Lamp and lanes all score nothing that round.",
+  "parts": [
+   {
+    "def": "golden",
+    "x": 18,
+    "y": 40,
+    "angle": 0,
+    "dials": {},
+    "inlay": "redseal",
+    "role": "core"
+   },
+   {
+    "def": "pop",
+    "x": 20.3,
+    "y": 43.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "pop",
+    "x": 15.6,
+    "y": 43.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "pop",
+    "x": 17.9,
+    "y": 46.2,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "plate",
+    "x": 18.8,
+    "y": 41.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "plate",
+    "x": 14.9,
+    "y": 42.3,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "goal",
+    "x": 8,
+    "y": 43.5,
+    "angle": 0,
+    "dials": {},
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "bell",
+    "x": 8.2,
+    "y": 37.6,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bell",
+    "x": 4.6,
+    "y": 37.0,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 17,
+    "y": 30,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 17,
+    "y": 33.5,
+    "angle": 0,
+    "dials": {},
+    "inlay": "opal",
+    "role": "core"
+   },
+   {
+    "def": "trophy",
+    "x": 14,
+    "y": 28.3,
+    "angle": 0,
+    "dials": {},
+    "inlay": "opal",
+    "role": "core"
+   },
+   {
+    "def": "trophy",
+    "x": 20,
+    "y": 28.3,
+    "angle": 0,
+    "dials": {},
+    "inlay": "opal",
+    "role": "core"
+   },
+   {
+    "def": "fame",
+    "x": 12,
+    "y": 21.0,
+    "angle": 0,
+    "dials": {},
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "disco",
+    "x": 8.6,
+    "y": 24.0,
+    "angle": 0,
+    "dials": {},
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "disco",
+    "x": 15.4,
+    "y": 24.0,
+    "angle": 0,
+    "dials": {},
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "wizard",
+    "x": 12,
+    "y": 25.6,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 4.4,
+    "y": 31.5,
+    "angle": 0,
+    "dials": {},
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 20.4,
+    "y": 23.6,
+    "angle": 0,
+    "dials": {},
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "disco",
+    "x": 4.4,
+    "y": 27.2,
+    "angle": 0,
+    "dials": {},
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "fame",
+    "x": 20.6,
+    "y": 34.6,
+    "angle": 0,
+    "dials": {},
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "magnet",
+    "x": 8.2,
+    "y": 30.6,
+    "angle": -0.61,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "lamp",
+    "x": 12.6,
+    "y": 40.6,
+    "angle": 0,
+    "dials": {
+     "radius": 6
+    },
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 12,
+    "y": 31.6,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "saver",
+    "x": 21.1,
+    "y": 20.8,
+    "angle": 0,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "strip",
+    "x": 12,
+    "y": 19.1,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "sling",
+    "x": 5.2,
+    "y": 17.8,
+    "angle": -1.05,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "sling",
+    "x": 18.8,
+    "y": 17.8,
+    "angle": 1.05,
+    "dials": {},
+    "role": "guard"
+   }
+  ]
+ },
+ {
+  "id": "dream-bell-tower-trophy-room",
+  "archetype": "DREAM: kept Mult that never stops: eight Old Bells (x1.2 each, forever), three Opal Trophy Cups polished by Tesla zaps (+15 start Mult), Afterglow + Momentum, on a set-bonus engine (setFactor 4, uncapped bank sets)",
+  "machine": "castle",
+  "kind": "dream",
+  "thesis": "Old Bell notches are per bell instance (inst.notches), one per round on the first ball hit, and rings are a run-long counter (Game.rings): eight bells give eight rings every three rounds, 1.2^24 = x79 after nine rounds and x341 at 32 rings. ringX multiplies the start Mult AND every additive gain (award adds gain * ringX) and is never capped. setFactor stacks (Jackpot Sets x2, Light Show x2 = 4): lane sets give +2.0 Mult (5 a ball = +10) and drop-target sets +1.2 each with no cap, all x ringX. Kept Mult: three Trophy Cups next to a Tesla Coil are polished by every zap (zaps go through hit(); Opal doubles it) to +5 each (the cap is per cup, so +15), Momentum adds +0.5 a cleared round, and Afterglow keeps 15% of each round's peak with no cap; none of it is switched off by the Auditor (startMult adds keptMult whatever the decals).",
+  "synergies": [
+   {
+    "a": "bell",
+    "b": "bell",
+    "claim": "Eight bells hit once each in a round add eight notches; every third such round adds eight rings (x4.3)."
+   },
+   {
+    "a": "sets",
+    "b": "lightShow",
+    "claim": "setFactor = 4: a lane set pays 160 points and +2.0 Mult, a bank set 240 points and +1.2 Mult."
+   },
+   {
+    "a": "bank",
+    "b": "sets",
+    "claim": "Bank set Mult is uncapped per ball (lanes are capped at 5 sets): 20 bank sets in a ball = +24 Mult (x ringX)."
+   },
+   {
+    "a": "flatRate",
+    "b": "bell",
+    "claim": "Under Flat Rate or the Overlord refreshRingX uses gainX(1.2) = 1.14: with 24 rings the Mult multiplier falls from x79 to x23 for that round."
+   },
+   {
+    "a": "afterglow",
+    "b": "bell",
+    "claim": "Afterglow keeps 15% of a peak that already includes ringX; the kept Mult is then multiplied by ringX again at every ball start (ballStartMult = baseMult x ringX): rings are applied twice to kept Mult."
+   },
+   {
+    "a": "tesla",
+    "b": "trophy",
+    "claim": "With the three Opal cups 3.45-3.5 from the Tesla (its nearest zappable parts), every Tesla hit polishes two of them by +0.08; each cup reaches its +5 cap in ~63 zaps, i.e. +15 kept start Mult within 2-3 rounds."
+   },
+   {
+    "a": "afterglow",
+    "b": "auditor",
+    "claim": "Kept Mult (cups, Momentum, Afterglow) and the rings all survive the Auditor (decals off until half the goal)."
+   },
+   {
+    "a": "afterglow",
+    "b": "peakMult",
+    "claim": "Start Mult grows geometrically: each cleared round adds 0.15 x peak, and the peak is at least the start, so start(n+1) >= 1.15 x start(n) even with no xMult at all; with bells and set Mult it is far more."
+   }
+  ],
+  "decor": "altar",
+  "decals": [
+   {
+    "id": "sets"
+   },
+   {
+    "id": "lightShow"
+   },
+   {
+    "id": "afterglow"
+   },
+   {
+    "id": "momentum"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "bell",
+    "bell",
+    "bell",
+    "bell",
+    "bell",
+    "bell",
+    "bank"
+   ],
+   "keepDecals": [
+    "afterglow",
+    "momentum"
+   ],
+   "note": "The realistic version (~$95): two bells, Tesla + three Opal cups, one bank, lane pack, Afterglow + Momentum: +15 kept from the cups, x1.2^6 = x3 from the bells by round 15, and the Afterglow compounding on top."
+  },
+  "placementNotes": "The eight bells ring the upper half on the plunge path and around Big Boi (4.1-4.2 from him, 3.4-4.0 from each other) so every bell takes its once-a-round first hit. One lane pack along the very top (y 47) under the bells. The Tesla (12,23) sits low in the middle with the three cups 3.45-3.5 around it (the minimum gap), so they are its nearest zappable parts; the Mag-Grab (12,30) throws straight up at the Dragon through the middle. Two vertical drop-target banks on the side walls at y 26 face the flipper shots; and a spinner on the right orbit. The Ritual Altar counts the many sets.",
+  "risks": "Eight rare bells (dream). Bells pay their 150 toll then only 20 a hit (bumpers x0.75 under Light Show), so points come from the Mult. Rings need many rounds: from round 4, eight bells ring at rounds 6, 9, 12, 15. Flat Rate/Overlord shrink every ring.",
+  "parts": [
+   {
+    "def": "bell",
+    "x": 4.6,
+    "y": 37.6,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bell",
+    "x": 6.6,
+    "y": 41.8,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bell",
+    "x": 10.0,
+    "y": 44.6,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bell",
+    "x": 14.0,
+    "y": 44.6,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bell",
+    "x": 17.4,
+    "y": 41.8,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bell",
+    "x": 19.4,
+    "y": 37.6,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bell",
+    "x": 8.4,
+    "y": 38.2,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bell",
+    "x": 15.6,
+    "y": 38.2,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 8.2,
+    "y": 47.0,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 12,
+    "y": 47.1,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 15.8,
+    "y": 47.0,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bank",
+    "x": 4.9,
+    "y": 26,
+    "angle": 1.5708,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "bank",
+    "x": 19.1,
+    "y": 26,
+    "angle": 1.5708,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "magnet",
+    "x": 12,
+    "y": 30.0,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 23.0,
+    "angle": 0,
+    "dials": {},
+    "role": "core"
+   },
+   {
+    "def": "trophy",
+    "x": 12,
+    "y": 26.5,
+    "angle": 0,
+    "dials": {},
+    "inlay": "opal",
+    "role": "core"
+   },
+   {
+    "def": "trophy",
+    "x": 9.0,
+    "y": 21.3,
+    "angle": 0,
+    "dials": {},
+    "inlay": "opal",
+    "role": "core"
+   },
+   {
+    "def": "trophy",
+    "x": 15.0,
+    "y": 21.3,
+    "angle": 0,
+    "dials": {},
+    "inlay": "opal",
+    "role": "core"
+   },
+   {
+    "def": "spinner",
+    "x": 20.4,
+    "y": 32.0,
+    "angle": 0,
+    "dials": {},
+    "role": "support"
+   },
+   {
+    "def": "sling",
+    "x": 5.2,
+    "y": 17.8,
+    "angle": -1.05,
+    "dials": {},
+    "role": "guard"
+   },
+   {
+    "def": "sling",
+    "x": 18.8,
+    "y": 17.8,
+    "angle": 1.05,
+    "dials": {},
+    "role": "guard"
+   }
+  ]
+ }
+]
