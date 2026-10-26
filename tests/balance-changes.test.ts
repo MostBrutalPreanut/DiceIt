@@ -131,8 +131,8 @@ describe('phase 3: the strongest parts', () => {
     expect(describePart(PARTS.wheel).map((l) => l.text).join(' ')).toContain('Spins until you flip, or 3 s.');
   });
 
-  it('a Ball Printer prints at most 2 a ball and rests 3 s after printing (balls roll over it)', () => {
-    expect(PARTS.printer.recipe.printCap).toBe(2);
+  it('a Ball Printer prints at most 1 a ball and rests 3 s after printing (balls roll over it)', () => {
+    expect(PARTS.printer.recipe.printCap).toBe(1);
     const sim = createSim(layoutOf(makePart('printer', 1, 12, 30, true)), { seed: 1 });
     sim.addBall(12, 31.5, 0, -6);
     const first = run(sim, 1.2);
@@ -277,7 +277,7 @@ describe('phase 7: weak parts, gems and decals', () => {
   it('the numbers', () => {
     expect(PARTS.nest.recipe.nest!.chance).toBe(0.5);
     expect(PARTS.jar.recipe.jar!.every).toBe(10);
-    expect(PARTS.bonsai.recipe.bonsai).toBe(6);
+    expect(PARTS.bonsai.recipe.bonsai).toBe(10);
     expect(PARTS.clock.recipe.clock!.hits).toBe(120);
     for (const id of ['altar', 'hutch'] as const) expect([PARTS[id].rarity, PARTS[id].cost]).toEqual(['rare', 8]);
     expect(PARTS.capsule.recipe.capsule!.rounds).toBe(4);
@@ -292,5 +292,6 @@ describe('phase 7: weak parts, gems and decals', () => {
 
   it('the Whale has no spout limit a ball, only a 3 s rest after each', () => {
     expect(PARTS.whale.recipe.whale!.rest).toBe(3);
+    expect(PARTS.whale.recipe.whale!.points).toBe(500);
   });
 });

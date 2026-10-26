@@ -569,7 +569,7 @@ export const PARTS: Record<PartId, PartDef> = {
   printer: {
     id: 'printer', name: 'Ball Printer', blurb: 'Catches a ball and spits out two. Multiball! Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 2, printRest: 3, perLevel: 10 },
+    recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 1, printRest: 3, perLevel: 10 },
     dials: [
       {
         id: 'hold', label: 'Hold', min: 0.2, max: 2, step: 0.1, default: 0.6,
@@ -730,7 +730,7 @@ export const PARTS: Record<PartId, PartDef> = {
   whale: {
     id: 'whale', name: 'The Whale', blurb: 'Swallows sparks for points, then spouts a spray of new ones.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 12, weight: 1,
     shape: { type: 'circle', r: 1.6 }, rotatable: false, kickUnit: 12,
-    recipe: { points: 20, per: 'hit', whale: { swallow: 10, every: 6, sparks: 6, points: 300, rest: 3 }, perLevel: 4 }, dials: [kickDial(1.5)],
+    recipe: { points: 20, per: 'hit', whale: { swallow: 10, every: 6, sparks: 6, points: 500, rest: 3 }, perLevel: 4 }, dials: [kickDial(1.5)],
   },
   insure: {
     id: 'insure', name: 'Insurance Policy', blurb: 'Last ball drained short of the goal? Sparks rain down. Once.', kind: 'target', rarity: 'uncommon', tags: ['guard'], cost: 5, weight: 1,
@@ -781,7 +781,7 @@ export const PARTS: Record<PartId, PartDef> = {
   bonsai: {
     id: 'bonsai', name: 'Bonsai Bumper', blurb: 'Pays more every round you leave it where it is. It grows on you.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
     shape: { type: 'circle', r: 0.95 }, rotatable: false, kickUnit: 10,
-    recipe: { points: 10, per: 'hit', bonsai: 6, perLevel: 2 }, dials: [kickDial(2)],
+    recipe: { points: 10, per: 'hit', bonsai: 10, perLevel: 2 }, dials: [kickDial(2)],
   },
   capsule: {
     id: 'capsule', name: 'Time Capsule', blurb: 'Leave it on the table four rounds, then dig it up: a free legendary.', kind: 'target', rarity: 'rare', tags: [], cost: 8, weight: 1,
@@ -806,7 +806,7 @@ export const PARTS: Record<PartId, PartDef> = {
   wizard: {
     id: 'wizard', name: 'Wizard Lamp', blurb: 'Hit every kind of part on your table to start Wizard Mode. Magic!', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 1,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 30, per: 'roll-over', wizard: { max: 8, seconds: 30, balls: 2 }, perLevel: 5 }, dials: [],
+    recipe: { points: 30, per: 'roll-over', wizard: { max: 8, seconds: 20, balls: 2 }, perLevel: 5 }, dials: [],
   },
 
   hourglass: {
@@ -1192,7 +1192,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.levelUp) lines.push({ tag: 'level', text: `Roll over to switch it on or off. It needs at least one more Level Light within ${LEVEL_RADIUS} of it. When it and every Level Light within ${LEVEL_RADIUS} are on, the bumpers within ${LEVEL_RADIUS} of those lights level up: +1 level for each light past the first.` });
   if (r.spawn) {
     const n = r.spawn + mods.printerExtra;
-    lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (at most ${r.printCap} printed in one ball, and 4 on the table).${r.printRest ? ` After printing it rests ${r.printRest} s: balls roll over it.` : ''} Printed balls share the clock of the ball you launched.` });
+    lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (at most ${r.printCap === 1 ? 'one' : r.printCap} printed in one ball, and 4 on the table).${r.printRest ? ` After printing it rests ${r.printRest} s: balls roll over it.` : ''} Printed balls share the clock of the ball you launched.` });
   }
   if (def.kind === 'saucer') {
     const hold = inst ? dialValue(inst, 'hold') : PARTS[def.id].dials[0]?.default ?? 0.6;
