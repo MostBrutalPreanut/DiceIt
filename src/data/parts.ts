@@ -428,7 +428,7 @@ const powerDial = (what: string): DialDef => ({
 export const PARTS: Record<PartId, PartDef> = {
   // ---- common: from round 1 ----
   pop: {
-    id: 'pop', name: 'Pop Bumper', blurb: 'Classic. Goes pop.', kind: 'bumper', rarity: 'common', tags: ['bumper'], cost: 3, weight: 3,
+    id: 'pop', name: 'Pop Bumper', blurb: 'Pays more with every Pop hit this ball. Goes pop.', kind: 'bumper', rarity: 'common', tags: ['bumper'], cost: 3, weight: 3,
     shape: { type: 'circle', r: 1.2 }, rotatable: false, kickUnit: 14,
     recipe: { points: 20, per: 'hit', grow: 1, growCap: 20, perLevel: 5 }, dials: [kickDial(2)],
   },
@@ -438,12 +438,12 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { points: 8, per: 'hit', money: 1, moneyCap: 5, perLevel: 2 }, dials: [kickDial(2)],
   },
   sling: {
-    id: 'sling', name: 'Slingshot', blurb: 'A rubber band with opinions.', kind: 'kicker', rarity: 'common', tags: ['kicker'], cost: 3, weight: 2,
+    id: 'sling', name: 'Slingshot', blurb: 'Snaps the ball off, and its next hit pays extra. Has opinions.', kind: 'kicker', rarity: 'common', tags: ['kicker'], cost: 3, weight: 2,
     shape: { type: 'box', hw: 1.7, hh: 0.4 }, rotatable: true, kickUnit: 16,
     recipe: { points: 6, per: 'hit', hot: 0.5, perLevel: 2 }, dials: [kickDial(3, 'How hard it snaps the ball away. Softer pays more per hit; harder throws it across the table.')],
   },
   spinner: {
-    id: 'spinner', name: 'Spinner', blurb: 'Whee. Faster ball, more whee.', kind: 'spinner', rarity: 'common', tags: ['kicker'], cost: 3, weight: 2,
+    id: 'spinner', name: 'Spinner', blurb: 'Shoot the ball through it: points and Mult on every spin. Whee.', kind: 'spinner', rarity: 'common', tags: ['kicker'], cost: 3, weight: 2,
     shape: { type: 'box', hw: 1.4, hh: 0.3 }, rotatable: true, kickUnit: 0,
     recipe: { points: 2, per: 'spin', spinMult: 0.01, spinMultCap: 1.5, perLevel: 0.5 },
     dials: [{
@@ -453,12 +453,12 @@ export const PARTS: Record<PartId, PartDef> = {
     }],
   },
   lane: {
-    id: 'lane', name: 'Lane Rollover', blurb: 'Roll over it. It lights up. Cheap thrills.', kind: 'rollover', rarity: 'common', tags: ['light'], cost: 4, pack: 3, weight: 3,
+    id: 'lane', name: 'Lane Rollover', blurb: 'Roll over all three to light them for a bonus. Cheap thrills.', kind: 'rollover', rarity: 'common', tags: ['light'], cost: 4, pack: 3, weight: 3,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
     recipe: { points: 10, per: 'roll-over', lights: true, setSize: 3, setBonus: { points: 40, mult: 0.5 }, setCap: 5, perLevel: 3 }, dials: [],
   },
   lamp: {
-    id: 'lamp', name: 'Lamp', blurb: 'Hit it again and again. The neighbours love it.', kind: 'lamp', rarity: 'common', tags: ['light'], cost: 4, weight: 2,
+    id: 'lamp', name: 'Lamp', blurb: 'Each hit brightens it, and parts near it pay more. Neighbourly.', kind: 'lamp', rarity: 'common', tags: ['light'], cost: 4, weight: 2,
     shape: { type: 'circle', r: 0.8 }, rotatable: false, kickUnit: 0,
     recipe: { lights: true, brighten: { points: 10, steps: 5 } },
     dials: [{
@@ -467,7 +467,7 @@ export const PARTS: Record<PartId, PartDef> = {
     }],
   },
   vari: {
-    id: 'vari', name: 'Vari-Target', blurb: 'Tap it, get peanuts. Smash it, get paid.', kind: 'target', rarity: 'common', tags: ['target'], cost: 4, weight: 2,
+    id: 'vari', name: 'Vari-Target', blurb: 'A target. Tap it, get peanuts. Smash it, get paid.', kind: 'target', rarity: 'common', tags: ['target'], cost: 4, weight: 2,
     shape: { type: 'box', hw: 1.3, hh: 0.35 }, rotatable: true, kickUnit: 0,
     recipe: { points: 8, per: 'hit', tiers: VARI_TIERS, hot: 0.5, hotTier: 3, perLevel: 2 },
     dials: [{
@@ -477,55 +477,55 @@ export const PARTS: Record<PartId, PartDef> = {
     }],
   },
   deflector: {
-    id: 'deflector', name: 'Deflector', blurb: 'A bouncy bar. Steers everything, and a bank shot pays.', kind: 'deflector', rarity: 'common', tags: ['kicker'], cost: 1, weight: 2,
+    id: 'deflector', name: 'Deflector', blurb: 'A bouncy bar to aim with. A ball off it pays extra next hit.', kind: 'deflector', rarity: 'common', tags: ['kicker'], cost: 1, weight: 2,
     shape: { type: 'box', hw: 2.2, hh: 0.28 }, rotatable: true, kickUnit: 0, recipe: { hot: 0.25 }, dials: [],
   },
   kickback: {
-    id: 'kickback', name: 'Kickback', blurb: 'Roll over it and it boots the ball right back.', kind: 'kickback', rarity: 'common', tags: ['kicker', 'guard'], cost: 4, weight: 2,
+    id: 'kickback', name: 'Kickback', blurb: 'Fires a ball that rolls over it back out. Outlane? Denied.', kind: 'kickback', rarity: 'common', tags: ['kicker', 'guard'], cost: 4, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: true, kickUnit: 0,
     recipe: { points: 30, per: 'kick', hot: 0.5, cooldown: 4, perLevel: 8 }, dials: [powerDial('kick')],
   },
 
   // ---- uncommon: from round 2 ----
   bank: {
-    id: 'bank', name: 'Drop-Target Bank', blurb: 'Three targets. They go down. They come back. The lamps cheer.', kind: 'bank', rarity: 'uncommon', tags: ['target'], cost: 5, weight: 2,
+    id: 'bank', name: 'Drop-Target Bank', blurb: 'Drop all three targets for a bonus, and the Lamps cheer.', kind: 'bank', rarity: 'uncommon', tags: ['target'], cost: 5, weight: 2,
     shape: { type: 'box', hw: 2.6, hh: 0.45 }, rotatable: true, kickUnit: 0,
     recipe: { points: 12, per: 'target', setBonus: { points: 60, mult: 0.3 }, lightsLamps: LAMP_FLASH, perLevel: 3 }, dials: [],
   },
   uplight: {
-    id: 'uplight', name: 'Level Light', blurb: 'Light them both and the bumpers nearby level up.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 5, pack: 2, weight: 2,
+    id: 'uplight', name: 'Level Light', blurb: 'Roll over both: the bumpers near them level up, for good.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 5, pack: 2, weight: 2,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
     recipe: { points: 2, per: 'pass', levelUp: true }, dials: [],
   },
   saver: {
-    id: 'saver', name: 'Ball Saver', blurb: 'Drain early? The machine pretends it never happened.', kind: 'saver', rarity: 'uncommon', tags: ['guard', 'money'], cost: 5, weight: 1,
+    id: 'saver', name: 'Ball Saver', blurb: 'Drain right after launch? Have the ball back. Shh.', kind: 'saver', rarity: 'uncommon', tags: ['guard', 'money'], cost: 5, weight: 1,
     shape: { type: 'circle', r: 0.8 }, rotatable: false, kickUnit: 0, recipe: { unusedPay: 1 }, dials: [],
   },
   flipper: {
-    id: 'flipper', name: 'Left Flipper', blurb: 'A little extra hand. Left button.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 6, weight: 1,
+    id: 'flipper', name: 'Left Flipper', blurb: 'An extra little flipper, on the left key. Put it anywhere.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 6, weight: 1,
     shape: { type: 'circle', r: 2.0 }, rotatable: false, kickUnit: 0, recipe: {}, dials: [],
   },
   flipperR: {
-    id: 'flipperR', name: 'Right Flipper', blurb: 'A little extra hand. Right button.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 6, weight: 1,
+    id: 'flipperR', name: 'Right Flipper', blurb: 'An extra little flipper, on the right key. Put it anywhere.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 6, weight: 1,
     shape: { type: 'circle', r: 2.0 }, rotatable: false, kickUnit: 0, recipe: {}, dials: [],
   },
   ding: {
-    id: 'ding', name: 'Ding-Dong Bell', blurb: 'Rings louder for a well-travelled ball.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
+    id: 'ding', name: 'Ding-Dong Bell', blurb: 'Pays more for each kind of part this ball already hit. Ding!', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
     shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 11,
     recipe: { points: 12, per: 'hit', variety: 8, perLevel: 3 }, dials: [kickDial(2)],
   },
   trophy: {
-    id: 'trophy', name: 'Trophy Cup', blurb: 'Polish it every round. It never forgets.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 3,
+    id: 'trophy', name: 'Trophy Cup', blurb: 'Every hit adds a little Mult you keep for the whole run. Shiny.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 3,
     shape: { type: 'circle', r: 1.05 }, rotatable: false, kickUnit: 9,
     recipe: { points: 20, per: 'hit', keep: { per: 0.04, cap: 5 }, perLevel: 5 }, dials: [kickDial(1.5)],
   },
   piggy: {
-    id: 'piggy', name: 'Piggy Bank', blurb: 'Feed it coins. Then smash it.', kind: 'target', rarity: 'uncommon', tags: ['target', 'money'], cost: 5, weight: 2,
+    id: 'piggy', name: 'Piggy Bank', blurb: 'Every hit drops in $1. Smash it hard to grab the lot. Oink.', kind: 'target', rarity: 'uncommon', tags: ['target', 'money'], cost: 5, weight: 2,
     shape: { type: 'box', hw: 1.1, hh: 0.55 }, rotatable: true, kickUnit: 0,
     recipe: { points: 5, per: 'hit', tiers: PIGGY_TIERS, piggy: { cap: 5, breakTier: 1, bonus: 1 }, perLevel: 1 }, dials: [],
   },
   magnet: {
-    id: 'magnet', name: 'Mag-Grab', blurb: 'Grabs the ball, charges up, lets go. Very rude.', kind: 'saucer', rarity: 'uncommon', tags: ['ball', 'guard'], cost: 6, weight: 1,
+    id: 'magnet', name: 'Mag-Grab', blurb: 'Grabs the ball, adds Mult, throws it where it points. Rude.', kind: 'saucer', rarity: 'uncommon', tags: ['ball', 'guard'], cost: 6, weight: 1,
     shape: { type: 'circle', r: 1.3 }, rotatable: true, kickUnit: 0,
     recipe: { points: 24, per: 'grab', mult: 0.25, multCap: 2, perLevel: 6 },
     dials: [
@@ -534,17 +534,17 @@ export const PARTS: Record<PartId, PartDef> = {
     ],
   },
   strip: {
-    id: 'strip', name: 'Glow Strip', blurb: 'A light under the floor. It parties whenever anything good happens.', kind: 'strip', rarity: 'uncommon', tags: ['light'], cost: 5, weight: 2,
+    id: 'strip', name: 'Glow Strip', blurb: 'Lies under parts. After any bonus, parts on it pay extra. Party!', kind: 'strip', rarity: 'uncommon', tags: ['light'], cost: 5, weight: 2,
     shape: { type: 'box', hw: 4, hh: 0.45 }, rotatable: false, kickUnit: 0,
     recipe: { strip: { seconds: 5, bonus: 0.5, reach: 1.6 } }, dials: [],
   },
   plate: {
-    id: 'plate', name: 'Power Plate', blurb: 'A humming plate in the floor. Bumpers on it hit harder.', kind: 'strip', rarity: 'uncommon', tags: ['bumper'], cost: 6, weight: 2,
+    id: 'plate', name: 'Power Plate', blurb: 'A plate in the floor. Bumpers on or near it pay more. It hums.', kind: 'strip', rarity: 'uncommon', tags: ['bumper'], cost: 6, weight: 2,
     shape: { type: 'circle', r: 1.5 }, rotatable: false, kickUnit: 0,
     recipe: { plate: { x: 1.5, reach: 3 } }, dials: [],
   },
   roller: {
-    id: 'roller', name: 'Roller Pop', blurb: 'A pop bumper on a rail. It will not sit still.', kind: 'mover', rarity: 'uncommon', tags: ['bumper'], cost: 6, weight: 2,
+    id: 'roller', name: 'Roller Pop', blurb: 'A bumper on a rail. Hit it near the ends for triple points.', kind: 'mover', rarity: 'uncommon', tags: ['bumper'], cost: 6, weight: 2,
     shape: { type: 'box', hw: 3.6, hh: 0.9 }, rotatable: false, kickUnit: 0,
     recipe: { points: 30, per: 'hit', edgeShot: { edge: 0.75, x: 3 }, perLevel: 8 }, dials: [],
     mover: { travel: 2.6, speed: 3.2, shape: { type: 'circle', r: 0.85 }, y: 0, restitution: 0.45, kick: 26 },
@@ -552,7 +552,7 @@ export const PARTS: Record<PartId, PartDef> = {
 
   // ---- rare: from round 4 ----
   printer: {
-    id: 'printer', name: 'Ball Printer', blurb: 'Eats one ball. Prints two. Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 2,
+    id: 'printer', name: 'Ball Printer', blurb: 'Catches a ball and spits out two. Multiball! Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
     recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 3, perLevel: 10 },
     dials: [
@@ -565,12 +565,12 @@ export const PARTS: Record<PartId, PartDef> = {
     ],
   },
   thunder: {
-    id: 'thunder', name: 'Thunder Bumper', blurb: 'A big wedge. Every bonk throws the ball up and shakes the Pops awake.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
+    id: 'thunder', name: 'Thunder Bumper', blurb: 'A big wedge: points, Mult, and every bonk grows your Pops.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
     shape: { type: 'tri', hw: 1.7, hh: 1.4 }, rotatable: false, kickUnit: 19,
     recipe: { points: 60, per: 'hit', feeds: { id: 'pop', n: 3 }, mult: 0.05, multCap: 2, perLevel: 15 }, dials: [kickDial(2)],
   },
   jackpot: {
-    id: 'jackpot', name: 'Jackpot Scoop', blurb: 'Every hit fills the pot. Sink it to cash in.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 8, weight: 2,
+    id: 'jackpot', name: 'Jackpot Scoop', blurb: 'Every hit anywhere fills the pot. Sink the ball in it to cash in.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.35 }, rotatable: false, kickUnit: 0,
     recipe: { points: 40, per: 'scoop', jackpot: { per: 8, cap: 3000 }, perLevel: 10 },
     dials: [{ id: 'hold', label: 'Hold', min: 0.4, max: 1.5, step: 0.1, default: 0.8, tradeoff: 'How long it keeps the ball before it fires it back out.', ends: ['quick', 'slow'], fmt: (v) => `${v.toFixed(1)} s` }, { ...powerDial('eject'), tradeoff: 'How hard it fires the ball back out.' }],
@@ -581,37 +581,37 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { xmult: 1.25, xmultCap: 3, cooldown: 3, lightsLane: true }, dials: [],
   },
   rank: {
-    id: 'rank', name: 'Rank Lights', blurb: 'Light all three and the ball gets a promotion.', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, pack: 3, weight: 2,
+    id: 'rank', name: 'Rank Lights', blurb: 'Roll over all three: that ball pays more for a while. Promoted!', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, pack: 3, weight: 2,
     shape: { type: 'circle', r: 0.95 }, rotatable: false, kickUnit: 0,
     recipe: { points: 10, per: 'roll-over', lights: true, setSize: 3, rank: { steps: [1.2, 1.4, 1.6], seconds: 40 }, perLevel: 3 }, dials: [],
   },
   bell: {
-    id: 'bell', name: 'Old Bell', blurb: 'Ring it once a round. Three rounds on, it remembers.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
+    id: 'bell', name: 'Old Bell', blurb: 'Ring it in three rounds: a bigger Mult for the rest of the run.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 10,
     recipe: { points: 20, per: 'hit', bell: { first: 150, notches: 3, x: 1.2 }, perLevel: 5 }, dials: [kickDial(1.5)],
   },
   tesla: {
-    id: 'tesla', name: 'Tesla Coil', blurb: 'Hit it and everything nearby gets a shock.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 9, weight: 2,
+    id: 'tesla', name: 'Tesla Coil', blurb: 'Every hit zaps the nearest parts, and they score too. Bzzt.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 9, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 12,
     recipe: { points: 30, per: 'hit', zap: { arcs: 2, perLevels: 3, maxArcs: 4 }, perLevel: 8 }, dials: [kickDial(2)],
   },
   keg: {
-    id: 'keg', name: 'Powder Keg', blurb: 'Light the fuse. Stand back.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
+    id: 'keg', name: 'Powder Keg', blurb: 'A hit lights the fuse. Boom: every part nearby scores. Stand back.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 8,
     recipe: { points: 10, per: 'hit', keg: { fuse: 2.5, radius: 6, blast: 80, chain: 4, rearm: 6, sparks: 1 }, perLevel: 3 }, dials: [kickDial(1.5)],
   },
   laser: {
-    id: 'laser', name: 'Laser Turret', blurb: 'Pew. Somewhere across the table, something scores.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 9, weight: 2,
+    id: 'laser', name: 'Laser Turret', blurb: 'Every hit fires a beam: every part in its path scores. Pew.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 9, weight: 2,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 10,
     recipe: { points: 40, per: 'hit', beam: { cooldown: 3 }, perLevel: 10 }, dials: [kickDial(2)],
   },
   gong: {
-    id: 'gong', name: 'Shockwave Gong', blurb: 'Bang it eight times. The whole table hears it.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
+    id: 'gong', name: 'Shockwave Gong', blurb: 'Every eighth hit, every part on the table scores at once. BWONG.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
     shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 11,
     recipe: { points: 25, per: 'hit', boom: { every: 8 }, perLevel: 6 }, dials: [kickDial(2)],
   },
   duck: {
-    id: 'duck', name: 'Duck Gallery', blurb: 'A tin duck paddles back and forth. Knock it over. It gets cross.', kind: 'mover', rarity: 'rare', tags: ['target'], cost: 8, weight: 2,
+    id: 'duck', name: 'Duck Gallery', blurb: 'A tin duck on a rail. Each hit pays more and speeds it up. Quack.', kind: 'mover', rarity: 'rare', tags: ['target'], cost: 8, weight: 2,
     shape: { type: 'box', hw: 3.9, hh: 0.75 }, rotatable: false, kickUnit: 0,
     recipe: { points: 60, per: 'duck', grow: 20, growCap: 200, speedUp: { by: 0.15, max: 2 }, perLevel: 15 }, dials: [],
     mover: { travel: 3.1, speed: 3.5, shape: { type: 'circle', r: 0.6 }, y: 0, restitution: 0.6 },
@@ -619,22 +619,22 @@ export const PARTS: Record<PartId, PartDef> = {
 
   // ---- legendary: from round 7 ----
   golden: {
-    id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold. Pays in points, Mult and cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 2,
+    id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold: big points, ×Mult, and a bit of cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 2,
     shape: { type: 'circle', r: 1.5 }, rotatable: false, kickUnit: 15,
     recipe: { points: 120, per: 'hit', xmult: 1.05, xmultCap: 3, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
   },
   fame: {
-    id: 'fame', name: 'Hall of Fame', blurb: 'Every star of your table gets a plaque. The more stars, the louder the crowd.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 2,
+    id: 'fame', name: 'Hall of Fame', blurb: 'Once a ball, roll over: ×Mult per kind of part on your table.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 2,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
     recipe: { points: 150, per: 'pass', typeX: 0.1, perBall: 1, perLevel: 40 }, dials: [],
   },
   disco: {
-    id: 'disco', name: 'Disco Ball', blurb: 'Once a ball: the lamps go wild and the Mult goes through the roof.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
+    id: 'disco', name: 'Disco Ball', blurb: 'Roll over once a ball: huge ×Mult, and every Lamp lights. Boogie.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0,
     recipe: { points: 200, per: 'pass', xmult: 2.5, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
   },
   goal: {
-    id: 'goal', name: 'Goal!', blurb: 'A tiny football goal with a very serious goalie.', kind: 'goal', rarity: 'legendary', tags: ['target'], cost: 12, weight: 2,
+    id: 'goal', name: 'Goal!', blurb: 'Shoot past the goalie for points and ×Mult. He is very serious.', kind: 'goal', rarity: 'legendary', tags: ['target'], cost: 12, weight: 2,
     shape: { type: 'box', hw: 3.4, hh: 1.1 }, rotatable: false, kickUnit: 0,
     recipe: { points: 300, per: 'goal', goal: { xmult: 1.5, xmultCap: 4 }, cooldown: 1.5, perLevel: 75 }, dials: [],
     mover: { travel: 1.7, speed: 3, shape: { type: 'box', hw: 0.75, hh: 0.22 }, y: -0.45, restitution: 0.55 },
@@ -642,190 +642,190 @@ export const PARTS: Record<PartId, PartDef> = {
 
   // ---- sparks: parts that shoot out bonus balls ----
   sparkler: {
-    id: 'sparkler', name: 'Sparkler', blurb: 'Fizz. Every bonk throws a spark.', kind: 'bumper', rarity: 'common', tags: ['bumper'], cost: 3, weight: 2,
+    id: 'sparkler', name: 'Sparkler', blurb: 'Every bonk throws a spark: a little bonus ball that scores. Fizz.', kind: 'bumper', rarity: 'common', tags: ['bumper'], cost: 3, weight: 2,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 10,
     recipe: { points: 8, per: 'hit', sparks: { n: 1, cooldown: 1 }, perLevel: 2 }, dials: [kickDial(2)],
   },
   rocks: {
-    id: 'rocks', name: 'Rock Pile', blurb: 'Hit it and it sheds. Hit it more and it grows.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 4, weight: 2,
+    id: 'rocks', name: 'Rock Pile', blurb: 'Every hit sheds a spark per rock. More hits, more rocks.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 4, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 8,
     recipe: { points: 10, per: 'hit', rocks: { every: 5, max: 5, cooldown: 2 }, perLevel: 3 }, dials: [kickDial(1.5)],
   },
   firecracker: {
-    id: 'firecracker', name: 'Firecracker', blurb: 'Once a ball: up it goes, and down come the sparks.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
+    id: 'firecracker', name: 'Firecracker', blurb: 'Once a ball, a hit fires a rocket that rains sparks. Ooh. Aah.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 9,
     recipe: { points: 15, per: 'hit', rocket: { n: 6, delay: 0.7 }, perLevel: 4 }, dials: [kickDial(2)],
   },
 
   // ---- gems: set into a part on the table (one each), sold from round 7 ----
   ruby: {
-    id: 'ruby', name: 'Ruby', blurb: 'Set it in a part. The part gets greedy.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 7,
+    id: 'ruby', name: 'Ruby', blurb: `Set it in a part: that part pays ×${RUBY_X}. Greedy.`, kind: 'inlay', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 7,
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'scoring' }, dials: [],
   },
   garnet: {
-    id: 'garnet', name: 'Garnet', blurb: 'Set it in a part that rests. It rests less.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 4, weight: 1, from: 7,
+    id: 'garnet', name: 'Garnet', blurb: 'Set it in a part that recharges: it recharges twice as fast.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 4, weight: 1, from: 7,
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'cooldown' }, dials: [],
   },
   opal: {
-    id: 'opal', name: 'Opal', blurb: 'Set it in a part that grows. It grows faster.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 5, weight: 1, from: 7,
+    id: 'opal', name: 'Opal', blurb: 'Set it in a part that grows: it grows twice as fast.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 5, weight: 1, from: 7,
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'growth' }, dials: [],
   },
   goldleaf: {
-    id: 'goldleaf', name: 'Gold Leaf', blurb: 'The part is worth a little more every time. For good.', kind: 'inlay', rarity: 'rare', tags: [], cost: 6, weight: 1, from: 7,
+    id: 'goldleaf', name: 'Gold Leaf', blurb: 'Set it in a part: it is worth a bit more every time. For good.', kind: 'inlay', rarity: 'rare', tags: [], cost: 6, weight: 1, from: 7,
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'scoring' }, dials: [],
   },
   redseal: {
-    id: 'redseal', name: 'Red Seal', blurb: 'Every hit counts twice. Then it needs a breather.', kind: 'inlay', rarity: 'rare', tags: [], cost: 7, weight: 1, from: 7,
+    id: 'redseal', name: 'Red Seal', blurb: 'Set it in a part: every hit scores twice, then a breather.', kind: 'inlay', rarity: 'rare', tags: [], cost: 7, weight: 1, from: 7,
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'scoring' }, dials: [],
   },
   topaz: {
-    id: 'topaz', name: 'Topaz', blurb: 'Set it in a part. Now and then it sheds a spark.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 5, weight: 1, from: 7,
+    id: 'topaz', name: 'Topaz', blurb: 'Set it in a part: now and then, a hit on it drops a bonus spark.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 5, weight: 1, from: 7,
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'scoring' }, dials: [],
   },
   emerald: {
-    id: 'emerald', name: 'Emerald', blurb: 'Set it in a once-a-ball part. Twice a ball.', kind: 'inlay', rarity: 'rare', tags: [], cost: 8, weight: 1, from: 7,
+    id: 'emerald', name: 'Emerald', blurb: 'Set it in a once-a-ball part: now it fires twice a ball.', kind: 'inlay', rarity: 'rare', tags: [], cost: 8, weight: 1, from: 7,
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'onceABall' }, dials: [],
   },
 
   gumball: {
-    id: 'gumball', name: 'Gumball Machine', blurb: 'Lock three. Then let them all go.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 1,
+    id: 'gumball', name: 'Gumball Machine', blurb: 'Locks three balls one by one, then lets them all go: multiball!', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 1,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
     recipe: { points: 30, per: 'lock', lock: { n: 3 }, perLevel: 6 }, dials: [],
   },
   ring: {
-    id: 'ring', name: 'Bank Ring', blurb: 'Your points, held in trust. Collect before you drain.', kind: 'rollover', rarity: 'rare', tags: ['money'], cost: 8, weight: 1,
+    id: 'ring', name: 'Bank Ring', blurb: 'Saves part of every hit. Roll through to cash it in, plus interest.', kind: 'rollover', rarity: 'rare', tags: ['money'], cost: 8, weight: 1,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
     recipe: { ring: { hold: 0.3, x: 1.5 } }, dials: [],
   },
   hand: {
-    id: 'hand', name: 'Helping Hand', blurb: 'A little flipper with a mind of its own.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 7, weight: 1,
+    id: 'hand', name: 'Helping Hand', blurb: 'A little flipper that flips itself when the ball comes near.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 7, weight: 1,
     shape: { type: 'circle', r: 2.0 }, rotatable: false, kickUnit: 0, recipe: { hand: true }, dials: [],
   },
   wheel: {
-    id: 'wheel', name: 'Spider Wheel', blurb: 'Spin to win. Flip to stop. Mostly win.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 8, weight: 1,
+    id: 'wheel', name: 'Spider Wheel', blurb: 'Sink the ball to spin a prize wheel. Flip to stop it. Mostly prizes.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 8, weight: 1,
     shape: { type: 'circle', r: 1.35 }, rotatable: false, kickUnit: 0,
     recipe: { points: 20, per: 'spin', wheel: { seconds: 3, speed: 5 }, perLevel: 4 }, dials: [{ ...powerDial('eject'), tradeoff: 'How hard it fires the ball back out.' }],
   },
   split: {
-    id: 'split', name: 'Splitter', blurb: 'One ball in. Two sparks out.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 7, weight: 2,
+    id: 'split', name: 'Splitter', blurb: 'Roll the ball over it and two bonus sparks split off. Snip.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 7, weight: 2,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
     recipe: { points: 10, per: 'roll-over', split: { n: 2, cooldown: 5 }, perLevel: 2 }, dials: [],
   },
   whale: {
-    id: 'whale', name: 'The Whale', blurb: 'It eats sparks. Then it sneezes.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 12, weight: 1,
+    id: 'whale', name: 'The Whale', blurb: 'Swallows sparks for points, then spouts a spray of new ones.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 12, weight: 1,
     shape: { type: 'circle', r: 1.6 }, rotatable: false, kickUnit: 12,
     recipe: { points: 20, per: 'hit', whale: { swallow: 8, every: 6, sparks: 6, points: 300, perBall: 3 }, perLevel: 4 }, dials: [kickDial(1.5)],
   },
   insure: {
-    id: 'insure', name: 'Insurance Policy', blurb: 'For when the last ball goes wrong. Once.', kind: 'target', rarity: 'uncommon', tags: ['guard'], cost: 5, weight: 1,
+    id: 'insure', name: 'Insurance Policy', blurb: 'Last ball drained short of the goal? Sparks rain down. Once.', kind: 'target', rarity: 'uncommon', tags: ['guard'], cost: 5, weight: 1,
     shape: { type: 'circle', r: 0.75 }, rotatable: false, kickUnit: 0,
     recipe: { insure: { sparks: 10 } }, dials: [],
   },
   nest: {
-    id: 'nest', name: 'Spider Nest', blurb: 'Every so often, an egg. Every egg, trouble.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 1,
+    id: 'nest', name: 'Spider Nest', blurb: 'Hits may lay an egg: a spark that hatches into three more. Ew.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 1,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 9,
     recipe: { points: 15, per: 'hit', nest: { chance: 0.25 }, perLevel: 3 }, dials: [kickDial(1.5)],
   },
   jar: {
-    id: 'jar', name: 'Marble Jar', blurb: 'Fill it up. Every ball brings friends.', kind: 'target', rarity: 'rare', tags: ['target'], cost: 8, weight: 1,
+    id: 'jar', name: 'Marble Jar', blurb: 'Hits fill it with marbles. Each new ball brings a spark per marble.', kind: 'target', rarity: 'rare', tags: ['target'], cost: 8, weight: 1,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
     recipe: { points: 10, per: 'hit', jar: { every: 25, max: 5 }, perLevel: 2 }, dials: [],
   },
   wreck: {
-    id: 'wreck', name: 'Wrecking Ball', blurb: 'Hit it and your ball gets big ideas.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 11, weight: 1,
+    id: 'wreck', name: 'Wrecking Ball', blurb: 'Once a ball, a hit makes your ball huge: it pays double. Big ideas.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 11, weight: 1,
     shape: { type: 'circle', r: 1.2 }, rotatable: false, kickUnit: 10,
     recipe: { points: 20, per: 'hit', wreck: { k: 1.5, seconds: 6, x: 2 }, perLevel: 4 }, dials: [kickDial(2)],
   },
   broom: {
-    id: 'broom', name: 'Broomstick', blurb: 'Hop on. Hold tight. Mind the walls.', kind: 'rollover', rarity: 'rare', tags: ['ball'], cost: 9, weight: 1,
+    id: 'broom', name: 'Broomstick', blurb: 'The ball rides it in a line, zapping every part it passes. Hold on!', kind: 'rollover', rarity: 'rare', tags: ['ball'], cost: 9, weight: 1,
     shape: { type: 'circle', r: 0.9 }, rotatable: true, kickUnit: 0,
     recipe: { points: 20, per: 'roll-over', ride: { x: 2 }, perLevel: 4 }, dials: [],
   },
   bucket: {
-    id: 'bucket', name: 'Free Ball Bucket', blurb: 'Land the ball in the bucket. Keep the ball.', kind: 'mover', rarity: 'legendary', tags: ['guard'], cost: 11, weight: 1,
+    id: 'bucket', name: 'Free Ball Bucket', blurb: 'Drop the ball in the sliding bucket to get it back. Free ball!', kind: 'mover', rarity: 'legendary', tags: ['guard'], cost: 11, weight: 1,
     shape: { type: 'box', hw: 3.4, hh: 0.7 }, rotatable: false, kickUnit: 0,
     recipe: { points: 200, per: 'catch', bucket: true }, dials: [],
     mover: { travel: 2.5, speed: 2.6, shape: { type: 'box', hw: 0.85, hh: 0.45 }, y: 0, restitution: 0.3, sensor: true },
   },
   grape: {
-    id: 'grape', name: 'Grape Bunch', blurb: 'Grapes like company. Lots of company.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, pack: 3, weight: 2,
+    id: 'grape', name: 'Grape Bunch', blurb: 'Pays more for every Grape Bunch touching it. Grapes like company.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, pack: 3, weight: 2,
     shape: { type: 'circle', r: 0.7 }, rotatable: false, kickUnit: 8,
     recipe: { points: 10, per: 'hit', grape: { touch: 3.1, golden: 4 }, perLevel: 2 }, dials: [kickDial(1.5)],
   },
   echo: {
-    id: 'echo', name: 'Echo Cave', blurb: 'Hello... hello... hello...', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 6, weight: 2,
+    id: 'echo', name: 'Echo Cave', blurb: 'Roll through caves in a row: each pays double the last. Hello...', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 6, weight: 2,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 0,
     recipe: { points: 15, per: 'roll-over', echo: { cap: 8 }, perLevel: 3 }, dials: [],
   },
   spot: {
-    id: 'spot', name: 'Spotlight', blurb: 'Everyone near it shines. Do not touch the lamp.', kind: 'target', rarity: 'uncommon', tags: ['light'], cost: 6, weight: 2,
+    id: 'spot', name: 'Spotlight', blurb: 'Parts near it pay more. Keep the ball off it or it goes dark.', kind: 'target', rarity: 'uncommon', tags: ['light'], cost: 6, weight: 2,
     shape: { type: 'circle', r: 0.75 }, rotatable: false, kickUnit: 0,
     recipe: { spot: { reach: 5, x: 1.5, dark: 10 } }, dials: [],
   },
   bonsai: {
-    id: 'bonsai', name: 'Bonsai Bumper', blurb: 'Leave it be. It grows on you.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
+    id: 'bonsai', name: 'Bonsai Bumper', blurb: 'Pays more every round you leave it where it is. It grows on you.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
     shape: { type: 'circle', r: 0.95 }, rotatable: false, kickUnit: 10,
     recipe: { points: 10, per: 'hit', bonsai: 4, perLevel: 2 }, dials: [kickDial(2)],
   },
   capsule: {
-    id: 'capsule', name: 'Time Capsule', blurb: 'Bury it now. Dig it up later.', kind: 'target', rarity: 'rare', tags: [], cost: 8, weight: 1,
+    id: 'capsule', name: 'Time Capsule', blurb: 'Leave it on the table six rounds, then dig it up: a free legendary.', kind: 'target', rarity: 'rare', tags: [], cost: 8, weight: 1,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
     recipe: { capsule: { rounds: 6, pick: 3 } }, dials: [],
   },
   ice: {
-    id: 'ice', name: 'Ice Sculpture', blurb: 'Worth a fortune. Melting fast.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
+    id: 'ice', name: 'Ice Sculpture', blurb: 'Pays a fortune, but every flipper press melts it a bit.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 6,
     recipe: { points: 250, per: 'hit', ice: { melt: 3 } }, dials: [],
   },
   well: {
-    id: 'well', name: 'Wishing Well', blurb: 'Toss a coin. Make a wish. Toss another.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper', 'money'], cost: 4, weight: 2,
+    id: 'well', name: 'Wishing Well', blurb: 'Throw $1 in between rounds: its hits pay more, for good. Wish!', kind: 'bumper', rarity: 'uncommon', tags: ['bumper', 'money'], cost: 4, weight: 2,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 8,
     recipe: { points: 10, per: 'hit', well: { perRound: 5, points: 3, mult: 0.02, multCap: 3 }, perLevel: 2 }, dials: [kickDial(1.5)],
   },
   pinata: {
-    id: 'pinata', name: 'Piñata', blurb: 'Whack it till it bursts. Candy for everyone.', kind: 'target', rarity: 'rare', tags: ['target'], cost: 9, weight: 1,
+    id: 'pinata', name: 'Piñata', blurb: 'Whack it till it bursts: sparks, cash and a free part. Candy!', kind: 'target', rarity: 'rare', tags: ['target'], cost: 9, weight: 1,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
     recipe: { points: 15, per: 'hit', tiers: VARI_TIERS, pinata: { health: 40, grow: 20, sparks: 15, money: 5, pick: 3 }, perLevel: 3 }, dials: [],
   },
   wizard: {
-    id: 'wizard', name: 'Wizard Lamp', blurb: 'Hit every kind of part. Then: magic.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 1,
+    id: 'wizard', name: 'Wizard Lamp', blurb: 'Hit every kind of part on your table to start Wizard Mode. Magic!', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 1,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
     recipe: { points: 30, per: 'roll-over', wizard: { max: 8, seconds: 30, balls: 2 }, perLevel: 5 }, dials: [],
   },
 
   // ---- decor: it stands on the cabinet (the apron, the corners above the dome), never on the table; balls never touch it ----
   clock: {
-    id: 'clock', name: 'Midnight Clock', blurb: 'Every hit moves it on a minute. At midnight: madness.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1,
+    id: 'clock', name: 'Midnight Clock', blurb: 'Every hit ticks it on. At midnight, hits pay double for a while.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1,
     shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 0, recipe: { clock: { hits: 180, seconds: 20, x: 2 } }, dials: [],
   },
   altar: {
-    id: 'altar', name: 'Ritual Altar', blurb: 'Complete your sets. Something answers.', kind: 'decor', rarity: 'legendary', tags: [], cost: 12, weight: 1,
+    id: 'altar', name: 'Ritual Altar', blurb: 'Complete sets (lanes, drop targets...) to summon wild rituals.', kind: 'decor', rarity: 'legendary', tags: [], cost: 12, weight: 1,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0, recipe: { altar: { sets: 8, seconds: 15 } }, dials: [],
   },
   hutch: {
-    id: 'hutch', name: 'Gremlin Hutch', blurb: 'Two gremlins loose on your table. Bonk them.', kind: 'decor', rarity: 'legendary', tags: ['money'], cost: 12, weight: 1,
+    id: 'hutch', name: 'Gremlin Hutch', blurb: 'Two gremlins roam your table. Bonk them for points and cash.', kind: 'decor', rarity: 'legendary', tags: ['money'], cost: 12, weight: 1,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0, recipe: { gremlins: 2 }, dials: [],
   },
   bulb: {
-    id: 'bulb', name: 'Spare Bulb', blurb: 'A brighter bulb for every Lamp.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 4,
+    id: 'bulb', name: 'Spare Bulb', blurb: 'Every Lamp glows wider and brighter.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 4,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0, recipe: { cab: { lampRadius: 1, lampBonus: 0.02 } }, dials: [],
   },
   feet: {
-    id: 'feet', name: 'Rubber Feet', blurb: 'The cabinet grips the floor. Shove away.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 4,
+    id: 'feet', name: 'Rubber Feet', blurb: 'Your nudges shove harder, for no extra tilt. Grippy.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 4,
     shape: { type: 'circle', r: 0.85 }, rotatable: false, kickUnit: 0, recipe: { cab: { nudge: 1.15 } }, dials: [],
   },
   tray: {
-    id: 'tray', name: 'Coin Tray', blurb: 'Somewhere to put the change.', kind: 'decor', rarity: 'rare', tags: ['money'], cost: 8, weight: 1, from: 4,
+    id: 'tray', name: 'Coin Tray', blurb: 'Every round you clear pays $1 more. Somewhere to put the change.', kind: 'decor', rarity: 'rare', tags: ['money'], cost: 8, weight: 1, from: 4,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 0, recipe: { cab: { pay: 1 } }, dials: [],
   },
   mirror: {
-    id: 'mirror', name: 'Side Mirror', blurb: 'Every other shop, a peek at one more part.', kind: 'decor', rarity: 'rare', tags: [], cost: 9, weight: 1, from: 4,
+    id: 'mirror', name: 'Side Mirror', blurb: 'Every second shop shows one extra part. Closer than it appears.', kind: 'decor', rarity: 'rare', tags: [], cost: 9, weight: 1, from: 4,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 0, recipe: { cab: { mirror: true } }, dials: [],
   },
 
   // ---- not for sale: every machine has one Big Boi in the middle, and what he does depends on the machine ----
   mega: {
-    id: 'mega', name: 'Big Boi', blurb: 'Heavy, rude, hard to miss.', kind: 'bumper', rarity: 'legendary', tags: ['bigboi', 'bumper'], cost: 6, weight: 0,
+    id: 'mega', name: 'Big Boi', blurb: 'Every hit pays points and pumps up your Mult. Heavy and rude.', kind: 'bumper', rarity: 'legendary', tags: ['bigboi', 'bumper'], cost: 6, weight: 0,
     shape: { type: 'circle', r: 1.9 }, rotatable: false, kickUnit: 18,
     recipe: { points: 50, per: 'hit', mult: 0.15, multCap: 3, perLevel: 5 }, dials: [kickDial(1.5)],
   },

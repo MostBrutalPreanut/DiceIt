@@ -32,17 +32,17 @@ export const DRAGON = { armour: 5, regrow: 1, jackpotX: 10 } as const;
 export const BIG_BOIS: Record<BigBoiId, BigBoiDef> = {
   foreman: {
     id: 'foreman', machine: 'factory', title: 'The Foreman', ability: 'Overtime',
-    blurb: 'Heavy, rude, hard to miss.',
+    blurb: 'Every hit pays points and pumps up your Mult. Heavy and rude.',
     recipe: { points: 50, per: 'hit', mult: 0.15, multCap: 5, perLevel: 12 },
   },
   cook: {
     id: 'cook', machine: 'diner', title: 'The Cook', ability: 'Order Up!',
-    blurb: 'Calls an order. Fill it and he gets generous.',
+    blurb: `Every hit calls an order: a part lights up. Hit it next for ×${ORDER.x}.`,
     recipe: { points: 40, per: 'hit', perLevel: 10 },
   },
   dragon: {
     id: 'dragon', machine: 'castle', title: 'The Dragon', ability: 'Siege',
-    blurb: 'Armoured. Knock every plate off and he pays the castle.',
+    blurb: 'Every hit knocks off a plate. Knock off the last for a jackpot.',
     recipe: { points: 40, per: 'hit', perLevel: 10 },
   },
 };
