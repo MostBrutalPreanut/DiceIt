@@ -32,6 +32,11 @@ export const TIP_K = 0.9;
 export const COOL_MULT = 3;
 /** A ranked ball's ring and ribbon (Rank Lights): Silver, Gold, Diamond, the same on every machine. */
 const RANK_COLOURS = ['#dfe6ee', '#ffd23f', '#8ff0ff'] as const;
+/** Zaps: how long an arc of lightning stays on screen, and how many are drawn in one frame (the score counts them all). */
+const ARC_LIFE = 0.22;
+const ARCS_DRAWN = 12;
+/** A cheap repeatable 0..1 noise for the lightning's zigzag. */
+const jit = (a: number, b: number, c: number) => { const s = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453; return s - Math.floor(s); };
 /** k is quantised so the baked textures can be shared between frames of the tip animation. */
 const K_STEP = 0.02;
 const quantK = (k: number) => Math.round(k / K_STEP) * K_STEP;
@@ -56,6 +61,8 @@ export class Renderer {
   private ballG = new Graphics();
   private tagLayer = new Container();
   private topG = new Graphics();
+  /** Zaps: lightning from a Tesla Coil to each part it made score, for a moment. */
+  private arcs: { x1: number; y1: number; x2: number; y2: number; age: number; seed: number }[] = [];
   private tiltLayer = new Container();
   particles!: Particles;
   dmd!: DotMatrix;
@@ -223,6 +230,15 @@ export class Renderer {
   onScore(ev: ScoreEvent) {
     const t = this.theme, def = PARTS[ev.def], color = roleFill(t, ev.def);
     this.pulses.set(ev.uid, 1);
+    if (ev.zap) {
+      // a zap: an arc of lightning and a crackle of sparks on the part; no debris, no shake (there can be many)
+      this.arcs.push({ x1: ev.zap.x, y1: ev.zap.y, x2: ev.x, y2: ev.y, age: 0, seed: this.arcs.length + ev.uid * 7 + ev.t });
+      if (this.arcs.length > ARCS_DRAWN * 2) this.arcs.shift();
+      this.particles.sparkle(ev.x + (Math.random() - 0.5), ev.y + (Math.random() - 0.5) * 0.6, 0.8, 0.7, false, true);
+      if (ev.label) this.particles.sticker(ev.label, '', color, ev.x, ev.y, 2.2, 1, 0);
+      else this.particles.sticker(ev.points.toLocaleString('en-US'), '', roleFill(t, 'tesla'), ev.x, ev.y, 1.4, 0.55, ev.points);
+      return;
+    }
     if (ev.tier !== undefined) this.lastTier.set(ev.uid, { tier: ev.tier, glow: 1 });
     if (ev.spins) {
       const sp = this.spin.get(ev.uid) ?? { angle: 0, speed: 0 };
@@ -349,6 +365,7 @@ export class Renderer {
     this.drawFlippers(game);
     this.drawPlunger(game);
     this.drawBalls(game);
+    this.drawArcs(dt);
     for (let i = this.glowUsed; i < this.glowPool.length; i++) this.glowPool[i].visible = false;
     this.particles.update(dt, this.view);
     this.dmd.update(dt);
@@ -409,7 +426,7 @@ export class Renderer {
     const pulse = this.pulses.get(p.uid) ?? 0;
     switch (p.def) {
       case 'mega': return { hit: pulse > 0.35, follow: true, mood: this.moodFor(game, pulse) };
-      case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': case 'trophy': return { hit: pulse > 0.35 };
+      case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': case 'trophy': case 'tesla': return { hit: pulse > 0.35 };
       case 'piggy': return { hit: pulse > 0.35, seg: game.scorer.piggies.get(p.uid) ?? 0 };
       case 'xlane': return { lit: !tilted && !game.mods.lightsOut && !game.scorer.coolingDown(p.uid, game.sim.time) };
       case 'fame': return { lit: !tilted && !game.mods.lightsOut && !this.discoFired(game, p.uid) };
@@ -586,6 +603,34 @@ export class Renderer {
     const [X, Y] = P(this.view, at.x, at.y - m.y);
     mv.sprite.position.set(X + jx, Y + jy);
     mv.sprite.zIndex = -at.y * 100 + 2;
+  }
+
+  /**
+   * Zaps: every live arc as a jagged bolt (a wide glow in the coil's colour under a white core), the newest
+   * ARCS_DRAWN only. The zigzag changes 30 times a second; in Calm mode it holds still.
+   */
+  private drawArcs(dt: number) {
+    for (const a of this.arcs) a.age += dt;
+    this.arcs = this.arcs.filter((a) => a.age < ARC_LIFE);
+    const v = this.view, g = this.topG, col = this.theme.role.tesla, beat = this.calm ? 0 : Math.floor(this.time * 30);
+    for (const a of this.arcs.slice(-ARCS_DRAWN)) {
+      const fade = 1 - a.age / ARC_LIFE, n = 8;
+      const [x1, y1] = P(v, a.x1, a.y1, 1.9), [x2, y2] = P(v, a.x2, a.y2, 0.9);
+      const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
+      const amp = Math.min(v.S * 0.7, len * 0.12);
+      const pts: number[] = [];
+      for (let i = 0; i <= n; i++) {
+        const u = i / n, off = i === 0 || i === n ? 0 : (jit(a.seed, i, beat) - 0.5) * 2 * amp * Math.sin(Math.PI * u);
+        pts.push(x1 + dx * u + nx * off, y1 + dy * u + ny * off);
+      }
+      const line = (w: number, color: string, alpha: number) => {
+        g.moveTo(pts[0], pts[1]);
+        for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]);
+        g.stroke({ width: w, color, alpha, cap: 'round', join: 'round' });
+      };
+      line(v.S * 0.38, col, 0.45 * fade);
+      line(v.S * 0.12, WHITE, 0.95 * fade);
+    }
   }
 
   /** The Dragon's armour: a ring of shield plates round him, one per plate left. */

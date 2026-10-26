@@ -475,6 +475,7 @@ export class AudioFx {
       case 'sling': this.twang(this.ladder(mult, 165, 12)); break;
       case 'spinner': this.spin(opts.spins ?? 3); break;
       case 'lane': case 'rank': this.laneRoll(); break;
+      case 'tesla': this.zap(true); this.bop(mult, 0.8); break;
       case 'bell': if (notes.some((n) => n.endsWith(' toll'))) this.toll(false); else this.bop(mult, 0.95); break;
       case 'uplight': this.levelLight(this.ladder(mult, 1047, 12)); break;
       case 'lamp': this.lampGlow(opts.label); break;
@@ -890,6 +891,15 @@ export class AudioFx {
     this.duck(0.6, 0.4);
     const n = levelled ? 6 : 2;
     for (let i = 0; i < n; i++) this.bell(v.o, v.t + i * 0.06, midi(76 + pent(i * 2)), 0.6, 0.14, 3.5, 0.7);
+  }
+
+  /** A zap: a short electric crackle with a buzz under it. One voice for a burst, so many zaps stay one sound. */
+  zap(big = false) {
+    const v = this.voice('zap', big ? 0.7 : 0.5, 0.25, 0.06, 2);
+    if (!v) return;
+    const { o, t } = v;
+    this.noise(o, t, big ? 0.2 : 0.12, 0.22, { f: 3800, type: 'highpass', trem: [70, 0.9] });
+    this.osc(o, t, 110, big ? 0.18 : 0.1, 0.07, { to: 90, attack: 0.002 });
   }
 
   /** Old Bell: one deep bronze toll; when it rings for the run, three, over a low hum. */

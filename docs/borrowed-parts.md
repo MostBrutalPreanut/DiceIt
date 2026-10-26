@@ -11,8 +11,8 @@ Effort is for *our* engine, as in [parts-catalog.md](parts-catalog.md): **S** = 
 Every card is on a review page with Approve / Change / Skip and a notes box per part:
 https://claude.ai/artifact/UMabyQfo79xB2nmhH6c1fv (private to its owner; the decisions are saved there).
 
-**Built so far:** Rank Lights and the Old Bell (step 1 of §4), as revised in §6.3; see
-[balance-plan.md](balance-plan.md) §2 for their numbers.
+**Built so far:** Rank Lights and the Old Bell (step 1 of §4), as revised in §6.3; zaps and the Tesla Coil (the
+start of step 2). See [balance-plan.md](balance-plan.md) §2 for their numbers.
 
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show
@@ -70,7 +70,10 @@ each adjacent copy).
 A **zap** scores a part as if the ball had hit it, with no physics: no kick, no ball movement. It counts as a
 hit for growth (Pop Bumpers grow), the Jackpot Scoop's pot, the Ding-Dong Bell's variety and Lucky Seven. Guards (as decided):
 a part can be zapped many times, but **at most once every 0.5 s**; a zap never sets off another zap (no chains,
-except Powder Kegs, 4 deep). Drawn as a lightning arc or a shockwave, so the player sees *why* a far-off part scored.
+except Powder Kegs, 4 deep). Added when it was built: a zap never reaches a ×Mult part (X Lane, the Golden Bumper,
+the Disco Ball, Hall of Fame, Rank Lights), so a ×Mult stays a shot the ball has to make; it neither spends nor
+earns a Hot Shot, and it never pays the Old Bell's toll. Each zap's points fly to the score as one chip, and a burst
+of zaps makes one crackle. Drawn as a lightning arc or a shockwave, so the player sees *why* a far-off part scored.
 
 Zaps are the scaling dial: they are worth more the more parts you own and the closer you pack them, which is
 exactly what a full late board has.

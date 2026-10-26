@@ -9,7 +9,7 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 328 pass, 0 fail (23 files) |
+| Unit tests | 337 pass, 0 fail (24 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
 | Browser smoke test | 104 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.5 ms a frame |
@@ -51,6 +51,9 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   a notch; three notches ring it for ×1.2 Mult on every ball for the rest of the run. Measured with
   `tools/power.ts`: Rank Lights sit between Lane Rollovers and X Lane per dollar (1,119 a $ mid, 3,306 late). The
   bell's single-round number cannot show its rings; the par player now notches its bells between rounds.
+- **Zaps and the Tesla Coil** (rare, $9): every hit arcs lightning to the 2 nearest parts (3 and 4 with levels),
+  which score as if hit. Measured: 328 a $ mid, 1,043 late, on the power tool's small table (about Lane
+  Rollovers per dollar; a plain Pop Bumper there measures -1,205 / -3,176). It should do more on a full board.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

@@ -256,7 +256,8 @@ export class Flyers {
     const to = this.aim.score ?? this.scoreTarget();
     if (!to) return;
     const mag = Math.log10(Math.max(10, s.points)), bonus = s.kind === 'bonus';
-    let n = Math.round((1.4 + mag * 1.35) * (bonus ? 1.6 : 1) * (this.overlay.calm ? 0.5 : 1));
+    // a zap's points fly as one chip: a coil can zap several parts at once, and the total is what counts
+    let n = s.zap ? 1 : Math.round((1.4 + mag * 1.35) * (bonus ? 1.6 : 1) * (this.overlay.calm ? 0.5 : 1));
     n = Math.max(1, Math.min(16, n, MAX_CHIPS - this.live));
     if (this.live >= MAX_CHIPS) {
       // the pool is full: the points ride on the chip that lands last, so the count still adds up

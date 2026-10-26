@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, grownPoints, hasTag, HOT_WINDOW, lampStats, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, RANK_NAMES, tierOf, type PartId, type PartInstance, type Recipe } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, grownPoints, hasTag, HOT_WINDOW, lampStats, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, RANK_NAMES, tierOf, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { Rng } from '../sim/rng';
@@ -30,6 +30,8 @@ export interface ScoreEvent {
   tier?: number;
   /** This hit was a Hot Shot (the ball was hot). */
   hot?: boolean;
+  /** A zap: no ball touched the part; lightning from here (a Tesla Coil) made it score. */
+  zap?: { x: number; y: number };
 }
 
 export interface LedgerRow {
@@ -126,6 +128,8 @@ export class Scorer {
   private firedThisBall = new Map<number, number>();
   /** The jackpot pot: ball hits when each scoop last cashed. */
   private potFrom = new Map<number, number>();
+  /** Zaps: until when each part cannot be zapped again. */
+  private zapCool = new Map<number, number>();
   /** Per part: how often it fired this round (the Old Bell). */
   private firedThisRound = new Map<number, number>();
   /** Rank Lights: each ranked ball's rank (1 = Silver) and until when it lasts. */
@@ -233,6 +237,7 @@ export class Scorer {
   startBall() {
     this.mult = this.ballStartMult();
     this.ranks.clear();
+    this.zapCool.clear();
     this.ballHits = 0;
     this.multPaid.clear();
     this.xPaid.clear();
@@ -542,7 +547,7 @@ export class Scorer {
     if (r.points) {
       if (r.perBall && (this.firedThisBall.get(inst.uid) ?? 0) >= r.perBall) return out;
       // an Old Bell's first hit of the round pays its toll instead of its points (and earns the round's notch)
-      const toll = r.bell && !this.firedThisRoundOf(inst.uid) ? r.bell.first : 0;
+      const toll = r.bell && !ev.zap && !this.firedThisRoundOf(inst.uid) ? r.bell.first : 0; // only the ball itself rings it
       const pts = toll || r.points;
       const spins = ev.spins ?? 1;
       const grown = grownPoints(r, this.hitsOf(inst.def));
@@ -574,7 +579,8 @@ export class Scorer {
       this.roundTypeHits.set(inst.def, (this.roundTypeHits.get(inst.def) ?? 0) + 1);
       const lucky = m.luckyEvery > 0 && this.ballHits % m.luckyEvery === 0;
       if (lucky) notes.push(`x${m.luckyX} lucky seven`);
-      const hot = this.hot.get(ev.ballId);
+      // a Hot Shot is the ball's: a zap neither spends it nor earns one
+      const hot = ev.zap ? undefined : this.hot.get(ev.ballId);
       const hotBonus = hot && hot.until >= ev.t ? hot.bonus : 0;
       if (hot) this.hot.delete(ev.ballId);
       if (hotBonus) notes.push(`+${Math.round(hotBonus * 100)}% hot shot`);
@@ -619,7 +625,7 @@ export class Scorer {
         notes.push(now > before ? `+${Math.round((now - before) * 100) / 100} kept Mult` : 'fully polished');
       }
       if (r.perBall) this.firedThisBall.set(inst.uid, (this.firedThisBall.get(inst.uid) ?? 0) + 1);
-      if (r.bell) this.firedThisRound.set(inst.uid, (this.firedThisRound.get(inst.uid) ?? 0) + 1);
+      if (toll) this.firedThisRound.set(inst.uid, (this.firedThisRound.get(inst.uid) ?? 0) + 1);
       const rang = toll && r.bell ? this.notch(inst, r.bell.notches) : false;
       if (toll && r.bell) notes.push(rang ? 'the bell rings' : `notch ${this.notchesOf(inst)}/${r.bell.notches}`);
       if (r.lightsLamps) this.flashLamps(ev.t, r.lightsLamps);
@@ -631,9 +637,11 @@ export class Scorer {
       // the third notch rings the bell: ×1.2 on the Mult of this ball and every ball after it, for the rest of the run
       if (rang) out.push(this.ring(inst, ev));
       // this hit makes the ball hot for its next one
-      if (r.hot && (r.hotTier === undefined || (tier && r.tiers!.indexOf(tier) >= r.hotTier))) this.hot.set(ev.ballId, { until: ev.t + HOT_WINDOW, bonus: r.hot * m.hotFactor });
+      if (!ev.zap && r.hot && (r.hotTier === undefined || (tier && r.tiers!.indexOf(tier) >= r.hotTier))) this.hot.set(ev.ballId, { until: ev.t + HOT_WINDOW, bonus: r.hot * m.hotFactor });
       // the Cook calls a new order; the Dragon loses a plate
       if (inst.def === 'mega') out.push(...this.bigBoiHit(inst, ev));
+      // a Tesla Coil arcs to the parts nearest it (a zapped coil does not: a zap never arcs on)
+      if (r.zap && !ev.zap) out.push(...this.arc(inst, ev));
     }
 
     // Level Lights (Space Cadet's bumper upgrade lanes): each pass switches the light on or off. When every light
@@ -726,6 +734,32 @@ export class Scorer {
     this.refreshRingX();
     const x = Math.round((this.ringX / before) * 1000) / 1000;
     return this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`Mult x${x} on every ball for the rest of the run`], `THE BELL RINGS! x${x}`, undefined, x);
+  }
+
+  /** How many parts this Tesla Coil arcs to: its base, one more every few levels, up to its most. */
+  arcsOf(inst: PartInstance): number {
+    const z = this.recipe(inst.def).zap;
+    return z ? Math.min(z.maxArcs, z.arcs + Math.floor(this.effLevel(inst) / z.perLevels)) : 0;
+  }
+
+  /**
+   * Lightning from a Tesla Coil to the nearest parts that can be zapped (not ones zapped in the last ZAP_COOLDOWN s,
+   * nor jammed ones): each scores as if the ball had hit it, as that ball, at that ball's speed.
+   */
+  private arc(coil: PartInstance, ev: { t: number; ballId: number; speed: number }): ScoreEvent[] {
+    const n = this.arcsOf(coil);
+    const targets = this.placed()
+      .filter((p) => p.uid !== coil.uid && zappable(p.def) && !this.jammed.has(p.def) && (this.zapCool.get(p.uid) ?? -1) <= ev.t)
+      .map((p) => ({ p, d: Math.hypot(p.x - coil.x, p.y - coil.y) }))
+      .sort((a, b) => a.d - b.d || a.p.uid - b.p.uid)
+      .slice(0, n);
+    const out: ScoreEvent[] = [];
+    for (const { p } of targets) {
+      this.zapCool.set(p.uid, ev.t + ZAP_COOLDOWN);
+      const zev = { type: 'partHit' as const, t: ev.t, uid: p.uid, ballId: ev.ballId, x: p.x, y: p.y, speed: ev.speed, zap: true, mover: PARTS[p.def].kind === 'mover' || undefined };
+      for (const e of this.hit(p, zev)) out.push({ ...e, zap: { x: coil.x, y: coil.y } });
+    }
+    return out;
   }
 
   /** Every Lamp at full glow for a while (a drop-target set, the Disco Ball). */

@@ -279,6 +279,23 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.cyl(x, y, 0.14, 1.46, 0.22, metal);
       break;
     }
+    case 'tesla': {
+      // a Tesla coil: a copper winding on a bumper skirt, under a round terminal that crackles when hit
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      const top = st.hit ? mat(t, mix(t.role.tesla, WHITE, 0.55)) : role;
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      p.cyl(x, y, r * 0.5, 0.16, 0.12, metal);
+      // the winding: copper turns with a thin dark gap between each
+      const copper = mat(t, mix(t.role.coin, t.accent, 0.4));
+      for (let i = 0; i < 6; i++) p.cyl(x, y, r * (0.5 - i * 0.025), 0.28 + i * 0.17, 0.13, copper);
+      // the terminal: a fat ring (a toroid) in the coil's colour
+      const z0 = 1.35;
+      const tor = [[0, 0.5], [0.3, 0.78], [0.6, 0.8], [1, 0.55]] as const;
+      p.face(hull(tor.flatMap(([u, k]) => ring(x, y, r * k, 26).map(([a, b]) => P(v, a, b, z0 + u * 0.5)))), top.base);
+      p.face(ring(x, y, r * 0.3, 18).map(([a, b]) => P(v, a, b, z0 + 0.5)), top.shade, { sil: false, line: 0.35 });
+      p.face(ring(x - r * 0.4, y + r * 0.15, r * 0.12, 12).map(([a, b]) => P(v, a, b, z0 + 0.42)), top.light, { sil: false, line: 0 });
+      break;
+    }
     case 'bell': {
       // an old bronze bell hung in a wooden yoke; three pips on its skirt count the notches. Rung this round, it goes dull
       shadow(under, v, t, x, y, r * 1.05, r * 1.05);

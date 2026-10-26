@@ -11,7 +11,7 @@ import { bigBoiOf, DRAGON, ORDER, type MachineId } from './bigboi';
 export type PartId =
   | 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver' | 'vari'
   | 'ding' | 'piggy' | 'magnet' | 'thunder' | 'jackpot' | 'xlane' | 'golden' | 'disco' | 'trophy' | 'plate' | 'fame'
-  | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell';
+  | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell' | 'tesla';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip';
 
@@ -147,7 +147,26 @@ export interface Recipe {
   rank?: { steps: number[]; seconds: number };
   /** Old Bell: its first hit each round pays `first` instead of its points and adds a notch; at `notches` it rings, and every ball's Mult is ×`x` for the rest of the run. */
   bell?: { first: number; notches: number; x: number };
+  /**
+   * Tesla Coil: every hit arcs lightning to the `arcs` nearest parts that can be zapped (one more every `perLevels`
+   * levels, up to `maxArcs`), and each scores as if the ball had hit it. A zap never arcs on.
+   */
+  zap?: { arcs: number; perLevels: number; maxArcs: number };
 }
+
+/** A zapped part cannot be zapped again for this long (seconds). */
+export const ZAP_COOLDOWN = 0.5;
+/**
+ * The parts a zap can hit: the ones a ball scores on by touching them. Not saucers, the goal or the Kickback (they
+ * need the ball itself), not a drop-target bank (a zap never moves anything), nor flippers, savers, bars or floor
+ * pieces. And never a ×Mult part (X Lane, the Golden Bumper, the Disco Ball, Hall of Fame, Rank Lights): zaps pay
+ * points, and a ×Mult stays a shot the ball has to make.
+ */
+export const zappable = (id: PartId) => {
+  const k = PARTS[id].kind, r = PARTS[id].recipe;
+  if (r.xmult || r.typeX || r.rank) return false;
+  return k === 'bumper' || k === 'kicker' || k === 'spinner' || k === 'rollover' || k === 'lamp' || k === 'target' || k === 'mover';
+};
 
 /** The names of the ranks, lowest first (Rank Lights). */
 export const RANK_NAMES = ['Silver', 'Gold', 'Diamond'] as const;
@@ -396,6 +415,11 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 10,
     recipe: { points: 20, per: 'hit', bell: { first: 150, notches: 3, x: 1.2 }, perLevel: 5 }, dials: [kickDial(1.5)],
   },
+  tesla: {
+    id: 'tesla', name: 'Tesla Coil', blurb: 'Hit it and everything nearby gets a shock.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 9, weight: 2,
+    shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 12,
+    recipe: { points: 30, per: 'hit', zap: { arcs: 2, perLevels: 3, maxArcs: 4 }, perLevel: 8 }, dials: [kickDial(2)],
+  },
   duck: {
     id: 'duck', name: 'Duck Gallery', blurb: 'A tin duck paddles back and forth. Knock it over. It gets cross.', kind: 'mover', rarity: 'rare', tags: ['target'], cost: 8, weight: 2,
     shape: { type: 'box', hw: 3.9, hh: 0.75 }, rotatable: false, kickUnit: 0,
@@ -627,6 +651,10 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.rank) {
     const steps = r.rank.steps.map((x, i) => `${RANK_NAMES[i]} (×${xg(x)})`);
     lines.push({ tag: 'mult', text: `Light all ${r.setSize} lights of a pack and the ball that lit the last one ranks up: every hit it makes pays more. ${steps.join(', then ')}. A rank lasts ${r.rank.seconds} s; lighting the set again moves it up and starts the time again, and a drain loses it.` });
+  }
+  if (r.zap) {
+    const at = (k: number) => k * r.zap!.perLevels;
+    lines.push({ tag: 'combo', text: `Every hit arcs lightning to the ${r.zap.arcs} nearest parts that score when the ball touches them (one more at level ${at(1)}${r.zap.maxArcs - r.zap.arcs > 1 ? ` and ${at(2)}` : ''}): each one scores as if the ball had hit it. A part can be zapped at most once every ${ZAP_COOLDOWN} s, a zap never arcs on, and saucers, the goal, the Kickback, drop targets and ×Mult parts cannot be zapped.` });
   }
   if (r.bell) lines.push({ tag: 'mult', text: `Its first hit each round pays ${f(r.bell.first)} instead, and adds a notch${inst?.notches ? ` (${inst.notches} of ${r.bell.notches} now)` : ''}. At ${r.bell.notches} notches it rings: your Mult ×${xg(r.bell.x)} on every ball for the rest of the run (rings stack), and the notches start again. Sell it and its notches go; the rings stay.` });
   if (r.tiers && def.id === 'vari') {
