@@ -1,0 +1,78 @@
+/* The Library (src/ui/library.ts): shelves of sticker cards by rarity, found ones in colour and the rest as black
+   silhouettes, and the picked entry's full card beside them. Same kit as the scoreboard: ink frames, paper cards,
+   drop shadows; the rarity colours are the shop's. */
+
+#menu.m-library { background: color-mix(in srgb, var(--bg) 90%, transparent); }
+.m-library { --r-common: var(--paper-dim); --r-uncommon: #3fae5a; --r-rare: #3f7fe0; --r-legendary: #e0a000; }
+
+/* the big tally, top right: how much of the game you have seen */
+.lbtotal { flex: none; margin-left: auto; display: grid; justify-items: end; gap: 2px; padding: 8px 14px 10px; background: var(--paper); border: var(--lw-frame) solid var(--ink); border-radius: 18px; box-shadow: 4px 5px 0 var(--drop); rotate: 1.5deg; }
+.lbtotal b { font-size: 34px; line-height: 1; transform: translateY(3px); }
+.lbtotal b small { font-size: 18px; color: var(--faint); }
+.lbtotal > span:not(.lbbar) { font: 800 11px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+.lbbar { display: block; width: 120px; height: 10px; border-radius: 99px; background: var(--paper-dim); border: var(--lw-detail) solid var(--ink); overflow: hidden; }
+.lbbar i { display: block; height: 100%; background: var(--accent); border-right: var(--lw-detail) solid var(--ink); }
+.lbbar i[style="width:0%"] { border-right: 0; }
+
+/* the shelf switch and the rarity filter */
+.lbtools { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; max-width: 1180px; margin: 0 auto 16px; }
+.lbtabs { background: var(--paper); box-shadow: 3px 4px 0 var(--drop); }
+#menu .lbtabs button { font: 400 19px/1 var(--display); padding: 9px 18px 5px; }
+#menu .lbtabs button small { font: 800 11px var(--ui); opacity: .75; }
+.lbrar { margin-left: auto; background: var(--paper); }
+#menu .lbrar button { padding: 4px 12px; font-size: 12px; }
+#menu .lbrar button.r-uncommon:not(.on) { box-shadow: inset 0 -4px 0 var(--r-uncommon); }
+#menu .lbrar button.r-rare:not(.on) { box-shadow: inset 0 -4px 0 var(--r-rare); }
+#menu .lbrar button.r-legendary:not(.on) { box-shadow: inset 0 -4px 0 var(--r-legendary); }
+
+.lbwrap { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; max-width: 1180px; margin: 0 auto; align-items: start; }
+.lbshelves { display: grid; gap: 14px; }
+.lbshelf { padding: 10px 14px 14px; background: var(--rim); border: var(--lw-frame) solid var(--ink); border-radius: 22px; box-shadow: 6px 7px 0 var(--drop); }
+.lbshelf h3 { display: flex; align-items: center; gap: 10px; margin: 2px 2px 10px; font-size: 22px; color: var(--paper); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
+.lbshelf h3 small { font-size: 15px; transform: translateY(2px); }
+.lbshelf h3 .lbbar { width: 90px; margin-left: auto; -webkit-text-stroke: 0; }
+.lbshelf.r-uncommon h3 .lbbar i { background: var(--r-uncommon); } .lbshelf.r-rare h3 .lbbar i { background: var(--r-rare); } .lbshelf.r-legendary h3 .lbbar i { background: var(--r-legendary); }
+.lbnote { margin: -6px 2px 10px; font-size: 12.5px; font-weight: 700; color: var(--ink); opacity: .8; }
+.lbgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+
+/* a card: the part on its plinth, its name under it, the rarity as a stripe along the bottom */
+#menu .lbcard { position: relative; display: grid; gap: 4px; justify-items: stretch; padding: 5px 5px 9px; border-radius: 14px; background: var(--paper); border: var(--lw-widget) solid var(--ink); box-shadow: 0 3px 0 var(--ink), inset 0 -5px 0 var(--r-common); transition: transform .14s cubic-bezier(.3,1.8,.5,1), box-shadow .14s; }
+#menu .lbcard.r-uncommon { box-shadow: 0 3px 0 var(--ink), inset 0 -5px 0 var(--r-uncommon); }
+#menu .lbcard.r-rare { box-shadow: 0 3px 0 var(--ink), inset 0 -5px 0 var(--r-rare); }
+#menu .lbcard.r-legendary { box-shadow: 0 3px 0 var(--ink), inset 0 -5px 0 var(--r-legendary); background: color-mix(in srgb, var(--paper) 85%, #ffd66b); }
+#menu .lbcard:hover, #menu .lbcard:focus-visible { transform: translateY(-3px) rotate(-1.5deg); }
+#menu .lbcard.on { outline: 3px solid var(--ink); outline-offset: 2px; transform: translateY(-3px); }
+.lbplinth { display: grid; place-items: center; aspect-ratio: 1; border-radius: 10px; background: var(--chip); }
+.lbplinth img { width: 88%; height: 88%; object-fit: contain; display: block; }
+.lbname { font: 400 13.5px/1.05 var(--display); text-align: center; transform: translateY(2px); min-height: 2.1em; display: grid; place-items: center; overflow-wrap: anywhere; }
+.lbcard .new { position: absolute; top: -7px; right: -5px; font: 800 9.5px var(--ui); letter-spacing: .08em; color: var(--ink); background: var(--glow); border: var(--lw-detail) solid var(--ink); border-radius: 99px; padding: 0 6px; rotate: 6deg; animation: ready 1.2s ease-in-out infinite; }
+/* not found yet: a shadow on a dim plinth, and ??? */
+#menu .lbcard.locked { background: var(--paper-dim); }
+.lbcard.locked .lbplinth { background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--paper) 70%, var(--paper-dim)) 0 6px, var(--paper-dim) 6px 12px); }
+.lbcard.locked .lbplinth img { opacity: .92; }
+.lbcard.locked .lbname { color: var(--faint); letter-spacing: .12em; }
+
+/* the picked entry: its picture big, then the same card the shop and the table show */
+#menu .lbdetail { position: sticky; top: 16px; margin: 0; padding: 12px 14px; }
+.lbdetail .lbbig { display: grid; place-items: center; height: 170px; margin: -12px -14px 0; border-bottom: var(--lw-widget) solid var(--ink); border-radius: 12px 12px 0 0; background: radial-gradient(closest-side, var(--glow), transparent 85%), var(--chip); }
+.lbdetail.locked .lbbig { background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--paper) 70%, var(--paper-dim)) 0 8px, var(--paper-dim) 8px 16px); }
+.lbdetail .lbbig img { width: 150px; height: 150px; object-fit: contain; filter: drop-shadow(3px 4px 0 var(--drop)); animation: lbpop .3s cubic-bezier(.3,1.6,.5,1) both; }
+.lbdetail .lbbig.decal img { width: 140px; height: 140px; }
+@keyframes lbpop { from { scale: .7; rotate: -6deg; } to { scale: 1; rotate: 0deg; } }
+#menu .lbdetail .head { margin-top: 0; border-radius: 0; }
+.lbdetail.locked .head h4 { letter-spacing: .14em; }
+.lbdetail.locked .desc li:first-child { letter-spacing: .2em; color: var(--faint); }
+@media (prefers-reduced-motion: reduce) { .lbdetail .lbbig img, .lbcard .new { animation: none; } }
+
+@media (max-width: 1000px) {
+  .lbwrap { grid-template-columns: minmax(0, 1fr); }
+  #menu .lbdetail { position: static; order: -1; }
+  .lbdetail .lbbig { height: 130px; }
+  .lbdetail .lbbig img { width: 116px; height: 116px; }
+}
+@media (max-width: 560px) {
+  .lbtotal { margin-left: 0; justify-items: start; rotate: 0deg; }
+  .lbrar { margin-left: 0; }
+  .lbgrid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+  .lbname { font-size: 12px; }
+}

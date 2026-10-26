@@ -1043,6 +1043,16 @@ function glyphIcon(g: Graphics, c: Container, t: Theme, glyph: string, R: number
   c.addChild(L);
 }
 
+/** Only a decal's picture (its icon, or its glyph on a disc), centred on 0,0, without the vinyl: the Library cuts it out of a locked decal's shadow. */
+export function decalArt(t: Theme, look: StuckDecal['look'], R: number, rot = 0): Container {
+  const c = new Container(), g = new Graphics();
+  c.rotation = (rot * Math.PI) / 180;
+  c.addChild(g);
+  if (look.icon) decalIcon(g, c, t, look.icon, R);
+  else glyphIcon(g, c, t, look.glyph ?? '?', R);
+  return c;
+}
+
 /** A die-cut vinyl decal: white cut margin, ink line, colour field, icon. Flat on the apron (squashed by k). */
 export function decalSprite(t: Theme, d: StuckDecal, x: number, y: number, R: number, k = 1, rot = 0): Container {
   const outer = new Container();

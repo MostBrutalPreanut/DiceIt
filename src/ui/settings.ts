@@ -30,8 +30,8 @@ export const ACTIONS: { id: Action; name: string }[] = [
 export const DEFAULT_KEYS: Record<Action, string> = { left: 'ArrowLeft', right: 'ArrowRight', launch: 'Space' };
 export const DEFAULT_SETTINGS: Settings = { music: 0.8, sfx: 1, quality: 'high', calm: false, keys: { ...DEFAULT_KEYS } };
 
-/** Keys the game already uses for something else (pause, cash out, play, mute, nudges, rotate, store). */
-export const RESERVED_KEYS = new Set(['Escape', 'Tab', 'Enter', 'NumpadEnter', 'KeyM', 'KeyZ', 'KeyX', 'KeyR', 'Delete', 'Backspace', 'MetaLeft', 'MetaRight']);
+/** Keys the game already uses for something else (pause, cash out, play, mute, nudges, rotate, store, feedback). */
+export const RESERVED_KEYS = new Set(['Escape', 'Tab', 'Enter', 'NumpadEnter', 'KeyM', 'KeyZ', 'KeyX', 'KeyR', 'KeyP', 'Delete', 'Backspace', 'MetaLeft', 'MetaRight']);
 
 const clamp01 = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : d);
 const isCode = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9]{2,24}$/.test(v) && !RESERVED_KEYS.has(v);

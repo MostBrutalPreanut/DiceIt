@@ -123,7 +123,7 @@ export function measure(layouts: Layout[], o: { rounds: number; seed: number; sk
           if (e.type === 'drain') {
             rep.drains++;
             const b = prev.find((q) => q.id === e.ballId);
-            if (b && e.reason === 'timeout') log(g.sim.clockLeft === null ? 'clock' : 'timeout', b);
+            if (b && e.reason === 'timeout') log('clock', b); // a ball the run-out after the clock could not end
           }
           if (e.type === 'ballSearch') {
             const b = prev.find((q) => q.id === e.ballId);
