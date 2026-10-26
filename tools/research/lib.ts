@@ -215,11 +215,11 @@ export function playRound(g: Game, o: PlayOpts): RoundTrace {
   const cap = o.capSeconds ?? 900;
   const uidDef = new Map<number, PartId>();
   const defOf = (uid: number) => { let d = uidDef.get(uid); if (!d) { d = g.layout.parts.find((p) => p.uid === uid)?.def; if (d) uidDef.set(uid, d); } return d; };
-  let ballStart = 0, markI = 0;
+  let ballStart = 0, markI = 0, cutting = false;
   const marks = o.marks ?? [];
   const wall0 = performance.now();
   for (let guard = 0; g.mode === 'round' && guard < 240 * 60 * 60; guard++) {
-    if (o.noClock) {
+    if (o.noClock && !cutting) {
       const sim = g.sim as unknown as { balls: { age: number }[] };
       for (const b of sim.balls) b.age = 0;
     }
@@ -269,10 +269,12 @@ export function playRound(g: Game, o: PlayOpts): RoundTrace {
       r.cumulative.push(g.scorer.score);
       r.ballSeconds.push(g.sim.time - ballStart);
       ballStart = g.sim.time;
+      cutting = false;
     }
     if (o.noClock && g.mode === 'round' && g.sim.time - ballStart > cap) {
       r.capped = true;
-      // end the ball: drain every ball in play
+      cutting = true;
+      // end the ball: drain every ball in play (they time out on the next step)
       const sim = g.sim as unknown as { balls: { age: number }[] };
       for (const b of sim.balls) b.age = 1e9;
     }
