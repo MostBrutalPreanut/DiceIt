@@ -29,8 +29,9 @@ export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover
   | 'mover' | 'goal' | 'strip' | 'inlay' | 'decor';
 
 /**
- * Rarity decides when a part turns up in the shop and how much it does. Commons are there from round 1;
- * the rarer a part, the later it starts to appear, the more it costs, the bigger it is and the more it does.
+ * Rarity decides how often a part turns up in the shop and how much it does. Commons are most of every shop;
+ * the rarer a part, the less often it shows (more often as the run goes on: RARITY_ODDS), the more it costs, the
+ * bigger it is and the more it does.
  */
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 export const RARITIES: Rarity[] = ['common', 'uncommon', 'rare', 'legendary'];
@@ -837,19 +838,48 @@ export const SHOP_IDS = PART_IDS.filter((id) => PARTS[id].weight > 0);
 export const hasTag = (id: PartId, tag: PartTag) => PARTS[id].tags.includes(tag);
 
 /**
- * How likely the shop is to show a part of this rarity in this round (times the part's own weight): commons are
- * always there, uncommons from round 2, rares from round 4 and legendaries from round 7, each growing more likely.
+ * The shop's luck, round by round (index 0 is round 1; endless rounds keep the last row). Every offer is rolled as
+ * a cascade: first the legendary chance, and if that misses the rare chance, then the uncommon one; the first that
+ * lands is the offer's rarity, and if none does it is a common. Early on nearly everything is common and a
+ * legendary cannot turn up at all; luck climbs every round, a step more after each boss (rounds 3, 6, 9, 12), and
+ * commons stay at least a third of the shop even in the last round.
  */
-export function rarityWeight(r: Rarity, round: number): number {
-  switch (r) {
-    case 'common': return 1;
-    case 'uncommon': return round < 2 ? 0 : Math.min(1, 0.4 + 0.12 * (round - 2));
-    case 'rare': return round < 4 ? 0 : Math.min(1, 0.25 + 0.1 * (round - 4));
-    case 'legendary': return round < 7 ? 0 : Math.min(0.6, 0.15 + 0.07 * (round - 7));
-  }
+export const RARITY_ODDS: Readonly<Record<Exclude<Rarity, 'common'>, number>>[] = [
+  { legendary: 0, rare: 0.02, uncommon: 0.12 }, // 1
+  { legendary: 0, rare: 0.03, uncommon: 0.15 },
+  { legendary: 0, rare: 0.04, uncommon: 0.18 }, // boss
+  { legendary: 0.005, rare: 0.07, uncommon: 0.25 },
+  { legendary: 0.01, rare: 0.09, uncommon: 0.28 }, // 5
+  { legendary: 0.015, rare: 0.11, uncommon: 0.31 }, // boss
+  { legendary: 0.025, rare: 0.13, uncommon: 0.34 },
+  { legendary: 0.035, rare: 0.15, uncommon: 0.36 },
+  { legendary: 0.045, rare: 0.17, uncommon: 0.38 }, // boss
+  { legendary: 0.06, rare: 0.19, uncommon: 0.40 }, // 10
+  { legendary: 0.07, rare: 0.21, uncommon: 0.41 },
+  { legendary: 0.08, rare: 0.22, uncommon: 0.42 }, // boss
+  { legendary: 0.09, rare: 0.24, uncommon: 0.43 },
+  { legendary: 0.10, rare: 0.25, uncommon: 0.44 },
+  { legendary: 0.12, rare: 0.26, uncommon: 0.45 }, // 15: the final boss
+];
+/** The order the cascade rolls in: the rarest first. */
+export const CASCADE: Rarity[] = ['legendary', 'rare', 'uncommon', 'common'];
+
+/** This round's row of RARITY_ODDS. */
+export function rarityOdds(round: number) {
+  return RARITY_ODDS[Math.max(0, Math.min(RARITY_ODDS.length, Math.floor(round)) - 1)];
 }
-/** The round a rarity first shows up in the shop. */
-export const RARITY_FROM: Record<Rarity, number> = { common: 1, uncommon: 2, rare: 4, legendary: 7 };
+
+/** The chance that one shop offer comes out at this rarity in this round: what the cascade adds up to. */
+export function rarityChance(r: Rarity, round: number): number {
+  const odds = rarityOdds(round);
+  let miss = 1;
+  for (const c of CASCADE) {
+    const hit = c === 'common' ? 1 : odds[c];
+    if (c === r) return miss * hit;
+    miss *= 1 - hit;
+  }
+  return 0;
+}
 
 // ---- instances ----------------------------------------------------------------------------------------
 
