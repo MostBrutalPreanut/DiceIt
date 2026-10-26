@@ -312,7 +312,7 @@ export const PARTS: Record<PartId, PartDef> = {
   trophy: {
     id: 'trophy', name: 'Trophy Cup', blurb: 'Polish it every round. It never forgets.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 3,
     shape: { type: 'circle', r: 1.05 }, rotatable: false, kickUnit: 9,
-    recipe: { points: 20, per: 'hit', keep: { per: 0.03, cap: 4 }, perLevel: 5 }, dials: [kickDial(1.5)],
+    recipe: { points: 20, per: 'hit', keep: { per: 0.04, cap: 5 }, perLevel: 5 }, dials: [kickDial(1.5)],
   },
   piggy: {
     id: 'piggy', name: 'Piggy Bank', blurb: 'Feed it coins. Then smash it.', kind: 'target', rarity: 'uncommon', tags: ['target', 'money'], cost: 5, weight: 2,
@@ -386,17 +386,17 @@ export const PARTS: Record<PartId, PartDef> = {
   golden: {
     id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold. Pays in points, Mult and cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 2,
     shape: { type: 'circle', r: 1.5 }, rotatable: false, kickUnit: 15,
-    recipe: { points: 120, per: 'hit', xmult: 1.06, xmultCap: 3, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
+    recipe: { points: 120, per: 'hit', xmult: 1.05, xmultCap: 3, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
   },
   fame: {
     id: 'fame', name: 'Hall of Fame', blurb: 'Every star of your table gets a plaque. The more stars, the louder the crowd.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 2,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 150, per: 'pass', typeX: 0.08, perBall: 1, perLevel: 40 }, dials: [],
+    recipe: { points: 150, per: 'pass', typeX: 0.1, perBall: 1, perLevel: 40 }, dials: [],
   },
   disco: {
-    id: 'disco', name: 'Disco Ball', blurb: 'Once a ball: the lamps go wild and the Mult doubles.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
+    id: 'disco', name: 'Disco Ball', blurb: 'Once a ball: the lamps go wild and the Mult goes through the roof.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 200, per: 'pass', xmult: 2, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
+    recipe: { points: 200, per: 'pass', xmult: 2.5, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
   },
   goal: {
     id: 'goal', name: 'Goal!', blurb: 'A tiny football goal with a very serious goalie.', kind: 'goal', rarity: 'legendary', tags: ['target'], cost: 12, weight: 2,
@@ -585,7 +585,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
   if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
   if (r.typeX) lines.push({ tag: 'mult', text: `The first time a ball rolls over it each ball: your Mult ×${xg(1 + r.typeX)} for every different part type on your table (Big Boi too)${ctx.types ? `, ×${num(Math.round((1 + (r.typeX) * mods.multGain) ** ctx.types * 100) / 100)} now` : ''}.` });
-  if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Doubles your Mult (×${xg(r.xmult)}) the first time a ball rolls over it each ball.` });
+  if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} the first time a ball rolls over it each ball.` });
   if (r.money && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.money} per ${per}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
   if (r.moneyEvery && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $1 every ${r.moneyEvery.n} hits, up to $${r.moneyEvery.cap} a round.` });
   if (r.variety) lines.push({ tag: 'grow', text: `+${f(r.variety)} for every different part type this ball has hit.` });

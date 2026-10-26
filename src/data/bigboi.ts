@@ -25,7 +25,7 @@ export interface BigBoiDef {
 }
 
 /** The Cook: the part he lights pays this many times on its next hit, then goes dark. */
-export const ORDER = { x: 3 } as const;
+export const ORDER = { x: 4 } as const;
 /** The Dragon: armour plates at the start of every ball, how many more grow back each time it is knocked off, and the jackpot (times his base points). */
 export const DRAGON = { armour: 5, regrow: 1, jackpotX: 10 } as const;
 
@@ -38,7 +38,7 @@ export const BIG_BOIS: Record<BigBoiId, BigBoiDef> = {
   cook: {
     id: 'cook', machine: 'diner', title: 'The Cook', ability: 'Order Up!',
     blurb: 'Calls an order. Fill it and he gets generous.',
-    recipe: { points: 30, per: 'hit', perLevel: 8 },
+    recipe: { points: 40, per: 'hit', perLevel: 10 },
   },
   dragon: {
     id: 'dragon', machine: 'castle', title: 'The Dragon', ability: 'Siege',

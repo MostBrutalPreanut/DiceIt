@@ -18,22 +18,22 @@ function clearRound(g: Game, mult = 1) {
 }
 
 describe('Mult that is kept from round to round', () => {
-  it('a Trophy Cup keeps +0.03 Mult a hit for the rest of the run: every ball after starts that much higher', () => {
+  it('a Trophy Cup keeps +0.04 Mult a hit for the rest of the run: every ball after starts that much higher', () => {
     const g = new Game();
     const cup = makePart('trophy', 50, 12, 28, true);
     g.layout.parts.push(cup);
     g.startRound();
     for (let i = 0; i < 10; i++) g.scorer.consume(hit(50));
-    expect(cup.polish).toBeCloseTo(0.3);
-    expect(g.keptMult).toBeCloseTo(0.3);
+    expect(cup.polish).toBeCloseTo(0.4);
+    expect(g.keptMult).toBeCloseTo(0.4);
     g.toWorkshop();
     g.startRound();
-    expect(g.scorer.mult).toBeCloseTo(1.3);
+    expect(g.scorer.mult).toBeCloseTo(1.4);
   });
 
   it('a Trophy Cup stops at its cap, and the polish goes with the cup', () => {
     const g = new Game();
-    const cup: PartInstance = { ...makePart('trophy', 50, 12, 28, true), polish: 3.99 };
+    const cup: PartInstance = { ...makePart('trophy', 50, 12, 28, true), polish: 4.99 };
     g.layout.parts.push(cup);
     g.startRound();
     g.scorer.consume(hit(50));
@@ -151,14 +151,14 @@ describe('Power Plate', () => {
 });
 
 describe('Hall of Fame', () => {
-  it('once a ball, multiplies the Mult by ×1.08 for every different part type on the table', async () => {
+  it('once a ball, multiplies the Mult by ×1.1 for every different part type on the table', async () => {
     const { Scorer } = await import('../src/game/scoring');
     const parts = [makePart('fame', 1, 12, 30, true), makePart('pop', 2, 6, 30, true), makePart('pop', 3, 18, 30, true), makePart('lane', 4, 12, 40, true)];
     const s = new Scorer(1e9, () => parts);
     s.startBall();
     const e = s.consume(hit(1))[0];
-    expect(e.label).toBe(`MULT x${(1.08 ** 3).toFixed(2)}`); // fame, pop and lane
-    expect(s.mult).toBeCloseTo(1.08 ** 3, 2);
+    expect(e.label).toBe(`MULT x${(1.1 ** 3).toFixed(2)}`); // fame, pop and lane
+    expect(s.mult).toBeCloseTo(1.1 ** 3, 2);
     expect(s.consume(hit(1))).toEqual([]); // once a ball
     s.startBall();
     expect(s.consume(hit(1))[0].kind).toBe('bonus');

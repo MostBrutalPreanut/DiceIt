@@ -179,15 +179,15 @@ describe('the new parts', () => {
     const s = scorer([makePart('golden', 1, 6, 30, true)]);
     const ev = Array.from({ length: 10 }, () => s.consume(hit(1))[0]);
     expect(ev.map((e) => e.money)).toEqual([0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-    expect(s.mult).toBeCloseTo(1.06 ** 10, 1);
+    expect(s.mult).toBeCloseTo(1.05 ** 10, 1);
   });
 
-  it('a Disco Ball doubles the Mult and lights every Lamp, once a ball', () => {
+  it('a Disco Ball multiplies the Mult by 2.5 and lights every Lamp, once a ball', () => {
     const parts = [makePart('disco', 1, 6, 30, true), makePart('lamp', 2, 12, 30, true)];
     const s = scorer(parts);
     const e = s.consume(hit(1))[0];
     expect(e.base).toBe(200);
-    expect(s.mult).toBeCloseTo(2);
+    expect(s.mult).toBeCloseTo(2.5);
     expect(s.isLit(2)).toBe(true);
     expect(s.consume(hit(1))).toEqual([]);
     s.startBall();
@@ -233,15 +233,15 @@ describe('Big Boi depends on the machine', () => {
     expect(s.mult).toBeCloseTo(1.15);
   });
 
-  it('the Cook calls an order when he is hit: one part lights up, its next hit pays triple, then it goes dark', () => {
+  it('the Cook calls an order when he is hit: one part lights up, its next hit pays ×4, then it goes dark', () => {
     const s = scorer(table(), { machine: 'diner', seed: 3 });
     expect(s.order).toBeNull(); // no order until he is hit
-    expect(s.consume(hit(10))[0].base).toBe(30);
+    expect(s.consume(hit(10))[0].base).toBe(40);
     const lit = s.order!;
     expect([1, 2]).toContain(lit);
     const other = lit === 1 ? 2 : 1;
     expect(s.consume(hit(other))[0].base).toBe(20); // the other Pop is not the order
-    expect(s.consume(hit(lit))[0].base).toBe(63); // (100 + 5 grown) x3
+    expect(s.consume(hit(lit))[0].base).toBe(84); // (20 + 1 grown) x4
     expect(s.order).toBeNull();
     expect(s.consume(hit(lit))[0].base).toBe(22); // once only
     expect(s.mult).toBe(1); // no Mult from orders
