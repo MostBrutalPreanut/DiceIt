@@ -896,9 +896,10 @@ async function main() {
     // every part has its own voice; a set or a level-up gets a fanfare and a shocked Big Boi
     if (s.kind === 'bonus') { audio.bonus(s.def, s.label, game.placed.some((p) => p.def === 'strip')); say(s.label ?? 'BONUS!'); renderer.onBigMoment(); renderer.bigBoiMood('shocked', 1.6); }
     else if (s.zap) audio.zap(); // however many parts one coil zaps, one crackle
+    else if (s.spark) audio.tick(); // a spark's touch: a tick, whatever it hit
     else audio.hit(s.def, s.multAfter, s);
-    // while you play, the display flashes every hit (a zap rides along with the hit that made it)
-    if (s.kind === 'hit' && !s.zap && game.mode === 'round') renderer.pop(`+${fmt(s.points)}`);
+    // while you play, the display flashes every hit (a zap rides along with the hit that made it, and sparks are too many)
+    if (s.kind === 'hit' && !s.zap && !s.spark && game.mode === 'round') renderer.pop(`+${fmt(s.points)}`);
     const band = Math.floor(s.multAfter);
     if (band > lastMultBand) { sayKey('mult', { n: band }); renderer.bigBoiMood('shocked', 1.4); }
     lastMultBand = band;

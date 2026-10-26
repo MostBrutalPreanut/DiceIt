@@ -2,9 +2,9 @@ import { Application, Container, Graphics, Rectangle, Sprite, Texture, type Text
 import { dialValue, footprint, gemFits, isInlay, lampStats, LEVEL_RADIUS, PARTS, SMALL_FLIPPER, type PartId, type PartInstance } from '../data/parts';
 import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
-import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, FLIPPER_REST, TABLE_W } from '../sim/constants';
+import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, FLIPPER_REST, SPARK_R, TABLE_W } from '../sim/constants';
 import { FLIPPER_PIVOTS, ledgeSeg } from '../sim/table';
-import { flat, label, P, Prop, ribbon, unP, type Pt, type View } from './draw';
+import { flat, label, P, Prop, ribbon, star, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
 import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
 import { DotMatrix } from './dmd';
@@ -35,6 +35,16 @@ const RANK_COLOURS = ['#dfe6ee', '#ffd23f', '#8ff0ff'] as const;
 /** Zaps: how long an arc of lightning stays on screen, and how many are drawn in one frame (the score counts them all). */
 const ARC_LIFE = 0.22;
 const ARCS_DRAWN = 12;
+/** A Firecracker's rocket flies to the top of the table, where its sparks burst as it lands. */
+const ROCKET_FLIGHT = PARTS.firecracker.recipe.rocket!.delay;
+const ROCKET_TOP = { x: 12, y: 45 };
+/**
+ * The effects budget (borrowed-parts §7): when frames run long for a while the extras go, cheapest-to-lose first.
+ * Strain 1 (and low graphics) drops the sparks' ghosts and floor glow; strain 2 also draws arcs straight and fewer of them. A frame
+ * time (ms, smoothed) over UP raises it after a second; one under DOWN for three seconds lowers it again.
+ */
+const STRAIN_UP = 22;
+const STRAIN_DOWN = 17.5;
 /** A cheap repeatable 0..1 noise for the lightning's zigzag. */
 const jit = (a: number, b: number, c: number) => { const s = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453; return s - Math.floor(s); };
 /** k is quantised so the baked textures can be shared between frames of the tip animation. */
@@ -66,6 +76,20 @@ export class Renderer {
   /** Laser Turret beams and the shockwave rings of blasts and booms, for a moment each. */
   private beams: { x1: number; y1: number; x2: number; y2: number; age: number }[] = [];
   private rings: { x: number; y: number; r: number; age: number; color: string }[] = [];
+  /** Firecracker rockets on their way up. */
+  private rockets: { x: number; y: number; age: number; smoke: number }[] = [];
+  /** Sparks: pooled sprites (halo, white-hot core and two ghosts behind each) and each spark's last few spots. */
+  private sparkLayer = new Container();
+  private sparkPool: Sprite[] = [];
+  private sparkTrails = new Map<number, { x: number; y: number }[]>();
+  private dotTex!: Texture;
+  /** A spark itself: a four-point star sticker in the theme's spark colour (baked per theme). */
+  private sparkTex: Texture | null = null;
+  /** How strained the frame rate is (0, 1 or 2), from the smoothed frame time; see STRAIN_UP. */
+  strain = 0;
+  private low = false;
+  private frameMs = 16.7;
+  private strainClock = 0;
   private tiltLayer = new Container();
   particles!: Particles;
   dmd!: DotMatrix;
@@ -119,10 +143,11 @@ export class Renderer {
     this.partLayer.sortableChildren = true;
     this.particles = new Particles(this.app.renderer, this.theme);
     this.dmd = new DotMatrix(this.theme);
-    this.machine.addChild(this.staticSprite, this.dmd.view, this.glowLayer, this.floorFx, this.partLayer, this.ballG, this.particles.layer, this.tagLayer, this.topG);
+    this.machine.addChild(this.staticSprite, this.dmd.view, this.glowLayer, this.floorFx, this.partLayer, this.ballG, this.sparkLayer, this.particles.layer, this.tagLayer, this.topG);
     this.world.addChild(this.machine);
     this.app.stage.addChild(this.world, this.tiltLayer);
     this.glowTex = makeGlowTexture();
+    this.dotTex = makeDotTexture();
     this.partLayer.addChild(this.plungerG);
     this.layout();
     // Pixi only follows window resizes on its own; the stage can also change size with the page (the score dock)
@@ -132,6 +157,8 @@ export class Renderer {
   setTheme(t: Theme) {
     this.theme = t;
     this.flush();
+    this.sparkTex?.destroy(true);
+    this.sparkTex = null;
     this.particles.bake(t);
     this.dmd.setTheme(t);
     for (const tag of this.tags.values()) tag.c.destroy({ children: true });
@@ -146,6 +173,7 @@ export class Renderer {
 
   /** Graphics quality (settings): low draws at 1x with no particle debris, smoke or glow; high is the full look. */
   setQuality(low: boolean) {
+    this.low = low;
     this.particles.lite = low;
     this.glowLayer.visible = !low;
     const res = low ? 1 : Math.min(window.devicePixelRatio || 1, 2);
@@ -243,6 +271,17 @@ export class Renderer {
       if (this.rings.length > 8) this.rings.shift();
       if (ev.def === 'keg') { this.particles.debris(ev.x, ev.y, 10, 1.3); this.particles.smokeAt(ev.x, ev.y + 0.2, 2.2, 1.4); this.particles.puff(ev.x, ev.y, 0.4, 2); }
       if (!this.calm) this.trauma = Math.min(1, this.trauma + (ev.def === 'keg' ? 0.5 : 0.3));
+    }
+    if (ev.rocket) {
+      this.rockets.push({ x: ev.rocket.x, y: ev.rocket.y, age: 0, smoke: 0 });
+      this.particles.puff(ev.x, ev.y, 0.3, 1.2);
+      this.particles.smokeAt(ev.x, ev.y + 0.2, 1.4);
+    }
+    if (ev.spark) {
+      // a spark's hit: a flash and a small number, no debris and no shake (there can be a lot of them)
+      this.particles.sparkle(ev.x + (Math.random() - 0.5) * 0.6, ev.y + (Math.random() - 0.5) * 0.4, 0.6, 0.5, false, true);
+      this.particles.sticker(ev.points.toLocaleString('en-US'), '', roleFill(t, 'sparkler'), ev.x, ev.y, 1.2, 0.5, ev.points);
+      return;
     }
     if (ev.zap) {
       // a zap: a crackle of sparks on the part (and an arc of lightning from a coil); no debris, no shake (there can be many)
@@ -347,6 +386,7 @@ export class Renderer {
 
   draw(game: Game, dt: number, st: DrawState) {
     this.time += dt;
+    this.updateStrain(dt);
     // the part cache is bounded; it is only ever emptied between frames, never while sprites are being assigned
     if (this.cache.size > 1600) { for (const c of this.cache.values()) c.tex.destroy(true); this.cache.clear(); }
     const qk = quantK(this.k);
@@ -379,6 +419,8 @@ export class Renderer {
     this.drawFlippers(game);
     this.drawPlunger(game);
     this.drawBalls(game);
+    this.drawSparks(game);
+    this.drawRockets(dt);
     this.drawArcs(dt);
     this.drawBeams(dt);
     this.drawRings(dt);
@@ -445,6 +487,9 @@ export class Renderer {
       case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': case 'trophy': case 'tesla': case 'gong': return { hit: pulse > 0.35 };
       case 'keg': { const k = game.scorer.kegState(p.uid, game.sim.time); return { hit: pulse > 0.35, lit: !tilted && k === 'lit', armed: k !== 'spent' }; }
       case 'laser': return { hit: pulse > 0.35, lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'sparkler': return { hit: pulse > 0.35, lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'rocks': return { hit: pulse > 0.35, seg: game.scorer.rocksOf(p) };
+      case 'firecracker': return { hit: pulse > 0.35, armed: !game.scorer.rocketSpent(p) };
       case 'piggy': return { hit: pulse > 0.35, seg: game.scorer.piggies.get(p.uid) ?? 0 };
       case 'xlane': return { lit: !tilted && !game.mods.lightsOut && !game.scorer.coolingDown(p.uid, game.sim.time) };
       case 'fame': return { lit: !tilted && !game.mods.lightsOut && !this.discoFired(game, p.uid) };
@@ -629,6 +674,91 @@ export class Renderer {
     mv.sprite.zIndex = -at.y * 100 + 2;
   }
 
+  /** Smoothed frame time drives the strain level (see STRAIN_UP); a paused frame (dt 0) says nothing. */
+  private updateStrain(dt: number) {
+    if (dt <= 0) return;
+    this.frameMs += (dt * 1000 - this.frameMs) * 0.1;
+    if (this.frameMs > STRAIN_UP && this.strain < 2) {
+      this.strainClock += dt;
+      if (this.strainClock > 1) { this.strain++; this.strainClock = 0; this.frameMs = 16.7; }
+    } else if (this.frameMs < STRAIN_DOWN && this.strain > 0) {
+      this.strainClock += dt;
+      if (this.strainClock > 3) { this.strain--; this.strainClock = 0; }
+    } else this.strainClock = 0;
+  }
+
+  /**
+   * Sparks: a halo in the spark colour round a white-hot core, two fainter ghosts on the way it came, and a warm
+   * spot on the floor; all pooled sprites, no Graphics. As a spark fades it shrinks and dims.
+   */
+  private drawSparks(game: Game) {
+    const v = this.view, col = num(this.theme.role.sparkler), sparks = game.sim.sparkStates();
+    const extras = this.strain < 1 && !this.calm && !this.low;
+    let used = 0;
+    const sprite = (tex: Texture, x: number, y: number, d: number, tint: number, alpha: number) => {
+      let s = this.sparkPool[used++];
+      if (!s) { s = new Sprite(tex); s.anchor.set(0.5); this.sparkLayer.addChild(s); this.sparkPool.push(s); }
+      s.texture = tex;
+      s.rotation = 0;
+      s.visible = true;
+      const [X, Y] = P(v, x, y, SPARK_R);
+      s.position.set(X, Y);
+      s.width = s.height = d;
+      s.tint = tint;
+      s.alpha = alpha;
+    };
+    const live = new Set<number>();
+    for (const sp of sparks) {
+      live.add(sp.id);
+      const tr = this.sparkTrails.get(sp.id) ?? [];
+      tr.unshift({ x: sp.x, y: sp.y });
+      if (tr.length > 5) tr.pop();
+      this.sparkTrails.set(sp.id, tr);
+      const d = (0.45 + 0.55 * sp.left) * SPARK_R * 2 * v.S;
+      if (extras) {
+        this.glow(sp.x, sp.y, 1.3, this.theme.role.sparkler, 0.22 * sp.left);
+        if (tr[2]) sprite(this.dotTex, tr[2].x, tr[2].y, d * 0.8, col, 0.45 * sp.left);
+        if (tr[4]) sprite(this.dotTex, tr[4].x, tr[4].y, d * 0.6, col, 0.25 * sp.left);
+      }
+      sprite(this.glowTex, sp.x, sp.y, d * 3, col, 0.7 * sp.left);
+      sprite(this.sparkTex ??= this.bakeSpark(), sp.x, sp.y, d * 1.9, 0xffffff, Math.min(1, 0.25 + sp.left));
+      this.sparkPool[used - 1].rotation = this.calm ? 0 : this.time * 5 + sp.id;
+    }
+    for (let i = used; i < this.sparkPool.length; i++) this.sparkPool[i].visible = false;
+    for (const id of [...this.sparkTrails.keys()]) if (!live.has(id)) this.sparkTrails.delete(id);
+  }
+
+  private bakeSpark(): Texture {
+    const t = this.theme, R = 28, g = new Graphics();
+    g.poly(flat(star(0, 0, R, R * 0.4, 4, -Math.PI / 2))).fill(t.role.sparkler).stroke({ width: 4, color: t.ink, join: 'round' });
+    g.circle(0, 0, R * 0.26).fill(WHITE);
+    const tex = this.app.renderer.generateTexture({ target: g, frame: new Rectangle(-R - 4, -R - 4, R * 2 + 8, R * 2 + 8), resolution: 2, antialias: true });
+    g.destroy();
+    return tex;
+  }
+
+  /** Firecracker rockets: a bright head trailing smoke up the table; at the top they burst (the sim's sparks follow). */
+  private drawRockets(dt: number) {
+    const v = this.view, g = this.topG, col = this.theme.role.firecracker;
+    for (const r of this.rockets) {
+      r.age += dt;
+      const u = Math.min(1, r.age / ROCKET_FLIGHT), e = u * u * (3 - 2 * u);
+      const x = r.x + (ROCKET_TOP.x - r.x) * e + Math.sin(u * 9) * 0.4 * (1 - u), y = r.y + (ROCKET_TOP.y - r.y) * e;
+      const z = 1 + Math.sin(u * Math.PI) * 3;
+      r.smoke -= dt;
+      if (r.smoke <= 0 && !this.calm) { r.smoke = 0.06; this.particles.smokeAt(x, y, z * 0.6, 0.5); }
+      const [X, Y] = P(v, x, y, z);
+      g.circle(X, Y, v.S * 0.5).fill({ color: col, alpha: 0.45 });
+      g.circle(X, Y, v.S * 0.22).fill({ color: WHITE });
+      if (u >= 1) {
+        for (let i = 0; i < 6; i++) this.particles.sparkle(ROCKET_TOP.x + (Math.random() - 0.5) * 8, ROCKET_TOP.y + (Math.random() - 0.5) * 3, 3 + Math.random() * 2, 1.1, i % 2 === 0);
+        this.rings.push({ x: ROCKET_TOP.x, y: ROCKET_TOP.y, r: 5, age: 0, color: col });
+        if (!this.calm) this.trauma = Math.min(1, this.trauma + 0.25);
+      }
+    }
+    this.rockets = this.rockets.filter((r) => r.age < ROCKET_FLIGHT);
+  }
+
   /**
    * Zaps: every live arc as a jagged bolt (a wide glow in the coil's colour under a white core), the newest
    * ARCS_DRAWN only. The zigzag changes 30 times a second; in Calm mode it holds still.
@@ -637,8 +767,9 @@ export class Renderer {
     for (const a of this.arcs) a.age += dt;
     this.arcs = this.arcs.filter((a) => a.age < ARC_LIFE);
     const v = this.view, g = this.topG, col = this.theme.role.tesla, beat = this.calm ? 0 : Math.floor(this.time * 30);
-    for (const a of this.arcs.slice(-ARCS_DRAWN)) {
-      const fade = Math.min(1, Math.max(0, 1 - a.age / ARC_LIFE)), n = 8;
+    const straight = this.strain >= 2;
+    for (const a of this.arcs.slice(straight ? -ARCS_DRAWN / 2 : -ARCS_DRAWN)) {
+      const fade = Math.min(1, Math.max(0, 1 - a.age / ARC_LIFE)), n = straight ? 1 : 8;
       const [x1, y1] = P(v, a.x1, a.y1, 1.9), [x2, y2] = P(v, a.x2, a.y2, 0.9);
       const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
       const amp = Math.min(v.S * 0.7, len * 0.12);
@@ -652,7 +783,7 @@ export class Renderer {
         for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]);
         g.stroke({ width: w, color, alpha, cap: 'round', join: 'round' });
       };
-      line(v.S * 0.38, col, 0.45 * fade);
+      if (!straight) line(v.S * 0.38, col, 0.45 * fade);
       line(v.S * 0.12, WHITE, 0.95 * fade);
     }
   }
@@ -961,6 +1092,20 @@ function dottedLine(g: Graphics, a: Pt, b: Pt, color: string, lw: number) {
 }
 
 /** One soft white radial gradient, tinted per glow: the only soft light on the table. */
+/** A small round dot with a soft rim: a spark's core and its ghosts. */
+function makeDotTexture(): Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const ctx = c.getContext('2d')!;
+  const gr = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.6, 'rgba(255,255,255,1)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gr;
+  ctx.fillRect(0, 0, 32, 32);
+  return Texture.from(c);
+}
+
 function makeGlowTexture(): Texture {
   const c = document.createElement('canvas');
   c.width = c.height = 128;

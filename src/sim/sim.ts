@@ -1,10 +1,11 @@
 import * as B from 'phaser-box2d/dist/PhaserBox2D.js';
-import { dialValue, PARTS, SMALL_FLIPPER, triPoints, type PartInstance } from '../data/parts';
+import { dialValue, PARTS, SMALL_FLIPPER, triPoints, zappable, type PartInstance } from '../data/parts';
 import {
-  BALL_R, BALL_SEARCH_AFTER, BALL_SEARCH_AGAIN, BALL_SEARCH_KICKS, BALL_SPAWN, BALL_TIMEOUT, DT, FLIPPER_LENGTH, FLIPPER_REST,
+  BALL_R, BALL_SEARCH_AFTER, BALL_SEARCH_AGAIN, BALL_SEARCH_KICKS, BALL_SPAWN, BALL_TIMEOUT, CAT, DT, FLIPPER_LENGTH, FLIPPER_REST,
   FLIPPER_SPEED_DOWN, FLIPPER_SPEED_UP, FLIPPER_TORQUE, FLIPPER_UP, LANE_FLOOR_Y, LANE_TOP_Y,
   LANE_WALL_X, MAX_BALL_SPEED, MAX_BALLS, NUDGE_SPEED, NUDGE_TILT, PLUNGE_CHARGE_TIME, PLUNGE_DRIFT,
-  PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, SAVER_WINDOW, SUBSTEPS, TABLE_H, TABLE_W, TILT_DECAY, WALL_RESTITUTION,
+  PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, SAVER_WINDOW, SPARK_CAP, SPARK_FADE, SPARK_GLOW, SPARK_GRAVITY, SPARK_R, SUBSTEPS,
+  TABLE_H, TABLE_W, TILT_DECAY, WALL_RESTITUTION,
 } from './constants';
 import { neutralMods, simModsOf, type SimMods } from '../data/mods';
 import { cloneLayout, type Layout } from './layout';
@@ -23,7 +24,7 @@ export const NO_INPUT: Input = { left: false, right: false, plunge: false, nudge
 /** Physical things that happened. Scoring and presentation both consume this stream; neither feeds back. */
 export type SimEvent =
   /** `zap`: no ball touched it; the scorer made it score (a Tesla Coil's arc, a keg's blast...), `depth` zaps down a chain of kegs. The sim never sends one. */
-  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean; depth?: number }
+  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean; depth?: number; spark?: boolean }
   | { type: 'partRelease'; t: number; uid: number; ballId: number }
   | { type: 'extraBall'; t: number; uid: number; ballId: number }
   | { type: 'ballSaved'; t: number; uid: number; ballId: number }
@@ -47,6 +48,16 @@ export interface BallState {
   held: boolean;
 }
 
+/** A spark, for drawing: where it is, and how much of it is left (1 = glowing, falling to 0 as it fades). */
+export interface SparkState {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  left: number;
+}
+
 export interface FlipperState {
   x: number;
   y: number;
@@ -60,6 +71,17 @@ export interface FlipperState {
 }
 
 type Local = { lx: number; ly: number };
+
+/** A spark in the world: whose ball's hit made it (it scores as that ball), how old it is, when it starts to fade. */
+interface SparkRef {
+  id: number;
+  body: any;
+  parent: number;
+  age: number;
+  fadeAt: number;
+  /** When it last scored on each part: a spark rattling against a part scores once every 0.25 s at most. */
+  hitAt: Map<number, number>;
+}
 interface BallRef {
   id: number;
   body: any;
@@ -160,6 +182,9 @@ export class Sim {
   private worldId: any;
   private ground: any;
   private balls: BallRef[] = [];
+  private sparks: SparkRef[] = [];
+  private sparkById = new Map<number, SparkRef>();
+  private nextSparkId = 1;
   private parts = new Map<number, PartRef>();
   private flippers: FlipperRef[] = [];
   private nextBallId = 1;
@@ -229,6 +254,7 @@ export class Sim {
     this.plungeWasHeld = false;
     this.nudgeCooldown = 0;
     this.nextBallId = 1;
+    this.nextSparkId = 1;
     this.nextFlipperId = 1;
     this.rescues = 0;
     this.sideOn = { L: false, R: false };
@@ -245,6 +271,7 @@ export class Sim {
   }
 
   private teardown() {
+    this.clearSparks();
     for (const b of this.balls) B.b2DestroyBody(b.body);
     for (const p of this.parts.values()) { if (p.mover) B.b2DestroyBody(p.mover.body); if (!p.flipper) B.b2DestroyBody(p.body); }
     for (const f of this.flippers) B.b2DestroyBody(f.body); // also destroys its joint
@@ -306,6 +333,7 @@ export class Sim {
     sd.friction = 0.3;
     sd.restitution = 0.15;
     sd.userData = { kind: 'flipper', side };
+    sd.filter.categoryBits = CAT.flipper; // sparks pass through flippers
     B.b2CreatePolygonShape(body, sd, poly);
 
     const jd = B.b2DefaultRevoluteJointDef();
@@ -523,6 +551,9 @@ export class Sim {
     sd.friction = 0.15;
     sd.restitution = 0.3 + this.mods.ballBounce;
     sd.userData = { kind: 'ball', id };
+    // balls never touch each other (or sparks): only the table and the flippers
+    sd.filter.categoryBits = CAT.ball;
+    sd.filter.maskBits = CAT.table | CAT.flipper;
     B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), BALL_R));
     B.b2Body_SetGravityScale(body, this.mods.ballGravity);
     this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0, preSpeed: 0, searches: 0, searchAt: null, relaunched: false });
@@ -704,7 +735,96 @@ export class Sim {
     this.processContacts();
     this.processSensors();
     this.checkBalls();
+    this.checkSparks();
     return this.events;
+  }
+
+  // ---- sparks ---------------------------------------------------------------------------------
+
+  get sparkCount() {
+    return this.sparks.length;
+  }
+
+  /**
+   * Shoot out `n` sparks, scoring as ball `parent`: from a ring of radius `r` round (x, y), flying outwards, or, with
+   * `top`, falling from across the top of the table (a firework's burst). Over the cap, the oldest start to fade.
+   */
+  addSparks(n: number, x: number, y: number, parent: number, opts: { r?: number; top?: boolean } = {}) {
+    for (let i = 0; i < n; i++) {
+      let px: number, py: number, vx: number, vy: number;
+      if (opts.top) {
+        px = this.rng.range(4, 20); py = this.rng.range(43, 47); vx = this.rng.range(-8, 8); vy = this.rng.range(-6, 6);
+      } else {
+        const a = this.rng.range(0, Math.PI * 2), r = opts.r ?? 1.2, s = this.rng.range(16, 24);
+        px = x + Math.cos(a) * r; py = y + Math.sin(a) * r; vx = Math.cos(a) * s; vy = Math.sin(a) * s + 4;
+      }
+      this.makeSpark(Math.min(LANE_WALL_X - 1, Math.max(1, px)), Math.min(TABLE_H - 2, Math.max(3, py)), vx, vy, parent);
+    }
+  }
+
+  private makeSpark(x: number, y: number, vx: number, vy: number, parent: number) {
+    // over the cap: the oldest glowing spark starts its fade now (nothing is refused); far over it, the oldest goes
+    const glowing = this.sparks.filter((s) => s.age < s.fadeAt);
+    if (glowing.length >= SPARK_CAP) glowing[0].fadeAt = glowing[0].age;
+    if (this.sparks.length >= SPARK_CAP + 12) this.removeSpark(this.sparks[0]);
+    const bd = B.b2DefaultBodyDef();
+    bd.type = B.b2BodyType.b2_dynamicBody;
+    bd.position = V(x, y);
+    bd.linearVelocity = V(vx, vy);
+    bd.linearDamping = 0.1;
+    const body = B.b2CreateBody(this.worldId, bd);
+    const id = this.nextSparkId++;
+    const sd = B.b2DefaultShapeDef();
+    sd.density = 0.5;
+    sd.friction = 0.05;
+    sd.restitution = 0.55;
+    sd.userData = { kind: 'spark', id };
+    sd.filter.categoryBits = CAT.spark;
+    sd.filter.maskBits = CAT.table; // walls and parts: never flippers, balls or other sparks
+    B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), SPARK_R));
+    B.b2Body_SetGravityScale(body, SPARK_GRAVITY);
+    const ref: SparkRef = { id, body, parent, age: 0, fadeAt: SPARK_GLOW, hitAt: new Map() };
+    this.sparks.push(ref);
+    this.sparkById.set(id, ref);
+  }
+
+  private removeSpark(s: SparkRef) {
+    B.b2DestroyBody(s.body);
+    this.sparks = this.sparks.filter((q) => q !== s);
+    this.sparkById.delete(s.id);
+  }
+
+  /** Every spark goes out (a ball ends, the table resets). */
+  clearSparks() {
+    for (const s of this.sparks) B.b2DestroyBody(s.body);
+    this.sparks = [];
+    this.sparkById.clear();
+  }
+
+  sparkStates(): SparkState[] {
+    return this.sparks.map((s) => {
+      const p = B.b2Body_GetPosition(s.body), v = B.b2Body_GetLinearVelocity(s.body);
+      return { id: s.id, x: p.x, y: p.y, vx: v.x, vy: v.y, left: s.age < s.fadeAt ? 1 : Math.max(0, 1 - (s.age - s.fadeAt) / SPARK_FADE) };
+    });
+  }
+
+  /** Sparks age and fade; one that has faded, drained past the flippers or left the table is gone. */
+  private checkSparks() {
+    for (const s of [...this.sparks]) {
+      s.age += this.dt;
+      const p = B.b2Body_GetPosition(s.body);
+      if (s.age >= s.fadeAt + SPARK_FADE || p.y < 2.2 || p.x < -1 || p.x > TABLE_W + 1 || p.y > TABLE_H + 2) this.removeSpark(s);
+    }
+  }
+
+  /** A spark touched a part: it scores as its ball would (on the parts a zap could reach), once every 0.25 s a part. */
+  private sparkHit(id: number, uid: number, extra: { spins?: number; mover?: boolean } = {}) {
+    const s = this.sparkById.get(id), pr = this.parts.get(uid);
+    if (!s || !pr || !zappable(pr.inst.def)) return;
+    if (this.time - (s.hitAt.get(uid) ?? -1) < 0.25) return;
+    s.hitAt.set(uid, this.time);
+    const p = B.b2Body_GetPosition(s.body), v = B.b2Body_GetLinearVelocity(s.body);
+    this.events.push({ type: 'partHit', t: this.time, uid, ballId: s.parent, x: p.x, y: p.y, speed: Math.hypot(v.x, v.y), spark: true, ...extra });
   }
 
   private inLane(b: BallRef) {
@@ -763,6 +883,21 @@ export class Sim {
     for (const { a, b } of pairs) {
       const ball = a?.kind === 'ball' ? a : b?.kind === 'ball' ? b : null;
       const part = a?.kind === 'part' ? a : b?.kind === 'part' ? b : null;
+      const spark = a?.kind === 'spark' ? a : b?.kind === 'spark' ? b : null;
+      if (spark && part) {
+        // a spark bounces off what it hits (a bumper still kicks it) and scores on it; it never drops a target
+        if (part.index === undefined) {
+          const pr = this.parts.get(part.uid), sr = this.sparkById.get(spark.id);
+          const def = pr && PARTS[pr.inst.def];
+          if (pr && sr && def && (def.kind === 'bumper' || def.kind === 'kicker')) {
+            const sp = B.b2Body_GetPosition(sr.body), v = B.b2Body_GetLinearVelocity(sr.body);
+            const dx = sp.x - pr.inst.x, dy = sp.y - pr.inst.y, len = Math.hypot(dx, dy) || 1, k = dialValue(pr.inst, 'kick') * def.kickUnit * 0.6;
+            B.b2Body_SetLinearVelocity(sr.body, V(v.x + (dx / len) * k, v.y + (dy / len) * k));
+          }
+          this.sparkHit(spark.id, part.uid, part.mover ? { mover: true } : {});
+        }
+        continue;
+      }
       if (!ball || !part) continue;
       const pr = this.parts.get(part.uid);
       const br = this.balls.find((x) => x.id === ball.id);
@@ -847,6 +982,16 @@ export class Sim {
       const e = ev.beginEvents[i];
       const s = B.b2Shape_GetUserData(e.sensorShapeId);
       const v = B.b2Shape_GetUserData(e.visitorShapeId);
+      if (s?.kind === 'part' && v?.kind === 'spark' && !s.goal) {
+        // a spark rolls over lanes and lamps and turns spinners (it is never caught or kicked)
+        const pr = this.parts.get(s.uid), sr = this.sparkById.get(v.id);
+        const k = pr && PARTS[pr.inst.def].kind;
+        if (sr && (k === 'rollover' || k === 'lamp' || k === 'spinner')) {
+          const vel = B.b2Body_GetLinearVelocity(sr.body), speed = Math.hypot(vel.x, vel.y);
+          this.sparkHit(v.id, s.uid, k === 'spinner' ? { spins: Math.max(1, Math.min(10, Math.round(speed / 10))) } : {});
+        }
+        continue;
+      }
       if (s?.kind !== 'part' || v?.kind !== 'ball') continue;
       const pr = this.parts.get(s.uid);
       const br = this.balls.find((x) => x.id === v.id);
@@ -1054,6 +1199,7 @@ export class Sim {
       parts.push(`${p.x.toFixed(5)},${p.y.toFixed(5)},${v.x.toFixed(5)},${v.y.toFixed(5)}`);
     }
     for (const f of this.flippers) parts.push(B.b2RevoluteJoint_GetAngle(f.joint).toFixed(5));
+    for (const k of this.sparks) { const p = B.b2Body_GetPosition(k.body); parts.push(`s${p.x.toFixed(5)},${p.y.toFixed(5)}`); }
     return parts.join('|');
   }
 

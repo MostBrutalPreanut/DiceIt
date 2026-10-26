@@ -13,7 +13,7 @@ import { clampLedge, LEDGE } from '../sim/table';
 import { GOALS, GOAL_GROWTH } from '../data/goals';
 import { Rng } from '../sim/rng';
 import { createSim, NO_INPUT, type Input, type Sim, type SimEvent } from '../sim/sim';
-import { Scorer, type ScoreEvent } from './scoring';
+import { Scorer, type ScoreEvent, type SparkBurst } from './scoring';
 
 export type Mode = 'workshop' | 'round' | 'roundEnd' | 'runOver';
 
@@ -183,6 +183,8 @@ export class Game {
   goalOverride: number | null = null;
   /** Every point the run has scored in its rounds (the lose screen's total). */
   runScore = 0;
+  /** Sparks owed to the table later (a Firecracker's burst): when, and what. */
+  private pendingSparks: (SparkBurst & { at: number })[] = [];
   /** The part the last gem from the toolbox went into (the UI selects it). */
   lastInlaid: number | null = null;
   /** Old Bell rings this run: every ball's Mult is ×1.2 for each, for the rest of the run (selling the bell keeps them). */
@@ -346,6 +348,19 @@ export class Game {
 
   private resetSim() {
     this.sim.reset(this.layout, { seed: this.seed++, mods: simModsOf(this.mods), ballClock: this.mods.ballClock });
+    this.pendingSparks = [];
+  }
+
+  /** The scorer asked for sparks: shoot them out now, or keep them for later (a firework bursts after its flight). */
+  private spawnSparks(score: ScoreEvent[]) {
+    for (const s of score) for (const b of s.sparks ?? []) {
+      if (b.delay) this.pendingSparks.push({ ...b, at: this.sim.time + b.delay });
+      else this.sim.addSparks(b.n, b.x, b.y, b.parent, { r: b.r, top: b.top });
+    }
+    if (!this.pendingSparks.length) return;
+    const due = this.pendingSparks.filter((b) => b.at <= this.sim.time);
+    this.pendingSparks = this.pendingSparks.filter((b) => b.at > this.sim.time);
+    for (const b of due) this.sim.addSparks(b.n, b.x, b.y, b.parent, { r: b.r, top: b.top });
   }
 
   get ballsPerRound() {
@@ -1060,6 +1075,7 @@ export class Game {
       if (ev.type === 'tilt') result.game.push({ type: 'tilt' });
     }
     for (const s of this.scorer.tick(this.sim.time)) result.score.push(s); // a Powder Keg's fuse burns down
+    this.spawnSparks(result.score);
     if (!wasGoal && this.scorer.goalReached) result.game.push({ type: 'goal' });
     // a ball ends when the LAST ball on the table is gone (the Ball Printer makes multiball)
     if (this.mode === 'round' && this.sim.ballCount === 0 && !this.sim.awaitingPlunge) this.endBall(false, result);
@@ -1071,6 +1087,8 @@ export class Game {
     if (forced) this.sim.reset(this.layout, { seed: this.seed++, mods: simModsOf(this.mods), ballClock: this.mods.ballClock }); // Cash Out: clear the table at once
     this.ballsLeft--;
     out.push({ type: 'ballEnd', ballsLeft: this.ballsLeft });
+    this.sim.clearSparks(); // a ball's sparks go out with it
+    this.pendingSparks = [];
     if (this.scorer.goalReached || this.ballsLeft <= 0) this.runScore += this.scorer.score;
     if (this.scorer.goalReached) {
       this.payout = this.computePayout();

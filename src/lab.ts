@@ -26,7 +26,10 @@ const STATES: Partial<Record<PartId, [string, PartState][]>> = {
   keg: [['idle', {}], ['lit', { lit: true }], ['spent', { armed: false }]],
   laser: [['ready', {}], ['recharging', { lit: false }]],
   gong: [['idle', {}], ['hit', { hit: true }]],
-  pop: [['idle', {}], ['hit', { hit: true }], ['lvl 2', { level: 2 }], ['max lvl', { level: 5 }], ['ruby', { gem: 'ruby' }], ['gold leaf', { gem: 'goldleaf' }], ['red seal', { gem: 'redseal' }]],
+  sparkler: [['ready', {}], ['hit', { hit: true }], ['recharging', { lit: false }]],
+  firecracker: [['ready', {}], ['hit', { hit: true }], ['spent', { armed: false }]],
+  rocks: [['1 rock', {}], ['3 rocks', { seg: 3 }], ['5 rocks', { seg: 5 }], ['hit', { hit: true, seg: 2 }]],
+  pop: [['idle', {}], ['hit', { hit: true }], ['lvl 2', { level: 2 }], ['max lvl', { level: 5 }], ['ruby', { gem: 'ruby' }], ['gold leaf', { gem: 'goldleaf' }], ['red seal', { gem: 'redseal' }], ['topaz', { gem: 'topaz' }]],
   bell: [['idle', {}], ['hit', { hit: true }], ['2 notches', { seg: 2 }], ['rung', { lit: false, seg: 1 }]],
 };
 const ANGLE: Partial<Record<PartId, number>> = { sling: -0.55, spinner: 0.3, deflector: 0.4, bank: 0.15, vari: 0.2, kickback: -0.5, printer: 0.3 };

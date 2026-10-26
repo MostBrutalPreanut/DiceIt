@@ -9,7 +9,7 @@
  * soft clipper that keeps the peak under 0.9. Under it all a relaxed toybox tune loops, different on each
  * machine: a clockwork music box in the factory, a swung doo-wop combo in the diner, a lute in the castle.
  */
-import type { PartId } from './data/parts';
+import { PARTS, type PartId } from './data/parts';
 
 const PENTATONIC = [0, 2, 4, 7, 9];
 const midi = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
@@ -479,6 +479,9 @@ export class AudioFx {
       case 'keg': if (opts.label === 'FUSE LIT!') this.fuse(); else this.bop(mult, 0.7); break;
       case 'laser': this.bop(mult, 0.9); if (opts.label === 'PEW!') this.pew(); break;
       case 'gong': this.gongHit(false); break;
+      case 'sparkler': this.fizz(); this.bop(mult, 1.1); break;
+      case 'firecracker': if (opts.label === 'WHOOSH!') this.rocket(); else this.bop(mult, 0.85); break;
+      case 'rocks': this.clack(); break;
       case 'bell': if (notes.some((n) => n.endsWith(' toll'))) this.toll(false); else this.bop(mult, 0.95); break;
       case 'uplight': this.levelLight(this.ladder(mult, 1047, 12)); break;
       case 'lamp': this.lampGlow(opts.label); break;
@@ -905,6 +908,38 @@ export class AudioFx {
     const { o, t } = v;
     this.noise(o, t, big ? 0.2 : 0.12, 0.22, { f: 3800, type: 'highpass', trem: [70, 0.9] });
     this.osc(o, t, 110, big ? 0.18 : 0.1, 0.07, { to: 90, attack: 0.002 });
+  }
+
+  /** A spark touching a part: the smallest tick. Many at once stay a patter, not a roar. */
+  tick() {
+    const v = this.voice('tick', 0.25, 0.06, 0.04, 3);
+    if (v) this.osc(v.o, v.t, rand(2600, 3400), 0.05, 0.06, { type: 'triangle', attack: 0.001 });
+  }
+
+  /** Sparkler: a short bright fizz. */
+  private fizz() {
+    const v = this.voice('fizz', 0.4, 0.3, 0.08, 2);
+    if (v) this.noise(v.o, v.t, 0.25, 0.14, { f: 6000, type: 'highpass', trem: [45, 0.7] });
+  }
+
+  /** Firecracker: a rising whistle as the rocket goes up, and the bang when it bursts at the top. */
+  private rocket() {
+    const v = this.voice('rocket', 0.7, 1.4, 0.2, 2, true);
+    if (!v) return;
+    const fly = PARTS.firecracker.recipe.rocket!.delay;
+    this.noise(v.o, v.t, fly, 0.16, { f: 2500, q: 2, attack: 0.05 });
+    this.osc(v.o, v.t, 700, fly, 0.05, { to: 2400, glide: fly, attack: 0.03 });
+    this.noise(v.o, v.t + fly, 0.6, 0.42, { f: 1400, type: 'lowpass' });
+    this.osc(v.o, v.t + fly, 140, 0.35, 0.3, { to: 45, attack: 0.002 });
+    for (let i = 0; i < 6; i++) this.noise(v.o, v.t + fly + 0.1 + i * rand(0.04, 0.08), 0.04, 0.12, { f: rand(3000, 6000), q: 3 });
+  }
+
+  /** Rock Pile: a dry stone clack. */
+  private clack() {
+    const v = this.voice('clack', 0.5, 0.15, 0.04, 3);
+    if (!v) return;
+    this.noise(v.o, v.t, 0.06, 0.3, { f: 1800, q: 4 });
+    this.osc(v.o, v.t, 320, 0.07, 0.12, { to: 180, attack: 0.001 });
   }
 
   /** Powder Keg: the fuse catches and hisses. */

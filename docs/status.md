@@ -9,10 +9,10 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 363 pass, 0 fail (25 files) |
+| Unit tests | 379 pass, 0 fail (26 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
-| Browser smoke test | 104 checks ok, no console errors |
-| Renderer cost (smoke, software GL) | about 2.5 ms a frame |
+| Browser smoke test | 105 checks ok, no console errors |
+| Renderer cost (smoke, software GL) | about 2.6 ms a frame; 3.5 ms with 4 balls, 24 sparks and zaps |
 | Balance run | see the balance section below |
 
 The smoke test's timing checks (physics speed, frame cost, the shop's roll-in wait) fail when the machine is
@@ -63,6 +63,12 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   shop (or the toolbox) onto a part: every part it fits is ringed in its colour while it is in hand, and it shows as
   a small stone at the part's front. **Not measured yet**: the par player and the auto-builder never buy or set a
   gem, so `npm run balance` cannot see them. Emerald on a Disco Ball (×2.5 twice a ball) is the one to watch.
+- **Sparks (step 4)**: little bonus balls that score on what they touch (as the ball that made them), never touch
+  flippers, balls or each other, and fade after 4 s; 24 glow at most. Made by the **Sparkler** (common, $3), the
+  **Rock Pile** (uncommon, $4), the **Firecracker** (rare, $8, a rocket once a ball that rains 6 sparks), the Powder
+  Keg's blast and the **Topaz** gem. Balls no longer collide with each other. Gain per round over a plain Pop Bumper
+  on the power tool's table, mid / late: Sparkler +4,200 / +8,619, Rock Pile +3,017 / +9,986, Firecracker +5,768 /
+  +14,661. The drawing drops its extras when frames run long (see borrowed-parts §7.3).
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

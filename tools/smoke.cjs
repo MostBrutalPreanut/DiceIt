@@ -299,6 +299,19 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   const ms = await page.evaluate(() => window.__pinball.probe(60));
   console.log(`renderer: ${ms.toFixed(2)} ms per frame (CPU side, software GL)`);
   if (ms > 12) fail(`drawing a frame costs too much (${ms.toFixed(1)} ms)`);
+  // the effects budget: four balls, a full load of sparks and a burst of zaps at once (borrowed-parts §7)
+  const busy = await page.evaluate(() => {
+    const P = window.__pinball, g = P.game, sim = g.sim;
+    for (let i = 0; i < 3; i++) sim.addBall(6 + i * 5, 40, (i - 1) * 6, -4);
+    const id = sim.ballStates()[0]?.id ?? 1;
+    sim.addSparks(24, 12, 34, id, { r: 1.5 });
+    const ps = g.placed.filter((p) => p.x !== undefined).slice(0, 8);
+    for (const p of ps) P.renderer.onScore({ uid: p.uid, def: p.def, kind: 'hit', x: p.x, y: p.y, t: sim.time, points: 12, base: 12, notes: [], money: 0, multBefore: 1, multAfter: 1, zap: { x: 12, y: 30, by: 'arc' } });
+    return { balls: sim.ballStates().length, sparks: sim.sparkStates().length, ms: P.probe(60) };
+  });
+  console.log(`renderer, ${busy.balls} balls + ${busy.sparks} sparks + zaps: ${busy.ms.toFixed(2)} ms per frame`);
+  check(busy.sparks >= 24, 'the sparks are on the table');
+  if (busy.ms > 12) fail(`drawing a busy frame costs too much (${busy.ms.toFixed(1)} ms)`);
 
   // visual snapshots: the workshop and a frozen play frame in every theme
   const shots = [];

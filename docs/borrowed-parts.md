@@ -13,7 +13,8 @@ https://claude.ai/artifact/UMabyQfo79xB2nmhH6c1fv (private to its owner; the dec
 
 **Built so far:** Rank Lights and the Old Bell (step 1 of §4), as revised in §6.3; zaps, the Tesla Coil, the Powder Keg, the
 Laser Turret (was Laser Cross: one beam is not a cross) and the Shockwave Gong (step 2); the inlays: Ruby, Garnet,
-Opal, Gold Leaf, Red Seal and Emerald (step 3; the Topaz waits for sparks in step 4). See [balance-plan.md](balance-plan.md) §2 for their numbers.
+Opal, Gold Leaf, Red Seal and Emerald (step 3); sparks with the Sparkler, the Rock Pile, the Firecracker, the
+Powder Keg's spark and the Topaz, plus the effects budget of §7 (step 4, see §7.3). See [balance-plan.md](balance-plan.md) §2 for their numbers.
 
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show
@@ -390,6 +391,26 @@ Low graphics starts at the bottom tier, and Calm mode also turns down shake and 
   10 zaps a second.
 - `npm run physics-report` gets a 24-spark line, and the escape fuzz runs with sparks on.
 - A determinism test: the same seed with sparks gives the same fingerprint, step for step.
+
+### 7.3 As built (step 4)
+- **Physics as planned:** collision categories (a ball's mask is walls, parts and flippers; a spark's is walls and
+  parts), sparks as plain dynamic bodies in their own list, the cap of 24 glowing (36 at most, the oldest goes), and
+  they are in the sim's fingerprint, so the determinism test covers them. A spark scores on parts that can be zapped,
+  each part at most once per 0.25 s per spark, as the ball that made it; it never makes sparks, spends a Hot Shot or
+  pays the Old Bell's toll.
+- **Drawing:** each spark is four pooled sprites (a halo, a four-point star sticker baked per theme that spins, and
+  two soft ghosts at older positions) plus a warm spot on the floor; no Graphics. An ordinary Container, not a
+  ParticleContainer: at 36 sparks the pool is under 150 sprites and Pixi batches them anyway.
+- **Effects:** a spark's hit is a small flash and a small number, no debris and no shake; its points fly as one chip;
+  its sound is one tick (3 at most in 0.35 s); the display does not flash for it. Not built: merging chips across
+  hits within 0.2 s (one chip a hit has been enough so far).
+- **Adaptive quality:** the renderer smooths the real frame interval. Over 22 ms for a second, strain goes up a step:
+  1 drops the spark ghosts and floor spots, 2 also draws lightning straight and half as many arcs. Under 17.5 ms for
+  3 s, it comes back a step. (The plan's 14 / 10 ms would trip at a plain 60 fps: the interval includes the wait
+  for the screen.) Low graphics drops the ghosts and spots from the start; debris and smoke already go with it.
+- **Checks:** the smoke test draws 4 balls, 24 sparks and a burst of zaps and fails above 12 ms a frame (3.5 ms in
+  this container, against 2.6 ms for the plain frame). Not done: the physics report's spark line and running the
+  escape fuzz with sparks.
 
 ## 8. Sources
 

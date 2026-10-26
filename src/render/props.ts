@@ -291,7 +291,7 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.cyl(x, y, 0.14, 1.46, 0.22, metal);
       break;
     }
-    case 'ruby': case 'garnet': case 'opal': case 'goldleaf': case 'redseal': case 'emerald': {
+    case 'ruby': case 'garnet': case 'opal': case 'goldleaf': case 'redseal': case 'emerald': case 'topaz': {
       // a gem as sold: the stone on a little velvet cushion
       shadow(under, v, t, x, y, 0.6, 0.5);
       p.cyl(x, y, 0.62, 0, 0.2, mat(t, mix(t.accent, t.shadeTint, 0.35)));
@@ -351,6 +351,58 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
         g.moveTo(ax, ay).lineTo(bx, by).stroke({ width: v.S * 0.2 + v.lw, color: t.ink, cap: 'round' });
         g.moveTo(ax, ay).lineTo(bx, by).stroke({ width: v.S * 0.2, color: t.rim, cap: 'round' });
       });
+      break;
+    }
+    case 'sparkler': {
+      // a sparkler: a thin wire on a bumper skirt, its tip a fizzing star (dark while it recharges)
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      p.cyl(x, y, r * 0.55, 0.16, 0.22, role);
+      p.cyl(x, y, 0.09, 0.38, 2.3, metal);
+      const ready = st.lit !== false;
+      const fizz = st.hit ? WHITE : ready ? t.role.sparkler : mix(t.role.sparkler, t.ink, 0.5);
+      const [sx, sy] = P(v, x, y, 2.75);
+      p.op((g) => {
+        g.star(sx, sy, 8, S * (ready ? 0.8 : 0.5), S * 0.3).fill(fizz).stroke({ width: v.lw * 0.7, color: t.ink, join: 'round' });
+        if (ready) g.circle(sx, sy, S * 0.17).fill(WHITE);
+      });
+      break;
+    }
+    case 'firecracker': {
+      // a firecracker: a striped rocket on its launch stand, nose up; once it has gone, only the empty stand is left
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      p.cyl(x, y, r * 0.62, 0.16, 0.18, metal);
+      if (st.armed === false) {
+        p.cyl(x, y, r * 0.3, 0.34, 0.3, mat(t, mix(t.metal, t.ink, 0.5)));
+        p.face(ring(x, y, r * 0.22, 14).map(([a, b]) => P(v, a, b, 0.65)), t.ink, { sil: false, line: 0 });
+        break;
+      }
+      const body = st.hit ? mat(t, mix(t.role.firecracker, WHITE, 0.4)) : role, band = mat(t, t.paper);
+      p.cyl(x, y, r * 0.4, 0.34, 1.0, body);
+      p.cyl(x, y, r * 0.4, 1.34, 0.3, band);
+      p.cyl(x, y, r * 0.4, 1.64, 1.0, body);
+      p.face(hull([...ring(x, y, r * 0.4, 18).map(([a, b]) => P(v, a, b, 2.64)), P(v, x, y, 3.8)]), band.base);
+      // the fuse, out of the bottom
+      const [fx0, fy0] = P(v, x + r * 0.3, y, 0.4), [fx1, fy1] = P(v, x + r * 0.62, y - r * 0.2, 0.34);
+      p.op((g) => g.moveTo(fx0, fy0).lineTo(fx1, fy1).stroke({ width: v.lw * 1.2, color: t.ink, cap: 'round' }));
+      break;
+    }
+    case 'rocks': {
+      // a pile of rocks, one boulder per spark it sheds a hit (1 to 5), on a low base
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r, 0, 0.14, mat(t, t.paper));
+      const stone = st.hit ? mat(t, mix(t.role.rocks, WHITE, 0.35)) : role;
+      const spots: [number, number, number, number][] = [[0, -0.1, 0.5, 0.14], [-0.42, 0.15, 0.36, 0.14], [0.42, 0.18, 0.38, 0.14], [0.05, 0.32, 0.34, 0.14], [0, 0.05, 0.3, 1.2]];
+      const n = Math.max(1, Math.min(5, st.seg ?? 1));
+      // farther first, the top stone last
+      const order = spots.slice(0, n).map((q, i) => ({ q, i })).sort((a, b) => (a.i === 4 ? 1 : b.i === 4 ? -1 : b.q[1] - a.q[1]));
+      for (const { q: [dx, dy, k, z0] } of order) {
+        const R = r * k, cx = x + dx * r, cy = y + dy * r;
+        const pts = [0, 0.45, 0.8, 1].flatMap((u) => ring(cx, cy, R * Math.cos((u * Math.PI) / 2.3), 9).map(([a, b]) => P(v, a, b, z0 + u * R * 2.6)));
+        p.face(hull(pts), stone.base);
+        p.face(ring(cx - R * 0.3, cy + R * 0.15, R * 0.3, 7).map(([a, b]) => P(v, a, b, z0 + R * 2.2)), stone.light, { sil: false, line: 0 });
+      }
       break;
     }
     case 'tesla': {

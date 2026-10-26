@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, grownPoints, hasTag, HOT_WINDOW, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, RANK_NAMES, RUBY_X, SEAL_DARK, tierOf, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, grownPoints, hasTag, HOT_WINDOW, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, RANK_NAMES, RUBY_X, SEAL_DARK, tierOf, TOPAZ_CHANCE, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { TABLE_H, TABLE_W } from '../sim/constants';
@@ -37,6 +37,23 @@ export interface ScoreEvent {
   beam?: { x1: number; y1: number; x2: number; y2: number };
   /** A blast or a boom went off here: how far its shockwave reaches. */
   blast?: number;
+  /** Sparks to shoot out (the game hands them to the sim): a burst round the part, or rain from the top later. */
+  sparks?: SparkBurst[];
+  /** A Firecracker's rocket left from here. */
+  rocket?: { x: number; y: number };
+  /** Scored by a spark, not by the ball itself. */
+  spark?: boolean;
+}
+
+/** `n` sparks, scoring as ball `parent`: from a ring of radius `r` round (x, y), or falling from the top, after `delay` s. */
+export interface SparkBurst {
+  n: number;
+  x: number;
+  y: number;
+  r: number;
+  parent: number;
+  top?: boolean;
+  delay?: number;
 }
 
 export type ZapKind = 'arc' | 'blast' | 'beam' | 'boom';
@@ -154,6 +171,8 @@ export class Scorer {
   private zapCool = new Map<number, number>();
   /** Powder Kegs this ball: lit (blowing at `at`) or spent (until `at`), whose ball lit it and how far down a chain it is. */
   private kegs = new Map<number, { at: number; spent: boolean; ballId: number; depth: number }>();
+  /** Rock Piles: the ball's hits on each this round (the pile grows with them). */
+  private rockHits = new Map<number, number>();
   /** Shockwave Gongs: the ball's hits on each. */
   private gongHits = new Map<number, number>();
   /** Per part: how often it fired this round (the Old Bell). */
@@ -221,6 +240,7 @@ export class Scorer {
     this.moneyPaid.clear();
     this.piggies.clear();
     this.firedThisRound.clear();
+    this.rockHits.clear();
     this.jammed.clear();
     if (this.opts.jam === 'mostNumerous') {
       const n = new Map<PartId, number>();
@@ -515,6 +535,7 @@ export class Scorer {
     const inst = this.getParts().find((p) => p.uid === ev.uid && p.placed);
     if (!inst) return [];
     const out = this.hit(inst, ev);
+    if (ev.spark) for (const e of out) if (!e.zap) e.spark = true;
     if (this.pending.length && out.length) out[out.length - 1].label ??= this.pending.shift();
     return out;
   }
@@ -580,7 +601,7 @@ export class Scorer {
       if (gem === 'redseal' && !this.sealing && (this.sealDark.get(inst.uid) ?? -1) > ev.t) return out; // dark after its double
       if (r.perBall && (this.firedThisBall.get(inst.uid) ?? 0) >= r.perBall * (gem === 'emerald' ? 2 : 1)) return out;
       // an Old Bell's first hit of the round pays its toll instead of its points (and earns the round's notch)
-      const toll = r.bell && !ev.zap && !this.firedThisRoundOf(inst.uid) ? r.bell.first : 0; // only the ball itself rings it
+      const toll = r.bell && !ev.zap && !ev.spark && !this.firedThisRoundOf(inst.uid) ? r.bell.first : 0; // only the ball itself rings it
       const pts = toll || r.points;
       const leaf = gem === 'goldleaf' ? this.leafOf(inst) : 0;
       const ruby = gem === 'ruby' ? RUBY_X : 1;
@@ -617,7 +638,7 @@ export class Scorer {
       const lucky = m.luckyEvery > 0 && this.ballHits % m.luckyEvery === 0;
       if (lucky) notes.push(`x${m.luckyX} lucky seven`);
       // a Hot Shot is the ball's: a zap neither spends it nor earns one
-      const hot = ev.zap ? undefined : this.hot.get(ev.ballId);
+      const hot = ev.zap || ev.spark ? undefined : this.hot.get(ev.ballId);
       const hotBonus = hot && hot.until >= ev.t ? hot.bonus : 0;
       if (hot) this.hot.delete(ev.ballId);
       if (hotBonus) notes.push(`+${Math.round(hotBonus * 100)}% hot shot`);
@@ -672,6 +693,26 @@ export class Scorer {
       if (tier && inst.def === 'vari') scored.tier = r.tiers!.indexOf(tier);
       if (hotBonus) scored.hot = true;
       out.push(scored);
+      // sparks: the ball's own hits shoot them out (sparks and zaps never make sparks)
+      if (!ev.zap && !ev.spark) {
+        let n = 0;
+        if (r.sparks && !this.coolingDown(inst.uid, ev.t)) { this.coolUntil.set(inst.uid, ev.t + r.sparks.cooldown * this.coolX(inst)); n += r.sparks.n; }
+        if (r.rocks) {
+          const rocks = this.rocksOf(inst);
+          this.rockHits.set(inst.uid, (this.rockHits.get(inst.uid) ?? 0) + 1);
+          if (!this.coolingDown(inst.uid, ev.t)) { this.coolUntil.set(inst.uid, ev.t + r.rocks.cooldown * this.coolX(inst)); n += rocks; }
+        }
+        if (gem === 'topaz' && this.rng.next() < TOPAZ_CHANCE) n++;
+        const bursts: SparkBurst[] = [];
+        if (n) bursts.push({ n, x: inst.x, y: inst.y, r: footprint(PARTS[inst.def]) + 0.45, parent: ev.ballId });
+        if (r.rocket && (this.firedThisBall.get(inst.uid) ?? 0) < (gem === 'emerald' ? 2 : 1)) {
+          this.firedThisBall.set(inst.uid, (this.firedThisBall.get(inst.uid) ?? 0) + 1);
+          scored.rocket = { x: inst.x, y: inst.y };
+          scored.label ??= 'WHOOSH!';
+          bursts.push({ n: r.rocket.n, x: inst.x, y: inst.y, r: 0, parent: ev.ballId, top: true, delay: r.rocket.delay });
+        }
+        if (bursts.length) scored.sparks = bursts;
+      }
       // a Powder Keg's fuse is lit (by the ball, or by a zap no further down a chain than it allows)
       if (r.keg && !this.kegState(inst.uid, ev.t) && (ev.depth ?? 0) < r.keg.chain) {
         this.kegs.set(inst.uid, { at: ev.t + r.keg.fuse, spent: false, ballId: ev.ballId, depth: ev.depth ?? 0 });
@@ -680,7 +721,7 @@ export class Scorer {
       // the third notch rings the bell: ×1.2 on the Mult of this ball and every ball after it, for the rest of the run
       if (rang) out.push(this.ring(inst, ev));
       // this hit makes the ball hot for its next one
-      if (!ev.zap && r.hot && (r.hotTier === undefined || (tier && r.tiers!.indexOf(tier) >= r.hotTier))) this.hot.set(ev.ballId, { until: ev.t + HOT_WINDOW, bonus: r.hot * m.hotFactor });
+      if (!ev.zap && !ev.spark && r.hot && (r.hotTier === undefined || (tier && r.tiers!.indexOf(tier) >= r.hotTier))) this.hot.set(ev.ballId, { until: ev.t + HOT_WINDOW, bonus: r.hot * m.hotFactor });
       // the Cook calls a new order; the Dragon loses a plate
       if (inst.def === 'mega') out.push(...this.bigBoiHit(inst, ev));
       // a Tesla Coil arcs to the parts nearest it (a zapped coil does not: a zap never arcs on)
@@ -863,11 +904,23 @@ export class Scorer {
       const pts = Math.round(r.blast * modFactor(inst.def, m) * situ.x);
       const e = this.award(inst, t, inst.x, inst.y, 'bonus', pts, 0, 0, [`${pts} blast`, ...situ.notes], 'KABOOM!');
       e.blast = r.radius;
+      if (r.sparks) e.sparks = [{ n: r.sparks, x: inst.x, y: inst.y, r: footprint(PARTS[inst.def]) + 0.45, parent: k.ballId }];
       out.push(e);
       const near = this.zapTargets(inst, t).filter((p) => Math.hypot(p.x - inst.x, p.y - inst.y) <= r.radius + footprint(PARTS[p.def]) * 0.5);
       out.push(...this.zap(inst, near, { t, ballId: k.ballId, speed: 20, depth: k.depth }, 'blast'));
     }
     return out;
+  }
+
+  /** How many rocks a Rock Pile holds now: one, and one more for every few hits this round. */
+  rocksOf(inst: PartInstance): number {
+    const r = this.recipe(inst.def).rocks;
+    return r ? Math.min(r.max, 1 + Math.floor((this.rockHits.get(inst.uid) ?? 0) / r.every)) : 0;
+  }
+
+  /** Has this Firecracker fired its rocket this ball (as often as it can)? */
+  rocketSpent(inst: PartInstance): boolean {
+    return (this.firedThisBall.get(inst.uid) ?? 0) >= (inst.inlay === 'emerald' ? 2 : 1);
   }
 
   /** Is this Powder Keg lit (fuse burning), spent (re-arming), or ready? */

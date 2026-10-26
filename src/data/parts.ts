@@ -4,15 +4,19 @@
  * `describe()`, which turns the same recipe into plain sentences so "how does this thing score?" can
  * never drift from what it actually does.
  */
-import { SAVER_WINDOW } from '../sim/constants';
+import { SAVER_WINDOW, SPARK_FADE, SPARK_GLOW } from '../sim/constants';
 import { neutralMods, type Mods } from './mods';
 import { bigBoiOf, DRAGON, ORDER, type MachineId } from './bigboi';
+
+/** How long a spark lasts, all told. */
+const SPARK_LIFE = SPARK_GLOW + SPARK_FADE;
 
 export type PartId =
   | 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver' | 'vari'
   | 'ding' | 'piggy' | 'magnet' | 'thunder' | 'jackpot' | 'xlane' | 'golden' | 'disco' | 'trophy' | 'plate' | 'fame'
   | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell' | 'tesla' | 'keg' | 'laser' | 'gong'
-  | 'ruby' | 'garnet' | 'emerald' | 'opal' | 'goldleaf' | 'redseal';
+  | 'ruby' | 'garnet' | 'emerald' | 'opal' | 'goldleaf' | 'redseal' | 'topaz'
+  | 'sparkler' | 'firecracker' | 'rocks';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip' | 'inlay';
 
@@ -157,7 +161,13 @@ export interface Recipe {
    * Powder Keg: a hit lights the fuse, and `fuse` seconds later it blows: `blast` points, and every part within
    * `radius` is zapped. A blast lights the other kegs it reaches, at most `chain` kegs deep. Spent for `rearm` s after.
    */
-  keg?: { fuse: number; radius: number; blast: number; chain: number; rearm: number };
+  keg?: { fuse: number; radius: number; blast: number; chain: number; rearm: number; sparks?: number };
+  /** Sparkler: a ball's hit shoots out `n` sparks, then it needs `cooldown` s. */
+  sparks?: { n: number; cooldown: number };
+  /** Rock Pile: a ball's hit drops one spark for every rock in the pile, then it needs `cooldown` s. The pile grows a rock every `every` hits (up to `max`), back to one each round. */
+  rocks?: { every: number; max: number; cooldown: number };
+  /** Firecracker: once a ball, a hit fires a rocket to the top of the table; `delay` s later it bursts into `n` sparks. */
+  rocket?: { n: number; delay: number };
   /** Laser Turret: a hit fires a beam right across the table in a random direction; every part on it is zapped. Dark for `cooldown` s after. */
   beam?: { cooldown: number };
   /** Shockwave Gong: every `every`th hit of a ball booms, and every part on the table is zapped. */
@@ -173,12 +183,14 @@ export const RUBY_X = 1.5;
 export const GARNET_X = 0.5;
 export const LEAF_CAP = 5;
 export const SEAL_DARK = 0.5;
+/** Topaz: the chance that a ball's hit on its part drops a spark. */
+export const TOPAZ_CHANCE = 0.15;
 /** The kinds of part a gem can be set into (never flippers, savers, the Kickback, bars, floor pieces, gems or Big Boi). */
 const INLAY_KINDS = new Set<PartKind>(['bumper', 'kicker', 'spinner', 'rollover', 'lamp', 'target', 'saucer', 'mover', 'goal', 'bank']);
 const FIT_TEXT: Record<GemFit, string> = {
   scoring: 'any part that scores when the ball hits it (not Big Boi)',
-  onceABall: 'a part that fires once a ball (the Disco Ball, Hall of Fame)',
-  cooldown: 'a part that goes dark or recharges (X Lane, Goal!, the Laser Turret, the Powder Keg)',
+  onceABall: 'a part that fires once a ball (the Disco Ball, Hall of Fame, the Firecracker)',
+  cooldown: 'a part that goes dark or recharges (X Lane, Goal!, the Laser Turret, the Powder Keg, the Sparkler, the Rock Pile)',
   growth: 'a part that grows as it is hit (the Pop Bumper, the Duck Gallery, the Trophy Cup)',
 };
 const GEM_TEXT: Partial<Record<PartId, string>> = {
@@ -188,6 +200,7 @@ const GEM_TEXT: Partial<Record<PartId, string>> = {
   opal: 'Every hit on its part counts twice for its growth (the Pops\' growth, the Duck\'s points, the Trophy\'s polish).',
   goldleaf: `Every time its part scores, it is worth +1 more, for the rest of the run (up to +${LEAF_CAP}× its points).`,
   redseal: `Every hit on its part scores twice; then the part is dark for ${SEAL_DARK} s.`,
+  topaz: `Every time the ball hits its part, there is a ${Math.round(TOPAZ_CHANCE * 100)}% chance it drops a spark.`,
 };
 
 /** Is this a gem (an inlay), not a part that goes on the table? */
@@ -199,8 +212,8 @@ export function gemFits(gem: PartId, part: PartId): boolean {
   if (!g || part === 'mega' || !INLAY_KINDS.has(d.kind)) return false;
   switch (g) {
     case 'scoring': return !!r.points;
-    case 'onceABall': return !!r.perBall;
-    case 'cooldown': return !!(r.cooldown || r.beam || r.keg);
+    case 'onceABall': return !!(r.perBall || r.rocket);
+    case 'cooldown': return !!(r.cooldown || r.beam || r.keg || r.sparks || r.rocks);
     case 'growth': return !!(r.grow || r.keep);
   }
 }
@@ -476,7 +489,7 @@ export const PARTS: Record<PartId, PartDef> = {
   keg: {
     id: 'keg', name: 'Powder Keg', blurb: 'Light the fuse. Stand back.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 8,
-    recipe: { points: 10, per: 'hit', keg: { fuse: 2.5, radius: 6, blast: 80, chain: 4, rearm: 6 }, perLevel: 3 }, dials: [kickDial(1.5)],
+    recipe: { points: 10, per: 'hit', keg: { fuse: 2.5, radius: 6, blast: 80, chain: 4, rearm: 6, sparks: 1 }, perLevel: 3 }, dials: [kickDial(1.5)],
   },
   laser: {
     id: 'laser', name: 'Laser Turret', blurb: 'Pew. Somewhere across the table, something scores.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 9, weight: 2,
@@ -518,6 +531,23 @@ export const PARTS: Record<PartId, PartDef> = {
     mover: { travel: 1.7, speed: 3, shape: { type: 'box', hw: 0.75, hh: 0.22 }, y: -0.45, restitution: 0.55 },
   },
 
+  // ---- sparks: parts that shoot out bonus balls ----
+  sparkler: {
+    id: 'sparkler', name: 'Sparkler', blurb: 'Fizz. Every bonk throws a spark.', kind: 'bumper', rarity: 'common', tags: ['bumper'], cost: 3, weight: 2,
+    shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 10,
+    recipe: { points: 8, per: 'hit', sparks: { n: 1, cooldown: 1 }, perLevel: 2 }, dials: [kickDial(2)],
+  },
+  rocks: {
+    id: 'rocks', name: 'Rock Pile', blurb: 'Hit it and it sheds. Hit it more and it grows.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 4, weight: 2,
+    shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 8,
+    recipe: { points: 10, per: 'hit', rocks: { every: 5, max: 5, cooldown: 2 }, perLevel: 3 }, dials: [kickDial(1.5)],
+  },
+  firecracker: {
+    id: 'firecracker', name: 'Firecracker', blurb: 'Once a ball: up it goes, and down come the sparks.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
+    shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 9,
+    recipe: { points: 15, per: 'hit', rocket: { n: 6, delay: 0.7 }, perLevel: 4 }, dials: [kickDial(2)],
+  },
+
   // ---- gems: set into a part on the table (one each), sold from round 7 ----
   ruby: {
     id: 'ruby', name: 'Ruby', blurb: 'Set it in a part. The part gets greedy.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 7,
@@ -537,6 +567,10 @@ export const PARTS: Record<PartId, PartDef> = {
   },
   redseal: {
     id: 'redseal', name: 'Red Seal', blurb: 'Every hit counts twice. Then it needs a breather.', kind: 'inlay', rarity: 'rare', tags: [], cost: 7, weight: 1, from: 7,
+    shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'scoring' }, dials: [],
+  },
+  topaz: {
+    id: 'topaz', name: 'Topaz', blurb: 'Set it in a part. Now and then it sheds a spark.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 5, weight: 1, from: 7,
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'scoring' }, dials: [],
   },
   emerald: {
@@ -759,7 +793,11 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     const at = (k: number) => k * r.zap!.perLevels;
     lines.push({ tag: 'combo', text: `Every hit arcs lightning to the ${r.zap.arcs} nearest parts that score when the ball touches them (one more at level ${at(1)}${r.zap.maxArcs - r.zap.arcs > 1 ? ` and ${at(2)}` : ''}): each one scores as if the ball had hit it. A part can be zapped at most once every ${ZAP_COOLDOWN} s, a zap never arcs on, and saucers, the goal, the Kickback, drop targets and ×Mult parts cannot be zapped.` });
   }
-  if (r.keg) lines.push({ tag: 'combo', text: `A hit lights the fuse. ${r.keg.fuse} s later it blows: ${f(r.keg.blast)} points, and every part within ${r.keg.radius} units is zapped (it scores as if the ball had hit it). A blast lights any other Powder Keg it reaches, up to ${r.keg.chain} kegs in a row. Then it is spent for ${r.keg.rearm} s.` });
+  if (r.sparks || r.rocks || r.rocket || r.keg?.sparks) lines.push({ tag: 'note', text: `A spark: a little bonus ball that flies off, scores on what it touches (as the ball that made it), slips through the flippers and fades after ${SPARK_LIFE} s. It never costs a ball.` });
+  if (r.sparks) lines.push({ tag: 'spawn', text: `Every hit of the ball shoots out ${r.sparks.n === 1 ? 'a spark' : `${r.sparks.n} sparks`}, then it needs ${r.sparks.cooldown} s.` });
+  if (r.rocks) lines.push({ tag: 'spawn', text: `Every hit of the ball drops a spark for each rock in the pile, then it needs ${r.rocks.cooldown} s. The pile grows a rock every ${r.rocks.every} hits (up to ${r.rocks.max}), and is back to one rock each round.` });
+  if (r.rocket) lines.push({ tag: 'spawn', text: `Once a ball, a hit fires a rocket to the top of the table: it bursts into ${r.rocket.n} sparks that rain down.` });
+  if (r.keg) lines.push({ tag: 'combo', text: `A hit lights the fuse. ${r.keg.fuse} s later it blows: ${f(r.keg.blast)} points, ${r.keg.sparks ? `a spark flies out, ` : ''}and every part within ${r.keg.radius} units is zapped (it scores as if the ball had hit it). A blast lights any other Powder Keg it reaches, up to ${r.keg.chain} kegs in a row. Then it is spent for ${r.keg.rearm} s.` });
   if (r.beam) lines.push({ tag: 'combo', text: `Every hit fires a laser beam through it in a random direction, right across the table: every part on the beam is zapped. Then it needs ${r.beam.cooldown} s to recharge.` });
   if (r.boom) lines.push({ tag: 'combo', text: `Every ${r.boom.every}th hit of a ball, it booms: every part on the table is zapped once. Nothing moves.` });
   if (r.keg || r.beam || r.boom) lines.push({ tag: 'note', text: `A part can be zapped at most once every ${ZAP_COOLDOWN} s; saucers, the goal, the Kickback, drop targets and ×Mult parts cannot be zapped.` });
