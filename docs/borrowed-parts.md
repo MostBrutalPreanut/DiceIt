@@ -11,6 +11,10 @@ Effort is for *our* engine, as in [parts-catalog.md](parts-catalog.md): **S** = 
 Every card is on a review page with Approve / Change / Skip and a notes box per part:
 https://claude.ai/artifact/UMabyQfo79xB2nmhH6c1fv (private to its owner; the decisions are saved there).
 
+**The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
+kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show
+each idea as first proposed; their names carry the verdict: ✅ approved, ✏️ changed (§6.3), ❌ skipped.
+
 Nothing here is built. It sits next to the parts catalog (which covers real pinball mechanisms); where an idea is
 already listed there, this doc says so and only adds the new angle.
 
@@ -37,16 +41,21 @@ Most of the ideas below are cheap once these exist. Each is worth building once 
 Stormy Weather), Peglin's Matryorbshka (splits in two on every peg hit), Peggle's Multiball power, Ball x Pit's
 Maggot (enemies burst into baby balls).
 
-A **spark** is a small, short-lived ball: radius about 0.7 of a real ball, lives 6 s or until it drains, never
-costs or saves a ball, and is drawn as a glowing ember so it never reads as a real ball. It scores like a ball but
-shares the parent ball's caps (Mult caps, set caps, the printer cap), so 12 sparks cannot break a cap that one ball
-cannot.
+A **spark** is a small, short-lived glowing ember that a part shoots out. As decided in the review:
 
-- **Physics cost is fine:** the M0 benchmark measured about 0.2 ms a 240 Hz step with 10 balls and 0.17 ms with 20
-  ([m0-physics-findings.md](m0-physics-findings.md)). A table cap of 12 sparks fits.
-- **Ball-vs-ball is only tested up to 4 balls**, so sparks should not collide with each other (a collision filter:
-  the sim has none yet, so this is the M part of the work). They collide with parts, walls and flippers.
-- They do not use the particle pool (capped at 150); they are bodies drawn like balls.
+- **It shoots out, hits stuff, and slowly fades away.** It leaves its source fast, bounces off walls and solid
+  parts and rolls through rollovers, scoring as it goes. It lives 4 s: full glow for 2.5 s, then it shrinks and
+  fades over 1.5 s and is gone. It never costs or saves a ball.
+- **Flippers never touch it**, and neither do balls or other sparks. It falls past the flippers and out, so the
+  player never juggles it; sparks are a show the build makes, not another thing to keep alive.
+- **No ball-vs-ball collision anywhere in the game** (the review's call): balls pass through each other too. That
+  should also cut the multiball pile-ups at the back of a flipper that cost the bot thousands of ball searches.
+- It scores like a ball, but shares the caps of the ball whose hit made it (Mult caps, set caps), so many sparks
+  cannot break a cap that one ball cannot.
+- **What makes sparks:** Sparkler (new, the cheap source, §6.3), Powder Keg, Firecracker, Rock Pile, Splitter,
+  Spider Nest, Marble Jar, Piñata, Insurance Policy, the Whale, the Topaz inlay and the Ritual Altar's Swarm.
+
+How it is simulated and drawn, and what that costs, is §7.
 
 Sparks are the mayhem dial: almost every "rain of balls" idea below is "spawn N sparks".
 
@@ -56,14 +65,14 @@ nearby pegs too), Peggle's Space Blast (blows up nearby pegs), Ballionaire's Tom
 each adjacent copy).
 
 A **zap** scores a part as if the ball had hit it, with no physics: no kick, no ball movement. It counts as a
-hit for growth (Pop Bumpers grow), the Jackpot Scoop's pot, the Ding-Dong Bell's variety and Lucky Seven. Guards:
-a zap never zaps again (no chains, except where a part says so, with a depth cap), and a part can be zapped at
-most once per 0.3 s. Drawn as a lightning arc or a shockwave, so the player sees *why* a far-off part scored.
+hit for growth (Pop Bumpers grow), the Jackpot Scoop's pot, the Ding-Dong Bell's variety and Lucky Seven. Guards (as decided):
+a part can be zapped many times, but **at most once every 0.5 s**; a zap never sets off another zap (no chains,
+except Powder Kegs, 4 deep). Drawn as a lightning arc or a shockwave, so the player sees *why* a far-off part scored.
 
 Zaps are the scaling dial: they are worth more the more parts you own and the closer you pack them, which is
 exactly what a full late board has.
 
-### 2.3 Fixtures: things that go *on* a part
+### 2.3 Fixtures: things that go *on* a part (decided: **inlays only**, one per part, on some parts; no stacks)
 **From:** Ballionaire's **Stackable** trait (Cairn, Spells, Amethyst: placing one next to a copy stacks onto it, and
 the effect scales with the stack) and its **Gems** (Amethyst, Topaz, Garnet, Peridot, Citrine: small pieces that
 power up adjacent triggers). Avengers: Infinity Quest does the same on a real machine: each gem you win is placed
@@ -78,7 +87,7 @@ Two kinds:
 
 Both work on a full board and soak up late money: problems 2 and 3 at once.
 
-### 2.4 Merging
+### 2.4 Merging (❌ skipped in the review)
 **From:** Ball x Pit's **Fusion** (two level-3 balls merge into one that keeps both abilities and frees a slot; the
 wiki counts 7,836 different fused balls) and **Evolution** (fixed recipes), Ultrapool (two of the same ball merge a
 level up, to Level 5; its cocktail bar fuses two different balls), Endless Bounce (drag two placed bumpers together;
@@ -101,74 +110,74 @@ a first guess for the balance tool to tune.
 
 | Part | Borrowed from | What it does here | M | S | L | Rarity, effort |
 |---|---|---|---|---|---|---|
-| **Powder Keg** | Peglin's bomb (the first hit lights the fuse, the second detonates it); Ballionaire's Bombgoblin; Peggle's Space Blast | A barrel. The first hit lights the fuse (sparks fly off it). The next hit, or 3 s later, it **blows**: 80 points, every ball and spark within 6 units is thrown outward, and every part within 6 units is zapped. Then it is gone until the next ball. A blast lights the fuse of any other Keg in range, so a row of them goes off as a chain (up to 4 deep). | ✔✔ | ✔ | ✔ | Rare $8, **M** |
-| **Tesla Coil** | Peggle 2's Uber Volt (Gnorman); Peglin's Ball Lightning | 30 a hit, and every hit arcs lightning to the **2 nearest scoring parts**, which are zapped. Levels add a third and a fourth arc. | ✔✔ | ✔✔ | ✔ | Rare $9, **S** once zaps exist |
-| **Grape Bunch** | Ballionaire's Tomato and Grape Vine (pay once more for each adjacent copy); Clover (4 or more touching turn lucky) | A small bumper, 10 a hit, and it pays again for every Grape Bunch touching it. Four or more in one cluster turn **golden** and pay double. Sold as a pack of 3. | | ✔✔ | | Uncommon $5 (pack), **S** |
-| **Echo Cave** | Ballionaire's Cave (×2 for every other Cave bonked in a row before it); Demon's Tilt's chain meter | A rollover tunnel, 15 a pass, ×2 for every other Echo Cave the ball went through **in a row** with no other part hit in between (×8 at most). A routing puzzle: line them up along one shot. | | ✔✔ | | Uncommon $6, **S** |
-| **Spotlight** | Ballionaire's Whistle (adjacent triggers ×2 until it is bonked) and Candle | Parts within 5 units pay ×1.5 **while it is not hit**. A hit knocks it dark for 10 s. The tension: build round it, then keep the ball off it. | | ✔ | ✔ | Uncommon $6, **S** |
-| **Laser Cross** | Ball x Pit's Holy Laser (damages every enemy in the ball's row and column); Peggle Nights' Electro (lightning from the first peg to the bucket clears its path) | 40 a hit, and every hit fires two beams through it across the whole table, one across and one up and down. Every part a beam crosses is zapped. Cooldown 3 s. | ✔✔ | ✔✔ | ✔ | Rare $9, **S** once zaps exist |
-| **Arc Wire** | Cult of PiN's Chain Lightning (while more than one ball is active, lightning damages everything between the balls) and Teamwork glyph (×1.2 per active ball) | While two or more balls or sparks are in play, lightning links them, and every 0.5 s every part on a line between two balls is zapped. With one ball it does nothing. | ✔✔ | ✔✔ | ✔ | Rare $9, **M** |
-| **Shockwave Gong** | Ultrapool's Tiger (launches every ball) and Tornado; Pinball Storm: Lokanta's Diting (re-bounces every marble); Cult of PiN's Power Nudge | 25 a hit. Every 10th hit it booms: every ball and spark on the table is kicked up the table at once. | ✔✔ | ✔ | | Uncommon $5, **S** |
+| ✅ **Powder Keg** | Peglin's bomb (the first hit lights the fuse, the second detonates it); Ballionaire's Bombgoblin; Peggle's Space Blast | A barrel. The first hit lights the fuse (sparks fly off it). The next hit, or 3 s later, it **blows**: 80 points, every ball and spark within 6 units is thrown outward, and every part within 6 units is zapped. Then it is gone until the next ball. A blast lights the fuse of any other Keg in range, so a row of them goes off as a chain (up to 4 deep). | ✔✔ | ✔ | ✔ | Rare $8, **M** |
+| ✅ **Tesla Coil** | Peggle 2's Uber Volt (Gnorman); Peglin's Ball Lightning | 30 a hit, and every hit arcs lightning to the **2 nearest scoring parts**, which are zapped. Levels add a third and a fourth arc. | ✔✔ | ✔✔ | ✔ | Rare $9, **S** once zaps exist |
+| ✅ **Grape Bunch** | Ballionaire's Tomato and Grape Vine (pay once more for each adjacent copy); Clover (4 or more touching turn lucky) | A small bumper, 10 a hit, and it pays again for every Grape Bunch touching it. Four or more in one cluster turn **golden** and pay double. Sold as a pack of 3. | | ✔✔ | | Uncommon $5 (pack), **S** |
+| ✅ **Echo Cave** | Ballionaire's Cave (×2 for every other Cave bonked in a row before it); Demon's Tilt's chain meter | A rollover tunnel, 15 a pass, ×2 for every other Echo Cave the ball went through **in a row** with no other part hit in between (×8 at most). A routing puzzle: line them up along one shot. | | ✔✔ | | Uncommon $6, **S** |
+| ✅ **Spotlight** | Ballionaire's Whistle (adjacent triggers ×2 until it is bonked) and Candle | Parts within 5 units pay ×1.5 **while it is not hit**. A hit knocks it dark for 10 s. The tension: build round it, then keep the ball off it. | | ✔ | ✔ | Uncommon $6, **S** |
+| ✏️ **Laser Cross** | Ball x Pit's Holy Laser (damages every enemy in the ball's row and column); Peggle Nights' Electro (lightning from the first peg to the bucket clears its path) | 40 a hit, and every hit fires two beams through it across the whole table, one across and one up and down. Every part a beam crosses is zapped. Cooldown 3 s. | ✔✔ | ✔✔ | ✔ | Rare $9, **S** once zaps exist |
+| ❌ **Arc Wire** | Cult of PiN's Chain Lightning (while more than one ball is active, lightning damages everything between the balls) and Teamwork glyph (×1.2 per active ball) | While two or more balls or sparks are in play, lightning links them, and every 0.5 s every part on a line between two balls is zapped. With one ball it does nothing. | ✔✔ | ✔✔ | ✔ | Rare $9, **M** |
+| ✏️ **Shockwave Gong** | Ultrapool's Tiger (launches every ball) and Tornado; Pinball Storm: Lokanta's Diting (re-bounces every marble); Cult of PiN's Power Nudge | 25 a hit. Every 10th hit it booms: every ball and spark on the table is kicked up the table at once. | ✔✔ | ✔ | | Uncommon $5, **S** |
 
 ### 3.2 Rains of balls (sparks)
 
 | Part | Borrowed from | What it does here | M | S | L | Rarity, effort |
 |---|---|---|---|---|---|---|
-| **Firecracker** | Ballionaire's Firecracker (once a drop, a rocket bursts and rains Fire balls); Stormy Weather | Once a ball, a hit fires a rocket to the top of the table. It bursts and rains **6 sparks** across the top. | ✔✔ | ✔ | | Rare $8, **M** (sparks) |
-| **Rock Pile** (stackable) | Ballionaire's Cairn (one Rock ball per Cairn in the stack) and Avalanche | A heap of rocks, 10 a hit, and every hit drops **1 spark per rock in the pile** (cooldown 2 s). Drop another Rock Pile on it to stack it, up to 5. Takes one spot however big it gets. | ✔✔ | ✔✔ | ✔✔ | Uncommon $5, **M** (sparks and stacks) |
-| **Splitter** | Peglin's Matryorbshka; Ballionaire's split-in-half effect | A rollover: the ball splits off **2 sparks** going left and right of it. Dark for 4 s after. | ✔ | ✔ | | Uncommon $6, **S** once sparks exist |
-| **The Whale** | Ballionaire's Whale (holds balls, ejects them all when full and pays per ball) and Dam (holds Water balls, spawns two per held ball) | Swallows every spark that touches it (8 points each). At 8 it **spouts**: 12 sparks out of its blowhole and 300 points. | ✔✔ | ✔ | ✔ | Legendary $12, **M** |
-| **Insurance Policy** (renamed: Cult of PiN has a glyph called Rainy Day Fund) | Ballionaire's Retirement Fund (if a tribute's last drop fails, spawn 10 Coin balls, then destroy itself) | If the **last ball of a round** drains short of the goal, 10 sparks rain from the top, once. Then the part is used up and leaves the table. A comeback, never a crutch. | ✔✔ | | ✔ | Uncommon $5, **S** once sparks exist |
-| **Tulip** | Pachinko's tulip catchers (petals that open and close to widen the catcher) and the payout of balls into the tray | A pocket whose petals open for 3 s whenever a target in the machine is hit. A ball that falls in while it is open pays 60 and spits out **3 sparks**; while it is shut the ball bounces off. | ✔ | ✔ | | Rare $8, **M** |
-| **Spider Nest** | Ball x Pit's Egg Sac (explodes into 2–4 baby balls), Spider Queen (25% chance a hit births an Egg Sac), Catapult | 15 a hit, and each hit has a 25% chance to lay an egg: a spark that bursts into 3 sparks on the first part it hits. | ✔✔ | ✔ | | Rare $8, **M** |
-| **Marble Jar** | Ballz (every orb collected adds a ball to all later volleys); Ball x Pit's Bag Maker (+1 ball slot) | Every 25 hits on it add a marble for the rest of the run (up to 5). Every ball you launch comes with one spark per marble. | ✔ | ✔✔ | ✔✔ | Rare $8, **S** once sparks exist |
+| ✅ **Firecracker** | Ballionaire's Firecracker (once a drop, a rocket bursts and rains Fire balls); Stormy Weather | Once a ball, a hit fires a rocket to the top of the table. It bursts and rains **6 sparks** across the top. | ✔✔ | ✔ | | Rare $8, **M** (sparks) |
+| ✏️ **Rock Pile** (stackable) | Ballionaire's Cairn (one Rock ball per Cairn in the stack) and Avalanche | A heap of rocks, 10 a hit, and every hit drops **1 spark per rock in the pile** (cooldown 2 s). Drop another Rock Pile on it to stack it, up to 5. Takes one spot however big it gets. | ✔✔ | ✔✔ | ✔✔ | Uncommon $5, **M** (sparks and stacks) |
+| ✅ **Splitter** | Peglin's Matryorbshka; Ballionaire's split-in-half effect | A rollover: the ball splits off **2 sparks** going left and right of it. Dark for 4 s after. | ✔ | ✔ | | Uncommon $6, **S** once sparks exist |
+| ✏️ **The Whale** | Ballionaire's Whale (holds balls, ejects them all when full and pays per ball) and Dam (holds Water balls, spawns two per held ball) | Swallows every spark that touches it (8 points each). At 8 it **spouts**: 12 sparks out of its blowhole and 300 points. | ✔✔ | ✔ | ✔ | Legendary $12, **M** |
+| ✅ **Insurance Policy** (renamed: Cult of PiN has a glyph called Rainy Day Fund) | Ballionaire's Retirement Fund (if a tribute's last drop fails, spawn 10 Coin balls, then destroy itself) | If the **last ball of a round** drains short of the goal, 10 sparks rain from the top, once. Then the part is used up and leaves the table. A comeback, never a crutch. | ✔✔ | | ✔ | Uncommon $5, **S** once sparks exist |
+| ❌ **Tulip** | Pachinko's tulip catchers (petals that open and close to widen the catcher) and the payout of balls into the tray | A pocket whose petals open for 3 s whenever a target in the machine is hit. A ball that falls in while it is open pays 60 and spits out **3 sparks**; while it is shut the ball bounces off. | ✔ | ✔ | | Rare $8, **M** |
+| ✅ **Spider Nest** | Ball x Pit's Egg Sac (explodes into 2–4 baby balls), Spider Queen (25% chance a hit births an Egg Sac), Catapult | 15 a hit, and each hit has a 25% chance to lay an egg: a spark that bursts into 3 sparks on the first part it hits. | ✔✔ | ✔ | | Rare $8, **M** |
+| ✅ **Marble Jar** | Ballz (every orb collected adds a ball to all later volleys); Ball x Pit's Bag Maker (+1 ball slot) | Every 25 hits on it add a marble for the rest of the run (up to 5). Every ball you launch comes with one spark per marble. | ✔ | ✔✔ | ✔✔ | Rare $8, **S** once sparks exist |
 
 ### 3.3 The ball itself
 
 | Part | Borrowed from | What it does here | M | S | L | Rarity, effort |
 |---|---|---|---|---|---|---|
-| **Rank Lights** | Pokémon Pinball Ruby & Sapphire (light three lights and the ball steps up to Great, Ultra and Master Ball, ×2, ×3 and ×4, for a while) | A set of 3 rollovers. Light all three and the ball **ranks up**: Silver (every hit pays ×1.5), Gold (×2), Diamond (×3). The ball changes colour and trails glitter. A rank lasts 40 s, and a drain loses it. | ✔ | ✔✔ | ✔✔ | Rare $8 (pack of 3), **S** |
-| **Wrecking Ball** | Peggle 2's Bowlder (Jeffrey: the ball becomes a boulder that smashes through pegs); Peggle's Fireball (burns through pegs) | Once a ball, a hit makes the ball **twice as big and heavy for 6 s**: it knocks drop targets down without bouncing, every bumper hit counts twice, and the table shakes on every hit. | ✔✔ | ✔ | | Legendary $11, **M** (needs a physics check, see §5) |
-| **Broomstick** | Ballionaire's Broom (bonk to ride it: the ball earns 2× and flies to the furthest screen edge) | The ball rides it: it flies in a straight line, ignoring gravity, for 1 s or until it reaches a wall, and every part it passes is zapped at ×2. | ✔✔ | ✔ | | Rare $9, **M** |
-| **Party Hats** (ball hats) | Ballionaire's Hats: Disguise (the ball counts as every ball type), Happy Drama Mask (3×), Captain's Hat (passes to another ball) | A rollover that puts a hat on the ball for the rest of that ball. Three kinds: **Disguise** (every hit counts as every part type, so the Ding-Dong Bell and Hall of Fame see the whole table), **Crown** (points ×2, but the ball's Mult stops growing), **Captain's Hat** (jumps to the next ball that touches this one in multiball). | | ✔ | ✔ | Uncommon $6, **S** |
-| **Gumball Machine** | Twilight Zone's gumball machine (holds three balls; dispenses or receives them during play); real-pinball ball locks; Wonka's Super Locks (kept between games) | A lock: a ball shot into it is held and a new one comes to the plunger at no cost. The **third** lock releases all three at once as a real multiball. | ✔✔ | | ✔ | Rare $9, **M** (the catalog lists the lock) |
-| **Bank Ring** | MASSFALL's HEAT (score builds up unbanked and counts only when you pass a golden bank ring); Demon's Tilt's banked jackpot | With a Bank Ring on the table, 30% of every hit is held back as heat. Roll through the ring to bank it all at ×1.5; a drain loses whatever is unbanked. | | ✔✔ | ✔ | Rare $8, **M** |
-| **Helping Hand** | The Addams Family's Thing Flips (the machine takes over a flipper and tries a shot, about 50–60% success) | A small flipper that flips by itself: when a ball comes near, it aims at the nearest scoring part and fires. It makes the shot about half the time. | ✔ | ✔ | ✔ | Uncommon $7, **M** |
-| **Bullet Time** | Ball x Pit's Timestop (freezes everything for 5–6 s); Peggle's Extreme Fever slow motion **(memory)**; Creature in the Well's Hammer | Once a ball, a hit slows the whole table to half speed for 4 s; every hit in it pays ×2. Slow the clock the sim is fed, never its step size (the tunnelling numbers depend on the step). | ✔✔ | ✔ | | Legendary $11, **M** |
+| ✏️ **Rank Lights** | Pokémon Pinball Ruby & Sapphire (light three lights and the ball steps up to Great, Ultra and Master Ball, ×2, ×3 and ×4, for a while) | A set of 3 rollovers. Light all three and the ball **ranks up**: Silver (every hit pays ×1.5), Gold (×2), Diamond (×3). The ball changes colour and trails glitter. A rank lasts 40 s, and a drain loses it. | ✔ | ✔✔ | ✔✔ | Rare $8 (pack of 3), **S** |
+| ✏️ **Wrecking Ball** | Peggle 2's Bowlder (Jeffrey: the ball becomes a boulder that smashes through pegs); Peggle's Fireball (burns through pegs) | Once a ball, a hit makes the ball **twice as big and heavy for 6 s**: it knocks drop targets down without bouncing, every bumper hit counts twice, and the table shakes on every hit. | ✔✔ | ✔ | | Legendary $11, **M** (needs a physics check, see §5) |
+| ✅ **Broomstick** | Ballionaire's Broom (bonk to ride it: the ball earns 2× and flies to the furthest screen edge) | The ball rides it: it flies in a straight line, ignoring gravity, for 1 s or until it reaches a wall, and every part it passes is zapped at ×2. | ✔✔ | ✔ | | Rare $9, **M** |
+| ❌ **Party Hats** (ball hats) | Ballionaire's Hats: Disguise (the ball counts as every ball type), Happy Drama Mask (3×), Captain's Hat (passes to another ball) | A rollover that puts a hat on the ball for the rest of that ball. Three kinds: **Disguise** (every hit counts as every part type, so the Ding-Dong Bell and Hall of Fame see the whole table), **Crown** (points ×2, but the ball's Mult stops growing), **Captain's Hat** (jumps to the next ball that touches this one in multiball). | | ✔ | ✔ | Uncommon $6, **S** |
+| ✅ **Gumball Machine** | Twilight Zone's gumball machine (holds three balls; dispenses or receives them during play); real-pinball ball locks; Wonka's Super Locks (kept between games) | A lock: a ball shot into it is held and a new one comes to the plunger at no cost. The **third** lock releases all three at once as a real multiball. | ✔✔ | | ✔ | Rare $9, **M** (the catalog lists the lock) |
+| ✅ **Bank Ring** | MASSFALL's HEAT (score builds up unbanked and counts only when you pass a golden bank ring); Demon's Tilt's banked jackpot | With a Bank Ring on the table, 30% of every hit is held back as heat. Roll through the ring to bank it all at ×1.5; a drain loses whatever is unbanked. | | ✔✔ | ✔ | Rare $8, **M** |
+| ✅ **Helping Hand** | The Addams Family's Thing Flips (the machine takes over a flipper and tries a shot, about 50–60% success) | A small flipper that flips by itself: when a ball comes near, it aims at the nearest scoring part and fires. It makes the shot about half the time. | ✔ | ✔ | ✔ | Uncommon $7, **M** |
+| ❌ **Bullet Time** | Ball x Pit's Timestop (freezes everything for 5–6 s); Peggle's Extreme Fever slow motion **(memory)**; Creature in the Well's Hammer | Once a ball, a hit slows the whole table to half speed for 4 s; every hit in it pays ×2. Slow the clock the sim is fed, never its step size (the tunnelling numbers depend on the step). | ✔✔ | ✔ | | Legendary $11, **M** |
 
 ### 3.4 Growth and big set pieces
 
 | Part | Borrowed from | What it does here | M | S | L | Rarity, effort |
 |---|---|---|---|---|---|---|
-| **Piñata** | Ballionaire's Attackables (Cave Troll: defeating it grants a draft; Lich: a boon draft); Peggle Blast's armoured pegs **(memory)**; Cult of PiN's damageable bumpers | Has 40 health; every hit takes 1–4 by impact speed (Vari-Target tiers). At zero it **bursts**: candy confetti, 15 sparks, $5, and a free pick of one of three parts. It comes back the next round with 20 more health. | ✔✔ | ✔ | ✔ | Rare $9, **M** |
-| **Bonsai Bumper** | Ballionaire's Agers (Tree, Cheese and Grape Vine gain +0.1 mult per age) | A bumper, 10 a hit and **+4 for every round it has stayed on the table without being moved**. Moving it resets the count. It pays you for committing to a layout. | | ✔✔ | | Uncommon $5, **S** |
-| **Time Capsule** | Ballionaire's Time Capsule (remove it at age 10 or more for 3 trigger drafts) | Scores nothing. Remove it after **6 rounds** on the table and it pays a **legendary part pick**. Before that, removing it pays nothing. It takes a spot early to pay off late. | | | ✔✔ | Rare $8, **S** |
-| **Free Ball Bucket** | Peggle's moving bucket at the bottom (a ball that lands in it is a free ball) **(memory)** | A small bucket slides back and forth under the flippers. A draining ball that lands in it is returned to the plunger and pays 200. It also adds drain pressure: it takes the space where a lucky bounce would have been. | ✔ | | ✔ | Legendary $11, **M** (a mover below the flippers) |
-| **Wizard Lamp** | Twilight Zone's Lost in the Zone (light all 14 door panels for a six-ball multiball of about 45 s); Pokémon Pinball's bonus stages; Demon's Tilt's rituals that unlock a wizard mode; Monster Bash's Monsters of Rock and Scared Stiff's Spider Mania (collect every award for a 4-ball mode); Metroid Prime Pinball's Artifact Temple | Lights a segment for every **different part type** the ball hits. All lit: **WIZARD MODE**, 30 s of 3-ball multiball, every ×Mult cap lifted, music change and a table-wide light show. Once a round. | ✔✔ | ✔✔ | ✔✔ | Legendary $13, **M** |
-| **Siege Tower** | Godzilla's building (drops floor by floor as it is damaged, changing the shots); Medieval Madness's castle | 5 floors; every 6 hits knock one down (100, 200, 300...), and each floor gone opens shots behind it. Flattened: 3-ball multiball and a 1,000 super jackpot at the rubble. It rebuilds next round one floor taller. Close to the Castle Dragon's Siege: maybe the Factory's or Diner's version instead. | ✔✔ | ✔ | ✔✔ | Legendary $12, **M** |
-| **Magic Trunk** | Theatre of Magic's rotating trunk (four faces: a scoop, a magnet that grabs the ball...) | Turns to a new face every 8 hits: a bumper (30), a scoop (pays 5 for every hit since it opened), a magnet (grabs and throws, +0.25 Mult), a plain wall. | ✔ | ✔ | ✔ | Rare $9, **M** |
-| **Haunted Gallery** | Pokémon Pinball's Gengar stage (10 Gastly bring Haunter, 10 Haunter bring Gengar); Devil's Crush's wandering skeletons; Peggle Blast's gnomes | Ghosts drift across the table, 3 at a time, 20 a pop. 10 popped bring a big ghost (3 hits, 150); 3 big ghosts bring the Boss Ghost (10 hits, 1,000 and ×1.5 Mult). Ghosts are moving sensors, not solid bodies. | ✔✔ | ✔ | ✔ | Rare $9, **M** |
-| **Old Bell** | CloverPit's Ring Bell (1 charge a round; a full 3-segment bar gives Symbols Multiplier +1 for good); Cult of PiN's Level Up glyph (×1.25 Mult for good after each Act) | Gains a notch every round you clear. At 3 notches the next hit rings it: every ball starts at ×1.2 Mult for the rest of the run (it stacks). Then it starts again. A slow ×Mult every run can find (problem 1). | | ✔✔ | ✔✔ | Rare $8, **S** |
-| **Wishing Well** | Yoku's Island Express (bumpers that work only once you deposit enough fruit); Cult of PiN's Financier and Investor glyphs (+Mult and +Base per Mana spent) | 10 a hit. In the workshop throw $1 in (up to $5 a round); every $1 in it adds +3 to its hits and +0.02 Mult a hit, for the rest of the run. A money sink on the board (problem 2). | | ✔ | ✔✔ | Uncommon $4, **S** |
-| **Ice Sculpture** | Cult of PiN's melting glyph (+300 damage, −1 every time a flipper is used, removed at 0) | 250 a hit, and it melts 1 point every time you press a flipper. At 0 it is a puddle and leaves the table. | | | ✔ | Uncommon $5, **S** |
-| **Dish Rack** | Roundguard's pots (every pot broken in a launch smashes in turn at the end, building a break multiplier); real pinball's end-of-ball bonus count-up **(memory)** | Four plates, sold as a set. A hit breaks a plate (20). When the ball drains, every broken plate on the table smashes one by one, each paying 25% more than the last; they come back for the next ball. | ✔ | ✔ | | Uncommon $5 (pack of 4), **S** |
+| ✅ **Piñata** | Ballionaire's Attackables (Cave Troll: defeating it grants a draft; Lich: a boon draft); Peggle Blast's armoured pegs **(memory)**; Cult of PiN's damageable bumpers | Has 40 health; every hit takes 1–4 by impact speed (Vari-Target tiers). At zero it **bursts**: candy confetti, 15 sparks, $5, and a free pick of one of three parts. It comes back the next round with 20 more health. | ✔✔ | ✔ | ✔ | Rare $9, **M** |
+| ✅ **Bonsai Bumper** | Ballionaire's Agers (Tree, Cheese and Grape Vine gain +0.1 mult per age) | A bumper, 10 a hit and **+4 for every round it has stayed on the table without being moved**. Moving it resets the count. It pays you for committing to a layout. | | ✔✔ | | Uncommon $5, **S** |
+| ✅ **Time Capsule** | Ballionaire's Time Capsule (remove it at age 10 or more for 3 trigger drafts) | Scores nothing. Remove it after **6 rounds** on the table and it pays a **legendary part pick**. Before that, removing it pays nothing. It takes a spot early to pay off late. | | | ✔✔ | Rare $8, **S** |
+| ✏️ **Free Ball Bucket** | Peggle's moving bucket at the bottom (a ball that lands in it is a free ball) **(memory)** | A small bucket slides back and forth under the flippers. A draining ball that lands in it is returned to the plunger and pays 200. It also adds drain pressure: it takes the space where a lucky bounce would have been. | ✔ | | ✔ | Legendary $11, **M** (a mover below the flippers) |
+| ✏️ **Wizard Lamp** | Twilight Zone's Lost in the Zone (light all 14 door panels for a six-ball multiball of about 45 s); Pokémon Pinball's bonus stages; Demon's Tilt's rituals that unlock a wizard mode; Monster Bash's Monsters of Rock and Scared Stiff's Spider Mania (collect every award for a 4-ball mode); Metroid Prime Pinball's Artifact Temple | Lights a segment for every **different part type** the ball hits. All lit: **WIZARD MODE**, 30 s of 3-ball multiball, every ×Mult cap lifted, music change and a table-wide light show. Once a round. | ✔✔ | ✔✔ | ✔✔ | Legendary $13, **M** |
+| ❌ **Siege Tower** | Godzilla's building (drops floor by floor as it is damaged, changing the shots); Medieval Madness's castle | 5 floors; every 6 hits knock one down (100, 200, 300...), and each floor gone opens shots behind it. Flattened: 3-ball multiball and a 1,000 super jackpot at the rubble. It rebuilds next round one floor taller. Close to the Castle Dragon's Siege: maybe the Factory's or Diner's version instead. | ✔✔ | ✔ | ✔✔ | Legendary $12, **M** |
+| ✏️ **Magic Trunk** | Theatre of Magic's rotating trunk (four faces: a scoop, a magnet that grabs the ball...) | Turns to a new face every 8 hits: a bumper (30), a scoop (pays 5 for every hit since it opened), a magnet (grabs and throws, +0.25 Mult), a plain wall. | ✔ | ✔ | ✔ | Rare $9, **M** |
+| ❌ **Haunted Gallery** | Pokémon Pinball's Gengar stage (10 Gastly bring Haunter, 10 Haunter bring Gengar); Devil's Crush's wandering skeletons; Peggle Blast's gnomes | Ghosts drift across the table, 3 at a time, 20 a pop. 10 popped bring a big ghost (3 hits, 150); 3 big ghosts bring the Boss Ghost (10 hits, 1,000 and ×1.5 Mult). Ghosts are moving sensors, not solid bodies. | ✔✔ | ✔ | ✔ | Rare $9, **M** |
+| ✏️ **Old Bell** | CloverPit's Ring Bell (1 charge a round; a full 3-segment bar gives Symbols Multiplier +1 for good); Cult of PiN's Level Up glyph (×1.25 Mult for good after each Act) | Gains a notch every round you clear. At 3 notches the next hit rings it: every ball starts at ×1.2 Mult for the rest of the run (it stacks). Then it starts again. A slow ×Mult every run can find (problem 1). | | ✔✔ | ✔✔ | Rare $8, **S** |
+| ✅ **Wishing Well** | Yoku's Island Express (bumpers that work only once you deposit enough fruit); Cult of PiN's Financier and Investor glyphs (+Mult and +Base per Mana spent) | 10 a hit. In the workshop throw $1 in (up to $5 a round); every $1 in it adds +3 to its hits and +0.02 Mult a hit, for the rest of the run. A money sink on the board (problem 2). | | ✔ | ✔✔ | Uncommon $4, **S** |
+| ✅ **Ice Sculpture** | Cult of PiN's melting glyph (+300 damage, −1 every time a flipper is used, removed at 0) | 250 a hit, and it melts 1 point every time you press a flipper. At 0 it is a puddle and leaves the table. | | | ✔ | Uncommon $5, **S** |
+| ❌ **Dish Rack** | Roundguard's pots (every pot broken in a launch smashes in turn at the end, building a break multiplier); real pinball's end-of-ball bonus count-up **(memory)** | Four plates, sold as a set. A hit breaks a plate (20). When the ball drains, every broken plate on the table smashes one by one, each paying 25% more than the last; they come back for the next ball. | ✔ | ✔ | | Uncommon $5 (pack of 4), **S** |
 
 ### 3.5 Modes and table events
 
 | Part | Borrowed from | What it does here | M | S | L | Rarity, effort |
 |---|---|---|---|---|---|---|
-| **Portal Gun** | Rick and Morty (Spooky): spinner hits charge a portal gun; spending it jumps to a random dimension with a rule (3× ramps, 10× lanes, ½ right half, all flippers fire together), and Megaseeds add 5% each; Pirates of the Caribbean's random chapters | Spinner spins charge it (50 to fill). Full, the next hit opens a portal for 20 s with one random rule from a deck of 12, good or bad (lanes ×5, left half ×3, bumpers ×2, slings off, right half ×0.5, both flippers on every button). Each portal you get through leaves +5% to everything for the round. Share the rule code with bosses like Crossed Wires. | ✔ | ✔ | ✔ | Rare $9, **M** |
-| **Ritual Altar** | Cult of PiN's Rituals (missions start table-wide specials: Tempest rains destruction for 10 s, Inferno sets every ball on fire for 20 s, Multiball) and its Altar bumper (hits upgrade a ritual) | Every 8 sets completed anywhere start a 15 s ritual, in turn: Tempest (lightning strikes random parts twice a second), Inferno (every hit also zaps the parts next to it), Swarm (8 sparks). Every 20 hits on the Altar make the next ritual stronger. | ✔✔ | ✔✔ | ✔✔ | Legendary $12, **M** (zaps, sparks) |
-| **Midnight Clock** | FunHouse's clock (shots move it on; at midnight comes multiball); Twilight Zone's clock | Every scoring hit anywhere moves the hands on a minute from 9 PM. At midnight (180 hits) it strikes twelve: 20 s of Midnight Madness, everything ×2 and every lamp flashing. Once a ball. A meter every part feeds, so it scales with the board. | ✔ | ✔✔ | ✔ | Uncommon $6, **S** |
-| **Spider Wheel** | Scared Stiff's spider wheel (the flippers stop it on one of 12 awards; collect all for Spider Mania); Bride of Pin·Bot's skill wheel; Cyclone's mystery wheel; Peggle's Lucky Spin | A scoop that spins a wheel of 8 awards, stopped by the flippers: ×2 for 20 s, $3, print a ball, light every Lamp, +1 Mult, a free reroll, 300 points, or Zilch. All 8 in a run: the next spin is Wheel Mania, 4-ball multiball at ×2. | ✔ | ✔ | ✔ | Rare $8, **M** |
-| **Gremlins** (a run rule, not sold) | Custom Pinball's Glitches (break them for a boon; left standing they raise the quota, cut coins and make rerolls dearer); Peggle Blast's gnomes; PINBOMB's boss parts | From round 7, two gremlins sneak onto the table each round, 5 hits each; a broken one pays $3 and a free reroll. Every gremlin still standing at the end of the round raises the next goal by 5%. | ✔ | | ✔✔ | Rule, **M** |
+| ❌ **Portal Gun** | Rick and Morty (Spooky): spinner hits charge a portal gun; spending it jumps to a random dimension with a rule (3× ramps, 10× lanes, ½ right half, all flippers fire together), and Megaseeds add 5% each; Pirates of the Caribbean's random chapters | Spinner spins charge it (50 to fill). Full, the next hit opens a portal for 20 s with one random rule from a deck of 12, good or bad (lanes ×5, left half ×3, bumpers ×2, slings off, right half ×0.5, both flippers on every button). Each portal you get through leaves +5% to everything for the round. Share the rule code with bosses like Crossed Wires. | ✔ | ✔ | ✔ | Rare $9, **M** |
+| ✏️ **Ritual Altar** | Cult of PiN's Rituals (missions start table-wide specials: Tempest rains destruction for 10 s, Inferno sets every ball on fire for 20 s, Multiball) and its Altar bumper (hits upgrade a ritual) | Every 8 sets completed anywhere start a 15 s ritual, in turn: Tempest (lightning strikes random parts twice a second), Inferno (every hit also zaps the parts next to it), Swarm (8 sparks). Every 20 hits on the Altar make the next ritual stronger. | ✔✔ | ✔✔ | ✔✔ | Legendary $12, **M** (zaps, sparks) |
+| ✏️ **Midnight Clock** | FunHouse's clock (shots move it on; at midnight comes multiball); Twilight Zone's clock | Every scoring hit anywhere moves the hands on a minute from 9 PM. At midnight (180 hits) it strikes twelve: 20 s of Midnight Madness, everything ×2 and every lamp flashing. Once a ball. A meter every part feeds, so it scales with the board. | ✔ | ✔✔ | ✔ | Uncommon $6, **S** |
+| ✅ **Spider Wheel** | Scared Stiff's spider wheel (the flippers stop it on one of 12 awards; collect all for Spider Mania); Bride of Pin·Bot's skill wheel; Cyclone's mystery wheel; Peggle's Lucky Spin | A scoop that spins a wheel of 8 awards, stopped by the flippers: ×2 for 20 s, $3, print a ball, light every Lamp, +1 Mult, a free reroll, 300 points, or Zilch. All 8 in a run: the next spin is Wheel Mania, 4-ball multiball at ×2. | ✔ | ✔ | ✔ | Rare $8, **M** |
+| ✏️ **Gremlins** (a run rule, not sold) | Custom Pinball's Glitches (break them for a boon; left standing they raise the quota, cut coins and make rerolls dearer); Peggle Blast's gnomes; PINBOMB's boss parts | From round 7, two gremlins sneak onto the table each round, 5 hits each; a broken one pays $3 and a free reroll. Every gremlin still standing at the end of the round raises the next goal by 5%. | ✔ | | ✔✔ | Rule, **M** |
 
 ### 3.6 Machine upgrades (no board space)
 
 | Part | Borrowed from | What it does here | M | S | L | Rarity, effort |
 |---|---|---|---|---|---|---|
-| **Cabinet Upgrades** | Balatro's Vouchers ($10 permanent upgrades in pairs: Overstock +1 shop slot, Antimatter +1 joker slot); Cult of PiN's shop Blessings; Raccoin's chips; Wizorb's town rebuilding; Ball x Pit's Bag Maker and Bank | From round 6 the shop offers one permanent machine upgrade a round, $10–15: wider flippers, +1 shop slot, +1 toolbox space, a stronger plunger, +1 lock on offers, a longer Ball Saver window. They come in pairs; the second costs more. Decide which overlap with decals (Wide Shelf, Big Toolbox, Layaway). | | ✔ | ✔✔ | Machine, **S** |
-| **Secret Basement** | Haunted House's cellar (a drain from the cellar goes to another playfield, never out); Black Hole's lower playfield; Banzai Run's backbox playfield; Kirby's Pinball Land's floors | A trap door drops the ball to a small basement table with its own two flippers and 4 part spots. A drain there sends the ball back up through the trap door. 30 s a visit. More board space late. The parts catalog lists it as **L** (ball layers). | ✔ | ✔✔ | ✔✔ | Legendary $13, **L** |
+| ✏️ **Cabinet Upgrades** | Balatro's Vouchers ($10 permanent upgrades in pairs: Overstock +1 shop slot, Antimatter +1 joker slot); Cult of PiN's shop Blessings; Raccoin's chips; Wizorb's town rebuilding; Ball x Pit's Bag Maker and Bank | From round 6 the shop offers one permanent machine upgrade a round, $10–15: wider flippers, +1 shop slot, +1 toolbox space, a stronger plunger, +1 lock on offers, a longer Ball Saver window. They come in pairs; the second costs more. Decide which overlap with decals (Wide Shelf, Big Toolbox, Layaway). | | ✔ | ✔✔ | Machine, **S** |
+| ❌ **Secret Basement** | Haunted House's cellar (a drain from the cellar goes to another playfield, never out); Black Hole's lower playfield; Banzai Run's backbox playfield; Kirby's Pinball Land's floors | A trap door drops the ball to a small basement table with its own two flippers and 4 part spots. A drain there sends the ball back up through the trap door. 30 s a visit. More board space late. The parts catalog lists it as **L** (ball layers). | ✔ | ✔✔ | ✔✔ | Legendary $13, **L** |
 
 ### 3.7 Inlays (fixtures, no board space)
 
@@ -177,37 +186,39 @@ somewhere to go; selling the part returns the gem to the toolbox.
 
 | Inlay | Borrowed from | What it does to its part |
 |---|---|---|
-| **Ruby** | Ballionaire's Amethyst (+mult to adjacent triggers per stack) | Pays ×1.5. |
-| **Topaz** | Ballionaire's Topaz (adjacent spawners get a chance of an extra ball) | Every hit has a 15% chance to drop a spark. |
-| **Garnet** | Ballionaire's Garnet (adjacent triggers skip one cooldown per drop) | Its cooldown or dark time is halved (X Lane, Kickback, Firecracker). |
-| **Emerald** | Ballionaire's Peridot (Limited triggers regain charges) | A once-a-ball part (Disco Ball, Hall of Fame, Firecracker) fires twice a ball. |
-| **Opal** | Ballionaire's Citrine (ages adjacent Agers) | Its hits count twice for its type's growth (Pop growth, the Duck's speed, the Trophy's polish). |
-| **Gold Leaf** | CloverPit's Golden symbol (adds its base value to itself every time it scores, for good); Balatro's Foil edition | Its points grow +1 every time it scores, for the rest of the run. |
-| **Red Seal** | Balatro's Red Seal (the card retriggers once); CloverPit's Repetition modifier | Every hit scores twice. The second score counts against the same caps. |
+| ✅ **Ruby** | Ballionaire's Amethyst (+mult to adjacent triggers per stack) | Pays ×1.5. |
+| ✅ **Topaz** | Ballionaire's Topaz (adjacent spawners get a chance of an extra ball) | Every hit has a 15% chance to drop a spark. |
+| ✅ **Garnet** | Ballionaire's Garnet (adjacent triggers skip one cooldown per drop) | Its cooldown or dark time is halved (X Lane, Kickback, Firecracker). |
+| ✅ **Emerald** | Ballionaire's Peridot (Limited triggers regain charges) | A once-a-ball part (Disco Ball, Hall of Fame, Firecracker) fires twice a ball. |
+| ✅ **Opal** | Ballionaire's Citrine (ages adjacent Agers) | Its hits count twice for its type's growth (Pop growth, the Duck's speed, the Trophy's polish). |
+| ✅ **Gold Leaf** | CloverPit's Golden symbol (adds its base value to itself every time it scores, for good); Balatro's Foil edition | Its points grow +1 every time it scores, for the rest of the run. |
+| ✏️ **Red Seal** | Balatro's Red Seal (the card retriggers once); CloverPit's Repetition modifier | Every hit scores twice. The second score counts against the same caps. |
 
 Effort **M** (a slot on a part instance, the shop and the tooltip). Emerald on a Disco Ball is a ×Mult doubler, so it
 needs the strictest look from the balance tool.
 
 ## 4. Recommended order
 
-The order I would build in: value for the late game ÷ effort, and each step reuses the one before it.
+The order I would build in after the review: value for the late game ÷ effort, and each step reuses the one before
+it.
 
 1. **Rank Lights and the Old Bell** (S). Reliable ×points and ×Mult levers that any run can find. They go
-   straight at problem 1.
-2. **Zaps, then the Tesla Coil and Powder Keg** (S, then M). The biggest show for the cost, and they scale with a
-   full board.
-3. **Inlays and Cabinet Upgrades** (M, S). The late money sinks that need no room (problems 2 and 3).
-4. **Sparks, then the Rock Pile (with stacks) and the Firecracker** (M). The real "screen full of balls" moment.
-   Do the collision filter and the cap first, and measure frame cost with 12 sparks in the smoke test.
-5. **Wizard Lamp** (M). A late legendary that turns a whole ball into an event; it reuses the Ball Printer's
+   straight at problem 1. Test Rank Lights against Flat Rate and the Overlord.
+2. **Zaps, then the Tesla Coil, Powder Keg, Laser Cross and Shockwave Gong** (S, then M). The biggest show for the
+   cost, and they scale with a full board.
+3. **Inlays** (M). The late money sink that needs no room (problems 2 and 3).
+4. **Sparks: the collision categories and no ball-vs-ball collision, then the Sparkler, Firecracker and Rock Pile**
+   (M). The real "screen full of balls" moment. Do the spark drawing and the effects budget of §7 in the same
+   step, and add the 24-spark smoke check before any spark part ships.
+5. **Decor: the strip around the playfield, then the Midnight Clock, Cabinet Upgrades and Ritual Altar** (M). It
+   takes no playfield spot, so it is the second answer to problems 2 and 3.
+6. **Wizard Lamp** (M). A late legendary that turns a whole ball into an event; it reuses the Ball Printer's
    multiball.
-6. **Piñata** (M). Mayhem with a reward, and a second home for the decal-pick and part-pick screens.
-7. The cheap scalers as filler between the big ones: **Grape Bunch, Echo Cave, Spotlight, Bonsai Bumper, Time
-   Capsule** (all S).
-8. Last, because they touch the riskiest physics: **Wrecking Ball, Broomstick, Free Ball Bucket, Bullet Time**.
-
-From the wider search, the best value: **Midnight Clock** and **Laser Cross** (S, they reuse zaps) early;
-**Ritual Altar** and **Siege Tower** as late legendaries; **Merging** once the inlays show whether money sinks work.
+7. **Piñata** (M). Mayhem with a reward, and a second home for the decal-pick and part-pick screens.
+8. The cheap scalers as filler between the big ones: **Grape Bunch, Echo Cave, Spotlight, Bonsai Bumper, Time
+   Capsule, Ice Sculpture, Wishing Well** (all S).
+9. Last, because they touch the riskiest physics: **Wrecking Ball, Broomstick, Free Ball Bucket**, and the
+   wandering gremlins of the **Gremlin Hutch**.
 
 ## 5. Watch out for
 
@@ -238,7 +249,141 @@ From the wider search, the best value: **Midnight Clock** and **Laser Cross** (S
   placed by hand; Cult of PiN's gravity-changing bumpers fight the flipper physics we spent M0 making safe;
   Ballionaire's no-aim autobonking runs against our flippers being the player's lever.
 
-## 6. Sources
+## 6. Review decisions (26 Oct 2026)
+
+Every card was reviewed on the review page: **29 approved, 15 to change, 10 skipped** (54 in all). The notes are
+summarised here as design decisions; where a note asked a question, the answer is under the part.
+
+### 6.1 Decisions that change the systems
+- **Sparks:** no flippers, no balls, no other sparks; they shoot out, hit stuff and fade away (§2.1).
+- **No ball-vs-ball collision in the game at all**, for balls as well as sparks.
+- **Zaps:** a part can be zapped many times, at most once every 0.5 s.
+- **Fixtures:** inlays only, one per part, and only on some parts: the ones that score when hit (bumpers, targets,
+  spinners, lanes, lamps, scoops). Not on flippers, the Ball Saver, the Kickback, floor pieces (Glow Strip, Power
+  Plate), decor or Big Boi. The card shows an empty gem socket on parts that take one. **No stacking.**
+- **Merging:** skipped.
+- **Never move parts mid-run.** Nothing a part does may push, slide or knock over another part. (Drop targets in the
+  existing Drop-Target Bank still fall and come back as they do today.)
+
+### 6.2 A new kind of part: decor
+The review asked for several ideas to become **decor**: things bought in the shop and placed **outside the build
+area** (on the cabinet around the playfield), which **cannot overlap each other and cannot be hit**. Decor never
+takes a playfield spot, so it is the answer to the full late board, and the money it costs is the late money sink.
+Decor in this doc: the **Ritual Altar**, the **Midnight Clock**, the **Cabinet Upgrades** (as small decor pieces)
+and the **Gremlin Hutch** (was Gremlins). Effort **M**: a decor strip in the layout, its own placement rules and
+drawing, and a shop slot type.
+
+### 6.3 The changed parts, as revised
+
+| Part | Note from the review | Revised |
+|---|---|---|
+| **Sparkler** (new) | The Whale: "we need a cheap way to create sparks" | Common, $3. 8 a hit, and every hit shoots out 1 spark (cooldown 1 s). The cheap, everyday spark source. |
+| **Powder Keg** (approved, reworded) | Make the wording simpler | Hit it once to light it. A few seconds later it explodes: everything around it scores, and it shoots out a spark. |
+| **Laser Cross** | Random direction is better | Every hit fires one beam in a random direction, right across the table. Every part on the beam scores. |
+| **Shockwave Gong** | Hitting everything is cool; do not move parts | Every 10th hit it booms and every part on the table scores once (a table-wide zap). Nothing moves, balls included. |
+| **Rock Pile** (approved) | A bit cheaper. Is a rock a heavy ball the flippers can bounce? | $4. No stacks now: the pile grows by a rock every 5 hits (up to 5, back to 1 each round), and every hit drops one rock per rock in the pile (cooldown 2 s). Rocks are sparks: the flippers never touch them. |
+| **The Whale** | 12 may be too much | Swallows sparks (8 points each); at 6 it spouts 6. With the Sparkler as a cheap source it has something to eat. |
+| **Rank Lights** | It counts for Flat Rate; test it. Perhaps ×1.2 steps are enough | Ranks count as Mult gains for Flat Rate and the Overlord. Silver ×1.2, Gold ×1.4, Diamond ×1.6 (read from "1x2 etc"; confirm), tuned by the balance tool. |
+| **Wrecking Ball** | Big heavy ball, but not sure it is good. What is a drop target? Do not move parts | A drop target is a target in the existing Drop-Target Bank (they already fall and come back), so nothing new moves. Revised: once a ball, a hit makes the ball 1.5× bigger and heavier for 6 s; every hit pays ×2 and shakes the table. Needs a playtest to see if it earns its slot. |
+| **Free Ball Bucket** (approved) | It must not always be under the flippers; make it a skill shot | It rides a rail you place in the build area, sliding back and forth. Landing a ball in it from above pays 200 and returns the ball to the plunger without losing it. |
+| **Wizard Lamp** | How many types? The player must know exactly | The lamp has one segment for every different part type on the table when the round starts, at most 8, and its card says the number ("Hit 6 types"). |
+| **Magic Trunk** (approved) | Maybe every 5 hits | Turns to a new face every 5 hits. |
+| **Old Bell** | It must be hit each round and pay once, so it is not a dud | Its first hit each round pays 150 and adds a notch; a round where it is not hit adds none. At 3 notches it rings: every ball starts at ×1.2 Mult for the rest of the run. |
+| **Red Seal** | But it puts (or extends) a short cooldown on the part | Every hit on its part scores twice, then the part is dark for 0.5 s (added to any cooldown it already has). |
+| **Ritual Altar** | Out of the build area, as decor; cannot be hit | Decor. Every 8 sets completed anywhere start a ritual (Tempest, Inferno, Swarm in turn); each ritual done makes the next one stronger (it cannot be hit, so its "20 hits" rule is gone). |
+| **Midnight Clock** | Make it decor | Decor, otherwise the same: every scoring hit moves it on a minute; at midnight, 20 s of ×2. |
+| **Cabinet Upgrades** | Small decor, weaker than decals | Small decor pieces, $6–10, each about half a decal: Spare Bulb (Lamps +5%), Rubber Feet (nudges 10% stronger, no extra tilt), Coin Tray ($1 every second round cleared), Side Mirror (the shop shows one more part every second round). |
+| **Gremlin Hutch** (was Gremlins) | Decor, not round based, but expensive. Gremlins move around and pass through parts, like the ghosts | Decor, legendary, $12. Releases 2 gremlins that wander the table, drifting through parts. A ball that touches one knocks it out for 300 and $1; it comes back 10 s later. |
+
+### 6.4 Approved as written
+Tesla Coil, Grape Bunch, Echo Cave, Spotlight, Firecracker, Splitter, Insurance Policy, Spider Nest, Marble Jar,
+Broomstick, Gumball Machine, Bank Ring, Helping Hand, Piñata, Bonsai Bumper, Time Capsule, Spider Wheel, Wishing
+Well, Ice Sculpture, and the Ruby, Topaz, Garnet, Emerald, Opal and Gold Leaf inlays (plus Powder Keg, Rock Pile,
+Free Ball Bucket and Magic Trunk with the small changes above).
+
+### 6.5 Skipped
+Arc Wire, Tulip, Party Hats, Bullet Time, Siege Tower, Haunted Gallery, Dish Rack, Portal Gun, Secret Basement,
+and the Merging system.
+
+## 7. Sparks, zaps and the CPU
+
+The review asked for a smart way to spend CPU when several balls, sparks, zaps and effects are on screen at once.
+The first rule: **the sim decides what happens and stays exact and deterministic; only drawing and sound are
+budgeted.** The balance tool, the bot and the player must see the same game, so nothing that scores is ever
+dropped to save time.
+
+### 7.1 What it costs: measured
+A throwaway benchmark (not committed) ran the real sim on a full late table (27 parts plus Big Boi) for 30 s of
+game time at 240 Hz, topping balls and sparks up as they drained. Node 22 in this container, CPU only; read the
+numbers as ratios, not as a promise for every machine.
+
+| On the table | ms per 240 Hz step | ms per 60 fps frame |
+|---|---|---|
+| 1 ball | 0.041 | 0.16 |
+| 4 balls | 0.044 | 0.18 |
+| 4 balls, no ball-vs-ball collision | 0.041 | 0.16 |
+| 4 balls + 12 sparks as Box2D bodies | 0.066 | 0.27 |
+| 4 balls + 30 sparks as Box2D bodies | 0.120 | 0.48 |
+| 4 balls + 12 sparks stepped outside Box2D (circle casts at 60 Hz) | 0.210 | 0.84 |
+| 4 balls + 30 sparks stepped outside Box2D | 0.339 | 1.36 |
+
+What it says:
+- **Physics is not the problem.** 30 sparks add about 0.3 ms a frame; a 60 fps frame has 16.7 ms.
+- **The obvious "smart" idea is slower.** Moving sparks outside Box2D and casting a circle for each one, even at a
+  quarter of the rate, cost 3–5× more, because this JavaScript Box2D allocates on every cast. Box2D's own broadphase
+  and solver are the cheap path. Keep sparks as ordinary bodies.
+- **Turning off ball-vs-ball collision** saves a little and should cut the pile-ups.
+- **The cost to watch is everything a hit triggers:** drawing, flying points, particles and sound. Balls are drawn
+  today as vector shapes rebuilt every frame (body, highlight and a trail ribbon each), which is fine for 4 balls and
+  not for 24 sparks.
+
+### 7.2 The plan
+
+**Physics (sim):**
+1. **Collision categories.** Walls, parts, flippers, balls and sparks each get a category. Balls collide with walls,
+   parts and flippers; sparks with walls and solid parts only; sensors (rollovers, lamps, spinners) see both. This
+   is the whole of "flippers never touch sparks" and "no ball-vs-ball collision".
+2. **Sparks are plain dynamic bodies, not bullets.** Box2D v3 already sweeps dynamic bodies against static ones, so
+   a spark cannot tunnel through a wall; the bullet sweep that balls need is only for fast bodies against moving
+   ones, and sparks never meet the flippers. A rare miss against a sliding duck or roller is harmless.
+3. **A hard cap: 24 sparks on the table.** A spawn over the cap makes the oldest spark start its fade at once, so
+   nothing is refused and the count never runs away.
+4. **Sparks live in their own list,** looked up by id in a Map. Today each contact searches the ball array, and
+   every step copies it; with sparks those per-step costs would grow with the spark count.
+5. **Zaps are a queue,** resolved at the end of each sim step: each part once per 0.5 s, Kegs chain at most 4 deep.
+   A zap is arithmetic in the scorer, so even 100 zaps in a step costs almost nothing.
+
+**Drawing (renderer):**
+1. **Sparks are baked sprites in one ParticleContainer,** the way `particles.ts` already draws debris: one texture
+   per theme, and per frame only position, scale and alpha change. Their trail is two fainter copies at older
+   positions, not ribbon geometry. All sparks together are one draw call.
+2. **One state snapshot a frame.** `ballStates()` is called several times a frame and allocates each time; read
+   balls and sparks once, share the arrays.
+3. **Lightning in one batch.** Every zap arc of a frame goes into one Graphics as a few jagged lines (seeded, so they
+   do not flicker), at most 12 arcs drawn a frame; the score still counts every zap.
+4. **Later, if needed:** balls as baked sprites too (the same move as sparks).
+
+**Effects budget (presentation only):**
+The game already caps particles (150), flying chips (160) and sound voices (24, with a minimum gap per kind of
+sound). Sparks and zaps plug into those caps, at a lower priority than real balls:
+1. **Priority:** a real ball's hit always gets its effects; zaps next; spark hits last.
+2. **Merge the flying points.** Points from sparks and zaps on the same part within 0.2 s fly as one chip carrying
+   the sum. Same total, far fewer chips.
+3. **A spark hit is a flash, not a burst:** the part lights up for a moment; no debris.
+4. **Sound:** spark hits share one soft tick with a 60 ms gap; zaps play one crackle a frame however many fired.
+
+**Quality that adapts:**
+A rolling average of frame time. Above 14 ms for a second, the next cosmetic tier goes: spark trails, then
+lightning becomes straight lines, then debris and smoke. Below 10 ms for 3 s, it comes back one tier at a time.
+Low graphics starts at the bottom tier, and Calm mode also turns down shake and flashes. The sim never knows.
+
+**Checks to add:**
+- The smoke test's renderer check (it fails above 12 ms a frame) gets a scripted frame with 4 balls, 24 sparks and
+  10 zaps a second.
+- `npm run physics-report` gets a 24-spark line, and the escape fuzz runs with sparks on.
+- A determinism test: the same seed with sparks gives the same fingerprint, step for step.
+
+## 8. Sources
 
 - Ballionaire: [Triggers](https://ballionaire.wiki.gg/wiki/Triggers) · [Boons](https://ballionaire.wiki.gg/wiki/Boons) · [Spell](https://ballionaire.wiki.gg/wiki/Spell) (ballionaire.wiki.gg) · [Rogueliker early access review](https://rogueliker.com/ballionaire-early-access-review/) · [Gamecritics review](https://gamecritics.com/gc-staff/ballionaire-review/) · [Steam page](https://store.steampowered.com/app/2667120/Ballionaire/)
 - Peglin: [Bomb](https://peglin.wiki.gg/wiki/Bomb) · [Peg](https://peglin.wiki.gg/wiki/Peg) · [Relic](https://peglin.wiki.gg/wiki/Relic) (peglin.wiki.gg) · [MuMu orb tier list](https://www.mumuglobal.com/blog/peglin-a-pachinko-roguelike-orbs-tier-list.html) (Matryorbshka, Ball Lightning)
