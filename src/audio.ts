@@ -241,6 +241,12 @@ export class AudioFx {
     this.applyMusicGain();
   }
 
+  /** The settings' two volumes at once, 0..1 each. */
+  setVolumes(music: number, sfx: number) {
+    this.setMusicVolume(music);
+    this.setSfxVolume(sfx);
+  }
+
   /** Music volume, 0..1 (on top of the music switch). */
   setMusicVolume(v: number) {
     this.musicVolume = clamp01(v);

@@ -1,11 +1,12 @@
 import './style.css';
+import './ui/menu.css';
 import { callout, type CalloutKey } from './data/callouts';
 import { dialValue, footprint, MAX_LEVEL, PARTS, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
 import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, decalTitle, KIND_NAMES, SKIP_PAY, type DecalId, type DecalPick } from './data/decals';
 import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
 import { FINAL_ROUND } from './data/bosses';
 import { AudioFx } from './audio';
-import { Game, goalFor, parseRun, type Arrangement, type GameEvent, type Payout } from './game/game';
+import { Game, goalFor, parseRun, type Arrangement, type GameEvent, type Payout, type RunSave } from './game/game';
 import type { ScoreEvent } from './game/scoring';
 import { Renderer, type DrawState } from './render/renderer';
 import { FxOverlay } from './render/overlay';
@@ -19,15 +20,22 @@ import { bossCard, decalCard, fmt, HUD_TIPS, partCard, rarityChip, roleVar, stat
 import { applyBackdrop, chase, makeBulbs, MultDial, Odometer } from './ui/hud';
 import { DecalPicker } from './ui/decalPick';
 import './ui/decalPick.css';
-import { Flyers } from './ui/flyers';
+import { Flyers, setFlyEffects } from './ui/flyers';
 import './ui/flyers.css';
+import { Menu, type SavedRunInfo } from './ui/menu';
+import { keyLabel, loadSettings, saveSettings, type Settings } from './ui/settings';
+import { Scoreboard, sourceOfSave, type RunResult } from './ui/scoreboard';
+import { Attract } from './attract';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORE = 'pinball-roguelite.run.v2';
 const SLOTS = 'pinball-roguelite.slots.v1';
 const THEME_KEY = 'pinball-roguelite.theme.v1';
-const CALM_KEY = 'pinball-roguelite.calm.v1';
-const store = { get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
+const store = {
+  get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
+  del: (k: string) => { try { localStorage.removeItem(k); } catch { /* ignore */ } },
+};
 
 /** The three faces have to be loaded before Pixi measures any text. */
 async function loadFonts() {
@@ -44,12 +52,14 @@ async function main() {
     const run = saved ? parseRun(saved) : null;
     if (run) { game.load(run, themeById(store.get(THEME_KEY))?.id); hasRun = true; }
   } catch { /* storage can be blocked; the game works without it */ }
-  const persist = () => store.set(STORE, JSON.stringify(game.save()));
+  // never while the attract table borrows the game, and not once the run has ended
+  const persist = () => { if (hasRun && !attract.on) store.set(STORE, JSON.stringify(game.save())); };
 
   // the machine is picked for each run (it decides the look and what Big Boi does); until the first pick, the Factory stands in behind the picker
   const chosen = hasRun ? themeById(game.machine) : null;
   let theme: Theme = chosen ?? FACTORY;
-  let calm = store.get(CALM_KEY) === '1';
+  let settings = loadSettings(store);
+  let calm = settings.calm;
 
   const renderer = new Renderer(theme);
   await renderer.init($('stage'));
@@ -59,6 +69,12 @@ async function main() {
   /** Points and coins fly from the part to the score dock and the money stack. */
   const flyers = new Flyers(overlay, renderer, { coinLand: () => audio.coinLand() });
   const odometer = new Odometer($('score'));
+  // the demo machine behind the main menu: it plays, it never saves
+  const attract = new Attract(game, {
+    score: (s) => renderer.onScore(s),
+    machine: (id) => { applyTheme(themeById(id) ?? FACTORY); menu.setMachine(id); },
+    gameOver: () => say('GAME OVER. INSERT COIN'),
+  });
   const dial = new MultDial($('multDial'));
 
   // ---- state shared by input, workshop and HUD ------------------------------------------------
@@ -134,31 +150,22 @@ async function main() {
     const t = themeById(id);
     if (!t) return;
     store.set(THEME_KEY, t.id);
-    $('themePick').hidden = true;
+    attract.stop();
+    menu.close();
     overlayEl.hidden = true;
     game.newRun(t.id as MachineId);
     hasRun = true;
+    board.startRun();
     armed = selected = null;
     selectedDecal = null;
     applyTheme(t);
     persist();
+    afterRunChange();
     const bb = BIG_BOIS[BIG_BOI_FOR[t.id]];
     say(`${t.tagline}. ${bb.title.toUpperCase()}${bb.ability ? `. ${bb.ability.toUpperCase()}` : ''}`);
   }
-  function showThemePicker() {
-    const box = $('themePick');
-    const cancel = hasRun ? '<button class="pickcancel" id="btnPickCancel">Keep playing this run</button>' : '';
-    box.innerHTML = `<div class="pickbox"><h2>Pick your machine</h2><div class="hint">Each machine has its own look and its own Big Boi in the middle of the table, and he decides what kind of build pays best. The machine stays for the whole run.</div>
-      <div class="cabs">${THEMES.map((t) => { const bb = BIG_BOIS[BIG_BOI_FOR[t.id]]; return `<button class="cab" data-theme="${t.id}" style="background:${t.bg};color:${t.ink}">
-        <img alt="" src="${iconURL('mega', 160, 120, t)}"><b>${t.tagline}</b><span class="bb">${bb.title}</span><span class="ab">${bb.ability ? `<em>${bb.ability}</em> ` : ''}${bb.blurb}</span><span class="go">Play this machine</span></button>`; }).join('')}</div>${cancel}</div>`;
-    box.hidden = false;
-    for (const b of box.querySelectorAll<HTMLButtonElement>('.cab')) b.onclick = () => pickTheme(b.dataset.theme!);
-    if (hasRun) $('btnPickCancel').onclick = () => { box.hidden = true; };
-  }
-
   function setCalm(on: boolean) {
     calm = on;
-    store.set(CALM_KEY, on ? '1' : '0');
     renderer.setCalm(on);
     overlay.calm = on;
     document.body.classList.toggle('calm', on);
@@ -729,21 +736,21 @@ async function main() {
       if (e.code === 'KeyY' || e.shiftKey) doRedo(); else doUndo();
       return;
     }
-    if (GAME_KEYS.has(e.code)) e.preventDefault();
+    if (GAME_KEYS.has(e.code) || Object.values(settings.keys).includes(e.code)) e.preventDefault();
     if (e.repeat) return;
     keys.add(e.code);
     if (e.code === 'KeyZ') nudgePulse = -1;
     if (e.code === 'KeyX') nudgePulse = 1;
     if (e.code === 'Tab') game.cashOut();
-    if (e.code === 'Enter' && game.canStart && $('themePick').hidden && overlayEl.hidden) startRound();
+    if (e.code === 'Enter' && game.canStart && overlayEl.hidden) startRound();
     if (e.code === 'KeyM') say(audio.toggleMute() ? 'SOUND OFF. THE SILENCE IS LOUD' : 'SOUND ON');
-    if (e.code === 'Space' && game.mode === 'workshop' && game.sim.ballCount === 0) { game.testBall(); sayKey('start'); }
+    if (e.code === settings.keys.launch && game.mode === 'workshop' && game.sim.ballCount === 0) { game.testBall(); sayKey('start'); }
     if (e.code === 'KeyR' && game.editable) {
       const uid = armed ?? selected;
       if (uid != null) { game.rotate(uid, (e.shiftKey ? -1 : 1) * (Math.PI / 12)); persist(); }
     }
     if ((e.code === 'Delete' || e.code === 'Backspace') && game.editable) storeSelected();
-    if (e.code === 'Escape') { if (shopDrag || carry || armed !== null) cancelHold(); else { selected = null; selectedDecal = null; refreshWorkshop(); } }
+    if (e.code === 'Escape') { if (shopDrag || carry || armed !== null) cancelHold(); else { selected = null; selectedDecal = null; refreshWorkshop(); openPause(); } }
   });
   addEventListener('keyup', (e) => keys.delete(e.code));
   addEventListener('blur', () => keys.clear());
@@ -751,18 +758,19 @@ async function main() {
   document.addEventListener('click', (e) => { if (e.target instanceof HTMLButtonElement) e.target.blur(); });
 
   // on-screen controls for touch devices send the same key events the keyboard does
+  const TOUCH: Record<string, keyof Settings['keys']> = { ArrowLeft: 'left', Space: 'launch', ArrowRight: 'right' };
   for (const b of document.querySelectorAll<HTMLButtonElement>('#touch button')) {
-    const code = b.dataset.key!;
-    const fire = (type: 'keydown' | 'keyup') => dispatchEvent(new KeyboardEvent(type, { code }));
+    const act = TOUCH[b.dataset.key!];
+    const fire = (type: 'keydown' | 'keyup') => dispatchEvent(new KeyboardEvent(type, { code: settings.keys[act] }));
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); fire('keydown'); });
     for (const t of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) b.addEventListener(t, () => fire('keyup'));
   }
 
   const readInput = (): Input => {
     const input: Input = {
-      left: keys.has('ArrowLeft'),
-      right: keys.has('ArrowRight'),
-      plunge: keys.has('Space'),
+      left: keys.has(settings.keys.left),
+      right: keys.has(settings.keys.right),
+      plunge: keys.has(settings.keys.launch),
       nudge: nudgePulse,
     };
     nudgePulse = 0;
@@ -779,7 +787,9 @@ async function main() {
   $('btnStart').onclick = startRound;
   $('btnCash').onclick = () => game.cashOut();
   $('btnTest').onclick = () => { audio.unlock(); game.testBall(); sayKey('start'); };
-  $('btnReset').onclick = () => showThemePicker(); // a new run starts with picking its machine
+  $('btnReset').onclick = () => { openMenu(); menu.askNewGame(); }; // a new run starts with picking its machine
+  $('btnPause').onclick = () => openPause();
+  $('btnSettings').onclick = () => { openPause(); menu.showSettings(); };
   $('btnReroll').onclick = () => { if (game.reroll()) { sayKey('reroll'); persist(); } else sayKey('broke'); refreshWorkshop(); };
   const sandbox = $('sandbox') as HTMLInputElement;
   sandbox.checked = game.sandbox;
@@ -795,14 +805,6 @@ async function main() {
   $('gravVal').textContent = gravity.value;
   for (const ev of ['pointerdown', 'keydown'] as const) gravity.addEventListener(ev, () => game.checkpoint());
   gravity.oninput = () => { game.setGravity(Number(gravity.value)); $('gravVal').textContent = gravity.value; persist(); };
-  const MUSIC_KEY = 'pinball-roguelite.music.v1';
-  const musicBox = $('music') as HTMLInputElement;
-  musicBox.checked = store.get(MUSIC_KEY) !== '0';
-  audio.setMusic(musicBox.checked);
-  musicBox.onchange = () => { audio.unlock(); audio.setMusic(musicBox.checked); store.set(MUSIC_KEY, musicBox.checked ? '1' : '0'); };
-  const calmBox = $('calm') as HTMLInputElement;
-  calmBox.checked = calm;
-  calmBox.onchange = () => setCalm(calmBox.checked);
 
   // ---- undo / redo, layout slots, heatmap, lab tools ------------------------------------------------
   const afterHistory = () => {
@@ -919,8 +921,12 @@ async function main() {
   };
   const onGame = (g: GameEvent) => {
     if (g.type === 'goal') { audio.goal(); renderer.onBigMoment(); sayKey('goal'); }
-    if (g.type === 'roundWon') { if (g.runWon) { say('THE FINAL BOSS IS DOWN. YOU WIN. FREE PLAY!'); renderer.bigBoiMood('cool', 30); } else sayKey('roundWon'); showOverlay(g.runWon ? 'champ' : 'won', g.payout); persist(); }
-    if (g.type === 'runOver') { sayKey('runOver'); audio.gameOver(); renderer.bigBoiMood('sad', 30); showOverlay('over'); }
+    if (g.type === 'roundWon') {
+      board.noteBest(game.scorer.score);
+      if (g.runWon) { say('THE FINAL BOSS IS DOWN. YOU WIN. FREE PLAY!'); renderer.bigBoiMood('cool', 30); board.record(game, 'won', game.sandbox); } else sayKey('roundWon');
+      showOverlay(g.runWon ? 'champ' : 'won', g.payout); persist();
+    }
+    if (g.type === 'runOver') { board.noteBest(game.scorer.score); endRun('lost'); sayKey('runOver'); audio.gameOver(); renderer.bigBoiMood('sad', 30); showOverlay('over'); }
     if (g.type === 'ballEnd') lastMultBand = 1;
   };
 
@@ -936,7 +942,7 @@ async function main() {
         <div class="stats"><span><b>${FINAL_ROUND}</b><small>rounds cleared</small></span><span><b>${fmt(game.runScore)}</b><small>total points</small></span><span><b>${game.decals.length}</b><small>decals</small></span></div>
         <div class="btnrow"><button class="primary disp" id="btnEndless">Keep playing (endless)</button><button class="disp" id="btnAgain">New run</button></div></div>`;
       ($('btnEndless') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; game.continueAfterRound(); sayKey(game.pending ? 'upgrade' : 'workshop'); refreshWorkshop(); persist(); };
-      ($('btnAgain') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; showThemePicker(); };
+      ($('btnAgain') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; openMenu('picker'); };
       return;
     }
     if (kind === 'won' && payout) {
@@ -953,8 +959,9 @@ async function main() {
         <div class="hint">${fmt(game.scorer.score)} of ${fmt(game.scorer.goal)} on round ${game.round}${boss ? `, against ${boss.name}` : ''}.</div>
         <div class="roundmap">${mapSvg(game.round)}</div>
         <div class="stats"><span><b>${game.round - 1}</b><small>rounds cleared</small></span><span><b>${fmt(game.runScore)}</b><small>total points</small></span><span><b>${game.placed.length}</b><small>parts on the table</small></span></div>
-        <button class="primary disp" id="btnAgain">New run</button></div>`;
-      ($('btnAgain') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; showThemePicker(); };
+        <div class="btnrow"><button class="primary disp" id="btnAgain">New run</button><button class="disp" id="btnToMenu">Main menu</button></div></div>`;
+      ($('btnAgain') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; openMenu('picker'); };
+      ($('btnToMenu') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; openMenu(); };
     }
   }
 
@@ -1000,12 +1007,13 @@ async function main() {
   /** The controls, in one short line under the table: what the keys do right now. */
   function updateKeys() {
     const mode = game.mode === 'workshop' ? 'build' : 'play';
-    if (mode === keysKey) return;
-    keysKey = mode;
+    const bound = settings.keys, key = `${mode}|${bound.left}|${bound.right}|${bound.launch}`;
+    if (key === keysKey) return;
+    keysKey = key;
     const k = (key: string, what: string) => `<kbd>${key}</kbd><span>${what}</span>`;
     $('keys').innerHTML = mode === 'play'
-      ? [k('←', ''), k('→', 'flippers'), k('Space', 'shoot'), k('Z', ''), k('X', 'nudge'), k('Tab', 'cash out'), k('M', 'mute')].join(' ')
-      : [k('Enter', 'play round'), k('Space', 'test ball'), k('R', 'rotate'), k('Del', 'to toolbox'), k('Ctrl+Z', 'undo'), k('M', 'mute')].join(' ');
+      ? [k(keyLabel(bound.left), ''), k(keyLabel(bound.right), 'flippers'), k(keyLabel(bound.launch), 'shoot'), k('Z', ''), k('X', 'nudge'), k('Tab', 'cash out'), k('Esc', 'pause')].join(' ')
+      : [k('Enter', 'play round'), k(keyLabel(bound.launch), 'test ball'), k('R', 'rotate'), k('Del', 'to toolbox'), k('Ctrl+Z', 'undo'), k('Esc', 'pause')].join(' ');
   }
 
   let ballsKey = '';
@@ -1113,6 +1121,111 @@ async function main() {
     }
   }
 
+  // ---- menus: settings, the scoreboard, pause, the main menu -------------------------------------------------------
+  function applySettings(s: Settings) {
+    settings = s;
+    saveSettings(store, s);
+    audio.setVolumes(s.music, s.sfx);
+    renderer.setQuality(s.quality === 'low');
+    setFlyEffects(s.quality !== 'low'); // low graphics: the score and coins count up in place
+    if (s.calm !== calm) setCalm(s.calm);
+    keysKey = '';
+  }
+
+  const board = new Scoreboard(store, hasRun);
+  const savedRun = (): RunSave | null => (hasRun ? parseRun(store.get(STORE) ?? '') : null);
+  /** The run ends: onto the scoreboard, and the save is cleared. The live game, or (behind the menu) the one in storage. */
+  function endRun(result: RunResult) {
+    if (!hasRun) return;
+    if (attract.on) {
+      const run = savedRun();
+      if (run) board.record(sourceOfSave(run), result, run.sandbox);
+    } else {
+      // a round in play counts what it has scored so far
+      const live = game.mode === 'round' ? game.scorer.score : 0;
+      board.noteBest(live);
+      board.record({ machine: game.machine, round: game.round, mode: game.mode, runScore: game.runScore + live, won: game.won, decals: game.decals, placed: game.placed, layout: game.layout }, result, game.sandbox);
+    }
+    board.endRun();
+    store.del(STORE);
+    hasRun = false;
+  }
+  /** After a run is started or loaded: the controls that mirror it. */
+  function afterRunChange() {
+    sandbox.checked = game.sandbox;
+    gravity.value = String(game.layout.gravity);
+    $('gravVal').textContent = gravity.value;
+    armed = selected = null;
+    selectedDecal = null;
+    keysKey = '';
+    refreshWorkshop();
+  }
+
+  /** The main menu (or the machine picker): the game hides and the attract table plays behind. The run stays saved. */
+  function openMenu(screen: 'main' | 'picker' = 'main') {
+    if (!attract.on) {
+      // a payout still on screen is taken on the way out, so the save is the next round's workshop
+      if (hasRun && game.mode === 'roundEnd' && game.payout) { game.continueAfterRound(); persist(); }
+      if (hasRun && game.mode === 'workshop') persist();
+      if (shopDrag || carry || armed !== null) cancelHold();
+      overlayEl.hidden = true;
+      $('tip').hidden = true;
+      keys.clear();
+      attract.start(theme.id);
+      say('BIG BOI. PINBALL DESIGNER');
+      dmdClock = 0;
+    }
+    if (screen === 'picker') menu.showPicker(); else menu.showMain();
+  }
+  function openPause() {
+    if (menu.open || attract.on) return;
+    if (shopDrag || carry || armed !== null) cancelHold();
+    keys.clear();
+    $('tip').hidden = true;
+    menu.showPause();
+  }
+
+  // the attract table's display: its score, and now and then a line
+  let dmdClock = 0, dmdLine = 0;
+  function attractDmd(dt: number) {
+    renderer.idle(game.scorer.score > 0 ? fmt(game.scorer.score) : 'BIG BOI');
+    if ((dmdClock += dt) < 9) return;
+    dmdClock = 0;
+    const best = board.records[0];
+    const lines = ['PRESS START', best ? `YOUR BEST ${fmt(best.score)}` : 'BUILD IT. BREAK IT.', 'BIG BOI. PINBALL DESIGNER', 'DEMO MODE'];
+    say(lines[dmdLine++ % lines.length]);
+  }
+  const IDLE_DRAW: DrawState = { ghost: null, selectedUid: null, hoverUid: null, showHeat: false, hoverDecal: null, ledge: null };
+
+  const menu = new Menu({
+    savedRun: (): SavedRunInfo | null => { const r = savedRun(); return r ? { machine: r.machine ?? 'factory', round: r.round, money: r.money, won: !!r.won } : null; },
+    newGame: (id) => { audio.unlock(); if (savedRun()) endRun('abandoned'); pickTheme(id); },
+    resume: () => {
+      const run = savedRun();
+      if (!run) { menu.showMain(); return; }
+      audio.unlock();
+      attract.stop();
+      menu.close();
+      game.load(run, themeById(store.get(THEME_KEY))?.id);
+      applyTheme(themeById(game.machine) ?? FACTORY);
+      afterRunChange();
+      say(`WELCOME BACK. ROUND ${game.round}`);
+    },
+    unpause: () => { menu.close(); last = performance.now(); },
+    quit: () => { menu.close(); openMenu(); },
+    abandon: () => { const live = !attract.on; endRun('abandoned'); if (live) openMenu(); else menu.showMain(); },
+    records: () => board.records,
+    thumb: (r) => {
+      const t = themeById(r.machine) ?? FACTORY;
+      const decals = Array.from({ length: DECAL_SLOTS }, (_, i) => { const d = r.decals[i]; return d ? { look: DECALS[d].look, rarity: DECALS[d].rarity } : null; });
+      return renderer.tableShot(r.parts, 220, 456, { theme: t, ledge: r.ledge, decals }).toDataURL();
+    },
+    bigBoi: (id) => iconURL('mega', 150, 120, themeById(id) ?? FACTORY),
+    settings: () => settings,
+    setSettings: (s) => { audio.unlock(); applySettings(s); },
+    wake: () => audio.unlock(),
+  });
+
   // ---- main loop ------------------------------------------------------------------------------------------------
   let acc = 0;
   let last = performance.now();
@@ -1154,6 +1267,12 @@ async function main() {
     toScreen: (x: number, y: number, z = 0) => renderer.toClient(x, y, z),
     /** Average ms per renderer.draw() over n frames of the current state. */
     probe: (n = 60) => renderer.probe(game, drawState, n),
+    menu: () => menu,
+    attract: () => attract.on,
+    /** Run `seconds` of the attract table (real time is too slow in a headless browser). */
+    demo(seconds: number) {
+      for (let f = 0; f < Math.round(seconds * 60); f++) { attract.step(1 / 60); renderer.draw(game, 1 / 60, IDLE_DRAW); }
+    },
     theme: (id: string) => pickTheme(id),
     refresh: () => refreshWorkshop(),
   };
@@ -1171,6 +1290,16 @@ async function main() {
     const now = performance.now();
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+    if (attract.on) {
+      attract.step(dt);
+      attractDmd(dt);
+      renderer.draw(game, dt, IDLE_DRAW);
+      bulbClock += dt;
+      if (!calm && bulbClock > 0.35) { bulbClock = 0; chase(document, ++bulbPhase); }
+      frames++;
+      return;
+    }
+    if (menu.paused) { acc = 0; renderer.draw(game, 0, drawState); return; }
     acc += dt;
     let n = 0;
     while (!frozen && acc >= DT && n < 24) {
@@ -1204,11 +1333,10 @@ async function main() {
   });
 
   makeBulbs(document);
-  setCalm(calm);
+  applySettings(settings);
   applyTheme(theme);
-  if (!chosen) showThemePicker();
   renderer.draw(game, 0, drawState);
-  sayKey('workshop');
+  openMenu();
 }
 
 void main();

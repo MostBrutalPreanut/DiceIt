@@ -1,7 +1,7 @@
 // Composes the concept sheets from the real table geometry and part data, then renders them to PNG.
 //   npx vite-node tools/concept/scenes.ts [outDir]      (default docs/concept)
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { PARTS, type PartId } from '../../src/data/parts';
 import { LANE_WALL_X, TABLE_H, TABLE_W } from '../../src/sim/constants';
@@ -16,6 +16,7 @@ import {
 } from './ui';
 
 const OUT = process.argv[2] || 'docs/concept';
+const CABINETS = 'src/assets/cabinets';
 let uidN = 0;
 const uid = (p: string) => `${p}${uidN++}`;
 
@@ -812,6 +813,20 @@ async function main() {
     await page.screenshot({ path: `${OUT}/${name}.png` });
     await page.close();
     console.log('wrote', `${OUT}/${name}.png`);
+  }
+  // the machine picker's three cabinets (src/ui/menu.ts): the key art's machines as standalone SVGs, cropped to what is drawn
+  if (!only || only.includes('cabinets')) {
+    mkdirSync(CABINETS, { recursive: true });
+    const page = await browser.newPage();
+    for (const t of THEMES) {
+      const body = cabinet(t, 0, 0, 14.5);
+      await page.setContent(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" overflow="visible"><g id="c">${body}</g></svg>`);
+      const [x, y, w, h] = await page.evaluate(() => { const r = (document.getElementById('c') as unknown as SVGGraphicsElement).getBBox(); return [r.x, r.y, r.width, r.height]; });
+      const pad = 6; // getBBox leaves the outlines out
+      writeFileSync(`${CABINETS}/${t.id}.svg`, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f(x - pad)} ${f(y - pad)} ${f(w + pad * 2)} ${f(h + pad * 2)}">${body}</svg>\n`);
+      console.log('wrote', `${CABINETS}/${t.id}.svg`);
+    }
+    await page.close();
   }
   if (only && !only.includes('backdrops')) { await browser.close(); return; }
   // the drifting backdrops as a looping GIF: 6 s at 12 fps
