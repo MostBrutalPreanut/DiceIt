@@ -1,0 +1,1338 @@
+[
+ {
+  "id": "foreman-elevator",
+  "archetype": "Bumper Car + Fan Club Foreman on a 4-plate pad, fed by a Mag-Grab -> Tesla -> Big Boi elevator",
+  "machine": "factory",
+  "kind": "realistic",
+  "thesis": "Four Power Plates in a 3.92-unit square around the fixed Big Boi all reach him (corner distance 2.77 <= reach 3), so every Foreman hit pays x1.5^4=5.06, then x1.5 Bumper Car (Big Boi is tagged bumper), x3 Fan Club, x1.5 Overclock(mega): ~x34 on 50+12/level base. A Mag-Grab directly under the lower Tesla throws every ball it grabs straight up into Tesla -> Big Boi, and the ball falls back onto the magnet: a self-feeding loop that is independent of flipper skill. The upper Tesla zaps both Level Lights of its pair every hit, which completes the pair every time (+1 level to Big Boi and both Teslas per Tesla hit), so levels hit 10 within the first round. Mult comes from Foreman +0.15/hit (cap +5/ball, zaps count), Mag-Grab +0.25/grab (cap +2) and Momentum.",
+  "synergies": [
+   {
+    "a": "plate",
+    "b": "mega",
+    "claim": "With all 4 plates placed, a Big Boi hit's base is x5.06 the plate-less value (plateXAt multiplies per plate); removing one plate drops it to x3.375."
+   },
+   {
+    "a": "tesla",
+    "b": "uplight",
+    "claim": "A Tesla whose 2 nearest zappable parts are the two Level Lights of one pair completes the pair on EVERY Tesla hit (both start off, both toggled on): +1 level to every bumper within 5.5, incl. Big Boi. Expect Big Boi level 10 after ~10 Tesla hits."
+   },
+   {
+    "a": "magnet",
+    "b": "tesla",
+    "claim": "Mag-Grab at (12,26.3) facing up + Tesla at (12,30.8) + Big Boi at (12,36) forms a vertical loop: rounds run to the full ball clocks and the round total is ~10x the same table without the magnet (measured 25M vs 2.5M mean at skill 0.6)."
+   },
+   {
+    "a": "tesla",
+    "b": "mega",
+    "claim": "Tesla arcs reach Big Boi once the 2 lights are cooling down or at Tesla level>=3 (3 arcs): each zap is a full Foreman hit (+0.15 Mult, plates/spots apply)."
+   },
+   {
+    "a": "fanClub",
+    "b": "bumperCar",
+    "claim": "Both apply to Big Boi in modFactor: x4.5 on every Foreman hit (x6.75 with Overclock mega)."
+   },
+   {
+    "a": "spot",
+    "b": "mega",
+    "claim": "Spotlights at distance 4.4-5 from Big Boi multiply each of his hits by x1.5 per lit spot; they sit beside him, so they are rarely knocked dark."
+   }
+  ],
+  "parts": [
+   {
+    "def": "plate",
+    "x": 10.04,
+    "y": 34.04,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 13.96,
+    "y": 34.04,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 10.04,
+    "y": 37.96,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 13.96,
+    "y": 37.96,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 41.2,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 9.25,
+    "y": 40.2,
+    "role": "support"
+   },
+   {
+    "def": "uplight",
+    "x": 14.75,
+    "y": 40.2,
+    "role": "support"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 30.8,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 7.6,
+    "y": 36,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 16.4,
+    "y": 36,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 12,
+    "y": 45.5,
+    "role": "support"
+   },
+   {
+    "def": "gong",
+    "x": 6.0,
+    "y": 43,
+    "role": "support"
+   },
+   {
+    "def": "magnet",
+    "x": 12,
+    "y": 26.3,
+    "role": "core"
+   }
+  ],
+  "decor": null,
+  "decals": [
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "fanClub"
+   },
+   {
+    "id": "overclock",
+    "target": "mega"
+   },
+   {
+    "id": "momentum"
+   }
+  ],
+  "assumes": {
+   "bigBoiLevel": 10,
+   "partLevel": 10,
+   "momentumKept": 4
+  },
+  "partial": {
+   "dropParts": [
+    "magnet",
+    "spot",
+    "gong"
+   ],
+   "keepDecals": [
+    "bumperCar",
+    "fanClub"
+   ],
+   "note": "Mid-run version: 4 plates + 2 Teslas + one Level Light pair (about $51) and only Bumper Car + Fan Club; still x22 on Big Boi but no elevator, so it depends on the ball finding Big Boi by itself (measured ~0.44M mean at level 10, skill 0.6)."
+  },
+  "placementNotes": "Plates: corners of a 3.92 square centred on Big Boi (floor parts only collide with floor parts: min gap 1.5+1.5+0.9=3.9). Upper Tesla at y 41.2 (Big Boi gap 1.9+1.1+1.1=4.1) with its Level Lights at (9.25,40.2)/(14.75,40.2): 2.93 from the Tesla (nearer than Big Boi at 5.2, so they are its 2 arcs), 5.5 apart (one group), 5.0 from Big Boi (in level reach). Lower Tesla at (12,30.8) right under Big Boi, Mag-Grab at (12,26.3) under it (gap 1.3+1.1+0.9=3.3) facing up (angle 0) so throws go Tesla -> Big Boi. Spots at 4.4-5 from Big Boi (reach 5) on his flanks and top. Gong top-left, on the entry path, to zap everything every 8th hit.",
+  "risks": "Night Shift turns off the Level Lights (levels already earned stay). Overlord can jam the Tesla type for a ball (Big Boi itself is fixed and never jammed). The Auditor switches Fan Club/Bumper Car/Overclock off until half the goal (plates and Momentum's kept Mult still work). Cheap Rubber halves Big Boi/Tesla kicks, which may stall the elevator. Mult is capped per ball (Foreman +5, Mag-Grab +2), so the score is mostly base points x level, not compounding."
+ },
+ {
+  "id": "dragon-purist-siege",
+  "archetype": "Purist (4 types: plate, tesla, uplight, magnet) on the Castle: Dragon armour jackpots fed by Tesla zaps",
+  "machine": "castle",
+  "kind": "realistic",
+  "thesis": "Purist doubles every hit (situational x2, which also multiplies the Dragon's 10x armour jackpot) while the table holds 4 types or fewer; Big Boi and floor plates are free value, and Power Plate, Tesla, Level Light and Mag-Grab are exactly 4. Tesla zaps on Big Boi knock off armour plates (bigBoiHit runs on zaps), so the Siege jackpot (40+10*level)*10 x3 Fan Club x1.5 Bumper Car x2 Purist fires every 5-7 Big Boi hits or zaps. The magnet/Tesla/Big Boi elevator keeps the ball in that column. Cheapest table here: about $53.",
+  "synergies": [
+   {
+    "a": "purist",
+    "b": "plate",
+    "claim": "Power Plates count as a part type for Purist; with 4 plates + 2 Teslas + 1 Level Light pair + 1 Mag-Grab (4 types) every hit, including the Dragon jackpot, pays x2. Adding any 5th type (e.g. a Spotlight) halves the whole table."
+   },
+   {
+    "a": "tesla",
+    "b": "mega",
+    "claim": "A Tesla zap on the Dragon removes an armour plate exactly like a ball hit: 5 zaps/hits break the armour for (40+10L)*10 base (x4.5 with Fan Club+Bumper Car, x9 with Purist)."
+   },
+   {
+    "a": "fanClub",
+    "b": "mega",
+    "claim": "Fan Club x3 applies to the armour jackpot (modFactor('mega') includes bigBoiX) as well as to each hit."
+   },
+   {
+    "a": "magnet",
+    "b": "tesla",
+    "claim": "Same elevator as foreman-elevator: rounds last to the ball clock; removing the magnet (and adding spots instead) drops the mean ~4x."
+   },
+   {
+    "a": "momentum",
+    "b": "purist",
+    "claim": "Momentum's kept Mult (+0.5 a cleared round) is the build's only big Mult source besides the Foreman-less Dragon; Purist + Momentum measured ~3x Purist + Overclock(mega)."
+   }
+  ],
+  "parts": [
+   {
+    "def": "plate",
+    "x": 10.04,
+    "y": 34.04,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 13.96,
+    "y": 34.04,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 10.04,
+    "y": 37.96,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 13.96,
+    "y": 37.96,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 41.2,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 9.25,
+    "y": 40.2,
+    "role": "support"
+   },
+   {
+    "def": "uplight",
+    "x": 14.75,
+    "y": 40.2,
+    "role": "support"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 30.8,
+    "role": "core"
+   },
+   {
+    "def": "magnet",
+    "x": 12,
+    "y": 26.3,
+    "role": "core"
+   }
+  ],
+  "decor": null,
+  "decals": [
+   {
+    "id": "purist"
+   },
+   {
+    "id": "fanClub"
+   },
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "momentum"
+   }
+  ],
+  "assumes": {
+   "bigBoiLevel": 10,
+   "partLevel": 10,
+   "momentumKept": 4
+  },
+  "partial": {
+   "dropParts": [
+    "magnet",
+    "tesla"
+   ],
+   "keepDecals": [
+    "purist",
+    "fanClub"
+   ],
+   "note": "Before the rares show: plates + one Level Light pair (2 types) with Purist + Fan Club. Big Boi pays x30 (x5.06 plates x3 x2) but levels only come from ball passes over the lights and there is no feeder (measured ~0.16M mean)."
+  },
+  "placementNotes": "Identical geometry to foreman-elevator minus spots and gong (each would be a 5th type). Upper Tesla's two nearest zappable parts are its Level Lights (2.93) so each of its hits levels Big Boi; the lower Tesla's nearest zappable part is Big Boi itself (5.2), so its every hit is a free armour plate.",
+  "risks": "Overlord jams a random scoring type every ball: here that is Tesla or Level Light half the time (Big Boi is never jammed). The Jammer jams the most numerous scoring type (Tesla, 2) for a round. Any extra part type bought later silently switches Purist off. Night Shift stops levelling but not scoring."
+ },
+ {
+  "id": "cook-target-practice-banks",
+  "archetype": "Target Practice + Jackpot Sets on the Diner: four Drop-Target Banks under Lamps and Spotlights, Disco/Fame for xMult",
+  "machine": "diner",
+  "kind": "realistic",
+  "thesis": "Under Target Practice a bank target pays 12x2 and a completed bank pays 60 x2 (target tag) x2 (Jackpot Sets) x1.5 (Overclock bank) = 360 base plus +0.6 Mult, with no per-ball cap on bank sets, and every set lights all Lamps for 5 s. Four banks on the main shot lines make bank sets the Mult engine; tight-radius Lamps (dial 3: +14%/step) and Spotlights sit on the banks. Disco (x2.5) and Hall of Fame (x1.1 per type, ~x2.6) multiply the whole Mult once a ball, and Rank Lights give x1.2-1.6. The Cook's orders land on bank targets/vari (x4).",
+  "synergies": [
+   {
+    "a": "targetPractice",
+    "b": "bank",
+    "claim": "Bank set bonus = 60 x2 (target tag) x2 (sets) x1.5 (overclock) = 360 base and +0.6 Mult per set; banks account for >75% of points."
+   },
+   {
+    "a": "bank",
+    "b": "lamp",
+    "claim": "Each bank set flashes every Lamp to full for 5 s: a dial-3 Lamp then adds +70% to every part within 3 (both banks next to it)."
+   },
+   {
+    "a": "disco",
+    "b": "fame",
+    "claim": "Removing Disco and Hall of Fame cuts the round total ~5-6x (they are the only xMult here)."
+   },
+   {
+    "a": "targetPractice",
+    "b": "duck",
+    "claim": "Duck Gallery and Goal! underperform a 4th bank under Target Practice (bot: duck ~5%, goal ~3% of points; 4th bank instead of the duck +35%)."
+   },
+   {
+    "a": "cook",
+    "b": "goal",
+    "claim": "A Cook order that lands on Goal! is wasted: the goal branch never applies or clears ORDER x4, so the order sits on the goal until Big Boi is hit again (keep Goal! off a Diner table)."
+   }
+  ],
+  "parts": [
+   {
+    "def": "bank",
+    "x": 12,
+    "y": 25,
+    "role": "core"
+   },
+   {
+    "def": "bank",
+    "x": 7,
+    "y": 30.5,
+    "angle": 0.4,
+    "role": "core"
+   },
+   {
+    "def": "bank",
+    "x": 17,
+    "y": 30.5,
+    "angle": -0.4,
+    "role": "core"
+   },
+   {
+    "def": "bank",
+    "x": 12,
+    "y": 42.5,
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 4,
+    "y": 41,
+    "role": "support"
+   },
+   {
+    "def": "xlane",
+    "x": 20,
+    "y": 41,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 3.8,
+    "y": 27,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 20.2,
+    "y": 27,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 12,
+    "y": 30.2,
+    "role": "support"
+   },
+   {
+    "def": "lamp",
+    "x": 7.8,
+    "y": 26.1,
+    "dials": {
+     "radius": 3
+    },
+    "role": "support"
+   },
+   {
+    "def": "lamp",
+    "x": 16.2,
+    "y": 26.1,
+    "dials": {
+     "radius": 3
+    },
+    "role": "support"
+   },
+   {
+    "def": "vari",
+    "x": 7.5,
+    "y": 37.5,
+    "angle": -1.2,
+    "role": "support"
+   },
+   {
+    "def": "vari",
+    "x": 16.5,
+    "y": 37.5,
+    "angle": 1.2,
+    "role": "support"
+   },
+   {
+    "def": "magnet",
+    "x": 11.9,
+    "y": 20.1,
+    "role": "guard"
+   },
+   {
+    "def": "disco",
+    "x": 8.3,
+    "y": 46.3,
+    "role": "core"
+   },
+   {
+    "def": "fame",
+    "x": 15.7,
+    "y": 46.3,
+    "role": "core"
+   },
+   {
+    "def": "rank",
+    "x": 5,
+    "y": 22,
+    "role": "support"
+   },
+   {
+    "def": "rank",
+    "x": 19,
+    "y": 22,
+    "role": "support"
+   },
+   {
+    "def": "rank",
+    "x": 12.1,
+    "y": 47,
+    "role": "support"
+   }
+  ],
+  "decor": null,
+  "decals": [
+   {
+    "id": "targetPractice"
+   },
+   {
+    "id": "sets"
+   },
+   {
+    "id": "overclock",
+    "target": "bank"
+   },
+   {
+    "id": "momentum"
+   }
+  ],
+  "assumes": {
+   "momentumKept": 4
+  },
+  "partial": {
+   "dropParts": [
+    "disco",
+    "fame",
+    "rank"
+   ],
+   "keepDecals": [
+    "targetPractice",
+    "sets",
+    "momentum"
+   ],
+   "note": "No legendaries: 4 banks, 2 vari, lamps, spots, X Lanes, Mag-Grab (~$74). Measured ~0.15M mean at skill 0.6: enough to about round 11, not 13+."
+  },
+  "placementNotes": "Bank 1 at (12,25) faces the flippers dead-on (below Big Boi); banks 2/3 at (7,30.5)/(17,30.5) tilted 0.4 rad so their faces point at the opposite flipper; bank 4 at (12,42.5) catches balls coming off Big Boi's top. Mag-Grab under bank 1 throws every grab into it. Lamps (dial radius 3) between bank 1 and banks 2/3 cover two banks each; Spotlights on the side walls and between banks are within 5 of a bank but off the shot lines. X Lanes on the side wall paths; Disco and Fame on the top lane path where the plunge enters.",
+  "risks": "Flat Rate/Overlord cut the +0.6 Mult per set and the xMults by 30%. Cheap Rubber slows balls (fewer clean bank sweeps). Night Shift turns Disco, Fame, X Lanes, Lamps and Rank off (Spotlights keep working). Needs two legendaries for round 13+. Banks are not zappable, so no Tesla/Gong help."
+ },
+ {
+  "id": "light-show-lane-echo",
+  "archetype": "Light Show + Jackpot Sets + Bright Lamps: 3 lane packs, X Lanes, a 4-cave Echo row, Rank Lights, Disco and Hall of Fame",
+  "machine": "factory",
+  "kind": "realistic",
+  "thesis": "With Light Show and Jackpot Sets a lane set pays 40 x4 x1.5 = 240 base and +2 Mult (0.5 x setFactor 4), five sets a ball: +10 Mult a ball from lanes alone, plus Foreman +5. X Lanes (x1.25, cap x3), Disco (x2.5) and Hall of Fame (x1.1^~11 types = x2.85) then multiply it. The Echo Cave row at the bottom keeps a x8 chain: the chain only breaks on a scoring non-cave hit, and Lamps, X Lanes, Spotlights and Deflectors do not break it, so once 4 distinct caves are in a chain every later cave pass is x8.",
+  "synergies": [
+   {
+    "a": "lane",
+    "b": "sets",
+    "claim": "With lightShow+sets each completed lane set adds +2 Mult (setCap 5/ball): Mult +10 a ball by lanes."
+   },
+   {
+    "a": "echo",
+    "b": "lamp",
+    "claim": "A Lamp hit between two caves does not break the Echo chain (lamps return before echoX); a chain of 4 distinct caves stays at x8 on every further cave pass until a scoring non-cave part is hit."
+   },
+   {
+    "a": "xlane",
+    "b": "lane",
+    "claim": "Each X Lane pass also lights the next dark lane (left to right), completing sets faster; x1.25 up to x3 a ball."
+   },
+   {
+    "a": "disco",
+    "b": "fame",
+    "claim": "Dropping Disco and Fame cuts the mean ~5x (1.5M -> 0.3M at skill 0.6)."
+   },
+   {
+    "a": "lightShow",
+    "b": "mega",
+    "claim": "Big Boi is not a light, so Light Show cuts his points to x0.75; his Foreman Mult (+0.15/hit) is untouched."
+   }
+  ],
+  "parts": [
+   {
+    "def": "lane",
+    "x": 8,
+    "y": 46.5,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 11,
+    "y": 46.5,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 14,
+    "y": 46.5,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 4,
+    "y": 41,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 4,
+    "y": 31,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 4,
+    "y": 26,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 20,
+    "y": 41,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 20,
+    "y": 31,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 20,
+    "y": 26,
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 17.5,
+    "y": 46,
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 6.5,
+    "y": 44,
+    "role": "core"
+   },
+   {
+    "def": "echo",
+    "x": 7.5,
+    "y": 22,
+    "role": "core"
+   },
+   {
+    "def": "echo",
+    "x": 10.5,
+    "y": 22,
+    "role": "core"
+   },
+   {
+    "def": "echo",
+    "x": 13.5,
+    "y": 22,
+    "role": "core"
+   },
+   {
+    "def": "echo",
+    "x": 16.5,
+    "y": 22,
+    "role": "core"
+   },
+   {
+    "def": "lamp",
+    "x": 12,
+    "y": 26,
+    "dials": {
+     "radius": 3
+    },
+    "role": "support"
+   },
+   {
+    "def": "lamp",
+    "x": 7.5,
+    "y": 26,
+    "dials": {
+     "radius": 3
+    },
+    "role": "support"
+   },
+   {
+    "def": "lamp",
+    "x": 16.5,
+    "y": 26,
+    "dials": {
+     "radius": 3
+    },
+    "role": "support"
+   },
+   {
+    "def": "rank",
+    "x": 8,
+    "y": 32,
+    "role": "support"
+   },
+   {
+    "def": "rank",
+    "x": 12,
+    "y": 30,
+    "role": "support"
+   },
+   {
+    "def": "rank",
+    "x": 16,
+    "y": 32,
+    "role": "support"
+   },
+   {
+    "def": "disco",
+    "x": 17.4,
+    "y": 42.6,
+    "role": "core"
+   },
+   {
+    "def": "fame",
+    "x": 8.7,
+    "y": 41.5,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 12,
+    "y": 19.5,
+    "role": "support"
+   },
+   {
+    "def": "hand",
+    "x": 5.5,
+    "y": 18,
+    "role": "guard"
+   },
+   {
+    "def": "hand",
+    "x": 18.5,
+    "y": 18,
+    "role": "guard"
+   }
+  ],
+  "decor": null,
+  "decals": [
+   {
+    "id": "lightShow"
+   },
+   {
+    "id": "sets"
+   },
+   {
+    "id": "lamps"
+   },
+   {
+    "id": "momentum"
+   }
+  ],
+  "assumes": {
+   "momentumKept": 4
+  },
+  "partial": {
+   "dropParts": [
+    "disco",
+    "fame"
+   ],
+   "keepDecals": [
+    "lightShow",
+    "sets",
+    "momentum"
+   ],
+   "note": "No legendaries (~$90): lanes, X Lanes, echo row, lamps, rank, spot, hands. Measured ~0.25M mean: clears to about round 11-12."
+  },
+  "placementNotes": "Pack 1 across the top on the plunge path (y 46.5), packs 2 and 3 down the left and right wall paths (x 4 / x 20) where balls run along the walls. X Lanes at the top corners. The 4 Echo Caves sit 3.0 apart in one row at y 22 (rollover gap 1+1+0.9=2.9) across the flipper return path so a ball sweeping along the row chains them. Dial-3 Lamps 4 above the caves (Bright Lamps + Light Show add +3 radius -> 6: they cover the caves and rank lights). Spotlight under the cave row within 5 of the two middle caves. Helping Hands above the flippers keep the ball.",
+  "risks": "Night Shift switches off every part tagged light here (lanes, caves, X Lanes, lamps, rank, Disco, Fame): this build scores almost nothing on that boss (only Big Boi and the Spotlight). Flat Rate/Overlord cut the +2 Mult per set and the xMults by 30%. High variance (min ~0.35M vs mean 1.5M)."
+ },
+ {
+  "id": "cook-autopilot-survival",
+  "archetype": "Survival for a weak player on the Diner: guards everywhere (Helping Hands, extra flippers, savers, Kickback, Free Ball Bucket, Mag-Grab) around the Fan Club plate engine",
+  "machine": "diner",
+  "kind": "realistic",
+  "thesis": "The scoring is the same plate-pad engine (4 plates, Fan Club, Bumper Car, Teslas, Spotlights) because it scores without flipper aim: Big Boi is in the middle and is fed by Teslas and the Mag-Grab elevator. Every other slot is a guard: two Helping Hands above the flippers (auto-flips, half of them aimed at the nearest scorer), small flippers on the side lanes, a Mag-Grab that throws up into Big Boi, a Free Ball Bucket that sends caught balls back to the plunger, two Ball Savers + Safety Net for early drains, a Kickback on the left wall, and Long Fuse for 80 s balls. On the Diner, Fan Club only pays on the Cook's own 40-point hits, and that is still enough: measured 5.9M mean at bot skill 0.3 (min 4.3M), 6.5M at 0.1, 3.2M at 0.3 under a Whirlpool approximation.",
+  "synergies": [
+   {
+    "a": "hand",
+    "b": "magnet",
+    "claim": "At flipper skill 0.1 this table scores about 10x the same scoring core without the guards (0.43M vs 4.6M+ measured): the hands and magnet do the flipping."
+   },
+   {
+    "a": "saver",
+    "b": "safetyNet",
+    "claim": "Savers and Safety Net only save drains in the first 8 s after a launch (SAVER_WINDOW); they fix bad plunges, not late drains."
+   },
+   {
+    "a": "longFuse",
+    "b": "magnet",
+    "claim": "With the elevator keeping the ball alive, rounds run to the full 3 x 80 s with Long Fuse: about +33% points over 60 s balls."
+   },
+   {
+    "a": "fanClub",
+    "b": "cook",
+    "claim": "The same table on the Factory scores ~3x the Diner (19M vs 6.5M at skill 0.1): Fan Club is weakest on the Cook, whose ability (orders x4) pays on other parts."
+   },
+   {
+    "a": "bucket",
+    "b": "hand",
+    "claim": "The Free Ball Bucket (y>=18.5 because of the build area) catches balls the Helping Hands knock up and back: each catch is 200 points and a fresh plunge, not a drain."
+   }
+  ],
+  "parts": [
+   {
+    "def": "plate",
+    "x": 10.04,
+    "y": 34.04,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 13.96,
+    "y": 34.04,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 10.04,
+    "y": 37.96,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 13.96,
+    "y": 37.96,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 41.2,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 9.25,
+    "y": 40.2,
+    "role": "support"
+   },
+   {
+    "def": "uplight",
+    "x": 14.75,
+    "y": 40.2,
+    "role": "support"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 30.8,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 9.25,
+    "y": 31.8,
+    "role": "support"
+   },
+   {
+    "def": "uplight",
+    "x": 14.75,
+    "y": 31.8,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 7.6,
+    "y": 36,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 16.4,
+    "y": 36,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 12,
+    "y": 45.5,
+    "role": "support"
+   },
+   {
+    "def": "gong",
+    "x": 6.0,
+    "y": 43,
+    "role": "support"
+   },
+   {
+    "def": "hand",
+    "x": 6,
+    "y": 18,
+    "role": "guard"
+   },
+   {
+    "def": "hand",
+    "x": 18,
+    "y": 18,
+    "role": "guard"
+   },
+   {
+    "def": "flipper",
+    "x": 5,
+    "y": 26,
+    "role": "guard"
+   },
+   {
+    "def": "flipperR",
+    "x": 19,
+    "y": 26,
+    "role": "guard"
+   },
+   {
+    "def": "magnet",
+    "x": 12,
+    "y": 27.3,
+    "role": "guard"
+   },
+   {
+    "def": "kickback",
+    "x": 3.5,
+    "y": 31,
+    "role": "guard"
+   },
+   {
+    "def": "bucket",
+    "x": 12,
+    "y": 21.3,
+    "role": "guard"
+   },
+   {
+    "def": "saver",
+    "x": 3.9,
+    "y": 21.1,
+    "role": "guard"
+   },
+   {
+    "def": "saver",
+    "x": 20.1,
+    "y": 21.1,
+    "role": "guard"
+   }
+  ],
+  "decor": null,
+  "decals": [
+   {
+    "id": "fanClub"
+   },
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "safetyNet"
+   },
+   {
+    "id": "longFuse"
+   }
+  ],
+  "assumes": {
+   "bigBoiLevel": 10,
+   "partLevel": 10
+  },
+  "partial": {
+   "dropParts": [
+    "bucket",
+    "flipper",
+    "flipperR",
+    "saver",
+    "kickback"
+   ],
+   "keepDecals": [
+    "fanClub",
+    "bumperCar"
+   ],
+   "note": "Without the legendary bucket, savers, Kickback and side flippers (keeps Helping Hands + Mag-Grab): measured the same or slightly higher (5.7M vs 5.3M at skill 0.6), so the hands and the magnet are the guards that matter; the rest is insurance for the human, not for the bot."
+  },
+  "placementNotes": "Scoring core as in foreman-elevator, plus a second Level Light pair under Big Boi for the lower Tesla. Helping Hands at (6,18)/(18,18) just above the main flippers where a falling ball passes; small flippers on the side lane paths at y 26; Mag-Grab at (12,27.3) facing up under the lower Tesla (elevator); bucket at (12,21.3) in the centre drain path (its rail is horizontal; must keep 6.6 from the hands); savers in the lower corners (non-solid, anywhere); Kickback on the left wall at (3.5,31) facing up.",
+  "risks": "The Whirlpool (drain magnet, steeper, 40 s clock) cuts Long Fuse's value and drags balls past the hands; Slippery Slope likewise. Crossed Wires does not affect Helping Hands. Ball Savers pay $1 only in rounds they were not needed. On the Diner Fan Club is the weakest; swap Long Fuse for Momentum if offered."
+ },
+ {
+  "id": "budget-grape-garden",
+  "archetype": "Low-budget (~$110 incl. wishes, no rares or legendaries) Castle table: the plate pad plus cheap scalers (Grape Bunches, Wishing Well, Bonsai, Ice Sculpture) and a Mag-Grab feeder",
+  "machine": "castle",
+  "kind": "realistic",
+  "thesis": "A run that never sees a rare can still assemble the plate pad (Power Plates are uncommon, $6) and a Level Light pair; Level Up(mega) puts Big Boi at level 12 on top of the Level Lights' 10. The cheap scalers are honest but small: two touching Grape packs (each grape touching 2 is x3), a Wishing Well fed $15 (+45 points, +0.3 Mult/hit, cap +3), two Bonsai aged 9 rounds (+36), and an Ice Sculpture bought the shop before the final (250 base x1.5, melts 3 per flipper press, so it lasts about one round). The Mag-Grab under Big Boi is the most important single piece: it took this table from 0.83M to 2.2M.",
+  "synergies": [
+   {
+    "a": "magnet",
+    "b": "mega",
+    "claim": "Mag-Grab at (12,27.3) facing up under Big Boi (no Tesla needed) more than doubles the round (0.83M -> 2.2M mean at skill 0.6)."
+   },
+   {
+    "a": "grape",
+    "b": "grape",
+    "claim": "A pack laid as a triangle 2.6-2.9 apart (touch <= 3.1): each grape pays (1+2)=x3; 4+ chained become golden (x2). Two separate triangles stay non-golden."
+   },
+   {
+    "a": "levelUp",
+    "b": "mega",
+    "claim": "Level Up adds +2 levels on top of the Level Light cap (effectiveLevel is not capped): Big Boi scores at 12 (Dragon 40+120, jackpot x10)."
+   },
+   {
+    "a": "well",
+    "b": "bumperCar",
+    "claim": "Wishing Well is tagged bumper: its +3 points per $ get Bumper Car x1.5; its Mult per hit (0.02 x $) hits the +3 cap per ball after ~10 hits at $15."
+   },
+   {
+    "a": "ice",
+    "b": "hand",
+    "claim": "Helping Hand flips do not melt the Ice Sculpture (only button presses emit flipper events)."
+   }
+  ],
+  "parts": [
+   {
+    "def": "plate",
+    "x": 10.04,
+    "y": 34.04,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 13.96,
+    "y": 34.04,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 10.04,
+    "y": 37.96,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 13.96,
+    "y": 37.96,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 9.25,
+    "y": 40.2,
+    "role": "support"
+   },
+   {
+    "def": "uplight",
+    "x": 14.75,
+    "y": 40.2,
+    "role": "support"
+   },
+   {
+    "def": "grape",
+    "x": 5.6,
+    "y": 42.2,
+    "role": "core"
+   },
+   {
+    "def": "grape",
+    "x": 8.2,
+    "y": 43.6,
+    "role": "core"
+   },
+   {
+    "def": "grape",
+    "x": 5.6,
+    "y": 45.0,
+    "role": "core"
+   },
+   {
+    "def": "grape",
+    "x": 18.4,
+    "y": 42.2,
+    "role": "core"
+   },
+   {
+    "def": "grape",
+    "x": 15.8,
+    "y": 43.6,
+    "role": "core"
+   },
+   {
+    "def": "grape",
+    "x": 18.4,
+    "y": 45.0,
+    "role": "core"
+   },
+   {
+    "def": "well",
+    "x": 12,
+    "y": 45.2,
+    "dials": {
+     "kick": 1
+    },
+    "role": "support"
+   },
+   {
+    "def": "bonsai",
+    "x": 7.3,
+    "y": 29.5,
+    "role": "support"
+   },
+   {
+    "def": "bonsai",
+    "x": 16.7,
+    "y": 29.5,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 7.6,
+    "y": 36,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 16.4,
+    "y": 36,
+    "role": "support"
+   },
+   {
+    "def": "gong",
+    "x": 19.8,
+    "y": 30.5,
+    "role": "support"
+   },
+   {
+    "def": "ice",
+    "x": 19.5,
+    "y": 24,
+    "role": "support"
+   },
+   {
+    "def": "magnet",
+    "x": 12,
+    "y": 27.3,
+    "role": "core"
+   },
+   {
+    "def": "hand",
+    "x": 7,
+    "y": 18,
+    "role": "guard"
+   },
+   {
+    "def": "hand",
+    "x": 17,
+    "y": 18,
+    "role": "guard"
+   }
+  ],
+  "decor": null,
+  "decals": [
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "fanClub"
+   },
+   {
+    "id": "levelUp",
+    "target": "mega"
+   },
+   {
+    "id": "momentum"
+   }
+  ],
+  "assumes": {
+   "bigBoiLevel": 10,
+   "partLevel": 8,
+   "momentumKept": 4,
+   "wellDollars": 15,
+   "bonsaiAge": 9,
+   "cashSpent": "parts ~$95 + $15 thrown in the well"
+  },
+  "partial": {
+   "dropParts": [
+    "magnet",
+    "ice",
+    "well"
+   ],
+   "keepDecals": [
+    "bumperCar",
+    "fanClub"
+   ],
+   "note": "What a poor run has by round 9: plates, one Level Light pair, grapes, bonsai, spots, hands, gong and two decals. Measured ~0.16M mean: the Mag-Grab under Big Boi is the piece that makes this table (x13)."
+  },
+  "placementNotes": "Plate pad and Level Light pair as in the other plate builds (lights 5.0 from Big Boi, within 5.5 of each other); Level Lights also reach the inner grape of each triangle. Grape triangles sit in the upper corners where balls rattle after the plunge. Well at the top centre on the entry path. Bonsai at mid sides, never moved (moving resets their age). Mag-Grab under Big Boi facing up. Gong on the right wall (zaps Big Boi and toggles the Level Lights every 8th gong hit). Ice on the lower right.",
+  "risks": "No Tesla: levels come only from ball passes over the lights, so Big Boi reaches 10 a few rounds later. The Auditor switches off the three decals that carry it until half the goal. Ice Sculpture is a one-round part (about 83 button presses). Mean is near the 1.5M final goal, so a bad final boss draw fails it."
+ },
+ {
+  "id": "dream-foreman-overdrive",
+  "archetype": "Dream: the Foreman elevator with Red-Seal Teslas, 4 Spotlights, 3 polished Trophy Cups, Emerald Disco + Emerald Hall of Fame, Ruby Golden Bumper, Old Bell rings and a Midnight Clock",
+  "machine": "factory",
+  "kind": "dream",
+  "thesis": "Stack every multiplier that reaches Big Boi: plates x5.06, 4 Spotlights x5.06, Fan Club x3, Bumper Car x1.5, Overclock x1.5, Midnight Clock x2 for 20 s once a ball. Mult: Momentum, 3 Trophy Cups kept at +5 each (the cap is per cup, so +15 start Mult), Old Bell rings (x1.2 each, 4 by round 15), Foreman +5, Mag-Grab +2, then Emerald Disco (x2.5 twice a ball = x6.25) and Emerald Hall of Fame (x1.1^~14 types, twice). Red Seal Teslas score twice and arc twice. Measured ~4.7 billion a round at skill 0.6: the game has no global cap on xMult stacking.",
+  "synergies": [
+   {
+    "a": "trophy",
+    "b": "trophy",
+    "claim": "Trophy polish is capped per cup (+5 each), not per run: three polished cups give +15 Mult every ball starts with."
+   },
+   {
+    "a": "emerald",
+    "b": "disco",
+    "claim": "Emerald Disco fires twice a ball: Mult x6.25 per ball instead of x2.5. Removing Disco+Fame (both Emerald) cuts the total ~30x."
+   },
+   {
+    "a": "redseal",
+    "b": "tesla",
+    "claim": "Red Seal on a Tesla re-runs the hit, so it arcs twice (the second arc goes to the next-nearest parts since the first targets are on zap cooldown)."
+   },
+   {
+    "a": "overclock",
+    "b": "goldenAge",
+    "claim": "On a table whose bumpers are already level 10, Overclock(mega) beats Golden Age (+50% vs +12 points on ~170): measured 1.76B vs 1.30B."
+   },
+   {
+    "a": "magnet",
+    "b": "tesla",
+    "claim": "Moving the Mag-Grab from y 23 to y 26.3 (directly under the lower Tesla) multiplies the total ~2.7x."
+   }
+  ],
+  "parts": [
+   {
+    "def": "plate",
+    "x": 10.04,
+    "y": 34.04,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 13.96,
+    "y": 34.04,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 10.04,
+    "y": 37.96,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 13.96,
+    "y": 37.96,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 41.2,
+    "role": "core",
+    "inlay": "redseal"
+   },
+   {
+    "def": "uplight",
+    "x": 9.25,
+    "y": 40.2,
+    "role": "support"
+   },
+   {
+    "def": "uplight",
+    "x": 14.75,
+    "y": 40.2,
+    "role": "support"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 30.8,
+    "role": "core",
+    "inlay": "redseal"
+   },
+   {
+    "def": "spot",
+    "x": 7.6,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 16.4,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 8.6,
+    "y": 32.6,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 15.4,
+    "y": 32.6,
+    "role": "core"
+   },
+   {
+    "def": "trophy",
+    "x": 5.5,
+    "y": 43,
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 18.5,
+    "y": 43,
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 12,
+    "y": 45.6,
+    "role": "support"
+   },
+   {
+    "def": "disco",
+    "x": 8.3,
+    "y": 46.3,
+    "role": "core",
+    "inlay": "emerald"
+   },
+   {
+    "def": "fame",
+    "x": 15.7,
+    "y": 46.3,
+    "role": "core",
+    "inlay": "emerald"
+   },
+   {
+    "def": "golden",
+    "x": 5,
+    "y": 28,
+    "role": "support",
+    "inlay": "ruby"
+   },
+   {
+    "def": "bell",
+    "x": 19,
+    "y": 28,
+    "role": "support"
+   },
+   {
+    "def": "magnet",
+    "x": 12,
+    "y": 26.3,
+    "role": "core"
+   },
+   {
+    "def": "hand",
+    "x": 6.5,
+    "y": 18,
+    "role": "guard"
+   },
+   {
+    "def": "hand",
+    "x": 17.5,
+    "y": 18,
+    "role": "guard"
+   }
+  ],
+  "decor": "clock",
+  "decals": [
+   {
+    "id": "fanClub"
+   },
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "overclock",
+    "target": "mega"
+   },
+   {
+    "id": "momentum"
+   }
+  ],
+  "assumes": {
+   "bigBoiLevel": 10,
+   "partLevel": 10,
+   "momentumKept": 5.5,
+   "trophyPolish": 5,
+   "bellRings": 4
+  },
+  "partial": {
+   "dropParts": [
+    "disco",
+    "fame",
+    "golden",
+    "trophy",
+    "bell"
+   ],
+   "keepDecals": [
+    "fanClub",
+    "bumperCar",
+    "overclock",
+    "momentum"
+   ],
+   "note": "Without the legendaries and the slow scalers it is foreman-elevator with 4 spots and Red Seals: still ~140M a round."
+  },
+  "placementNotes": "foreman-elevator geometry plus a 4th Spotlight pair below Big Boi at (8.6,32.6)/(15.4,32.6) (4.8 from him, clear of the lower Tesla). Trophies in the upper corners and top centre where the plunge rattles. Disco and Fame on the top lane path so every ball's first pass after launch fires them. Golden Bumper and Old Bell on the mid walls. Clock in the decor slot (180 scoring hits to midnight; zaps count).",
+  "risks": "Needs 3 legendaries + 4 gems + ~$200; the Auditor removes the decals until half the goal (not an issue at these numbers). Overlord jams one type per ball (Disco or Fame for a ball halves it at most). Night Shift turns off Disco, Fame and the Level Lights."
+ }
+]

@@ -4,7 +4,7 @@ A research pass, not a tuning pass: **nothing in the game was changed.** Everyth
 real game (the real `Game`, sim and scorer, headless) with new test players, and is meant to decide what to change.
 The harness is in `tools/research/` (see the end of this file for how to re-run any of it).
 
-**What was run** (about 2,200 simulated rounds of build trials and segments, 120 full campaigns, 2 census passes):
+**What was run** (about 35,000 simulated rounds in all, including every evaluation the placers made):
 
 | Test | What it answers | Size |
 |---|---|---|
@@ -37,10 +37,10 @@ The harness is in `tools/research/` (see the end of this file for how to re-run 
    - **Hall of Fame** (x1.1 per part type) never goes through the ×Mult cap, and every copy stacks.
    - **Disco Ball** has no ×Mult cap, so every copy stacks (x2.5 each).
    - **Emerald** makes either fire twice a ball.
-4. **The Spider Wheel is the strongest part in the game** once the player presses a flipper during the spin (+536% avg,
-   +1,119% pro). A ball lands in it ~45 times a round, and collecting all 8 segments gives Wheel Mania (3 balls, x2) about
+4. **The Spider Wheel is the strongest part in the game** once the player presses a flipper during the spin (+536% to
+   +1,099% for an average player, about +930% for a pro, both census passes). A ball lands in it ~45 times a round, and collecting all 8 segments gives Wheel Mania (3 balls, x2) about
    twice a round. If nobody presses, the 3 s timeout always stops on segment 7, **Zilch**.
-5. **The Ball Printer is the next strongest** (+400% to +730%, even for poor players), then **Twin Ball** (+73% to +565%),
+5. **The Ball Printer is the next strongest** (+417% to +741%, +523% for poor players), then **Twin Ball** (+73% to +565%),
    which together with **Multiball Madness** is a permanent x2 because the twin waiting in the plunger lane counts as a
    ball in play.
 6. **Long Fuse does nothing** (bug): it adds 20 s to the round clock, but the sim also ends any ball older than the
@@ -54,14 +54,16 @@ The harness is in `tools/research/` (see the end of this file for how to re-run 
 9. **Late cash piles up with nothing to buy**: $47 at round 10, $138 at round 15, while spending falls to $9 a round. The
    table (36-37 pieces by round 12) and the toolbox are full, and the big rail parts (Duck Gallery, Goal!, Roller Pop,
    Free Ball Bucket) **cannot be placed at all** on a full late table.
-10. **Four gems do almost nothing** (Garnet, Opal, Gold Leaf, Topaz: 0-13%), and a handful of parts are a net loss on
-    every table (Deflector, The Whale, Drop-Target Bank, Grape Bunch, Spotlight, Wishing Well late, extra flippers for
-    anyone but a poor player). Details per part in §8.
+10. **Four gems do almost nothing** (Garnet, Opal, Gold Leaf, Topaz: 0-13%), and a handful of parts are a net loss in
+    both census passes: Deflector, The Whale, Spotlight, Spider Nest, Marble Jar, Goal!, the extra flippers and the
+    **Helping Hand, which does not help poor players either** (-23%). X Lane is far ahead of every other uncommon.
+    Details per part in §8.
 11. **Crossed Wires costs a bot nothing** (it swaps hands perfectly); a player who presses the old hand 30% of the time
     drops from a 33-89% pass rate to 0-11%. The real cost is somewhere in between: it needs a human playtest.
 12. **Performance is fine.** The sim costs 10-17 ms per second of play on the heaviest builds; drawing a frame costs
     1-6 ms (16 ms at worst with 4 balls). The biggest tables (35+ parts, multiball) use up to ~80% of the frame budget in
-    their worst 5 s in headless Chromium: worth watching on low-end devices.
+    their worst 5 s in headless Chromium (a first run showed 1.4 s for one 5 s window; it did not reproduce): worth
+  watching on low-end devices.
 
 ---
 
@@ -162,7 +164,7 @@ What it says:
 - **Rounds 11-13 are easier than their neighbours** (pros clear them at 1.75-3.8 times the goal): the run's builds come
   together there, and the curve does not follow.
 - **Round 15 is a coin flip for a pro** and a loss for an average player, with the goal at 1.5M.
-- Where the 113 losses happened: rounds 1-2: 35; the round-3 boss: 12 (6 Short Fuse, 6 The Jammer); round 4: 10; round 9
+- Where the 113 losses happened: rounds 1-2: 35; the round-3 boss: 14 (6 Short Fuse, 6 The Jammer, 2 Slippery Slope); round 4: 10; round 9
   (boss): 14; round 10: 8; the final: 8 (6 of them to the Overlord).
 
 ### 3.3 Bosses met in real runs
@@ -281,10 +283,12 @@ What it says:
 - **The "honest" archetypes stall at round 13-14 even for a pro**: lights, targets, additive Mult, the ×Mult ladder,
   sets, sparks. They are the builds the game's parts and decals are written for, and they lose to the final curve.
 - **Partial builds mostly die before round 13** (their decals are the first thing missing). That is as it should be,
-  except the dream partials (still 18-22) and the autopilot partial (a poor player still wins half its runs).
-- **Placement**: the auto-placer and the hand placements end in the same place for most builds (±1 round), but the
-  engine builds only work with the hand placement (the placer does not find "Tesla right next to Big Boi"); the
-  Hall-of-Fame zoo got better when auto-placed (all players beat 15). Placement is a real skill in this game.
+  except most dream partials (still 17-22) and the autopilot partial (the poor player still won both of its runs).
+- **Placement**: the "auto" variant starts from the build finder's spots and makes 16 more placer moves. For most builds
+  that changed the result by a round or less; it broke budget-grape-garden (beat round 15 in half the runs before, none
+  after), and it improved the Hall-of-Fame zoo (every player beat 15) and the ×Mult ladder for a pro. The engines
+  themselves depend on exact adjacency (a Tesla within arc range of Big Boi, Plates touching him), which is placement
+  knowledge, not luck: a player who learns it gets the engine.
 - **Skill hardly matters on the winning builds**: pro, average and poor reach the same rounds with the engine and the
   autopilot. Skill shows on the honest builds (pro reaches 14, poor 11-12).
 - By final boss, over every build that reached it: Auditor beaten 78% (pro and avg), Overlord 60%, Whirlpool 63-85%.
@@ -364,26 +368,144 @@ unless noted, over 4-round segments. Two passes with different seeds and placeme
 zap or spark hit it at all. The mid table is a round-5 table (Pops, Big Boi, lanes, slings, spinner, lamp); the late one a
 round-11 table (16 parts, level 3, every ball starts at x3).
 
-PARTS_TABLE
+**How to read it**: the four decor pieces that change nothing on these tables (Spare Bulb, Rubber Feet, Coin Tray, Side
+Mirror) read +10-12% on the mid table and -5% to -16% on the late one in the two passes: that is the noise floor.
+**Anything inside about ±20% is zero.** "agree: NO" means the two passes disagree in sign by more than 25 points: read
+those as "about nothing". "no room" means the part could not be placed on the 16-part late table at all. Late pro and
+poor are both passes pooled.
+
+| part | $ | rarity | mid avg (pass 1 / 2) | late avg (1 / 2) | late pro | late poor | agree | touched | what it did (late, avg, per round) |
+|---|---|---|---|---|---|---|---|---|---|
+| pop | 3 | common | +35% / -1% | +7% / +1% | -9% | -6% | NO | 100% | 47 hits;  |
+| coin | 4 | common | +9% / +33% | +1% / -21% | +11% | +4% | yes | 100% | 16 hits; $ 4.8 |
+| sling | 3 | common | -24% / -10% | +18% / -12% | +25% | -12% | NO | 100% | 51 hits;  |
+| spinner | 3 | common | -10% / +51% | -5% / +31% | +37% | +2% | NO | 100% | 37 hits;  |
+| lane | 4 | common | +46% / +66% | +17% / +34% | +19% | +16% | yes | 100% | 75 hits; LANES COMPLETE 9.0, LANE SETS MAXED 2.8 |
+| lamp | 4 | common | +26% / +14% | -13% / -2% | -5% | +1% | yes | 100% | 16 hits; LAMP #/# 11.9, LAMP FULL! 1.5 |
+| vari | 4 | common | +3% / +18% | -2% / +4% | +19% | -2% | yes | 100% | 9 hits; tier2 4.5, tier3 3.8, tier1 1.6 |
+| deflector | 1 | common | -37% / -24% | -2% / -19% | -17% | -3% | yes | 100% | 33 hits;  |
+| kickback | 4 | common | +27% / +36% | +23% / +0% | +2% | +22% | yes | 100% | 7 hits;  |
+| bank | 5 | uncommon | -18% / +18% | -19% / -15% | +6% | +18% | NO | 100% | 42 hits; bankSet 9.0, BANK COMPLETE 9.0 |
+| uplight | 5 | uncommon | +12% / +10% | -19% / +6% | -3% | -6% | NO | 100% | 22 hits;  |
+| saver | 5 | uncommon | +29% / +29% | +10% / +7% | +8% | +26% | yes | 0% | 0 hits;  |
+| flipper | 6 | uncommon | -16% / -20% | +0% / -21% | -7% | -10% | yes | 0% | 0 hits;  |
+| flipperR | 6 | uncommon | -21% / -12% | -8% / +4% | +9% | -9% | yes | 0% | 0 hits;  |
+| ding | 5 | uncommon | +23% / -13% | +36% / +24% | +45% | +66% | NO | 100% | 36 hits;  |
+| trophy | 8 | rare | +27% / +32% | -3% / -20% | +31% | +3% | yes | 100% | 10 hits;  |
+| piggy | 5 | uncommon | -10% / -6% | +1% / -24% | -1% | -15% | NO | 100% | 9 hits; $ 10.2 |
+| magnet | 6 | uncommon | +86% / +30% | +67% / +6% | +76% | +51% | yes | 100% | 13 hits; caught 13.3 |
+| strip | 5 | uncommon | +15% / +18% | -11% / -1% | -3% | +4% | yes | 0% | 0 hits;  |
+| plate | 6 | uncommon | +12% / +10% | -15% / +0% | -5% | +3% | yes | 0% | 0 hits;  |
+| roller | 6 | uncommon | -25% / +55% | -16% / -5% | -9% | -1% | NO | no room | 0 hits;  |
+| printer | 9 | rare | +727% / +741% | +417% / +622% | +552% | +523% | yes | 100% | 50 hits; caught 49.9, extraBall 7.4 |
+| thunder | 8 | rare | +51% / +81% | +29% / +48% | +54% | +46% | yes | 100% | 56 hits;  |
+| jackpot | 8 | rare | +48% / +49% | +73% / +41% | +71% | +84% | yes | 100% | 22 hits; caught 21.7, JACKPOT! 21.6 |
+| xlane | 7 | uncommon | +95% / +108% | +57% / +83% | +81% | +67% | yes | 100% | 19 hits; MULT x# 8.2, LANES COMPLETE 3.8, X LANE MAXED 2.5 |
+| rank | 8 | rare | +64% / +92% | +35% / +39% | +36% | +35% | yes | 100% | 57 hits; DIAMOND AGAIN! 3.8, SILVER RANK! 2.2, GOLD RANK! 1.6 |
+| bell | 8 | rare | -33% / 0% | +17% / -12% | +23% | +10% | NO | 100% | 16 hits; THE BELL RINGS! x# 0.3 |
+| tesla | 9 | rare | +37% / +81% | +12% / +37% | +36% | +81% | yes | 100% | 19 hits;  |
+| keg | 8 | rare | +11% / +16% | +2% / +12% | +18% | +7% | yes | 100% | 16 hits; FUSE LIT! 5.9, KABOOM! 5.5, sparksOut 5.5 |
+| laser | 9 | rare | +20% / +13% | +53% / +2% | +40% | +5% | yes | 100% | 16 hits; PEW! 11.5, beam 11.5 |
+| gong | 5 | uncommon | +14% / -17% | +46% / +29% | +62% | +72% | NO | 100% | 24 hits; BOOM! 1.8, blast 1.8 |
+| duck | 8 | rare | +27% / +25% | -16% / -5% | -9% | -1% | yes | no room | 0 hits;  |
+| golden | 12 | legendary | +117% / +73% | +97% / +113% | +123% | +110% | yes | 100% | 27 hits; $ 3.9 |
+| fame | 13 | legendary | +69% / +69% | +81% / +103% | +106% | +115% | yes | 100% | 21 hits; MULT x# 2.5 |
+| disco | 11 | legendary | +101% / +103% | +66% / +86% | +88% | +97% | yes | 100% | 20 hits; MULT x# 2.5 |
+| goal | 12 | legendary | -17% / -18% | -16% / -56% | +2% | -21% | yes | no room | 6 hits; goal 2.1, GOAL! 1.6 |
+| sparkler | 3 | common | +38% / +3% | +0% / +14% | +8% | +3% | yes | 100% | 25 hits; sparksOut 20.4 |
+| rocks | 4 | uncommon | +67% / +50% | -30% / -2% | +30% | +12% | yes | 100% | 15 hits; sparksOut 25.2 |
+| firecracker | 8 | rare | +29% / +36% | +68% / +41% | +50% | +45% | yes | 100% | 10 hits; sparksOut 13.8, WHOOSH! 2.3, rocket 2.3 |
+| gumball | 9 | rare | +116% / +185% | +54% / +63% | +79% | +86% | yes | 100% | 17 hits; caught 2.9, extraBall 2.8, LOCK #/# 2.0 |
+| ring | 8 | rare | +16% / +18% | -5% / +2% | +1% | +3% | yes | 100% | 23 hits; BANKED #! 14.8, BANKED #,#! 6.2 |
+| hand | 7 | uncommon | +9% / +2% | -8% / -17% | -8% | -23% | yes | 0% | 0 hits;  |
+| wheel | 8 | rare | +574% / +1099% | +536% / +1050% | +926% | +274% | yes | 100% | 47 hits; caught 46.6, SPIN! 46.6, $ 24.5 |
+| split | 7 | uncommon | +3% / +46% | +3% / -16% | +33% | +19% | yes | 100% | 15 hits; sparksOut 13.2, SPLIT! 6.6 |
+| whale | 12 | legendary | +9% / +28% | -29% / -4% | -16% | -31% | yes | 100% | 17 hits; swallow 1.3 |
+| insure | 5 | uncommon | +32% / -8% | 0% / +12% | +3% | -3% | NO | 25% | 3 hits; INSURED! 0.3 |
+| nest | 8 | rare | -16% / +1% | -14% / -24% | +8% | -1% | yes | 100% | 7 hits; sparksOut 1.8 |
+| jar | 8 | rare | +14% / +17% | +2% / -23% | +2% | +9% | yes | 100% | 9 hits; MARBLE #! 0.3 |
+| wreck | 11 | legendary | +55% / +19% | +33% / +28% | +32% | +21% | yes | 100% | 18 hits; WRECKING BALL! 2.5, grow 2.5 |
+| broom | 9 | rare | +82% / +85% | -17% / +62% | +53% | +42% | NO | 100% | 14 hits;  |
+| bucket | 11 | legendary | +58% / +65% | -16% / +27% | +17% | -2% | NO | no room | 2 hits; bucket 2.0, FREE BALL! 2.0 |
+| grape | 5 | uncommon | -17% / +64% | -10% / -4% | +9% | 0% | NO | 100% | 32 hits;  |
+| echo | 6 | uncommon | +19% / +20% | -7% / -1% | -3% | +3% | yes | 100% | 22 hits;  |
+| spot | 6 | uncommon | -16% / +15% | -9% / -10% | -4% | -18% | NO | 100% | 11 hits; LIGHTS OUT 4.9 |
+| bonsai | 5 | uncommon | +8% / -2% | -5% / -16% | -6% | +11% | yes | 100% | 8 hits;  |
+| capsule | 8 | rare | +10% / -1% | -7% / -24% | +10% | +3% | yes | 100% | 9 hits;  |
+| ice | 5 | uncommon | +41% / +14% | +4% / +1% | +2% | +2% | yes | 54% | 7 hits; PUDDLE! 0.3 |
+| well | 4 | uncommon | +36% / +20% | -25% / -2% | +23% | -28% | yes | 100% | 9 hits;  |
+| pinata | 9 | rare | -2% / +38% | +12% / +31% | +10% | +21% | NO | 100% | 12 hits; sparksOut 6.3, $ 2.1, PIÑATA! 0.4 |
+| wizard | 13 | legendary | +165% / +139% | +91% / +42% | +56% | +57% | yes | 100% | 18 hits; extraBall 2.0, ballsOut 2.0, WIZARD MODE! 1.0 |
+| clock | 6 | uncommon | +15% / +13% | -6% / +4% | +2% | +8% | yes | 0% | 0 hits; MIDNIGHT MADNESS! 0.5 |
+| altar | 12 | legendary | +20% / +33% | +14% / +24% | -1% | +9% | yes | 0% | 0 hits; sparksOut 4.0, TEMPEST! 0.4, INFERNO! 0.3 |
+| hutch | 12 | legendary | +34% / +38% | -9% / +4% | +4% | +7% | yes | 0% | 0 hits; gremlinKnock 7.8, GOTCHA! 7.8, $ 4.8 |
+| bulb | 6 | uncommon | +12% / +10% | -16% / -5% | -9% | -1% | yes | 0% | 0 hits;  |
+| feet | 6 | uncommon | +12% / +10% | -16% / -5% | -9% | -1% | yes | 0% | 0 hits;  |
+| tray | 8 | rare | +12% / +10% | -16% / -5% | -9% | -1% | yes | 0% | 0 hits;  |
+| mirror | 9 | rare | +12% / +10% | -16% / -5% | -9% | -1% | yes | 0% | 0 hits;  |
 
 ### 8.1 Verdicts and suggestions
 
-VERDICTS
+**Too strong** (both passes, both tables, every player):
+
+| Part | Measured | Why | Suggestion |
+|---|---|---|---|
+| Spider Wheel (rare, $8) | +536% to +1,099% (pro +926%, poor +274%) | a ball lands in it ~47 times a round; collecting 8 segments gives Wheel Mania about twice a round; each segment is a 200 ms window | §10.3 item 9 |
+| Ball Printer (rare, $9) | +417% to +741%, poor +523% | ~50 catches and 7 extra balls a round; multiball feeds everything | §10.3 item 10 |
+| Gumball Machine (rare, $9) | +54% to +185% | one sure 3-ball multiball every round | fine once the Printer is cut; or a 2-ball lock |
+| X Lane (uncommon, $7) | +57% to +108% | the best uncommon by far: x1.25 a pass up to x3 a ball, and it lights lanes too | make it rare ($8), or cap it at x2 a ball |
+| Golden Bumper, Hall of Fame, Disco Ball (legendary) | +66% to +123% each | ×Mult every ball | right for a legendary; fix the stacking (§10.1), not the single copy |
+| Wizard Lamp (legendary, $13) | +42% to +165% | WIZARD MODE once a round, every round, on any table with enough types | fine for a legendary |
+
+**Strong and fine**: Thunder Bumper (+29% to +81%), Jackpot Scoop (+41% to +84%), Rank Lights (+35% to +92%),
+Firecracker (+29% to +68%), Tesla Coil (+12% to +81%; it is the zaps on Big Boi that break it, §10.2), Wrecking Ball
+(+19% to +55%), Lane Rollover pack (+17% to +66%), Mag-Grab (+6% to +86%, but see the loop, §10.3), Shockwave Gong on a
+full table (+29% to +72%), Kickback (0 to +36%), Ball Saver (+7% to +29%; +26% for poor players), Ding-Dong Bell on a full
+table (+24% to +66%).
+
+**About right as fillers** (inside the noise, they do what they say): Pop Bumper (the reference), Cha-Ching (about $5 a
+round), Slingshot, Spinner, Lamp, Vari-Target, Powder Keg, Laser Turret, Sparkler, Rock Pile, Splitter, Piñata, Bank Ring,
+Drop-Target Bank (9 sets a round; +57% with Target Practice), Grape Bunch, Echo Cave, Ice Sculpture (one round of 250s),
+Insurance Policy (once), Trophy Cup and Old Bell (they pay over a whole run; four rounds cannot show it), Level Light (aim).
+
+**Weak or a net loss** (both passes agree):
+
+| Part | Measured | What happens | Suggestion |
+|---|---|---|---|
+| Deflector ($1) | -37% to -2% | scores nothing; the +25% Hot Shot rarely lands; it takes room | give it points (5 a hit) or make its Hot Shot +50% |
+| The Whale (legendary, $12) | -29% to +28%; poor -31% | it eats the sparks that would have scored, and spouts at most 3 times a ball | no spout cap, or swallowed sparks keep scoring; or uncommon at $7 |
+| Spotlight ($6) | -16% to +15%; poor -18% | the ball knocks it dark ~5 times a round for 10 s each | dark for 4 s; or only a direct flipper shot darkens it |
+| Spider Nest ($8) | -24% to +1% | 25% of hits lay an egg: under 2 sparks a round | 50% eggs, or eggs hatch into 5 |
+| Marble Jar ($8) | -23% to +17% | a marble every 25 ball hits: 0.3 a round | a marble every 10 hits |
+| Goal! (legendary, $12) | -56% to -16% | big (3.6), does not fit a late table, shortens ball life ~8 s; it needs aim (no bot aims) | smaller footprint, and a human aim test before judging |
+| Duck Gallery, Roller Pop, Free Ball Bucket | fine mid; **no room** late | 3.5-4 footprints: a full late table cannot take them | §10.4 item 15 |
+| Left / Right Flipper ($6) | -21% to +9%, also for poor players | an extra bat does not save balls, and blocks shots | $4, and a save once a ball when the ball crosses it |
+| Helping Hand ($7) | -23% to +9%; **poor -23%** | it flips by itself, but does not keep balls alive (ball life -3 s late for poor players) | flip earlier and harder, always upward; it should be the weak player's part, and it is not |
+| Piggy Bank ($5) | -24% to +1% | ~$10 a round late, which buys nothing late (§3.4) | fine early; late money needs a use (§10.4) |
+| Wishing Well ($4) | -25% to +36%; late poor -28% | +3 points and +0.02 Mult a hit per $ thrown in, $5 a visit | make it the late money sink: no per-visit limit, +0.05 Mult per $ |
+| Bonsai Bumper ($5) | -16% to +8% | +4 a round unmoved: needs 8+ rounds | fine for a long run; +6 a round |
+| Midnight Clock (decor, $6) | -6% to +15% | midnight about once every two rounds | 120 hits, not 180 |
+| Ritual Altar, Gremlin Hutch (legendary decor, $12) | -9% to +38% | rituals and gremlins are small next to a legendary part | uncommon/rare price, or stronger rituals |
+| Time Capsule ($8) | scores nothing for 6 rounds | then 3 legendaries to pick from | 4 rounds |
+| Garnet, Opal, Gold Leaf, Topaz (gems) | 0 to +13% | the thing they speed up is rarely the limit | see §8.2 |
 
 ### 8.2 Gems (the gain over the same host part without the gem)
 
-| Gem | Host | Mid (avg / pro / poor) | Late (avg / pro / poor) | Verdict |
-|---|---|---|---|---|
-| Emerald | Disco Ball | +103% / +106% / +98% | +108% / +111% / +84% | doubles an uncapped x2.5: too strong (see §10.1) |
-| Emerald | Hall of Fame | +61% / +63% / +55% | +134% / +137% / +101% | same |
-| Emerald | Firecracker | +39% / +47% / +34% | +19% | fine |
-| Red Seal | Thunder Bumper | +37% / +37% / +38% | +30% / +33% / +31% | good on a busy, high-points part |
-| Ruby | Thunder Bumper | +21% | +18% | fine, a little low for $6 |
-| Ruby / Gold Leaf / Red Seal | Pop Bumper | +3% to +11% | +3% to +4% | a Pop is too cheap a host: fine |
-| Garnet | X Lane / Laser | +3% / 0% | +5% / +2% | **does nothing measurable** |
-| Opal | Pop / Duck | +2% / +13% | 0% / 0% | **does nothing measurable** |
-| Topaz | Pop | -15% / -31% (poor) | +29% | noise: about nothing |
-| Gold Leaf | Pop | +11% | +3% | grows +1 a score up to 5x: too slow to show in 4 rounds; weak |
+| Gem | Host | Mid avg (pass 1 / 2) | Late avg (1 / 2) | Late pro / poor | Verdict |
+|---|---|---|---|---|---|
+| Emerald | Disco Ball | +103% / +90% | +108% / +115% | +112% / +94% | doubles an uncapped x2.5: too strong (§10.1) |
+| Emerald | Hall of Fame | +61% / +60% | +134% / +144% | +139% / +115% | same |
+| Emerald | Firecracker | +39% / +18% | +19% / +6% | +25% / +28% | fine |
+| Red Seal | Thunder Bumper | +37% / +30% | +30% / +34% | +30% / +30% | good on a busy, high-points part |
+| Ruby | Thunder Bumper | +21% / +16% | +18% / +19% | +19% / +18% | fine, a little low for $6 |
+| Ruby / Gold Leaf / Red Seal | Pop Bumper | +6% to +11% | +3% to +4% | +2% to +4% | a Pop is too cheap a host: fine |
+| Garnet | X Lane / Laser Turret | +3% to +6% / 0% | +4% to +5% / +1% to +2% | +1% to +8% | **does nothing measurable**: recharge is not what limits them |
+| Opal | Pop / Duck Gallery | +2% / +9% to +13% | 0% / 0% (no room) | 0% | **does nothing measurable** |
+| Topaz | Pop Bumper | -15% / +1% | +29% / +11% | -12% / +14% | inside the noise: about nothing |
+| Gold Leaf | Pop Bumper | +11% / +11% | +3% / +3% | +3% / +2% | +1 a score up to 5x is too slow to show; weak |
+
+Suggestions: Garnet halves the cooldown of *any* part with one (Sparkler, Rock Pile, Splitter, Kickback, Tesla zap
+cooldown), not only the four it names; Opal also doubles Trophy polish and Bonsai age; Gold Leaf +2 a score; Topaz 25%.
 
 ### 8.3 The parts with no points of their own (the mechanics probe)
 
@@ -399,7 +521,7 @@ VERDICTS
 | Gumball Machine | yes | exactly one 3-ball multiball a round, as tuned |
 | Free Ball Bucket | yes | ~5 catches a round (each ball back to the plunger); cannot be placed on a full late table |
 | Ball Printer | yes | ~60 catches and ~8 extra balls a round |
-| Helping Hand | flips, but never "hits" | no score events; it shows only in ball life (below) |
+| Helping Hand | flips, but never "hits" | no score events; it shows only in ball life (§8.1) |
 | Ball Saver | yes | 0.7-0.9 saves a round |
 
 ---
@@ -477,9 +599,9 @@ Ordered by what to do first. "Measured" means the numbers above; "proposal" is a
 
 9. **Spider Wheel**: one spin a ball (or a 10 s rest after a spin); Wheel Mania once a round; the timeout stops on a random
    segment, not always Zilch; spin slower (3 a second) so the stop is readable rather than a 200 ms timing trick.
-   Measured: +536% avg, +1,119% pro.
+   Measured: +536% to +1,099% for an average player, about +930% for a pro.
 10. **Ball Printer**: 2 balls a ball (from 3) and a 3 s rest after printing, or make it legendary at $11-12. Measured:
-    +400-730%, the most reliable winner, including for poor players.
+    +417% to +741%, the most reliable winner, including for poor players (+523%).
 11. **Twin Ball**: count only launched balls for Multiball Madness (or anything counting balls); consider the twin
     arriving with the first ball of a round only. Measured: +73-565%.
 12. **Mag-Grab**: it cannot grab the same ball again within 3 s, so a Mag-Grab-into-Big-Boi loop ends. Measured: with the clock off,
@@ -526,15 +648,20 @@ Ordered by what to do first. "Measured" means the numbers above; "proposal" is a
 
 ### 10.8 The weak parts
 
-VERDICT_SHORT
+33. Buffs, in order of how far below the line they are: Deflector, The Whale, Spotlight, Spider Nest, Marble Jar,
+    Helping Hand, the extra flippers, Goal! (footprint), Wishing Well (as the money sink), the legendary decor, the four
+    weak gems. Numbers and a suggestion for each are in §8.1 and §8.2.
+34. X Lane to rare, or x2 a ball.
+35. Re-run `report-pooled.ts` after each change: two passes, and only move a part when both agree.
 
 ### 10.9 Tools
 
-33. Give the balance tool's par bot a per-approach miss model (or use `tools/research/lib.ts`'s `Human`): today it
+36. Give the balance tool's par bot a per-approach miss model (or use `tools/research/lib.ts`'s `Human`): today it
     measures a perfect player.
-34. The auto-builder never finds "next to Big Boi" engines and moves parts for free; the research placer charges the move
-    fee but is no smarter. A human finds the engine; the tools do not.
-35. Add a nudging player (Rubber Feet, Heavy Ball's cost, tilt) and an aiming player (Goal!, Duck, Drop-Target Banks)
+37. Both auto-placers search by short random moves; the engines depend on exact adjacency (a Tesla within arc range of
+    Big Boi, Plates touching him), which neither searches for, so tool-built tables probably under-represent them. The
+    repo's auto-builder also moves parts for free (the research placer charges the fee).
+38. Add a nudging player (Rubber Feet, Heavy Ball's cost, tilt) and an aiming player (Goal!, Duck, Drop-Target Banks)
     before judging those parts.
 
 ---
@@ -569,4 +696,5 @@ npx vite-node tools/research/mechanics.ts                      # the parts with 
 ```
 
 The build finder's 21 builds are in `tools/research/builds/` (JSON: parts with spots, decals, decor, partial version,
-the synergy each build claims).
+the synergy each build claims). Every report this file quotes is in `docs/balance-research/` (calibration, both census
+passes pooled, campaigns, builds and clock, decals and bosses), with the raw results in `raw-results.tgz`.

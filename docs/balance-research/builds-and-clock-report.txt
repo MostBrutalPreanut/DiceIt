@@ -1,0 +1,168 @@
+
+BUILDS: rounds 13-15 judged (final boss in 15), then endless until a loss. Per variant and player: beat r15 (n), last round won (median, max), r15 score/goal p50
+build                               $    variant  pro                         avg                         poor
+foreman-elevator                     76  full     100%(2) last   21/21  x3.9  100%(2) last   20/20  x4.3   50%(2) last 15.5/17  x3.1  
+foreman-elevator                     76  auto     100%(2) last   21/21  x3.8  100%(2) last   18/21  x4.3   50%(2) last 16.5/19  x2.1  
+foreman-elevator                     47  partial    0%(2) last 13.5/14  x0.1    0%(2) last 11.5/12  x-      0%(2) last    0/0   x-    
+dragon-purist-siege                  53  full     100%(2) last   20/20  x1.6  100%(2) last   18/19  x1.7   50%(2) last 15.5/17  x0.9  
+dragon-purist-siege                  53  auto     100%(2) last   20/20  x1.6  100%(2) last   18/19  x1.7   50%(2) last 15.5/17  x0.9  
+dragon-purist-siege                  29  partial    0%(2) last    6/12  x-      0%(2) last    0/0   x-      0%(2) last    0/0   x-    
+cook-target-practice-banks          106  full       0%(2) last 13.5/14  x0.4    0%(2) last 13.5/14  x0.2    0%(2) last  6.5/13  x-    
+cook-target-practice-banks          106  auto       0%(2) last   14/14  x0.3    0%(2) last 11.5/12  x-      0%(2) last 12.5/13  x-    
+cook-target-practice-banks           74  partial    0%(2) last    5/10  x-      0%(2) last 10.5/11  x-      0%(2) last    0/0   x-    
+light-show-lane-echo                114  full       0%(2) last   13/14  x0.3    0%(2) last   14/14  x0.3    0%(2) last   11/11  x-    
+light-show-lane-echo                114  auto       0%(2) last   13/14  x0.4    0%(2) last 13.5/14  x0.3    0%(2) last 11.5/12  x-    
+light-show-lane-echo                 90  partial    0%(2) last 11.5/12  x-      0%(2) last    6/12  x-      0%(2) last    5/10  x-    
+cook-autopilot-survival             132  full     100%(2) last   17/17  x2.1  100%(2) last   18/18  x1.6  100%(2) last   18/18  x1.6  
+cook-autopilot-survival             132  auto     100%(2) last 17.5/18  x1.0  100%(2) last   18/18  x1.2  100%(2) last   18/18  x1.7  
+cook-autopilot-survival              95  partial   50%(2) last 15.5/17  x0.9   50%(2) last   16/18  x0.5  100%(2) last   16/16  x1.5  
+budget-grape-garden                  95  full      50%(2) last   15/16  x0.7   50%(2) last 14.5/17  x1.6   50%(2) last 14.5/15  x0.8  
+budget-grape-garden                  95  auto       0%(2) last 12.5/13  x-      0%(2) last   12/12  x-      0%(2) last 13.5/14  x0.1  
+budget-grape-garden                  80  partial    0%(2) last   11/12  x-      0%(2) last    5/10  x-      0%(2) last    0/0   x-    
+dream-foreman-overdrive             201  full     100%(2) last   22/22  x84.7 100%(2) last   22/22  x74.5 100%(2) last   22/22  x116.2
+dream-foreman-overdrive             201  auto     100%(2) last   22/22  x60.8 100%(2) last   22/22  x84.1 100%(2) last   22/22  x142.0
+dream-foreman-overdrive             111  partial  100%(2) last   22/22  x19.8 100%(2) last 21.5/22  x18.1 100%(2) last   19/21  x18.6 
+foreman-overtime-additive            97  full       0%(2) last 13.5/14  x0.2    0%(2) last   13/13  x-      0%(2) last 11.5/12  x-    
+foreman-overtime-additive            97  auto       0%(2) last 13.5/14  x0.2    0%(2) last   13/13  x-      0%(2) last 11.5/12  x-    
+foreman-overtime-additive            65  partial    0%(2) last 11.5/12  x-      0%(2) last 11.5/12  x-      0%(2) last  5.5/11  x-    
+xmult-ladder                        122  full       0%(2) last   14/14  x0.6    0%(2) last 13.5/14  x0.4    0%(2) last 10.5/11  x-    
+xmult-ladder                        122  auto      50%(2) last   15/16  x1.2    0%(2) last   14/14  x0.6    0%(2) last 12.5/14  x0.2  
+xmult-ladder                         87  partial    0%(2) last   11/12  x-      0%(2) last    0/0   x-      0%(2) last    0/0   x-    
+hall-of-fame-zoo                    178  full      50%(2) last 15.5/17  x15.8  50%(2) last   17/20  x28.6 100%(2) last 18.5/20  x3.5  
+hall-of-fame-zoo                    178  auto     100%(2) last   20/20  x2.6  100%(2) last   18/19  x49.9 100%(2) last 17.5/20  x1.6  
+hall-of-fame-zoo                    125  partial    0%(2) last 12.5/14  x0.7    0%(2) last 12.5/13  x-      0%(2) last 13.5/14  x0.2  
+foreman-furnace                     115  full       0%(2) last   14/14  x0.5    0%(2) last 13.5/14  x0.1    0%(2) last   11/12  x-    
+foreman-furnace                     115  auto       0%(2) last 13.5/14  x0.4    0%(2) last   12/12  x-      0%(2) last    6/12  x-    
+foreman-furnace                      83  partial    0%(2) last   12/12  x-      0%(2) last 10.5/11  x-      0%(2) last    5/10  x-    
+multiball-madness-castle             99  full     100%(2) last   17/17  x1.5  100%(2) last 16.5/17  x1.6   50%(2) last   15/16  x0.7  
+multiball-madness-castle             99  auto     100%(2) last   17/17  x1.9  100%(2) last 16.5/17  x1.1   50%(2) last   15/16  x1.0  
+multiball-madness-castle             71  partial    0%(2) last   13/13  x-      0%(2) last 12.5/13  x-      0%(2) last 11.5/12  x-    
+dream-disco-fame-singularity        292  full     100%(2) last   22/22  x1.8074850925469398e+36100%(2) last   22/22  x6.942709459866718e+34100%(2) last   22/22  x3.8963369877940677e+31
+dream-disco-fame-singularity        292  auto     100%(2) last   22/22  x2.4139236594296137e+37100%(2) last   22/22  x4.099798151304786e+35100%(2) last   22/22  x1.4851126875977555e+30
+dream-disco-fame-singularity        202  partial  100%(2) last   22/22  x2264945706887.8100%(2) last   22/22  x377102666120.8100%(2) last   22/22  x196485782.8
+dream-bell-tower-trophy-room        153  full     100%(2) last   22/22  x40.3 100%(2) last   22/22  x65.6 100%(2) last   22/22  x75.1 
+dream-bell-tower-trophy-room        153  auto     100%(2) last   22/22  x69.2 100%(2) last   22/22  x47.8 100%(2) last   22/22  x32.1 
+dream-bell-tower-trophy-room         79  partial    0%(2) last   12/12  x-      0%(2) last   12/13  x-      0%(2) last   11/12  x-    
+castle-dragon-siege                 114  full     100%(2) last 16.5/17  x2.5   50%(2) last   15/16  x1.4    0%(2) last   14/14  x0.3  
+castle-dragon-siege                 114  auto      50%(2) last   15/16  x0.8   50%(2) last 15.5/17  x0.8   50%(2) last 14.5/15  x0.6  
+castle-dragon-siege                  47  partial    0%(2) last    0/0   x-      0%(2) last    0/0   x-      0%(2) last    0/0   x-    
+factory-spotlit-tesla-crown         136  full      50%(2) last 15.5/17  x1.2    0%(2) last   14/14  x0.6    0%(2) last 11.5/12  x-    
+factory-spotlit-tesla-crown         136  auto      50%(2) last   15/16  x0.8    0%(2) last 12.5/13  x-      0%(2) last   11/12  x-    
+factory-spotlit-tesla-crown          51  partial    0%(2) last 10.5/11  x-      0%(2) last    5/10  x-      0%(2) last    0/0   x-    
+diner-printer-lucky-madness         126  full       0%(2) last   14/14  x0.7   50%(2) last 14.5/15  x0.8    0%(2) last   13/14  x0.1  
+diner-printer-lucky-madness         126  auto      50%(2) last 14.5/15  x1.0    0%(2) last   14/14  x0.6    0%(2) last 13.5/14  x0.1  
+diner-printer-lucky-madness         117  partial    0%(2) last   12/12  x-      0%(2) last 10.5/11  x-      0%(2) last  5.5/11  x-    
+factory-altar-set-storm             132  full       0%(2) last   14/14  x0.4    0%(2) last   13/14  x0.1    0%(2) last   12/12  x-    
+factory-altar-set-storm             132  auto       0%(2) last   14/14  x0.5    0%(2) last   13/13  x-      0%(2) last 11.5/13  x-    
+factory-altar-set-storm             100  partial    0%(2) last 10.5/11  x-      0%(2) last 11.5/12  x-      0%(2) last    5/10  x-    
+factory-broom-xmult-runway          168  full     100%(2) last   20/20  x5.2  100%(2) last   19/20  x6.8  100%(2) last 18.5/20  x1.3  
+factory-broom-xmult-runway          168  auto     100%(2) last   20/20  x5.1  100%(2) last   20/20  x7.3  100%(2) last   20/20  x2.7  
+factory-broom-xmult-runway          132  partial    0%(2) last   14/14  x0.3    0%(2) last 12.5/13  x-      0%(2) last   13/14  x0.3  
+castle-dragon-apocalypse            204  full     100%(2) last   20/20  x25.2 100%(2) last   20/20  x51.2 100%(2) last   20/20  x7.1  
+castle-dragon-apocalypse            204  auto     100%(2) last   20/20  x33.5 100%(2) last   20/20  x36.7 100%(2) last   20/20  x9.4  
+castle-dragon-apocalypse            163  partial  100%(2) last 18.5/19  x2.8  100%(2) last   18/18  x3.4  100%(2) last 17.5/18  x1.5  
+factory-supernova                   238  full     100%(2) last   22/22  x133.6100%(2) last   22/22  x18.1 100%(2) last   20/20  x232.9
+factory-supernova                   238  auto     100%(2) last   20/20  x101.1100%(2) last   21/22  x53.4 100%(2) last   20/20  x68.2 
+factory-supernova                   208  partial  100%(2) last 19.5/20  x4.2  100%(2) last   19/19  x6.1   50%(2) last 14.5/17  x3.3  
+
+WHERE THE POINTS COME FROM (round 13-15, full variant, all players): top parts and spark/zap shares
+foreman-elevator                   mega 98%, magnet 1%, tesla 0%, gong 0%, uplight 0%           sparks 0% zaps 93% peakMult p50 12
+dragon-purist-siege                mega 97%, tesla 2%, magnet 1%, uplight 0%                    sparks 0% zaps 95% peakMult p50 7
+cook-target-practice-banks         bank 79%, vari 9%, magnet 4%, rank 1%, mega 1%               sparks 0% zaps 0% peakMult p50 100
+light-show-lane-echo               echo 45%, lane 27%, mega 8%, xlane 5%, rank 4%               sparks 0% zaps 0% peakMult p50 124
+cook-autopilot-survival            mega 96%, tesla 3%, magnet 0%, gong 0%, uplight 0%           sparks 0% zaps 96% peakMult p50 3
+budget-grape-garden                mega 96%, grape 1%, bonsai 1%, well 1%, gong 0%              sparks 0% zaps 2% peakMult p50 8
+dream-foreman-overdrive            mega 98%, tesla 1%, golden 0%, trophy 0%, magnet 0%          sparks 0% zaps 80% peakMult p50 142
+foreman-overtime-additive          thunder 50%, mega 37%, pop 3%, tesla 2%, magnet 1%           sparks 0% zaps 37% peakMult p50 30
+xmult-ladder                       golden 57%, mega 20%, pop 9%, goal 5%, magnet 2%             sparks 0% zaps 0% peakMult p50 235
+hall-of-fame-zoo                   mega 26%, ding 18%, grape 15%, well 8%, vari 1%              sparks 21% zaps 19% peakMult p50 2125
+foreman-furnace                    mega 87%, pop 12%, magnet 0%, sling 0%, spot 0%              sparks 0% zaps 0% peakMult p50 11
+multiball-madness-castle           mega 41%, pop 30%, thunder 9%, bucket 4%, printer 2%         sparks 0% zaps 0% peakMult p50 13
+dream-disco-fame-singularity       mega 46%, magnet 12%, golden 11%, trophy 8%, wizard 5%       sparks 0% zaps 4% peakMult p50 3.9681469811446765e+27
+dream-bell-tower-trophy-room       mega 26%, bell 23%, trophy 16%, bank 8%, tesla 4%            sparks 0% zaps 11% peakMult p50 4957
+castle-dragon-siege                mega 78%, tesla 9%, thunder 5%, trophy 1%, firecracker 1%    sparks 18% zaps 51% peakMult p50 18
+factory-spotlit-tesla-crown        mega 59%, ding 14%, thunder 10%, tesla 9%                    sparks 10% zaps 40% peakMult p50 34
+diner-printer-lucky-madness        ding 34%, mega 31%, thunder 12%, tesla 8%                    sparks 27% zaps 23% peakMult p50 6
+factory-altar-set-storm            mega 50%, ding 18%, tesla 8%, thunder 7%, rocks 4%           sparks 16% zaps 41% peakMult p50 16
+factory-broom-xmult-runway         mega 72%, jackpot 11%, tesla 11%, ding 3%, trophy 1%         sparks 0% zaps 29% peakMult p50 208
+castle-dragon-apocalypse           mega 72%, tesla 19%, trophy 7%, gong 1%, nest 0%             sparks 14% zaps 60% peakMult p50 300
+factory-supernova                  mega 88%, ding 7%, tesla 3%, trophy 1%, gong 0%              sparks 1% zaps 15% peakMult p50 2989
+
+PERFORMANCE (sim only, Node): wall ms per sim second, worst single step, max sparks / balls
+foreman-elevator                     12.8 ms/s (p90 25.6)  worst step 934.4 ms  sparks 0  balls 1
+dragon-purist-siege                  16.7 ms/s (p90 32.2)  worst step 1260.0 ms  sparks 0  balls 1
+cook-target-practice-banks           10.6 ms/s (p90 21.2)  worst step 609.7 ms  sparks 0  balls 1
+light-show-lane-echo                 17.1 ms/s (p90 29.7)  worst step 32.6 ms  sparks 0  balls 1
+cook-autopilot-survival              16.7 ms/s (p90 22.4)  worst step 32.5 ms  sparks 0  balls 1
+budget-grape-garden                  13.7 ms/s (p90 21.4)  worst step 30.9 ms  sparks 0  balls 1
+dream-foreman-overdrive              15.3 ms/s (p90 22.8)  worst step 25.9 ms  sparks 0  balls 1
+foreman-overtime-additive            10.2 ms/s (p90 20.3)  worst step 25.8 ms  sparks 0  balls 1
+xmult-ladder                         10.3 ms/s (p90 20.6)  worst step 29.2 ms  sparks 0  balls 1
+hall-of-fame-zoo                     14.3 ms/s (p90 21.8)  worst step 29.0 ms  sparks 33  balls 3
+foreman-furnace                      10.1 ms/s (p90 20.0)  worst step 29.7 ms  sparks 0  balls 1
+multiball-madness-castle             13.1 ms/s (p90 18.0)  worst step 38.4 ms  sparks 0  balls 4
+dream-disco-fame-singularity         11.0 ms/s (p90 18.5)  worst step 27.9 ms  sparks 0  balls 3
+dream-bell-tower-trophy-room         11.5 ms/s (p90 20.1)  worst step 31.3 ms  sparks 16  balls 1
+castle-dragon-siege                  12.4 ms/s (p90 19.3)  worst step 22.6 ms  sparks 23  balls 1
+factory-spotlit-tesla-crown          12.3 ms/s (p90 21.3)  worst step 30.3 ms  sparks 12  balls 1
+diner-printer-lucky-madness          14.2 ms/s (p90 24.4)  worst step 52.4 ms  sparks 28  balls 4
+factory-altar-set-storm              11.8 ms/s (p90 21.6)  worst step 21.4 ms  sparks 32  balls 1
+factory-broom-xmult-runway           10.0 ms/s (p90 17.6)  worst step 28.4 ms  sparks 5  balls 1
+castle-dragon-apocalypse             12.4 ms/s (p90 18.4)  worst step 23.0 ms  sparks 20  balls 2
+factory-supernova                    11.1 ms/s (p90 18.2)  worst step 28.2 ms  sparks 11  balls 2
+
+BY FINAL BOSS (all builds, full+auto): beat rate
+auditor    pro   beat 79% of 24 that reached it; r15 score/goal p50 3.39
+auditor    avg   beat 78% of 23 that reached it; r15 score/goal p50 7.80
+auditor    poor  beat 55% of 20 that reached it; r15 score/goal p50 1.63
+overlord   pro   beat 60% of 25 that reached it; r15 score/goal p50 1.27
+overlord   avg   beat 60% of 20 that reached it; r15 score/goal p50 1.14
+overlord   poor  beat 86% of 21 that reached it; r15 score/goal p50 1.46
+whirlpool  pro   beat 63% of 27 that reached it; r15 score/goal p50 1.48
+whirlpool  avg   beat 81% of 21 that reached it; r15 score/goal p50 2.20
+whirlpool  poor  beat 85% of 13 that reached it; r15 score/goal p50 2.05
+
+CLOCK OFF: same build, same seeds, every ball out; clock on vs off (ball cut at 10 min)
+build                               player  score on p50    off p50    off/on   ball s on mean/max   off mean/max   score at 1/2/5/10 min (off, mean)
+foreman-elevator                   pro       8,392,921   35,791,077   x4.3       49/60              206/600     2,609,305 / 7,109,691 / 17,834,213 / 33,810,233
+foreman-elevator                   avg       9,944,912   41,664,744   x4.2       49/60              145/359     2,614,530 / 7,911,533 / 18,659,874 / 30,170,349
+dragon-purist-siege                pro       4,753,735   33,299,090   x7.0       50/60              311/600     1,177,983 / 3,257,481 / 9,710,385 / 22,323,842
+dragon-purist-siege                avg       3,599,577   10,837,172   x3.0       41/60              114/281     1,276,551 / 3,237,242 / 6,911,712 / 8,461,271
+cook-target-practice-banks         pro         504,416      881,149   x1.7       44/60               58/99      231,298 / 677,263 / 849,071 / 849,071
+cook-target-practice-banks         avg         315,067      593,158   x1.9       31/60               47/123     173,420 / 277,509 / 499,830 / 499,830
+light-show-lane-echo               pro         634,087      883,215   x1.4       35/60               43/87      443,462 / 741,256 / 741,256 / 741,256
+light-show-lane-echo               avg         771,146      682,715   x0.9       32/60               32/62      467,293 / 467,293 / 467,293 / 467,293
+cook-autopilot-survival            pro       5,792,965   71,619,325   x12.4      58/73              536/600     1,616,899 / 4,102,371 / 11,561,962 / 23,988,577
+cook-autopilot-survival            avg       5,626,933   72,831,484   x12.9      56/67              600/600     2,059,227 / 4,543,123 / 11,991,830 / 24,428,794
+budget-grape-garden                pro         556,868      556,868   x1.0       37/60               37/63      275,480 / 424,275 / 424,275 / 424,275
+budget-grape-garden                avg         499,483      499,483   x1.0       29/60               51/195     354,816 / 490,461 / 664,481 / 664,481
+dream-foreman-overdrive            pro     507,934,381 2,003,001,922   x3.9       38/60               69/225     214,631,276 / 727,028,920 / 861,408,273 / 861,408,273
+dream-foreman-overdrive            avg     478,590,155 2,149,509,862   x4.5       30/60               64/206     784,050,980 / 1,039,020,625 / 1,373,612,584 / 1,373,612,584
+foreman-overtime-additive          pro         656,073    3,056,813   x4.7       41/60               86/306     159,446 / 632,625 / 1,874,564 / 1,874,564
+foreman-overtime-additive          avg         947,923      435,794   x0.5       48/60               54/110     233,126 / 459,966 / 694,251 / 694,251
+xmult-ladder                       pro         990,326      990,326   x1.0       25/60               37/171     696,224 / 2,742,128 / 4,910,534 / 4,910,534
+xmult-ladder                       avg         288,194      288,194   x1.0       17/42               17/42      230,345 / 230,345 / 230,345 / 230,345
+hall-of-fame-zoo                   pro     142,726,402  334,217,373   x2.3       56/61              126/316     92,481,675 / 134,459,810 / 294,820,367 / 534,006,390
+hall-of-fame-zoo                   avg      57,044,802   90,081,185   x1.6       45/61               70/193     43,295,795 / 122,684,697 / 205,222,455 / 205,222,455
+foreman-furnace                    pro         636,404      636,404   x1.0       32/60               43/157     377,524 / 509,451 / 699,277 / 699,277
+foreman-furnace                    avg         501,671      501,671   x1.0       30/60               40/119     577,195 / 867,519 / 1,021,099 / 1,021,099
+multiball-madness-castle           pro       4,959,964   72,662,732   x14.6      68/121             600/601     1,258,884 / 2,691,657 / 8,453,260 / 23,192,489
+multiball-madness-castle           avg       4,898,213   46,659,855   x9.5       68/121             475/602     1,335,551 / 2,437,997 / 6,685,327 / 17,765,475
+dream-disco-fame-singularity       pro    296,856,891,056 1,741,584,619,277   x5.9       46/60              114/331     229,487,943,164 / 650,705,279,939 / 1,234,948,189,470 / 1,234,948,189,470
+dream-disco-fame-singularity       avg    89,561,127,847 128,345,325,290   x1.4       36/60               43/94      100,811,582,319 / 198,030,604,113 / 198,030,604,113 / 198,030,604,113
+dream-bell-tower-trophy-room       pro         496,731    2,520,902   x5.1       36/60               87/312     326,304 / 741,335 / 1,925,252 / 1,925,252
+dream-bell-tower-trophy-room       avg         487,599      677,645   x1.4       33/60               44/115     439,060 / 645,317 / 796,518 / 796,518
+castle-dragon-siege                pro       2,606,121    5,685,724   x2.2       41/60               93/218     412,724 / 1,369,562 / 3,965,707 / 3,965,707
+castle-dragon-siege                avg       2,611,739    1,860,336   x0.7       42/60               38/84      459,852 / 795,469 / 795,469 / 795,469
+factory-spotlit-tesla-crown        pro       2,258,370    7,088,388   x3.1       38/60               93/255     686,698 / 1,728,638 / 5,272,863 / 5,272,863
+factory-spotlit-tesla-crown        avg         456,667      456,667   x1.0       26/60               27/68      261,184 / 261,184 / 261,184 / 261,184
+diner-printer-lucky-madness        pro       1,813,627    3,901,522   x2.2       55/61              148/303     609,933 / 1,187,115 / 2,346,386 / 3,127,827
+diner-printer-lucky-madness        avg       1,822,778    1,605,889   x0.9       50/61               81/151     577,269 / 1,079,217 / 1,280,161 / 1,280,161
+factory-altar-set-storm            pro       1,780,020      522,850   x0.3       44/60               38/140     344,633 / 747,151 / 1,134,233 / 1,134,233
+factory-altar-set-storm            avg         157,810      157,810   x1.0       26/51               26/51      79,524 / 79,524 / 79,524 / 79,524
+factory-broom-xmult-runway         pro      20,537,380  109,641,896   x5.3       60/61              218/600     5,302,357 / 19,167,804 / 37,307,578 / 67,034,241
+factory-broom-xmult-runway         avg      14,650,723   35,755,560   x2.4       42/61               83/162     5,794,804 / 12,221,099 / 27,921,598 / 36,744,968
+castle-dragon-apocalypse           pro      84,451,784  116,368,002   x1.4       45/60               59/121     29,844,213 / 44,270,662 / 71,224,020 / 71,224,020
+castle-dragon-apocalypse           avg      90,214,072  128,437,039   x1.4       46/60               68/148     43,206,388 / 74,165,992 / 103,772,251 / 103,772,251
+factory-supernova                  pro     879,420,531 1,636,498,329   x1.9       56/60              132/221     280,600,549 / 559,137,578 / 1,488,700,660 / 1,805,691,011
+factory-supernova                  avg     872,232,650 1,085,337,865   x1.2       50/60               67/135     324,319,778 / 607,763,943 / 672,130,345 / 672,130,345

@@ -1,0 +1,1394 @@
+[
+ {
+  "id": "castle-dragon-siege",
+  "archetype": "Tesla Coils hugging the Dragon: arcs, booms and sparks knock his armour off, Fan Club pays the jackpots",
+  "machine": "castle",
+  "kind": "realistic",
+  "thesis": "In bigBoiHit the Dragon loses a plate on EVERY scoring hit, and zaps and sparks go through the same hit() path, so a Tesla Coil whose nearest zappable part is Big Boi turns every coil hit into an armour plate (Big Boi has a 0.5 s zap cooldown, nothing else). The jackpot is (40+10*level)*10 * modFactor('mega') * situational, so Fan Club x3, Overclock(mega) x1.5, Bumper Car x1.5, Last Call and the Midnight Clock all multiply it, while plates/lamps/spots do not. Level Lights placed where the coils' second arc lands toggle on every arc and level Big Boi + both coils for good. Probe (L6 start, 3 rounds, skill 0.6): 1.2M-2.7M a round, 3-10 slays a round, 2/3 of Big Boi's hits were arcs.",
+  "synergies": [
+   {
+    "a": "tesla",
+    "b": "mega",
+    "claim": "Castle: >=50% of Big Boi's scoring hits are zaps (by 'arc'), and each removes an armour plate; slays per round >= 4 with two flanking coils"
+   },
+   {
+    "a": "tesla",
+    "b": "uplight",
+    "claim": "a coil's 2nd-nearest zappable part is a Level Light: arcs toggle it, so the pair completes several times a round (>=3 'BUMPERS +1 LEVEL' per round) and Big Boi/coils reach L10 within ~3 rounds without the ball touching the lights"
+   },
+   {
+    "a": "fanClub",
+    "b": "mega",
+    "claim": "Fan Club multiplies the ARMOUR BROKEN jackpot x3 (bigBoiX is inside modFactor): mega's ledger points roughly triple vs the same table without it"
+   },
+   {
+    "a": "gong",
+    "b": "lane",
+    "claim": "one Shockwave Gong boom zaps all three lanes of a pack in one pass and completes a LANES COMPLETE set (+0.5 Mult), capped 5 sets a ball"
+   },
+   {
+    "a": "clock",
+    "b": "mega",
+    "claim": "sparks and zaps advance the Midnight Clock (clockHit is in the points branch with no zap/spark check): >=1 MIDNIGHT MADNESS per round and slays during it pay x2"
+   }
+  ],
+  "parts": [
+   {
+    "def": "tesla",
+    "x": 7.8,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 16.2,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 40.2,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 10,
+    "y": 31.9,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 14,
+    "y": 31.9,
+    "role": "core"
+   },
+   {
+    "def": "gong",
+    "x": 12,
+    "y": 22.2,
+    "role": "support"
+   },
+   {
+    "def": "firecracker",
+    "x": 12,
+    "y": 27.6,
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 6.5,
+    "y": 22,
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 17.5,
+    "y": 22,
+    "role": "support"
+   },
+   {
+    "def": "pinata",
+    "x": 4.6,
+    "y": 34,
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 4.5,
+    "y": 40.5,
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 19.5,
+    "y": 40.5,
+    "role": "support"
+   },
+   {
+    "def": "nest",
+    "x": 16.3,
+    "y": 44.4,
+    "role": "support"
+   },
+   {
+    "def": "sparkler",
+    "x": 7.7,
+    "y": 44.4,
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 4.2,
+    "y": 29.5,
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 19.8,
+    "y": 29.5,
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 19.8,
+    "y": 34.5,
+    "role": "support"
+   },
+   {
+    "def": "xlane",
+    "x": 20.2,
+    "y": 45,
+    "role": "support"
+   },
+   {
+    "def": "thunder",
+    "x": 12,
+    "y": 17.5,
+    "role": "guard"
+   }
+  ],
+  "decor": "clock",
+  "decals": [
+   {
+    "id": "fanClub"
+   },
+   {
+    "id": "overclock",
+    "target": "mega"
+   },
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "lastCall"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "tesla",
+    "nest",
+    "xlane",
+    "trophy",
+    "pinata"
+   ],
+   "keepDecals": [
+    "fanClub",
+    "overclock"
+   ],
+   "note": "Two flanking coils + the Level Light pair + gong low + rock piles, Fan Club and Overclock(mega): probe 0.32-0.69M a round at L6 (still ~75% Dragon)."
+  },
+  "placementNotes": "Coils at exactly 4.2 left/right/above Big Boi (the solid-gap minimum 1.9+1.1+1.1) so Big Boi is always their nearest zappable target; the Level Lights at (10,31.9)/(14,31.9) are 4.5-4.7 from Big Boi and the side coils, i.e. inside LEVEL_RADIUS 5.5 of both and the coils' 2nd arc. The gong, thunder, rock piles and firecracker sit low (y 17-28) on the bot's main ball path: upper parts get 10-20 hits a round, low ones 40-80. Lanes and X Lane are out of the coils' nearest-4 so they never steal arcs. Trophies collect kept Mult (polish) from the ball and stray arcs (the coils' 3rd arc at L3+).",
+  "risks": "The Jammer jams Tesla here (3 coils tie 3 lanes, coil is pricier): ablation without coils 1.29M vs 2.57M mean; Overlord jamming tesla one ball in ~12 types. Ablations (6 rounds, L6): no spark makers 1.86M, no gong 2.36M. Castle has little +Mult (no Foreman): the score is jackpot x a modest Mult (peak 10-17). Auditor turns Fan Club/Overclock off until half the goal. Lights Out (Night Shift) stops the Level Lights. The coil's 2nd arc is wasted once lights are maxed (MAX_LEVEL 10) but still toggles them."
+ },
+ {
+  "id": "factory-spotlit-tesla-crown",
+  "archetype": "Foreman crowned by 3 Tesla Coils, 3 Power Plates under him and 4 Spotlights round him; low gong/rocks feed the zaps",
+  "machine": "factory",
+  "kind": "realistic",
+  "thesis": "Every zap scores 'as if the ball had hit it' through baseNow's full stack: Power Plates (x1.5 each, bumpers within 3), Spotlights (x1.5 each within 5, multiply), lamps/strips, Overclock, Lucky Seven, Midnight Clock. Three plates 2.3 from Big Boi give x3.375 and four spotlights on the 4.6 ring give x5.06, so each arc on the Foreman is ~17x his base AND +0.15 Mult (Foreman cap +5 a ball reached early). Spotlights are not zappable and are 0.75 wide: the bot hit them 1-7 times a round, so they are lit almost all the time. Probe at L6: 2.6M-4.3M a round, peak Mult 25-27.",
+  "synergies": [
+   {
+    "a": "spot",
+    "b": "mega",
+    "claim": "4 Spotlights within 5 of Big Boi multiply each other: zapped Foreman hits show 'x5.0625 spotlight' and mega is >50% of the round's points"
+   },
+   {
+    "a": "plate",
+    "b": "tesla",
+    "claim": "Power Plates also multiply the Tesla's own points and every zapped bumper (plateXAt has no zap/spark check)"
+   },
+   {
+    "a": "tesla",
+    "b": "mega",
+    "claim": "Foreman Mult cap (+5 a ball) is reached within the first ~20 s of a ball because arcs count as Big Boi hits"
+   },
+   {
+    "a": "lucky",
+    "b": "tesla",
+    "claim": "zaps and sparks advance ballHits, so Lucky Seven triggers on ~1/7 of ALL points-branch events (zap/spark included): average +28.6% on them, no extra synergy beyond that"
+   },
+   {
+    "a": "rocks",
+    "b": "gong",
+    "claim": "rock-pile sparks count toward the gong's 8 hits (boom has no spark check): gong at (12,22.2) booms 1-5 times a round"
+   }
+  ],
+  "parts": [
+   {
+    "def": "plate",
+    "x": 12,
+    "y": 38.3,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 10.0,
+    "y": 34.85,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 14.0,
+    "y": 34.85,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 7.8,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 16.2,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 40.2,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 8.75,
+    "y": 39.25,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 15.25,
+    "y": 39.25,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 8.75,
+    "y": 32.75,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 15.25,
+    "y": 32.75,
+    "role": "core"
+   },
+   {
+    "def": "gong",
+    "x": 12,
+    "y": 22.2,
+    "role": "support"
+   },
+   {
+    "def": "thunder",
+    "x": 12,
+    "y": 17.5,
+    "role": "support"
+   },
+   {
+    "def": "ding",
+    "x": 7.5,
+    "y": 25.5,
+    "role": "support"
+   },
+   {
+    "def": "ding",
+    "x": 16.5,
+    "y": 25.5,
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 5.5,
+    "y": 20.5,
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 18.5,
+    "y": 20.5,
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 4.6,
+    "y": 30,
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 19.4,
+    "y": 30,
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 9.0,
+    "y": 29.2,
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 15.0,
+    "y": 29.2,
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 12,
+    "y": 30.5,
+    "role": "support"
+   },
+   {
+    "def": "xlane",
+    "x": 12,
+    "y": 26.4,
+    "role": "support"
+   },
+   {
+    "def": "sparkler",
+    "x": 12,
+    "y": 44.5,
+    "role": "support"
+   }
+  ],
+  "decor": "clock",
+  "decals": [
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "lucky"
+   },
+   {
+    "id": "overclock",
+    "target": "mega"
+   },
+   {
+    "id": "headStart"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "spot",
+    "spot",
+    "plate",
+    "tesla",
+    "trophy"
+   ],
+   "keepDecals": [
+    "bumperCar",
+    "lucky"
+   ],
+   "note": "Two coils, two plates, two lower spotlights: probe 1.0-1.6M a round at L6."
+  },
+  "placementNotes": "Plates at 2.3 from Big Boi on three sides (3.99 apart: floor parts need 1.5+1.5+0.9) so Big Boi is within reach 3 of all three; coils at 4.2 sit within 3 of one plate each. Spotlights on the 45-degree diagonals at 4.6 from Big Boi (>=3.75 solid gap, <=5 reach) and 3.4 from the coils, so coils get x2.25 too. Coils have nothing zappable closer than Big Boi (lanes/lamps would steal arcs). Gong, thunder, dings, rocks, lanes and X Lane sit low where the ball actually goes.",
+  "risks": "The Jammer jams the most numerous SCORING type, ties broken by price: here Tesla (3, tied with lanes, $9 > $4) - the build loses ~65% (ablation: no coils 1.66M vs 4.68M mean). Spotlights/Plates have no points so neither Jammer nor Overlord can ever jam them. Spotlights go dark 10 s when the ball touches one. Night Shift: spotXAt has no lightsOut check, so Spotlights keep multiplying (and cannot be knocked dark, since hit() returns early for light-tagged parts). Ablations (6 rounds, L6): no spotlights 2.96M, no clock 3.40M, no Lucky 3.80M, no spark makers 3.18M, no gong 3.95M vs 4.68M full."
+ },
+ {
+  "id": "diner-printer-lucky-madness",
+  "archetype": "Ball Printer multiball + Multiball Madness + Lucky Seven over a spark/zap table: every spark and zap pays x2 while two balls are up",
+  "machine": "diner",
+  "kind": "realistic",
+  "thesis": "Multiball Madness is in situational(): every points-branch hit, keg blast, set bonus and zap/spark hit pays x2 while sim.ballCount >= 2, and a Ball Printer on the low centre line catches the ball several times a ball. More balls also mean more ball hits on rock piles/nest (spark makers) and on coils, and Lucky Seven counts every one of them. The Cook adds x4 orders that zaps consume. Probe at L6: 4.1-5.2M a round; the same table with no printer 0.18-1.15M.",
+  "synergies": [
+   {
+    "a": "printer",
+    "b": "multiball",
+    "claim": "with the printer at (12,26.4), >50% of scoring events carry 'x2 multiball' and total round score is >3x the no-printer table"
+   },
+   {
+    "a": "multiball",
+    "b": "rocks",
+    "claim": "sparks score as their parent ball and situational() checks ball count, so spark hits during multiball also show 'x2 multiball'"
+   },
+   {
+    "a": "lucky",
+    "b": "multiball",
+    "claim": "Lucky Seven (every 7th hit of a ball x3) and Multiball x2 multiply on the same hit; ballHits counts zaps/sparks of all balls"
+   },
+   {
+    "a": "tesla",
+    "b": "mega",
+    "claim": "Cook: each arc on Big Boi calls a new order; the order's x4 is often spent by a zap or spark on the ordered part"
+   },
+   {
+    "a": "pinata",
+    "b": "tesla",
+    "claim": "zaps/sparks deal 1 Pinata damage each; the Pinata bursts about once a round (15 sparks, $5, free part)"
+   }
+  ],
+  "parts": [
+   {
+    "def": "plate",
+    "x": 12,
+    "y": 38.3,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 10.0,
+    "y": 34.85,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 14.0,
+    "y": 34.85,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 7.8,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 16.2,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 8.75,
+    "y": 32.75,
+    "role": "support"
+   },
+   {
+    "def": "spot",
+    "x": 15.25,
+    "y": 32.75,
+    "role": "support"
+   },
+   {
+    "def": "printer",
+    "x": 12,
+    "y": 26.4,
+    "role": "core"
+   },
+   {
+    "def": "thunder",
+    "x": 12,
+    "y": 17.5,
+    "role": "support"
+   },
+   {
+    "def": "gong",
+    "x": 12,
+    "y": 22.2,
+    "role": "core"
+   },
+   {
+    "def": "ding",
+    "x": 7.5,
+    "y": 25.5,
+    "role": "support"
+   },
+   {
+    "def": "ding",
+    "x": 16.5,
+    "y": 25.5,
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 5.5,
+    "y": 20.5,
+    "role": "core"
+   },
+   {
+    "def": "rocks",
+    "x": 18.5,
+    "y": 20.5,
+    "role": "core"
+   },
+   {
+    "def": "nest",
+    "x": 4.6,
+    "y": 30,
+    "role": "support"
+   },
+   {
+    "def": "pinata",
+    "x": 19.4,
+    "y": 30,
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 9.0,
+    "y": 29.2,
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 15.0,
+    "y": 29.2,
+    "role": "support"
+   },
+   {
+    "def": "lane",
+    "x": 12,
+    "y": 30.5,
+    "role": "support"
+   },
+   {
+    "def": "sparkler",
+    "x": 12,
+    "y": 40.5,
+    "role": "support"
+   },
+   {
+    "def": "firecracker",
+    "x": 12,
+    "y": 44.5,
+    "role": "support"
+   }
+  ],
+  "decor": "clock",
+  "decals": [
+   {
+    "id": "multiball"
+   },
+   {
+    "id": "lucky"
+   },
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "headStart"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "printer"
+   ],
+   "keepDecals": [
+    "lucky",
+    "bumperCar",
+    "headStart"
+   ],
+   "note": "Same table without the Ball Printer (and so no Multiball Madness): probe 0.18-1.15M a round. Shows the printer, not the sparks, is the engine."
+  },
+  "placementNotes": "Printer on the centre line just above the gong (12,22.2) and thunder (12,17.5): the thunder throws the ball up the middle into it. Coils at 4.2 from Big Boi with nothing zappable nearer; plates under Big Boi and the coils; two lower spotlights cover Big Boi, the coils and the lanes. Rock piles near the slings/flipper return (5.5/18.5, 20.5) get 50-80 hits a round.",
+  "risks": "Ablations (6 rounds, L6): full 4.78M mean; no Multiball Madness decal 2.55M; no coils 2.40M; no spark makers 2.87M; no gong 4.09M. Jammer jams the lanes (3) here, harmless. Ball searches if printed balls pile up at a flipper pivot (none seen in probes). Printer prints at most 3 a ball. Cook has no +Mult: peak Mult only ~6, so Head Start matters. Tax Man stops pinata cash only."
+ },
+ {
+  "id": "factory-altar-set-storm",
+  "archetype": "Ritual Altar fed by lane sets and Level Light sets that gong booms and arcs complete; Tempest/Inferno/Swarm grow stronger every ritual",
+  "machine": "factory",
+  "kind": "realistic",
+  "thesis": "setDone() counts lane sets (5 a ball cap) and Level Light group completions (no cap) for the Altar; booms and arcs light lanes and TOGGLE Level Lights, so sets come without aiming. 8 sets start a 15 s ritual whose strength (rituals done, max 4) is kept for the run: Tempest 6 zaps/s, Inferno zaps the 5 nearest parts on every ball hit, Swarm 24 sparks. Jackpot Sets doubles every lane set (+1 Mult each). This is a test of Altar vs Midnight Clock on the same table: in one-round probes (strength reset each round) Altar 0.7-2.8M vs Clock 1.2-2.8M; in a real run the strength should reach 4 by about round 3.",
+  "synergies": [
+   {
+    "a": "altar",
+    "b": "gong",
+    "claim": "a boom lights every lane (zaps light rollovers) and completes up to 3 lane sets at once; each counts for the Altar"
+   },
+   {
+    "a": "altar",
+    "b": "uplight",
+    "claim": "sparks/zaps toggle Level Lights; each completed pair counts as a set for the Altar (no cap) and levels the bumpers within 5.5"
+   },
+   {
+    "a": "sets",
+    "b": "lane",
+    "claim": "Jackpot Sets: a lane set pays +1 Mult (0.5 x2); 5 sets a ball = +5 Mult a ball"
+   },
+   {
+    "a": "altar",
+    "b": "mega",
+    "claim": "Tempest zaps random zappable parts (incl. Big Boi) 2+s times a second; with strength 4, >=60 storm zaps per ritual"
+   },
+   {
+    "a": "altar",
+    "b": "clock",
+    "claim": "over a 5-round run with strength carried, Altar >= Clock on this table; in single-round tests Clock wins"
+   }
+  ],
+  "parts": [
+   {
+    "def": "plate",
+    "x": 12,
+    "y": 38.3,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 10.0,
+    "y": 34.85,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 14.0,
+    "y": 34.85,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 7.8,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 16.2,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 40.2,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 8.75,
+    "y": 39.25,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 15.25,
+    "y": 39.25,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 8.75,
+    "y": 32.75,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 15.25,
+    "y": 32.75,
+    "role": "core"
+   },
+   {
+    "def": "gong",
+    "x": 12,
+    "y": 22.2,
+    "role": "core"
+   },
+   {
+    "def": "thunder",
+    "x": 12,
+    "y": 17.5,
+    "role": "support"
+   },
+   {
+    "def": "ding",
+    "x": 6.8,
+    "y": 26.2,
+    "role": "support"
+   },
+   {
+    "def": "ding",
+    "x": 17.2,
+    "y": 26.2,
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 5.5,
+    "y": 20.5,
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 18.5,
+    "y": 20.5,
+    "role": "support"
+   },
+   {
+    "def": "uplight",
+    "x": 9.3,
+    "y": 24.0,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 14.7,
+    "y": 24.0,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 9.0,
+    "y": 29.2,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 15.0,
+    "y": 29.2,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 12,
+    "y": 30.5,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 4.4,
+    "y": 31.0,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 19.6,
+    "y": 31.0,
+    "role": "core"
+   },
+   {
+    "def": "lane",
+    "x": 4.4,
+    "y": 35.0,
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 12,
+    "y": 26.4,
+    "role": "support"
+   }
+  ],
+  "decor": "altar",
+  "decals": [
+   {
+    "id": "sets"
+   },
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "lucky"
+   },
+   {
+    "id": "overclock",
+    "target": "mega"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "lane",
+    "lane",
+    "lane",
+    "spot",
+    "spot"
+   ],
+   "keepDecals": [
+    "sets",
+    "lucky"
+   ],
+   "note": "One lane pack + Level Lights, two spotlights: probe 0.21-1.16M a round (full table 0.68-2.84M, strength reset every probe round)."
+  },
+  "placementNotes": "Two lane packs: one low (9,29.2)/(15,29.2)/(12,30.5) on the ball path, one on the side walls; the left wall lane (4.4,31) is 3.5 from the left coil, its 2nd arc, which lights it. Level Lights (9.3,24)/(14.7,24) within 5.5 of each other, the gong, both dings and the left rock pile. The rest is the Factory crown (plates, coils, spotlights).",
+  "risks": "Jammer jams the Lane Rollovers here (6, most numerous) = no lane sets that round. No counting during a ritual. Lane sets cap at 5 a ball. Night Shift (lightsOut) kills lanes and Level Lights = no sets. Altar is legendary ($12) and rare in shops; harness should play >=4 rounds in a row to see strength grow."
+ },
+ {
+  "id": "factory-broom-xmult-runway",
+  "archetype": "Broomstick launching the ball up a centre runway of 2 X Lanes (garnet) + Disco Ball (emerald) + Jackpot Scoop, over the spotlit Tesla crown",
+  "machine": "factory",
+  "kind": "realistic",
+  "thesis": "A Broomstick ride's pass events go straight to hit() with zap:true, ride:true and bypass zappable(): they fire X Lanes, Disco, Golden, Hall of Fame, Mag-Grab and cash the Jackpot pot, with the ride's x2. The real engine though is the low centre column itself: the ball rolls up x=12 from the flippers every ball, so X Lane x1.25 to its x3 cap and Disco x2.5 twice (emerald) multiply the Foreman's +5 etc: peak Mult 117-144 in probes. Then every zap on the spotlit Foreman pays ~17x base x 130 Mult. Probe at L6: 28M-72M a round WITH the broom, 31-34M without it (the broom adds 3-9 ride jackpot cashes a round, not the bulk).",
+  "synergies": [
+   {
+    "a": "broom",
+    "b": "jackpot",
+    "claim": "a ride passing the Jackpot Scoop cashes the pot with 'x2 broomstick' (ride events skip zappable())"
+   },
+   {
+    "a": "broom",
+    "b": "disco",
+    "claim": "a ride past the Disco Ball fires its x2.5 even though the Disco is not zappable"
+   },
+   {
+    "a": "xlane",
+    "b": "disco",
+    "claim": "the centre column is rolled over every ball: X Lane reaches its x3 cap and Disco x2.5 x2 (emerald): peak Mult >100 by mid-ball"
+   },
+   {
+    "a": "tesla",
+    "b": "jackpot",
+    "claim": "zaps/sparks add +8 each to the Jackpot pot (ballHits counts them); the pot hits its 3000 cap within a ball"
+   },
+   {
+    "a": "spot",
+    "b": "mega",
+    "claim": "same x5.06 Spotlight / x3.375 plate crown as factory-spotlit-tesla-crown"
+   }
+  ],
+  "parts": [
+   {
+    "def": "plate",
+    "x": 12,
+    "y": 38.3,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 10.0,
+    "y": 34.85,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 14.0,
+    "y": 34.85,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 7.8,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 16.2,
+    "y": 36,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 40.2,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 8.75,
+    "y": 39.25,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 15.25,
+    "y": 39.25,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 8.75,
+    "y": 32.75,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 15.25,
+    "y": 32.75,
+    "role": "core"
+   },
+   {
+    "def": "broom",
+    "x": 12,
+    "y": 17.6,
+    "angle": 0,
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 12,
+    "y": 21.1,
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 12,
+    "y": 24.3,
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "disco",
+    "x": 12,
+    "y": 27.7,
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "jackpot",
+    "x": 12,
+    "y": 31.2,
+    "role": "core"
+   },
+   {
+    "def": "gong",
+    "x": 7.2,
+    "y": 21.5,
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 16.8,
+    "y": 21.5,
+    "role": "support"
+   },
+   {
+    "def": "ding",
+    "x": 6.6,
+    "y": 27.4,
+    "role": "support"
+   },
+   {
+    "def": "ding",
+    "x": 17.4,
+    "y": 27.4,
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 4.6,
+    "y": 32.5,
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 19.4,
+    "y": 32.5,
+    "role": "support"
+   }
+  ],
+  "decor": "clock",
+  "decals": [
+   {
+    "id": "overclock",
+    "target": "jackpot"
+   },
+   {
+    "id": "lucky"
+   },
+   {
+    "id": "headStart"
+   },
+   {
+    "id": "bumperCar"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "broom",
+    "jackpot",
+    "disco"
+   ],
+   "keepDecals": [
+    "lucky",
+    "bumperCar"
+   ],
+   "note": "Just two garnet X Lanes in the column over the crown, no legendary: probe 2.5-4.3M a round at L6 (full 19-56M; dropping only the broom gave 31-34M in an earlier probe, so the emerald Disco is most of it)."
+  },
+  "placementNotes": "Broom (angle 0 = straight up, ride 32 u/s for <=1 s) at (12,17.6) just above the flipper throw; rollovers stacked 3.1-3.5 apart on x=12 (rollover gap 0.9) so the ride and the ball's own run cross all of them; Jackpot Scoop last at (12,31.2) because catching the ball ends the ride; Big Boi at 4.8 above it. Gong, rock pile and dings flank the runway at x 6.6-7.2 / 16.8-17.4. Bumper Car x0.75 hits the jackpot/xlane/disco (non-bumpers): swap for Momentum if the harness prefers.",
+  "risks": "Jammer jams Tesla (3). X Lane cap x3 a ball per type; Disco perBall (emerald 2). Flat Rate / Overlord shrink every xMult by 30% of its distance from x1 (gainX). Night Shift (lightsOut) turns X Lanes and Disco off = collapse. A Jackpot Scoop that holds the ball 0.8 s on the main path costs ball time."
+ },
+ {
+  "id": "castle-dragon-apocalypse",
+  "archetype": "DREAM: four Red-Sealed Tesla Coils boxing in the Dragon, Twin Ball + Multiball Madness + Fan Club, xMult runway under him",
+  "machine": "castle",
+  "kind": "dream",
+  "thesis": "Red Seal makes hit() run twice; on a coil the second pass arcs again to the next targets off cooldown, so each coil hit is ~2x the arcs, and four coils at 4.2 round Big Boi make him the 3rd target of each (after the Level Lights at 3.1, which keep levelling him). Twin Ball keeps Multiball Madness x2 on all the time, Fan Club x3 / Overclock x1.5 on each ARMOUR BROKEN, and the X Lane/Disco runway lifts the Mult to ~140. Probe (parts start at L6): 51-73M a round, 12-15 slays a round; without the runway 3.8-6.3M.",
+  "synergies": [
+   {
+    "a": "redseal",
+    "b": "tesla",
+    "claim": "a Red-Sealed coil's ball hit produces up to 2x its arc count of zaps in one event (inner hit() arcs to the next nearest off zap cooldown)"
+   },
+   {
+    "a": "twin",
+    "b": "multiball",
+    "claim": "with Twin Ball, >80% of the ball time has >=2 balls: x2 multiball on most slays"
+   },
+   {
+    "a": "redseal",
+    "b": "gong",
+    "claim": "Red Seal on a gong counts 2 toward its every-8 boom per hit: booms ~2x as often (minus 0.5 s dark)"
+   },
+   {
+    "a": "opal",
+    "b": "trophy",
+    "claim": "zaps polish trophies (keep has no zap check); Opal doubles it: three cups reach +15 kept start Mult in ~2 rounds"
+   },
+   {
+    "a": "uplight",
+    "b": "tesla",
+    "claim": "4 Level Lights in a 5.44 square form 3-light groups: each completion gives +2 levels"
+   }
+  ],
+  "parts": [
+   {
+    "def": "tesla",
+    "x": 7.8,
+    "y": 36,
+    "inlay": "redseal",
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 16.2,
+    "y": 36,
+    "inlay": "redseal",
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 40.2,
+    "inlay": "redseal",
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 12,
+    "y": 31.8,
+    "inlay": "redseal",
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 9.28,
+    "y": 33.28,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 14.72,
+    "y": 33.28,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 9.28,
+    "y": 38.72,
+    "role": "core"
+   },
+   {
+    "def": "uplight",
+    "x": 14.72,
+    "y": 38.72,
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 12,
+    "y": 21.1,
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 12,
+    "y": 24.3,
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "disco",
+    "x": 12,
+    "y": 27.7,
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "gong",
+    "x": 7.2,
+    "y": 21.5,
+    "inlay": "redseal",
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 16.8,
+    "y": 21.5,
+    "inlay": "garnet",
+    "role": "support"
+   },
+   {
+    "def": "firecracker",
+    "x": 6.6,
+    "y": 27.4,
+    "inlay": "emerald",
+    "role": "support"
+   },
+   {
+    "def": "nest",
+    "x": 17.4,
+    "y": 27.4,
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 4.6,
+    "y": 32.5,
+    "inlay": "opal",
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 19.4,
+    "y": 32.5,
+    "inlay": "opal",
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 4.6,
+    "y": 41.5,
+    "inlay": "opal",
+    "role": "support"
+   }
+  ],
+  "decor": "clock",
+  "decals": [
+   {
+    "id": "fanClub"
+   },
+   {
+    "id": "overclock",
+    "target": "mega"
+   },
+   {
+    "id": "twin"
+   },
+   {
+    "id": "multiball"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "xlane",
+    "xlane",
+    "disco"
+   ],
+   "keepDecals": [
+    "fanClub",
+    "overclock",
+    "twin",
+    "multiball"
+   ],
+   "note": "Without the ×Mult runway it is a pure zap/jackpot machine: probe 3.8-6.3M a round at L6."
+  },
+  "placementNotes": "Coils on the four sides of Big Boi at 4.2. Level Lights on the 3.85 diagonals (>=3.7 from Big Boi, >=2.9 from coils, 5.44 apart) so every coil's first two arcs toggle lights and the third hits Big Boi (L6+ coils have 4 arcs). Runway on x=12 below the bottom coil (disco 4.1 from it). Spark makers low on the flanks.",
+  "risks": "Jammer jams Tesla (4 coils = most numerous): the round falls back to the runway + ball hits. Twin balls can drain together. The lights steal two arcs per coil hit (needs coil L6 for 4 arcs) - with low levels Big Boi gets few arcs; consider moving lights out if levels are already 10."
+ },
+ {
+  "id": "factory-supernova",
+  "archetype": "DREAM: Hall of Fame + Disco (emerald each) + X Lanes on a broom runway, five Spotlights and three Plates on the Foreman, Twin + Multiball",
+  "machine": "factory",
+  "kind": "dream",
+  "thesis": "Hall of Fame's typeX goes straight into xmult with NO cap (typeXNow, never takeX): x1.1^types (12 types = x3.14) once a ball, twice with an Emerald, stacked on X Lane x3 and Disco x2.5^2. Peak Mult ~1400. Every Tesla arc then hits a Foreman worth 170 x 3.375 (plates) x 7.6 (5 spots) x 2.25 (Bumper Car + Overclock) x2 multiball x2 midnight. Probe (parts at L6): 0.9-2.1 BILLION a round (1.3-3.0B at L10). Goal r15 is 1.5M. The game breaks.",
+  "synergies": [
+   {
+    "a": "fame",
+    "b": "emerald",
+    "claim": "Hall of Fame fires twice a ball and its xMult is uncapped: two passes multiply Mult by ~x3.1 each"
+   },
+   {
+    "a": "broom",
+    "b": "mega",
+    "claim": "rides end on Big Boi after zapping him with x2 broomstick: 20-40 ride hits on mega a round"
+   },
+   {
+    "a": "spot",
+    "b": "plate",
+    "claim": "five Spotlights x1.5 and three Plates x1.5 multiply: Big Boi zaps show x7.59 spotlight and x3.375 power plate"
+   },
+   {
+    "a": "redseal",
+    "b": "tesla",
+    "claim": "Red Seal doubles coil arcs and double-scores zapped coils"
+   },
+   {
+    "a": "twin",
+    "b": "multiball",
+    "claim": "x2 multiball on most events"
+   }
+  ],
+  "parts": [
+   {
+    "def": "plate",
+    "x": 12,
+    "y": 38.3,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 10.0,
+    "y": 34.85,
+    "role": "core"
+   },
+   {
+    "def": "plate",
+    "x": 14.0,
+    "y": 34.85,
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 7.8,
+    "y": 36,
+    "inlay": "redseal",
+    "role": "core"
+   },
+   {
+    "def": "tesla",
+    "x": 16.2,
+    "y": 36,
+    "inlay": "redseal",
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 15.52,
+    "y": 38.96,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 12,
+    "y": 40.6,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 8.48,
+    "y": 38.96,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 8.48,
+    "y": 33.04,
+    "role": "core"
+   },
+   {
+    "def": "spot",
+    "x": 15.52,
+    "y": 33.04,
+    "role": "core"
+   },
+   {
+    "def": "broom",
+    "x": 12,
+    "y": 17.6,
+    "angle": 0,
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 12,
+    "y": 21.1,
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "xlane",
+    "x": 12,
+    "y": 24.3,
+    "inlay": "garnet",
+    "role": "core"
+   },
+   {
+    "def": "disco",
+    "x": 12,
+    "y": 27.7,
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "fame",
+    "x": 12,
+    "y": 31.3,
+    "inlay": "emerald",
+    "role": "core"
+   },
+   {
+    "def": "gong",
+    "x": 7.2,
+    "y": 21.5,
+    "inlay": "redseal",
+    "role": "support"
+   },
+   {
+    "def": "rocks",
+    "x": 16.8,
+    "y": 21.5,
+    "inlay": "garnet",
+    "role": "support"
+   },
+   {
+    "def": "ding",
+    "x": 6.6,
+    "y": 27.4,
+    "inlay": "ruby",
+    "role": "support"
+   },
+   {
+    "def": "ding",
+    "x": 17.4,
+    "y": 27.4,
+    "inlay": "ruby",
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 4.6,
+    "y": 32.5,
+    "inlay": "opal",
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 19.4,
+    "y": 32.5,
+    "inlay": "opal",
+    "role": "support"
+   },
+   {
+    "def": "trophy",
+    "x": 4.6,
+    "y": 41.5,
+    "inlay": "opal",
+    "role": "support"
+   }
+  ],
+  "decor": "clock",
+  "decals": [
+   {
+    "id": "twin"
+   },
+   {
+    "id": "multiball"
+   },
+   {
+    "id": "bumperCar"
+   },
+   {
+    "id": "overclock",
+    "target": "mega"
+   }
+  ],
+  "partial": {
+   "dropParts": [
+    "fame",
+    "broom"
+   ],
+   "keepDecals": [
+    "bumperCar",
+    "overclock"
+   ],
+   "note": "No Hall of Fame, no broom, no Twin/Multiball: probe 12-86M a round at L6 - still 10x the final goal."
+  },
+  "placementNotes": "Spotlights at r=4.6 round Big Boi at 40/90/140/220/320 degrees (>=2.6 apart, >=2.95 from coils); the 270-degree slot holds the Hall of Fame (rollover) at (12,31.3), the top of the runway, 4.7 below Big Boi. Runway broom->X Lane->X Lane->Disco->Fame on x=12, 3.1-3.6 apart. Coils only left/right so their nearest is Big Boi.",
+  "risks": "Night Shift kills X Lanes/Disco (Fame is a 'light' too: lightsOut only blocks parts tagged light from hit() - Fame is tagged light, so it dies as well). Flat Rate/Overlord shrink each xMult by 30% (gainX) but Fame's per-type compounding still dominates."
+ }
+]

@@ -1,0 +1,17 @@
+table    profile clock  score p10/p50/p90          ball s (median, mean)  timeouts/ball  drains/ball  presses/round  peakMult  wall s/round
+starter  pro     on       2,929     5,215    10,571       38     37          0.33         0.67           63        3.5    0.8
+starter  avg     on       1,145     3,948     5,718       20     26          0.13         0.88           47        3.0    0.6
+starter  poor    on         335     1,703     3,870       12     18          0.04         0.96           46        2.4    0.5
+starter  par     on       1,882     3,834     8,897       36     36          0.25         0.75           60        3.3    0.8
+mid      pro     on       4,293    16,329    22,281       41     38          0.27         0.73           53        5.8    0.9
+mid      avg     on       3,067     8,055    14,010       17     25          0.17         0.83           42        5.3    0.7
+mid      poor    on         492     1,586     4,280       11     13          0.02         0.98           31        2.4    0.3
+mid      par     on       8,247    15,322    21,659       44     40          0.35         0.65           56        6.2    0.9
+late     pro     on      49,328    76,026   114,358       57     44          0.48         0.52           62        8.6    1.1
+late     avg     on      20,905    69,065    79,891       34     34          0.23         0.77           55        7.9    1.0
+late     poor    on       7,468    18,534    50,585       11     17          0.08         0.92           39        4.6    0.5
+late     par     on      62,916    73,177    86,031       47     43          0.38         0.63           59        8.5    1.1
+mid      pro     OFF      6,160    22,247    32,489       32     39          0.00         1.00           57        7.8    1.1  capped balls: 0
+mid      avg     OFF      3,079     6,171    26,131       16     28          0.00         1.00           47        5.2    1.0  capped balls: 0
+late     pro     OFF    109,783   156,518   212,255       69     65          0.00         1.00           90       12.3    1.6  capped balls: 0
+late     avg     OFF     52,151    96,215   153,271       42     48          0.00         1.00           74        9.8    1.3  capped balls: 0
