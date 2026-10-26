@@ -4,6 +4,7 @@
 // renderer; what is drawn here is baked once per part x state x theme into a texture.
 import { Container, Graphics } from 'pixi.js';
 import { MAX_LEVEL, PARTS, type PartId } from '../data/parts';
+import { decorPanel } from '../sim/cabinet';
 import { BALL_R, FLIPPER_LENGTH } from '../sim/constants';
 import { box, flat, hull, label, P, Prop, ring, shadow, shadowPoly, star, type Pt, type View } from './draw';
 import { mat, mix, mixHue, WHITE, type Mat, type Theme } from './theme';
@@ -38,11 +39,13 @@ export interface PartState {
   bright?: number;
   /** The gem set into the part (an inlay): a little stone at its front. */
   gem?: PartId;
+  /** Decor drawn as an icon (the shop, the toolbox, its card): a small square screen instead of the whole decor screen. */
+  badge?: boolean;
 }
 export type Mood = 'happy' | 'oof' | 'sad' | 'shocked' | 'cool' | 'blink';
 
 export const stateKey = (st: PartState) =>
-  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0, st.part ?? '', st.bright ?? '', st.gem ?? ''].join('.');
+  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0, st.part ?? '', st.bright ?? '', st.gem ?? '', st.badge ? 1 : 0].join('.');
 
 const ringS = (cx: number, cy: number, r: number, n = 20, ry = r): Pt[] => ring(cx, cy, r, n, ry);
 
@@ -556,25 +559,6 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       for (const [k, s2, sz] of [[0.4, 1, 0.22], [-0.1, -1, 0.16], [0.75, -1, 0.14]] as const) { const [qx, qy] = dir(r * k), [ox, oy] = side(r * 0.55 * s2), [X, Y] = P(v, qx + ox, qy + oy, 0.9); p.op((g) => g.star(X, Y, 4, S * sz, S * sz * 0.38).fill(t.role.coin).stroke({ width: v.lw * 0.4, color: t.ink, join: 'round' })); }
       break;
     }
-    case 'hutch': {
-      // decor: a little wooden hutch with a pitched roof, a round door and two eyes peering out of the dark
-      shadow(under, v, t, x, y, r * 1.05, r * 0.85);
-      const wood = mat(t, mix(t.role.hutch, t.rim, 0.5)), roof = mat(t, t.role.hutch), hw = r * 0.72, hd = r * 0.55, h = 0.95, top = 1.75;
-      p.prism(box(x, y, hw, hd, 0), 0, h, wood);
-      // the gable end facing you, then the two slopes of the roof over it
-      p.face([P(v, x - hw, y - hd, h), P(v, x + hw, y - hd, h), P(v, x, y - hd, top)], wood.mid, { line: 0.4 });
-      for (const sx of [-1, 1]) p.face([P(v, x + sx * (hw + 0.14), y - hd - 0.12, h - 0.06), P(v, x, y - hd - 0.12, top + 0.06), P(v, x, y + hd + 0.12, top + 0.06), P(v, x + sx * (hw + 0.14), y + hd + 0.12, h - 0.06)], sx < 0 ? roof.light : roof.base, { line: 0.4 });
-      p.face([P(v, x - hw - 0.14, y - hd - 0.12, h - 0.06), P(v, x, y - hd - 0.12, top + 0.06), P(v, x + hw + 0.14, y - hd - 0.12, h - 0.06), P(v, x + hw + 0.04, y - hd - 0.12, h - 0.16), P(v, x, y - hd - 0.12, top - 0.06), P(v, x - hw - 0.04, y - hd - 0.12, h - 0.16)], roof.shade, { sil: false, line: 0.35 });
-      const door: Pt[] = [];
-      for (let i = 0; i <= 12; i++) { const a = Math.PI - (i / 12) * Math.PI; door.push([Math.cos(a) * 0.3, 0.42 + Math.sin(a) * 0.3]); }
-      door.push([0.3, 0.02], [-0.3, 0.02]);
-      p.face(xz(v, x, y - hd - 0.01, door), t.ink, { sil: false, line: 0.35 });
-      for (const sx of [-1, 1]) { const [ex, ey] = P(v, x + sx * 0.11, y - hd - 0.02, 0.48); p.op((g) => { g.ellipse(ex, ey, S * 0.07, S * 0.09).fill(t.role.goldleaf); g.circle(ex, ey, S * 0.03).fill(t.ink); }); }
-      // a hand-painted warning plank
-      const [wx, wy] = P(v, x + hw * 0.62, y - hd - 0.02, 0.62);
-      p.op((g) => { g.rect(wx - S * 0.12, wy - S * 0.1, S * 0.24, S * 0.2).fill(t.paper).stroke({ width: v.lw * 0.4, color: t.ink }); g.rect(wx - S * 0.015, wy - S * 0.07, S * 0.03, S * 0.09).fill(t.accent); g.circle(wx, wy + S * 0.05, S * 0.017).fill(t.accent); });
-      break;
-    }
     case 'grape': {
       // a bunch of grapes on a vine-leaf base; a big enough bunch turns gold
       shadow(under, v, t, x, y, r * 1.05, r * 1.05);
@@ -782,100 +766,6 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.face(hull([...ring(x, y, r * 0.3, 16).map(([a, b]) => P(v, a, b, 0.08)), P(v, x + r * 0.08, y + r * 0.05, 1.5)]), hat.base);
       const [sx, sy] = P(v, x - r * 0.05, y - r * 0.05, 0.6);
       p.op((g) => g.star(sx, sy, 5, S * 0.18, S * 0.08).fill(t.role.goldleaf).stroke({ width: v.lw * 0.4, color: t.ink, join: 'round' }));
-      break;
-    }
-    case 'clock': {
-      // a mantel clock: a wooden case on a plinth, a round face on its front; the hands creep from 9 to midnight
-      shadow(under, v, t, x, y, r * 1.0, r * 0.75);
-      const wood = mat(t, t.role.clock), hw = r * 0.62, d = r * 0.42;
-      p.prism(box(x, y, hw + 0.12, d + 0.1, 0), 0, 0.25, mat(t, mix(t.role.clock, t.ink, 0.25)));
-      p.prism(box(x, y, hw, d, 0), 0.25, 2.3, wood);
-      // a rounded top
-      p.face(hull([0, 0.35, 0.7, 1].flatMap((u) => [P(v, x - hw * Math.cos((u * Math.PI) / 2), y - d, 2.55 + Math.sin((u * Math.PI) / 2) * 0.55), P(v, x + hw * Math.cos((u * Math.PI) / 2), y - d, 2.55 + Math.sin((u * Math.PI) / 2) * 0.55)])), wood.base);
-      const R = hw * 0.78, zc = 1.75, tall = 1.9;
-      const disc = (k: number): Pt[] => Array.from({ length: 24 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return P(v, x + Math.cos(a) * R * k, y - d - 0.02, zc + Math.sin(a) * R * k * tall); });
-      p.face(disc(1), st.lit ? mix(t.accent, WHITE, 0.5) : t.paper, { line: 0.5 });
-      const seg = st.seg ?? 0, hour = Math.PI - (seg / 12) * (Math.PI / 2), minute = Math.PI / 2 - ((seg % 4) / 4) * Math.PI * 2;
-      const hand = (a: number, k: number, w: number) => {
-        const [cx, cy] = P(v, x, y - d - 0.03, zc), [hx, hy] = P(v, x + Math.cos(a) * R * k, y - d - 0.03, zc + Math.sin(a) * R * k * tall);
-        p.op((g) => g.moveTo(cx, cy).lineTo(hx, hy).stroke({ width: w, color: t.ink, cap: 'round' }));
-      };
-      hand(seg >= 12 ? Math.PI / 2 : hour, 0.55, v.lw * 1.2);
-      hand(minute, 0.85, v.lw * 0.8);
-      if (st.lit) { const [sx, sy] = P(v, x + hw * 0.9, y - d, 3.2); p.op((g) => g.star(sx, sy, 8, S * 0.55, S * 0.22).fill(t.accent).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' })); }
-      break;
-    }
-    case 'altar': {
-      // a stone altar: a carved block with eight runes (they light up as sets are completed) and two candles
-      shadow(under, v, t, x, y, r * 1.05, r * 0.8);
-      const stone = mat(t, t.role.altar), hw = r * 0.85, d = r * 0.5;
-      p.prism(box(x, y, hw + 0.1, d + 0.1, 0), 0, 0.3, mat(t, mix(t.role.altar, t.ink, 0.3)));
-      p.prism(box(x, y, hw, d, 0), 0.3, 1.25, stone);
-      p.prism(box(x, y, hw + 0.15, d + 0.12, 0), 1.55, 0.25, mat(t, mix(t.role.altar, WHITE, 0.15)));
-      const on = st.seg ?? 0;
-      for (let i = 0; i < 8; i++) {
-        const [rx, ry] = P(v, x - hw * 0.8 + (i * hw * 1.6) / 7, y - d - 0.02, 0.92 + (i % 2) * 0.22);
-        const lit = st.lit || i < on;
-        p.op((g) => g.circle(rx, ry, S * 0.1).fill(lit ? t.accent : mix(t.role.altar, t.ink, 0.45)).stroke({ width: v.lw * 0.4, color: t.ink }));
-      }
-      for (const dx of [-hw * 0.55, hw * 0.55]) {
-        p.cyl(x + dx, y, 0.16, 1.8, 0.75, mat(t, t.paper), { n: 12 });
-        const [fx, fy] = P(v, x + dx, y, 2.75);
-        const big = st.lit ? 1.6 : 1;
-        p.op((g) => {
-          g.ellipse(fx, fy - S * 0.12 * big, S * 0.13 * big, S * 0.24 * big).fill(st.lit ? t.accent : t.role.sparkler).stroke({ width: v.lw * 0.5, color: t.ink });
-          g.ellipse(fx, fy - S * 0.06 * big, S * 0.05 * big, S * 0.1 * big).fill(WHITE);
-        });
-      }
-      break;
-    }
-    case 'bulb': {
-      // a spare bulb in its cardboard box: the flaps open and the bulb standing up out of it
-      shadow(under, v, t, x, y, r * 0.95, r * 0.75);
-      const kraft = mat(t, mix('#d9a865', t.shadeTint, 0.08)), hw = 0.6, hd = 0.48, h = 0.72;
-      for (const sx of [-1, 1]) p.face([P(v, x + sx * hw, y - hd, h), P(v, x + sx * hw, y + hd, h), P(v, x + sx * (hw + 0.32), y + hd, h + 0.4), P(v, x + sx * (hw + 0.32), y - hd, h + 0.4)], sx < 0 ? kraft.light : kraft.shade, { line: 0.35 });
-      p.prism(box(x, y, hw, hd, 0), 0, h, kraft, { top: mix(kraft.base, t.ink, 0.5) });
-      p.cyl(x, y, 0.2, h - 0.2, 0.34, metal, { n: 16 });
-      for (let i = 0; i < 2; i++) p.cyl(x, y, 0.22, h - 0.08 + i * 0.1, 0.04, mat(t, mix(t.metal, t.ink, 0.3)), { n: 16 });
-      egg(p, v, x, y, h + 0.68, 0.46, 0.46, 0.48, 0, mat(t, t.role.bulb));
-      p.face([P(v, x - hw, y - hd, 0), P(v, x + hw, y - hd, 0), P(v, x + hw, y - hd, h), P(v, x - hw, y - hd, h)], kraft.mid, { sil: false, line: 0.35 });
-      const [LX, LY] = P(v, x, y - hd, h * 0.48);
-      p.op((g) => {
-        g.roundRect(LX - S * 0.3, LY - S * 0.17, S * 0.6, S * 0.34, S * 0.06).fill(t.paper).stroke({ width: v.lw * 0.4, color: t.ink });
-        g.circle(LX, LY - S * 0.03, S * 0.09).fill(t.role.bulb).stroke({ width: v.lw * 0.35, color: t.ink });
-        g.rect(LX - S * 0.04, LY + S * 0.06, S * 0.08, S * 0.06).fill(t.ink);
-      });
-      break;
-    }
-    case 'feet': {
-      // a rubber foot: a fat black stopper with a ribbed rim
-      shadow(under, v, t, x, y, r * 0.95, r * 0.95);
-      const rubber = mat(t, t.role.feet);
-      p.cyl(x, y, r * 0.85, 0, 0.35, rubber);
-      p.cyl(x, y, r * 0.7, 0.35, 0.3, mat(t, mix(t.role.feet, WHITE, 0.15)));
-      p.cyl(x, y, r * 0.3, 0.65, 0.12, metal);
-      break;
-    }
-    case 'tray': {
-      // a coin tray: a shallow brass dish with a little pile of coins in it
-      shadow(under, v, t, x, y, r * 1.0, r * 0.8);
-      const brass = mat(t, t.role.tray);
-      p.prism(box(x, y, r * 0.9, r * 0.6, 0, 0.25), 0, 0.3, brass);
-      p.face(box(x, y, r * 0.72, r * 0.45, 0, 0.2).map(([a, b]) => P(v, a, b, 0.3)), brass.shade, { sil: false, line: 0.35 });
-      for (const [dx, dy, n] of [[-0.25, 0.05, 3], [0.25, -0.05, 2]] as const) for (let i = 0; i < n; i++) p.cyl(x + dx * r, y + dy * r, r * 0.26, 0.22 + i * 0.1, 0.08, mat(t, t.role.coin), { n: 16 });
-      break;
-    }
-    case 'mirror': {
-      // a side mirror on a stalk: a round glass in a frame, catching the light
-      shadow(under, v, t, x, y, r * 0.8, r * 0.6);
-      p.cyl(x, y, r * 0.55, 0, 0.18, metal);
-      p.cyl(x, y, 0.1, 0.18, 1.1, metal, { n: 10 });
-      const R = r * 0.7, zc = 2.0, tall = 1.8;
-      const disc = (k: number): Pt[] => Array.from({ length: 24 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return P(v, x + Math.cos(a) * R * k, y - 0.05, zc + Math.sin(a) * R * k * tall); });
-      p.face(disc(1), t.role.mirror === undefined ? t.metal : mix(t.metal, t.ink, 0.2), { line: 0.5 });
-      p.face(disc(0.8), t.role.mirror, { sil: false, line: 0.3 });
-      const [gx, gy] = P(v, x - R * 0.3, y - 0.06, zc + R * 0.6);
-      p.op((g) => g.moveTo(gx, gy).lineTo(gx + S * 0.25, gy + S * 0.3).stroke({ width: v.lw * 0.9, color: WHITE, cap: 'round' }));
       break;
     }
     case 'tesla': {
@@ -1101,6 +991,11 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
         g.circle(BX, BY, R2).stroke({ width: v.lw * 0.5, color: t.ink });
         g.circle(BX - R2 * 0.35, BY - R2 * 0.35, R2 * 0.16).fill(WHITE);
       });
+      break;
+    }
+    case 'clock': case 'altar': case 'hutch': case 'bulb': case 'feet': case 'tray': case 'mirror': {
+      // decor: a flat picture in the decor screen at the head of the table (or, as an icon, a small square screen)
+      decorScreen(p, v, t, id, x, y, st);
       break;
     }
     case 'flipper': case 'flipperR': {
@@ -1336,6 +1231,122 @@ function motif(p: Prop, v: View, t: Theme, x: number, y: number, r: number, z: n
     p.face(ring(x, y, r * 0.66).map(([a, b]) => P(v, a, b, z)), role.light, { sil: false, line: 0.35 });
     const dots = Array.from({ length: 6 }, (_, i) => { const a = (i / 6) * Math.PI * 2 + 0.3; return P(v, x + Math.cos(a) * r * 0.82, y + Math.sin(a) * r * 0.82, z); });
     p.op((g) => { for (const [X, Y] of dots) g.circle(X, Y, v.S * 0.07).fill(t.ink); });
+  }
+}
+
+/**
+ * Decor, drawn flat into the decor screen at the head of the table: a metal bezel, a glass in the decor's own colour,
+ * and its picture lit up on the glass, the main motif in the middle and smaller ones out towards the ends. As a badge
+ * (an icon in the shop or the toolbox) it is a small square screen with the main motif alone.
+ */
+function decorScreen(p: Prop, v: View, t: Theme, id: PartId, x: number, y: number, st: PartState) {
+  const S = v.S, badge = !!st.badge, lit = !!st.lit;
+  // local screen coordinates (u across, w up): flat in the floor, or for a badge standing upright, facing you, unsquashed
+  const zc = 1.1 / v.kz;
+  const at = (u: number, w: number): Pt => (badge ? P(v, x + u, y, zc + w / v.kz) : P(v, x + u, y + w, 0.01));
+  const loc = (pts: Pt[]) => pts.map(([u, w]) => at(u, w));
+  const disc = (u: number, w: number, r: number, fill: string, line = 0.35, ry = r) => p.face(loc(ring(u, w, r, 22, ry)), fill, { sil: false, line });
+  // the glass is the decor's colour, darkened (the rubber feet, already dark, sit on grey glass instead)
+  const role = t.role[id], glass = id === 'feet' ? mix(t.metal, t.ink, 0.45) : mix(role, t.ink, lit ? 0.4 : 0.62);
+  const rel = (pts: Pt[]) => pts.map(([a, b]): Pt => [a - x, b - y]);
+  if (badge) { // a little stand under the upright screen
+    p.cyl(x, y, 0.9, 0, 0.14, mat(t, t.metal));
+    p.cyl(x, y, 0.16, 0.14, zc - 1.2 / v.kz, mat(t, t.metal), { n: 10 });
+  }
+  p.face(loc(badge ? box(0, 0, 1.75, 1.3, 0, 0.45) : rel(decorPanel(x, y, -0.3))), mix(t.metal, t.shadeTint, 0.15), { line: 0.45 });
+  p.face(loc(badge ? box(0, 0, 1.45, 1.0, 0, 0.32) : rel(decorPanel(x, y, 0.12))), glass, { sil: false, line: 0.4 });
+  // a sheen along the top of the glass
+  const sheen = badge ? [at(-1.1, 0.78), at(-0.3, 0.84)] : loc(rel(decorPanel(x, y, 0.45)).slice(5, 20));
+  p.op((g) => { g.moveTo(sheen[0][0], sheen[0][1]); for (const q of sheen.slice(1)) g.lineTo(q[0], q[1]); g.stroke({ width: v.lw * 0.7, color: WHITE, alpha: 0.28, cap: 'round' }); });
+  const wc = badge ? 0 : 0.12, R = badge ? 0.78 : 1.0;
+  /** The motifs either side of the middle: two mid-sized, two small ones near the ends (none on a badge). */
+  const sides: [number, number, number][] = badge ? [] : [[-3.4, 0.02, 0.62], [3.4, 0.02, 0.62], [-5.6, -0.3, 0.44], [5.6, -0.3, 0.44]];
+  const sparkle = (u: number, w: number, r: number, fill: string) => p.face(loc(star(u, w, r, r * 0.36, 4, Math.PI / 2)), fill, { sil: false, line: 0.3 });
+  switch (id) {
+    case 'clock': {
+      // the Midnight Clock: a clock face whose hands creep from 9 PM to midnight, a moon and stars either side
+      disc(0, wc, R, lit ? mix(t.accent, WHITE, 0.45) : t.paper, 0.45);
+      p.op((g) => { for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2, [X, Y] = at(Math.cos(a) * R * 0.78, wc + Math.sin(a) * R * 0.78); g.circle(X, Y, S * (i % 3 ? 0.04 : 0.07)).fill(t.ink); } });
+      const seg = st.seg ?? 0, mins = Math.min(180, seg * 15), hourA = Math.PI / 2 - ((9 + mins / 60) / 12) * Math.PI * 2, minA = Math.PI / 2 - (mins / 60) * Math.PI * 2;
+      const [cx, cy] = at(0, wc);
+      p.op((g) => {
+        for (const [a, k, w] of [[hourA, 0.5, 1.3], [minA, 0.76, 0.85]] as const) { const [hx, hy] = at(Math.cos(a) * R * k, wc + Math.sin(a) * R * k); g.moveTo(cx, cy).lineTo(hx, hy).stroke({ width: v.lw * w, color: t.ink, cap: 'round' }); }
+        g.circle(cx, cy, S * 0.07).fill(t.accent).stroke({ width: v.lw * 0.3, color: t.ink });
+      });
+      sides.forEach(([u, w, r], i) => {
+        if (i < 2) { disc(u, w, r, t.role.coin, 0.35); disc(u + r * 0.38 * (u < 0 ? 1 : -1), w + r * 0.2, r * 0.8, glass, 0); }
+        else sparkle(u, w, r * (lit ? 1.25 : 1), lit ? t.accent : t.paper);
+      });
+      break;
+    }
+    case 'altar': {
+      // the Ritual Altar: a sigil in the middle and eight runes, lit one by one as your sets are completed
+      disc(0, wc, R, lit ? t.accent : mix(role, t.ink, 0.2), 0.45);
+      p.face(loc(star(0, wc, R * 0.82, R * 0.34, 5, Math.PI / 2)), lit ? WHITE : t.role.coin, { sil: false, line: 0.3 });
+      if (!badge) for (let i = 0; i < 8; i++) {
+        const k = Math.floor(i / 2), side = i % 2 ? 1 : -1, u = side * (1.75 + k * 1.22), w = -0.05 - k * 0.12, on = lit || i < (st.seg ?? 0), h = 0.36;
+        p.face(loc(box(u, w, h * 0.8, h, 0, 0.12)), on ? t.accent : mix(role, t.paper, 0.15), { sil: false, line: 0.35 });
+        const [ax, ay] = at(u, w + h * 0.6), [bx, by] = at(u, w - h * 0.6), [cx2, cy2] = at(u + h * 0.45 * (k % 2 ? 1 : -1), w + h * 0.1);
+        p.op((g) => g.moveTo(ax, ay).lineTo(bx, by).moveTo(ax, ay).lineTo(cx2, cy2).stroke({ width: v.lw * 0.45, color: on ? WHITE : t.ink, cap: 'round' }));
+      }
+      break;
+    }
+    case 'hutch': {
+      // the Gremlin Hutch: a little arched door with two eyes in the dark, and paw prints running off either side
+      const door = (wd: number, ht: number): Pt[] => [[-wd, wc - ht * 0.55], ...Array.from({ length: 11 }, (_, i): Pt => { const a = Math.PI - (i / 10) * Math.PI; return [Math.cos(a) * wd, wc - ht * 0.55 + ht * 0.5 + Math.sin(a) * wd * 0.9]; }), [wd, wc - ht * 0.55]];
+      p.face(loc(door(R * 1.05, R * 1.9)), mix(role, t.rim, 0.4), { sil: false, line: 0.4 });
+      p.face(loc(door(R * 0.72, R * 1.55)), t.ink, { sil: false, line: 0.3 });
+      for (const k of [-1, 1]) disc(k * R * 0.26, wc + R * 0.1, 0.13, t.role.goldleaf, 0, 0.17);
+      if (!badge) for (const k of [-1, 1]) for (let j = 0; j < 4; j++) {
+        const u = k * (1.9 + j * 1.25), w = (j % 2 ? 0.25 : -0.2) - j * 0.08;
+        disc(u, w, 0.2, mix(role, t.paper, 0.35), 0, 0.17);
+        for (const d of [-1, 0, 1]) disc(u + d * 0.17 + k * 0.12, w + 0.22 - Math.abs(d) * 0.05, 0.07, mix(role, t.paper, 0.35), 0);
+      }
+      break;
+    }
+    case 'bulb': {
+      // the Spare Bulb: a big bulb glowing in the middle, smaller ones either side, all lit for the Lamps
+      const bulb = (u: number, w: number, r: number) => {
+        const [cx, cy] = at(u, w + r * 0.25);
+        p.op((g) => { for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; g.moveTo(cx + Math.cos(a) * r * S * 1.0, cy + Math.sin(a) * r * S * 0.86).lineTo(cx + Math.cos(a) * r * S * 1.35, cy + Math.sin(a) * r * S * 1.16); } g.stroke({ width: v.lw * 0.6, color: t.role.lamp, cap: 'round' }); });
+        disc(u, w + r * 0.25, r * 0.72, t.role.lamp, 0.4);
+        p.face(loc(box(u, w - r * 0.62, r * 0.3, r * 0.22, 0, 0.04)), t.metal, { sil: false, line: 0.35 });
+        disc(u - r * 0.22, w + r * 0.42, r * 0.16, WHITE, 0);
+      };
+      bulb(0, wc, R);
+      for (const [u, w, r] of sides) bulb(u, w, r);
+      break;
+    }
+    case 'feet': {
+      // the Rubber Feet: rubber stoppers seen from below, ridged rings round a screw, the cabinet's grip
+      const foot = (u: number, w: number, r: number) => {
+        disc(u, w, r, role, 0.4);
+        disc(u, w, r * 0.72, mix(role, WHITE, 0.15), 0.3);
+        disc(u, w, r * 0.45, mix(role, WHITE, 0.08), 0.3);
+        disc(u, w, r * 0.2, t.metal, 0.3);
+      };
+      foot(0, wc, R);
+      for (const [u, w, r] of sides) foot(u, w, r);
+      break;
+    }
+    case 'tray': {
+      // the Coin Tray: a brass tray in the middle with change in it, little piles of coins either side
+      const coin = (u: number, w: number, r: number) => { disc(u, w, r, t.role.coin, 0.35); disc(u, w, r * 0.62, mix(t.role.coin, WHITE, 0.3), 0.25); };
+      p.face(loc(box(0, wc, R * 1.55, R * 0.82, 0, 0.3)), role, { sil: false, line: 0.4 });
+      p.face(loc(box(0, wc, R * 1.3, R * 0.6, 0, 0.22)), mix(role, t.ink, 0.3), { sil: false, line: 0.3 });
+      for (const [du, dw] of [[-0.6, 0.1], [0.05, -0.12], [0.62, 0.15]] as const) coin(du * R, wc + dw * R, R * 0.36);
+      for (const [u, w, r] of sides) { coin(u - r * 0.3, w - r * 0.15, r * 0.6); coin(u + r * 0.32, w - r * 0.1, r * 0.6); coin(u, w + r * 0.3, r * 0.6); }
+      break;
+    }
+    case 'mirror': {
+      // the Side Mirror: an oval glass in a frame, with glints, and sparkles either side
+      disc(0, wc, R * 1.55, t.metal, 0.45, R * 0.95);
+      disc(0, wc, R * 1.35, role, 0.35, R * 0.78);
+      const [ax, ay] = at(-R * 0.75, wc - R * 0.1), [bx, by] = at(-R * 0.25, wc + R * 0.55), [cx, cy] = at(-R * 0.3, wc - R * 0.35), [dx, dy] = at(R * 0.05, wc + R * 0.1);
+      p.op((g) => g.moveTo(ax, ay).lineTo(bx, by).moveTo(cx, cy).lineTo(dx, dy).stroke({ width: v.lw * 0.8, color: WHITE, cap: 'round' }));
+      for (const [u, w, r] of sides) sparkle(u, w, r, WHITE);
+      break;
+    }
   }
 }
 

@@ -12,6 +12,7 @@ import { Renderer, type DrawState } from './render/renderer';
 import type { Mood } from './render/props';
 import { FxOverlay } from './render/overlay';
 import { FACTORY, roleFill, themeById, THEMES, themeVars, type Theme } from './render/theme';
+import { onDecorSlot } from './sim/cabinet';
 import { DT, LANE_WALL_X, TABLE_W } from './sim/constants';
 import { canPlaceLedge, starterLayout } from './sim/layout';
 import { clampLedge, FLIPPER_PIVOTS, LEDGE, ledgeSeg } from './sim/table';
@@ -102,10 +103,10 @@ async function main() {
   let ledgeDrag: { dy: number; y: number } | null = null;
   let hoverLedge = false;
   let pointer: { x: number; y: number } | null = null;
-  /** The same pointer on the cabinet (where decor stands: the apron, the tops of the walls). */
-  let pointerCab: { x: number; y: number } | null = null;
-  /** Where a part of this type would go under the pointer: on the table, or (decor) on the cabinet. */
-  const spotFor = (id: PartId, cx: number, cy: number) => (isDecor(id) ? renderer.toCabinet(cx, cy) : renderer.toSim(cx, cy));
+  /** Where a piece of decor would go under the pointer: into the decor screen at the head of the table, when it is over it. */
+  let pointerDecor: { x: number; y: number } | null = null;
+  /** Where a part of this type would go under the pointer: on the table, or (decor) into the decor screen. */
+  const spotFor = (id: PartId, cx: number, cy: number) => (isDecor(id) ? renderer.toDecor(cx, cy) : renderer.toSim(cx, cy));
   let ledgerTimer = 0;
   let lastMultBand = 1;
   let lastStamp = 0;
@@ -199,7 +200,7 @@ async function main() {
     }
     if (PARTS[inst.def].recipe.capsule) { const c = PARTS[inst.def].recipe.capsule!; return game.capsuleRipe(inst) ? 'Ripe: remove it for a free legendary pick!' : `${inst.age ?? 0} of ${c.rounds} rounds on the table.`; }
     if (!isDecor(inst.def)) return statsLine(game.scorer.ledger.get(inst.uid));
-    if (!inst.placed) return 'In the toolbox: decor works only on the cabinet.';
+    if (!inst.placed) return 'In the toolbox: decor works only in the decor screen at the top of the table.';
     const r = PARTS[inst.def].recipe;
     if (r.clock) { const t = game.scorer.label(inst); return t === 'MIDNIGHT' ? 'Midnight Madness: every hit pays double!' : `The clock says ${t}. Midnight comes at ${r.clock.hits} hits.`; }
     if (r.altar) {
@@ -582,7 +583,7 @@ async function main() {
     if (over === canvas) {
       const p = spotFor(d.id, cx, cy);
       part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y, d.angle) : game.buyAndPlace(d.slot, p.x, p.y, d.angle);
-      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); placedTip(part.uid); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? 'DECOR GOES ON THE CABINET' : 'NO ROOM THERE'); return false; }
+      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); placedTip(part.uid); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? (game.decor.length ? 'ONE DECOR AT A TIME: STORE THE OTHER FIRST' : 'DECOR GOES IN THE SCREEN UP TOP') : 'NO ROOM THERE'); return false; }
     } else if (over?.closest('#inventoryBox')) {
       part = d.slot === null ? game.grant(d.id, d.angle) : game.buy(d.slot, d.angle);
       if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(d.slot !== null && !game.hasRoomFor(d.id) ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
@@ -609,7 +610,7 @@ async function main() {
     if (!shopDrag.moving && !shopDrag.carry) return;
     const over = document.elementFromPoint(e.clientX, e.clientY);
     pointer = over === canvas ? renderer.toSim(e.clientX, e.clientY) : null;
-    pointerCab = over === canvas ? renderer.toCabinet(e.clientX, e.clientY) : null;
+    pointerDecor = over === canvas ? renderer.toDecor(e.clientX, e.clientY) : null;
     $('inventoryBox').classList.toggle('drop', !!over?.closest('#inventoryBox'));
   });
   addEventListener('pointerup', (e) => {
@@ -660,10 +661,10 @@ async function main() {
     }
     return best;
   };
-  /** The part under the pointer: one on the table, else decor on the cabinet. */
+  /** The part under the pointer: one on the table, else the decor in the decor screen. */
   const hitAt = (cx: number, cy: number) => {
-    const p = renderer.toSim(cx, cy), c = renderer.toCabinet(cx, cy);
-    return hitPart(p.x, p.y) ?? hitPart(c.x, c.y, game.decor);
+    const p = renderer.toSim(cx, cy);
+    return hitPart(p.x, p.y) ?? (onDecorSlot(p.x, p.y) ? game.decor[0] : undefined);
   };
 
   /** Is a sim point on the wall ledge? (Its handle is a little fatter than the rail.) */
@@ -679,7 +680,7 @@ async function main() {
     if (!game.editable || e.button !== 0) return;
     const p = renderer.toSim(e.clientX, e.clientY);
     pointer = p;
-    pointerCab = renderer.toCabinet(e.clientX, e.clientY);
+    pointerDecor = renderer.toDecor(e.clientX, e.clientY);
     if (carry) { putDown(); return; } // a part being moved: this click sets it down where it is
     if (armed === null && !hitAt(e.clientX, e.clientY) && onLedge(p.x, p.y)) {
       const y = game.layout.ledge ?? LEDGE.default;
@@ -716,13 +717,13 @@ async function main() {
   });
   canvas.addEventListener('pointermove', (e) => {
     pointer = renderer.toSim(e.clientX, e.clientY);
-    pointerCab = renderer.toCabinet(e.clientX, e.clientY);
+    pointerDecor = renderer.toDecor(e.clientX, e.clientY);
     hover = hitAt(e.clientX, e.clientY)?.uid ?? null;
     hoverLedge = hover === null && game.editable && (ledgeDrag !== null || onLedge(pointer.x, pointer.y));
     if (ledgeDrag) ledgeDrag.y = clampLedge(pointer.y + ledgeDrag.dy);
     hoverDecal = hover === null ? renderer.decalAt(e.clientX, e.clientY) : null;
     if (carry && game.editable) {
-      const q = isDecor(game.part(carry.uid)?.def ?? 'pop') ? pointerCab : pointer;
+      const q = isDecor(game.part(carry.uid)?.def ?? 'pop') ? pointerDecor! : pointer;
       if (game.place(carry.uid, q.x, q.y, !carry.moved)) carry.moved = true;
     }
     showTip(e.clientX, e.clientY);
@@ -737,7 +738,7 @@ async function main() {
     refreshWorkshop();
   });
   canvas.addEventListener('pointerleave', () => {
-    pointer = null; pointerCab = null; hover = null; hoverDecal = null; hoverLedge = false; $('tip').hidden = true;
+    pointer = null; pointerDecor = null; hover = null; hoverDecal = null; hoverLedge = false; $('tip').hidden = true;
     // a part being moved goes back to its spot when the pointer leaves the table
     if (carry) { dropCarry(); refreshWorkshop(); }
   });
@@ -1554,7 +1555,7 @@ async function main() {
       ? { y: ledgeDrag?.y ?? game.layout.ledge ?? LEDGE.default, valid: !ledgeDrag || canPlaceLedge(game.layout, ledgeDrag.y), moving: !!ledgeDrag }
       : null;
     const armedPart = armed != null ? game.part(armed) : undefined;
-    const ptr = (id: PartId) => (isDecor(id) ? pointerCab : pointer);
+    const ptr = (id: PartId) => (isDecor(id) ? pointerDecor : pointer);
     const sp = shopDrag ? ptr(shopDrag.id) : null, ap = armedPart ? ptr(armedPart.def) : null;
     drawState.ghost = game.editable && (shopDrag?.moving || shopDrag?.carry) && sp
       ? { def: shopDrag.id, x: sp.x, y: sp.y, angle: PARTS[shopDrag.id].rotatable ? shopDrag.angle : 0, valid: game.canDropAt(shopDrag.id, sp.x, sp.y) }

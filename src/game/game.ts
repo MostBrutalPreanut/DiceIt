@@ -7,7 +7,8 @@ import {
 } from '../data/decals';
 import { BOSSES, bossOf, FINAL_ROUND, planBosses, type BossDef, type BossId } from '../data/bosses';
 import type { MachineId } from '../data/bigboi';
-import { canPlace, canPlaceLedge, decorParts, WALL_GAP, ensureBigBoi, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
+import { canPlace, canPlaceLedge, decorParts, WALL_GAP, ensureBigBoi, inventoryParts, loadLayout, placedParts, settleDecor, starterLayout, type Layout } from '../sim/layout';
+import { decorSpot } from '../sim/cabinet';
 import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
 import { clampLedge, LEDGE } from '../sim/table';
 import { GOALS, GOAL_GROWTH } from '../data/goals';
@@ -285,7 +286,7 @@ export class Game {
     return placedParts(this.layout);
   }
 
-  /** The decor standing on the cabinet. */
+  /** The decor in the decor screen (one piece at most). */
   get decor(): PartInstance[] {
     return decorParts(this.layout);
   }
@@ -353,7 +354,7 @@ export class Game {
     return m;
   }
 
-  /** The cabinet upgrades on the cabinet add their little bit (decor in the toolbox does nothing). */
+  /** The cabinet upgrades in the decor screen add their little bit (decor in the toolbox does nothing). */
   private withDecor(m: Mods): Mods {
     for (const p of decorParts(this.layout)) {
       const c = PARTS[p.def].recipe.cab;
@@ -367,7 +368,7 @@ export class Game {
     return m;
   }
 
-  /** Decor went on or off the cabinet: a cabinet upgrade works (or stops) at once, the shop included. */
+  /** Decor went into or out of the decor screen: a cabinet upgrade works (or stops) at once, the shop included. */
   private decorChanged(id: PartId) {
     if (!isDecor(id) || this.fixedMods || this.mode !== 'workshop') return;
     this.mods = this.workshopMods();
@@ -715,7 +716,7 @@ export class Game {
   applyArrangement(a: Arrangement): { placed: number; missing: number } {
     if (!this.editable) return { placed: 0, missing: 0 };
     this.checkpoint();
-    for (const p of this.layout.parts) if (!p.fixed && !isDecor(p.def)) p.placed = false; // the decor stays on the cabinet
+    for (const p of this.layout.parts) if (!p.fixed && !isDecor(p.def)) p.placed = false; // the decor stays in its screen
     let placed = 0, missing = 0;
     for (const e of a.parts) {
       if (!(e.def in PARTS) || e.def === 'mega') { missing++; continue; }
@@ -816,6 +817,7 @@ export class Game {
     this.layout.parts = this.layout.parts.filter((p) => p.def in PARTS);
     migrateParts(this.layout, s.levels);
     ensureBigBoi(this.layout);
+    settleDecor(this.layout);
     this.mods = this.workshopMods();
     this.enforceToolbox();
     this.soldOverflow = [];
@@ -972,6 +974,7 @@ export class Game {
       return target;
     }
     const cost = this.priceAt(slot);
+    if (isDecor(id)) ({ x, y } = decorSpot(x, y)); // decor drops into the decor screen
     if (!this.canAfford(cost) || !canPlace(this.layout, id, x, y)) return null;
     const spots = this.packSpots(id, x, y);
     if (!spots) return null;
@@ -1010,6 +1013,7 @@ export class Game {
   }
 
   private addPlaced(id: PartId, x: number, y: number, angle = 0): PartInstance {
+    if (isDecor(id)) ({ x, y } = decorSpot(x, y));
     const inst = makePart(id, this.layout.nextUid++, x, y, true);
     inst.angle = aimed(id, angle);
     this.layout.parts.push(inst);
@@ -1108,6 +1112,7 @@ export class Game {
       this.lastInlaid = target.uid;
       return true;
     }
+    if (p && isDecor(p.def)) ({ x, y } = decorSpot(x, y));
     if (!this.editable || !p || p.fixed || !canPlace(this.layout, p.def, x, y, uid)) return false;
     const moving = p.placed && (p.x !== x || p.y !== y);
     if (moving && this.moveFee(p) > this.money) return false;

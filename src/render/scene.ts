@@ -7,7 +7,7 @@ import type { Rarity } from '../data/parts';
 import { LANE_WALL_X, TABLE_H, TABLE_W } from '../sim/constants';
 import { BIG_BOI_AT } from '../sim/layout';
 import { FLIPPER_PIVOTS, tableSegments } from '../sim/table';
-import { APRON_Z, apronPoly, DECAL_SLOT_POS, floorPoly, RIM, WALL_TOP } from '../sim/cabinet';
+import { APRON_Z, apronPoly, DECAL_SLOT_POS, DECOR_SLOT, decorPanel, floorPoly, RIM, WALL_TOP } from '../sim/cabinet';
 import { box, flat, hull, label, P, Prop, ribbon, ring, shadow, shadowPoly, star, type Pt, type View } from './draw';
 import { mat, mix, WHITE, type Theme } from './theme';
 
@@ -105,6 +105,7 @@ export function buildMachine(v: View, t: Theme, decals: (StuckDecal | null)[], l
   const top = new Graphics();
   well.addChild(top);
   top.poly(floorPts).stroke({ width: v.lw, color: t.ink, join: 'round' });
+  decorScreenFrame(top, v, t);
   // the apron, with its relic decals: two slots each side, like the rule cards on a real machine
   const apron = new Prop(v, t);
   apron.prism(apronPoly(), 0, APRON_Z, mat(t, t.rim));
@@ -150,6 +151,23 @@ function kept(layer: string, v: View, t: Theme, draw: (g: Graphics) => void): Gr
     keptLayers.set(key, c);
   }
   return c;
+}
+
+/**
+ * The decor screen at the head of the table, empty: a metal bezel round dark glass dotted like the DMD, with a faint
+ * plus in the middle. Decor put in it draws its own picture over the glass (props.ts decorScreen).
+ */
+function decorScreenFrame(g: Graphics, v: View, t: Theme) {
+  const pts = (inset: number) => flat(decorPanel(undefined, undefined, inset).map(([x, y]) => P(v, x, y, 0.005)));
+  g.poly(pts(-0.3)).fill(mix(t.metal, t.shadeTint, 0.15)).stroke({ width: v.lw * 0.9, color: t.ink, join: 'round' });
+  g.poly(pts(0.12)).fill(t.screen).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' });
+  for (let x = DECOR_SLOT.x - 7; x <= DECOR_SLOT.x + 7; x += 0.55) for (let y = DECOR_SLOT.y - 1.4; y <= DECOR_SLOT.y + 2; y += 0.55) {
+    if (Math.hypot((x - DECOR_SLOT.x) / 11.75, (y - (DECOR_SLOT.y - 9.7)) / 11.2) > 1 || y < DECOR_SLOT.y - 1.0) continue;
+    const [X, Y] = P(v, x, y, 0.01);
+    g.circle(X, Y, Math.max(0.6, v.S * 0.07)).fill({ color: t.dmd, alpha: 0.16 });
+  }
+  const [cx, cy] = P(v, DECOR_SLOT.x, DECOR_SLOT.y + 0.05, 0.01), r = v.S * 0.45;
+  g.moveTo(cx - r, cy).lineTo(cx + r, cy).moveTo(cx, cy - r * v.k).lineTo(cx, cy + r * v.k).stroke({ width: v.S * 0.14, color: t.dmd, alpha: 0.35, cap: 'round' });
 }
 
 function floorArt(g: Graphics, v: View, t: Theme) {

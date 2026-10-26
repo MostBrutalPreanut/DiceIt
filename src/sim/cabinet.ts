@@ -3,7 +3,7 @@ import { FLIPPER_PIVOTS, tableOutline } from './table';
 
 type Pt = [number, number];
 
-// The cabinet round the playfield, in sim units: what the renderer draws, and where decor may stand.
+// The cabinet round the playfield, in sim units: what the renderer draws, and the decor screen at the head of the table.
 
 /** The cabinet rim around the field. */
 export const RIM = { cx: 13, cy: 26.1, hw: 14.6, hh: 27.5 };
@@ -19,48 +19,25 @@ export const APRON_Z = 0.5;
 export const WALL_TOP = 1.6;
 /** The four decal slots on the apron (sim x, y; they sit on the apron top, z = APRON_Z). */
 export const DECAL_SLOT_POS: Pt[] = [[2.6, 6.6], [5.6, 4.4], [18.4, 4.4], [21.4, 6.6]];
-/** Decor keeps this far from a decal slot's centre (a slot's sticker is about this wide), and this far from the rim's edge. */
-const SLOT_CLEAR = 1.25;
-const EDGE = 0.25;
-/** The drain's mouth on the apron, between the flippers (its hazard stripes). */
-const DRAIN = { x: 12, hw: 4.2, top: 3.4 };
-
-function inside(poly: Pt[], x: number, y: number) {
-  let c = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i], [xj, yj] = poly[j];
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
-  }
-  return c;
-}
-
-let floor: Pt[] | null = null, apron: Pt[] | null = null;
 
 /**
- * What a point of the cabinet is, for decor: the apron (z APRON_Z), the top of the cabinet walls round the
- * playfield (z WALL_TOP), or null (the playfield itself, or off the cabinet).
+ * The decor screen: one flat panel built into the head of the playfield, in the strip between the top of the build
+ * area and the dome, where a ball only rolls past on its way in from the plunger. Decor goes nowhere else, and only
+ * one piece at a time: it is a picture in the floor, so the ball rolls over it and nothing can stand in its way.
  */
-export function decorZ(x: number, y: number): number | null {
-  floor ??= floorPoly();
-  apron ??= apronPoly();
-  if (inside(apron, x, y)) return APRON_Z;
-  if (Math.abs(x - RIM.cx) > RIM.hw - EDGE || Math.abs(y - RIM.cy) > RIM.hh - EDGE) return null;
-  return inside(floor, x, y) ? null : WALL_TOP;
+export const DECOR_SLOT = { x: 13, y: 49.7 } as const;
+/** The screen's outline round (x, y): its top follows the dome, its bottom sags a little, like a smile. */
+export function decorPanel(x: number = DECOR_SLOT.x, y: number = DECOR_SLOT.y, inset = 0): Pt[] {
+  // the top is the dome, shrunk; the bottom corners sit 1.2 below the centre, the top 1.85 above it
+  const ry = 11.55 - inset, rx = 12.1 - inset, dy = -9.7, a0 = Math.asin(Math.min(0.99, 8.5 / ry));
+  const top: Pt[] = Array.from({ length: 25 }, (_, i) => { const a = a0 + ((Math.PI - 2 * a0) * i) / 24; return [x + Math.cos(a) * rx, y + dy + Math.sin(a) * ry]; });
+  const [lx, ly] = top[top.length - 1], [rx0, ry0] = top[0], sag = 0.55 - inset * 0.3;
+  const bottom: Pt[] = Array.from({ length: 13 }, (_, i) => { const u = (i + 1) / 14, k = 1 - u; return [lx + (rx0 - lx) * u, k * k * ly + 2 * k * u * (ly - sag * 2) + u * u * ry0]; });
+  return [...top, ...bottom];
 }
-
-/**
- * Can a piece of decor of footprint `r` stand at (x, y)? All of it on one surface (the apron, or the top of the
- * walls), clear of the decal slots. (Clear of other decor is the layout's check.)
- */
-export function decorFits(r: number, x: number, y: number): boolean {
-  const z = decorZ(x, y);
-  if (z === null) return false;
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    if (decorZ(x + Math.cos(a) * r, y + Math.sin(a) * r) !== z) return false;
-  }
-  if (z !== APRON_Z) return true;
-  // on the apron: not on the drain's hazard stripes between the flippers, nor on a decal slot
-  if (Math.abs(x - DRAIN.x) < DRAIN.hw + r && y - r < DRAIN.top) return false;
-  return DECAL_SLOT_POS.every(([sx, sy]) => Math.hypot(sx - x, sy - y) >= r + SLOT_CLEAR);
+/** Is (x, y) over the decor screen? (A little generous, so a drop near its edge still lands in it.) */
+export function onDecorSlot(x: number, y: number): boolean {
+  return Math.abs(x - DECOR_SLOT.x) < 8.6 && y > DECOR_SLOT.y - 2.2 && y < DECOR_SLOT.y + 2.6;
 }
+/** Where a piece of decor dropped at (x, y) goes: into the screen if it was dropped over it, else where it was dropped. */
+export const decorSpot = (x: number, y: number) => (onDecorSlot(x, y) ? { x: DECOR_SLOT.x, y: DECOR_SLOT.y } : { x, y });

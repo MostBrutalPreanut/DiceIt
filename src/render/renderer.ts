@@ -4,7 +4,7 @@ import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
 import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, FLIPPER_REST, SPARK_R, TABLE_W } from '../sim/constants';
 import { FLIPPER_PIVOTS, ledgeSeg } from '../sim/table';
-import { APRON_Z as APRON_TOP, decorFits, decorZ, WALL_TOP } from '../sim/cabinet';
+import { decorPanel, decorSpot } from '../sim/cabinet';
 import { flat, label, P, Prop, ribbon, star, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
 import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawGremlin, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
@@ -50,8 +50,6 @@ const STRAIN_UP = 22;
 const STRAIN_DOWN = 17.5;
 /** A cheap repeatable 0..1 noise for the lightning's zigzag. */
 const jit = (a: number, b: number, c: number) => { const s = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453; return s - Math.floor(s); };
-/** The height decor stands at: the apron's top or the cabinet walls' (a spot off the cabinet reads as the walls'). */
-const cabZ = (x: number, y: number) => decorZ(x, y) ?? WALL_TOP;
 /** k is quantised so the baked textures can be shared between frames of the tip animation. */
 const K_STEP = 0.02;
 const quantK = (k: number) => Math.round(k / K_STEP) * K_STEP;
@@ -79,8 +77,6 @@ export class Renderer {
   /** Laser Turret beams and the shockwave rings of blasts and booms, for a moment each. */
   private beams: { x1: number; y1: number; x2: number; y2: number; age: number }[] = [];
   private rings: { x: number; y: number; r: number; age: number; color: string }[] = [];
-  /** Where each kind of decor could stand (a grid of spots on the cabinet), for the hint while one is in hand. */
-  private decorSpots = new Map<PartId, Pt[]>();
   /** Firecracker rockets on their way up. */
   private rockets: { x: number; y: number; age: number; smoke: number }[] = [];
   /** Sparks: pooled sprites (halo, white-hot core and two ghosts behind each) and each spark's last few spots. */
@@ -239,18 +235,10 @@ export class Renderer {
     return { x, y };
   }
 
-  /**
-   * Pointer position (client px) -> a spot on the cabinet, for decor: on the top of the walls if the pointer is over
-   * them, else on the apron (both stand higher than the floor, so the floor's point would be off).
-   */
-  toCabinet(clientX: number, clientY: number) {
-    const r = this.app.canvas.getBoundingClientRect();
-    const local = this.machine.toLocal({ x: clientX - r.left, y: clientY - r.top });
-    const on = (z: number) => { const [x, y] = unP({ ...this.view, oy: this.view.oy - z * this.view.kz * this.view.S }, local.x, local.y); return { x, y }; };
-    const top = on(WALL_TOP);
-    if (decorZ(top.x, top.y) === WALL_TOP) return top;
-    const apron = on(APRON_TOP);
-    return decorZ(apron.x, apron.y) === APRON_TOP ? apron : top;
+  /** Pointer position (client px) -> where a piece of decor would go: into the decor screen if the pointer is over it. */
+  toDecor(clientX: number, clientY: number) {
+    const { x, y } = this.toSim(clientX, clientY);
+    return decorSpot(x, y);
   }
 
   /** Sim point (with height) -> client px, for the HTML overlay effects and the smoke test. */
@@ -588,7 +576,7 @@ export class Renderer {
     for (const p of [...game.placed, ...game.decor]) {
       seen.add(p.uid);
       const def = PARTS[p.def];
-      const z = isDecor(p.def) ? cabZ(p.x, p.y) : 0; // decor stands on the cabinet
+      const z = 0, decor = isDecor(p.def); // decor is a picture in the decor screen, flat on the floor
       let pulse = this.pulses.get(p.uid) ?? 0;
       if (pulse > 0) { pulse = Math.max(0, pulse - dt * 4.5); this.pulses.set(p.uid, pulse); }
       const sp = this.spin.get(p.uid);
@@ -604,7 +592,7 @@ export class Renderer {
       if (p.inlay) ps.gem = p.inlay;
       // glows live on the floor, under every part: lamps, lit inserts, armed kickbacks, a ready saver
       const r = footprint(def);
-      if (!tilted && !z) {
+      if (!tilted && !decor) {
         if (p.def === 'lamp' && ps.bright) this.glow(p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, 0.12 + 0.09 * ps.bright);
         if (p.def === 'strip' && ps.lit) this.glow(p.x, p.y, 4.6, t.role.strip, 0.5 + 0.2 * Math.sin(this.time * 10));
         if (p.def === 'lane' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.lane, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.7, p.y + 0.5, 0.3, 0.7, false, true); }
@@ -655,7 +643,7 @@ export class Renderer {
         else { const a = sh.amp * v.S * 0.22 * (sh.t / 0.2); jx = (Math.random() - 0.5) * 2 * a; jy = (Math.random() - 0.5) * a; }
       }
       pv.sprite.position.set(X + jx, Y + jy);
-      pv.sprite.zIndex = -p.y * 100;
+      pv.sprite.zIndex = decor ? -1e7 : -p.y * 100; // the decor screen is under everything on the table
       const jammed = game.scorer.jammed.has(p.def);
       pv.sprite.alpha = jammed ? 0.45 : 1;
       pv.sprite.tint = jammed ? num(mix(t.shadeTint, '#ffffff', 0.4)) : 0xffffff;
@@ -664,7 +652,8 @@ export class Renderer {
       pv.sprite.scale.set(1 + sq, 1 - sq);
 
       // selection: a dashed paper ring; hover: a ring in the part's colour
-      if (st.selectedUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.6, t.paper, v.lw * 1.4, t.ink, z);
+      if (decor && (st.selectedUid === p.uid || st.hoverUid === p.uid)) outlinePoly(fx, v, decorPanel(p.x, p.y, -0.35), st.selectedUid === p.uid ? t.paper : roleFill(t, p.def), v.lw * (st.selectedUid === p.uid ? 1.4 : 1.1), t.ink);
+      else if (st.selectedUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.6, t.paper, v.lw * 1.4, t.ink, z);
       else if (st.hoverUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.5, roleFill(t, p.def), v.lw * 1.1, undefined, z);
       if (def.kind === 'lamp' && (st.selectedUid === p.uid || st.hoverUid === p.uid)) {
         dashedRing(fx, v, p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, v.lw, t.ink);
@@ -695,8 +684,7 @@ export class Renderer {
       if (!pv) { pv = { sprite: new Sprite() }; this.partLayer.addChild(pv.sprite); this.parts.set(-1, pv); }
       pv.sprite.texture = b.tex;
       pv.sprite.anchor.set(b.ax, b.ay);
-      const gz = isDecor(st.ghost.def) ? cabZ(st.ghost.x, st.ghost.y) : 0;
-      const [X, Y] = P(v, st.ghost.x, st.ghost.y, gz);
+      const [X, Y] = P(v, st.ghost.x, st.ghost.y);
       pv.sprite.position.set(X, Y);
       pv.sprite.zIndex = 100000;
       pv.sprite.alpha = 0.6;
@@ -705,20 +693,10 @@ export class Renderer {
       if (isInlay(st.ghost.def)) {
         // a gem in hand: every part it fits is ringed in the gem's colour (it goes into the one it is dropped on)
         for (const q of game.placed) if (!q.fixed && gemFits(st.ghost.def, q.def)) dashedRing(fx, v, q.x, q.y, footprint(PARTS[q.def]) + 0.35, t.role[st.ghost.def], v.lw * 1.4, t.ink);
-      } else dashedRing(fx, v, st.ghost.x, st.ghost.y, footprint(def), st.ghost.valid ? t.ink : t.accent, v.lw, undefined, gz);
-      if (isDecor(st.ghost.def)) {
-        // decor in hand: the cabinet's free spots are dotted (the apron, the corners above the dome)
-        let spots = this.decorSpots.get(st.ghost.def);
-        if (!spots) {
-          spots = [];
-          for (let y = -1; y < 54; y += 0.75) for (let x = -1.5; x < 28; x += 0.75) if (decorFits(footprint(def), x, y)) spots.push([x, y]);
-          this.decorSpots.set(st.ghost.def, spots);
-        }
-        for (const [x, y] of spots) {
-          const [X, Y] = P(v, x, y, cabZ(x, y) + 0.03);
-          fx.circle(X, Y, Math.max(1, v.S * 0.08)).fill({ color: t.paper, alpha: 0.7 });
-        }
-      }
+      } else if (isDecor(st.ghost.def)) {
+        // decor in hand: the decor screen at the head of the table is ringed (in the accent while there is no room in it)
+        outlinePoly(fx, v, decorPanel(undefined, undefined, -0.35), st.ghost.valid ? t.paper : t.accent, v.lw * 1.4, t.ink);
+      } else dashedRing(fx, v, st.ghost.x, st.ghost.y, footprint(def), st.ghost.valid ? t.ink : t.accent, v.lw);
     } else {
       const pv = this.parts.get(-1);
       if (pv) { pv.sprite.destroy(); this.parts.delete(-1); }
@@ -1041,7 +1019,7 @@ export class Renderer {
       if (id === 'button') return drawButton(vv, t);
       if (id === 'flipper' || id === 'flipperR' || id === 'hand') { const g = new Graphics(); drawFlipper(g, vv, t, 0, 0, id === 'flipperR' ? 0.49 : -0.49, id === 'flipperR' ? -1 : 1, FLIPPER_LENGTH * SMALL_FLIPPER, id === 'hand'); const c = new Container(); c.addChild(g); return c; }
       const a = id === 'sling' ? -0.55 : id === 'spinner' ? 0.3 : id === 'deflector' ? 0.4 : id === 'bank' ? 0.15 : id === 'vari' ? 0.2 : id === 'kickback' ? -0.5 : id === 'printer' ? 0.3 : id === 'piggy' ? 0.25 : id === 'magnet' || id === 'jackpot' ? 0.3 : 0;
-      return drawPart(vv, t, id, 0, 0, a, { lit: true, letter: t.laneWord[0], target: 'pop', down: [false, false, true], armed: true, seg: 2, ...(opts.st ?? {}) });
+      return drawPart(vv, t, id, 0, 0, a, { lit: true, letter: t.laneWord[0], target: 'pop', down: [false, false, true], armed: true, seg: 2, ...(isDecor(id) ? { badge: true, lit: false, seg: 6 } : {}), ...(opts.st ?? {}) });
     };
     const probe = make(10);
     const b0 = probe.getLocalBounds();
@@ -1112,6 +1090,18 @@ function dashedRing(g: Graphics, v: View, x: number, y: number, r: number, color
       const a0 = (i / n) * Math.PI * 2, a1 = a0 + ((Math.PI * 2) / n) * 0.55;
       const p0 = P(v, x + Math.cos(a0) * r, y + Math.sin(a0) * r, z + 0.03), p1 = P(v, x + Math.cos((a0 + a1) / 2) * r, y + Math.sin((a0 + a1) / 2) * r, z + 0.03), p2 = P(v, x + Math.cos(a1) * r, y + Math.sin(a1) * r, z + 0.03);
       g.moveTo(p0[0], p0[1]).lineTo(p1[0], p1[1]).lineTo(p2[0], p2[1]);
+    }
+    g.stroke({ width, color: col, cap: 'round' });
+  }
+}
+
+/** A dashed outline round a floor shape (the decor screen), in sim points: the same marks as dashedRing. */
+function outlinePoly(g: Graphics, v: View, pts: Pt[], color: string, w: number, under: string) {
+  const sp = pts.map(([x, y]) => P(v, x, y, 0.03));
+  for (const [width, col] of [[w + v.lw * 1.2, under], [w, color]] as [number, string][]) {
+    for (let i = 0; i < sp.length; i += 2) {
+      const a = sp[i], b = sp[(i + 1) % sp.length];
+      g.moveTo(a[0], a[1]).lineTo(b[0], b[1]);
     }
     g.stroke({ width, color: col, cap: 'round' });
   }

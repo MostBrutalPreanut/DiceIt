@@ -2,16 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { describe as describePart, infernoReach, isDecor, makePart, PARTS, SHOP_IDS, swarmSparks, tempestRate, type PartId, type PartInstance } from '../src/data/parts';
 import { Game, rollOffers } from '../src/game/game';
 import { Scorer } from '../src/game/scoring';
-import { decorFits } from '../src/sim/cabinet';
-import { canPlace, placedParts } from '../src/sim/layout';
+import { DECOR_SLOT, onDecorSlot } from '../src/sim/cabinet';
+import { canPlace, placedParts, settleDecor } from '../src/sim/layout';
 import { Rng } from '../src/sim/rng';
 import type { SimEvent } from '../src/sim/sim';
 
 const hit = (uid: number, extra: Partial<Extract<SimEvent, { type: 'partHit' }>> = {}): SimEvent =>
   ({ type: 'partHit', t: 0, uid, ballId: 1, x: 0, y: 0, speed: 10, ...extra });
 const at = (id: PartId, uid: number, x: number, y: number): PartInstance => makePart(id, uid, x, y, true);
-/** A spot on the cabinet's top-left corner, above the dome, and one on the apron. */
-const CORNER = { x: 2, y: 51 }, APRON = { x: 3, y: 1.5 };
+/** The decor screen at the head of the table (decor dropped anywhere over it lands in its middle). */
+const CORNER = { x: DECOR_SLOT.x, y: DECOR_SLOT.y };
 const scorer = (parts: PartInstance[]) => {
   const s = new Scorer(1e9, () => parts);
   s.resetRound();
@@ -19,23 +19,46 @@ const scorer = (parts: PartInstance[]) => {
 };
 
 describe('decor: where it stands', () => {
-  it('on the cabinet (the corners above the dome, the apron), never on the table, the drain or a decal slot', () => {
-    expect(decorFits(0.9, CORNER.x, CORNER.y)).toBe(true);
-    expect(decorFits(0.9, APRON.x, APRON.y)).toBe(true);
-    expect(decorFits(0.9, 12, 30)).toBe(false); // the playfield
-    expect(decorFits(0.9, 12, 1.5)).toBe(false); // the drain's stripes
-    expect(decorFits(0.9, 2.6, 6.6)).toBe(false); // a decal slot
-    expect(decorFits(0.9, 40, 30)).toBe(false); // off the cabinet
+  it('in the decor screen at the head of the table, over the dome, never among the parts or out on the cabinet', () => {
+    expect(onDecorSlot(DECOR_SLOT.x, DECOR_SLOT.y)).toBe(true);
+    expect(onDecorSlot(DECOR_SLOT.x - 6, DECOR_SLOT.y - 0.5)).toBe(true); // anywhere over the screen
+    expect(onDecorSlot(12, 30)).toBe(false); // the playfield
+    expect(onDecorSlot(3, 1.5)).toBe(false); // the apron
+    expect(onDecorSlot(2, 51)).toBe(false); // the cabinet's corner
+    expect(DECOR_SLOT.y - 1.2).toBeGreaterThanOrEqual(48); // clear of the build area
   });
 
-  it('decor and table parts never get in each other\'s way; two pieces of decor cannot overlap', () => {
+  it('one piece at a time, and decor and table parts never get in each other\'s way', () => {
     const layout = { parts: [at('clock', 1, CORNER.x, CORNER.y)], gravity: 50, nextUid: 10 };
-    expect(canPlace(layout, 'bulb', CORNER.x + 1.2, CORNER.y)).toBe(false);
-    expect(canPlace(layout, 'bulb', CORNER.x + 2.4, CORNER.y)).toBe(true);
-    expect(canPlace(layout, 'clock', 12, 30)).toBe(false);
+    expect(canPlace(layout, 'bulb', CORNER.x + 3, CORNER.y)).toBe(false); // the screen is taken
+    expect(canPlace(layout, 'clock', CORNER.x + 3, CORNER.y, 1)).toBe(true); // the clock itself can move within it
+    expect(canPlace({ ...layout, parts: [] }, 'bulb', CORNER.x + 3, CORNER.y)).toBe(true);
+    expect(canPlace(layout, 'clock', 12, 30, 1)).toBe(false);
     expect(canPlace(layout, 'pop', CORNER.x, CORNER.y)).toBe(false);
     expect(canPlace(layout, 'pop', 12, 30)).toBe(true);
     expect(placedParts(layout)).toEqual([]); // decor is not on the table
+  });
+
+  it('a save from when decor stood all over the cabinet keeps one piece, in the screen, and stores the rest', () => {
+    const layout = { parts: [at('clock', 1, 2, 51), at('bulb', 2, 3, 1.5), at('pop', 3, 12, 30)], gravity: 50, nextUid: 10 };
+    expect(settleDecor(layout)).toBe(true);
+    expect(layout.parts[0]).toMatchObject({ placed: true, x: DECOR_SLOT.x, y: DECOR_SLOT.y });
+    expect(layout.parts[1].placed).toBe(false);
+    expect(layout.parts[2]).toMatchObject({ placed: true, x: 12, y: 30 });
+    expect(settleDecor(layout)).toBe(false);
+  });
+
+  it('dropped over the screen it snaps into the middle; a second piece is refused', () => {
+    const g = new Game();
+    g.round = 9; g.money = 50;
+    g.toWorkshop();
+    g.shop.offers = ['clock', 'bulb', null, null];
+    const c = g.buyAndPlace(0, DECOR_SLOT.x + 4, DECOR_SLOT.y + 0.6)!;
+    expect(c).toMatchObject({ placed: true, x: DECOR_SLOT.x, y: DECOR_SLOT.y });
+    expect(g.canDropAt('bulb', DECOR_SLOT.x, DECOR_SLOT.y)).toBe(false);
+    expect(g.buyAndPlace(1, DECOR_SLOT.x, DECOR_SLOT.y)).toBeNull();
+    expect(g.store(c.uid)).toBeNull();
+    expect(g.buyAndPlace(1, DECOR_SLOT.x, DECOR_SLOT.y)).not.toBeNull();
   });
 });
 
@@ -51,7 +74,7 @@ describe('decor: in the shop', () => {
     expect(seen.has('clock')).toBe(true);
   });
 
-  it('dropped from the shop onto the cabinet it stands there, with no body in the sim', () => {
+  it('dropped from the shop into the decor screen it sits there, with no body in the sim', () => {
     const g = new Game();
     g.round = 9; g.money = 50;
     g.toWorkshop();

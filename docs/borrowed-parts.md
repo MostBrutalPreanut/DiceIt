@@ -307,13 +307,15 @@ and the **Gremlin Hutch** (was Gremlins). Effort **M**: a decor strip in the lay
 drawing, and a shop slot type.
 
 ### 6.2.1 Decor as built (step 5)
-- **Where it stands:** on the cabinet itself, never on the playfield: the wooden corners above the dome (the top of
-  the walls) and the apron below the flippers, clear of the drain's stripes and the four decal slots. Both are always
-  on screen, even on a phone, where the scenery beside the cabinet is cropped. Decor cannot overlap other decor; table
-  parts and decor never block each other. While a piece is in hand, every spot it fits is dotted.
+- **Where it stands:** in the **decor screen**, a flat panel built into the head of the playfield, in the strip between
+  the top of the build area and the dome (where the ball only rolls past on its way in from the plunger). It is a
+  picture in the floor, drawn larger than a part: the ball rolls over it and it never sticks out of the cabinet. There
+  is room for **one piece of decor at a time**, so two never meet; to swap, store the one in the screen first. While a
+  piece is in hand the screen is ringed (in the accent when it is taken). Saves from when decor stood anywhere on the
+  cabinet keep their first piece in the screen and put the rest in the toolbox.
 - **What it is:** a part of kind `decor`: bought in the shop (one of each, so the shop never offers decor you own),
   kept in the toolbox, sold and moved like a part. It has no body in the sim, so the ball never touches it, and it
-  works only while it stands on the cabinet. Zaps, Hall of Fame's part types, Purist and Crowd Pleaser ignore it.
+  works only while it is in the decor screen. Zaps, Hall of Fame's part types, Purist and Crowd Pleaser ignore it.
 - **Midnight Clock** (uncommon, $6): every scoring hit (zaps and sparks too) is a minute from 9 PM; at midnight (180)
   it strikes: 20 s of every hit ×2 and every Lamp at full glow. Once a ball; the hands go back each round.
 - **Ritual Altar** (legendary, $12): every 8 completed sets (lane, bank, Level Light, Rank Light) start a 15 s

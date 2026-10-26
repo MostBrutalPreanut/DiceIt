@@ -1,5 +1,5 @@
 import { footprint, isDecor, makePart, PARTS, underFloor, type PartId, type PartInstance } from '../data/parts';
-import { decorFits } from './cabinet';
+import { DECOR_SLOT, onDecorSlot } from './cabinet';
 import { BUILD_AREA, DEFAULT_GRAVITY } from './constants';
 import { clampLedge, LEDGE, ledgeSeg, tableSegments } from './table';
 
@@ -39,11 +39,26 @@ export function starterLayout(): Layout {
   };
 }
 
-/** The parts on the table (decor stands on the cabinet: see decorParts). */
+/** The parts on the table (decor sits in the decor screen: see decorParts). */
 export const placedParts = (l: Layout) => l.parts.filter((p) => p.placed && !isDecor(p.def));
-/** The decor standing on the cabinet. */
+/** The decor in the decor screen (there is room for one). */
 export const decorParts = (l: Layout) => l.parts.filter((p) => p.placed && isDecor(p.def));
 export const inventoryParts = (l: Layout) => l.parts.filter((p) => !p.placed);
+
+/**
+ * Decor from before the decor screen stood anywhere on the cabinet, several at once: the first piece moves into the
+ * screen and the rest go back to the toolbox. Returns whether anything moved.
+ */
+export function settleDecor(l: Layout): boolean {
+  let changed = false, kept = false;
+  for (const p of l.parts) {
+    if (!p.placed || !isDecor(p.def)) continue;
+    if (kept) { p.placed = false; changed = true; continue; }
+    kept = true;
+    if (p.x !== DECOR_SLOT.x || p.y !== DECOR_SLOT.y) { p.x = DECOR_SLOT.x; p.y = DECOR_SLOT.y; changed = true; }
+  }
+  return changed;
+}
 
 export function cloneLayout(l: Layout): Layout {
   return { ...l, parts: l.parts.map((p) => ({ ...p, dials: { ...p.dials } })) };
@@ -70,12 +85,11 @@ function distToSegment(px: number, py: number, s: { x1: number; y1: number; x2: 
 /** Can a part of this type sit at (x, y)? `ignoreUid` lets a part being dragged ignore itself. */
 export function canPlace(layout: Layout, id: PartId, x: number, y: number, ignoreUid?: number): boolean {
   if (PARTS[id].kind === 'inlay') return false; // a gem goes into a part, never on the table itself
-  const r = footprint(PARTS[id]);
   if (isDecor(id)) {
-    // decor stands on the cabinet, clear of the decal slots and of other decor (never on the table)
-    if (!decorFits(r, x, y)) return false;
-    return layout.parts.every((p) => !p.placed || p.uid === ignoreUid || !isDecor(p.def) || Math.hypot(p.x - x, p.y - y) >= r + footprint(PARTS[p.def]) + 0.15);
+    // decor goes in the decor screen at the head of the table (never among the parts), one piece at a time
+    return onDecorSlot(x, y) && !layout.parts.some((p) => p.placed && p.uid !== ignoreUid && isDecor(p.def));
   }
+  const r = footprint(PARTS[id]);
   if (x - r < BUILD_AREA.x0 || x + r > BUILD_AREA.x1 || y - r < BUILD_AREA.y0 || y + r > BUILD_AREA.y1) return false;
   // keep clear of the cabinet walls (the dome and chamfer are not rectangles), with room for a ball between: a gap
   // narrower than the ball is a pocket it can come to rest in (the same room the ledge keeps from the parts)
