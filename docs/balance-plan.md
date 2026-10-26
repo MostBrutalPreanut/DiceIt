@@ -23,9 +23,9 @@ each machine's Big Boi pulls the run towards a different build:
 | Rarity | In the shop from | Weight (× the part's own) | Price | Parts |
 |---|---|---|---|---|
 | Common | round 1 | 1 | $1–4 | Pop Bumper, Cha-Ching Bumper, Slingshot, Spinner, Lane Rollover (pack of 3), Lamp, Vari-Target, Deflector, Kickback, **Sparkler** |
-| Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $4–7 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, Glow Strip, Roller Pop, **Power Plate**, X Lane, **Shockwave Gong**, **Rock Pile**, **Midnight Clock**, **Spare Bulb**, **Rubber Feet**, **Grape Bunch** (pack of 3), **Echo Cave**, **Spotlight**, **Bonsai Bumper**, **Ice Sculpture**, **Wishing Well** |
-| Rare | round 4 | 0.25, +0.1 a round, up to 1 | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup**, **Rank Lights** (pack of 3), **Old Bell**, **Tesla Coil**, **Powder Keg**, **Laser Turret**, **Firecracker**, **Coin Tray**, **Side Mirror**, **Piñata**, **Time Capsule**, **Broomstick** |
-| Legendary | round 7 | 0.15, +0.07 a round, up to 0.6 | $11–13 | Golden Bumper, Disco Ball, Goal!, **Hall of Fame**, **Ritual Altar**, **Wizard Lamp**, **Wrecking Ball**, **Free Ball Bucket**, **Gremlin Hutch** |
+| Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $4–7 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, Glow Strip, Roller Pop, **Power Plate**, X Lane, **Shockwave Gong**, **Rock Pile**, **Midnight Clock**, **Spare Bulb**, **Rubber Feet**, **Grape Bunch** (pack of 3), **Echo Cave**, **Spotlight**, **Bonsai Bumper**, **Ice Sculpture**, **Wishing Well**, **Splitter**, **Insurance Policy** |
+| Rare | round 4 | 0.25, +0.1 a round, up to 1 | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup**, **Rank Lights** (pack of 3), **Old Bell**, **Tesla Coil**, **Powder Keg**, **Laser Turret**, **Firecracker**, **Coin Tray**, **Side Mirror**, **Piñata**, **Time Capsule**, **Broomstick**, **Spider Nest**, **Marble Jar** |
+| Legendary | round 7 | 0.15, +0.07 a round, up to 0.6 | $11–13 | Golden Bumper, Disco Ball, Goal!, **Hall of Fame**, **Ritual Altar**, **Wizard Lamp**, **Wrecking Ball**, **Free Ball Bucket**, **Gremlin Hutch**, **The Whale** |
 
 Rarer parts are physically bigger and do more. Every part does at least two things, and many feed or starve each other.
 Cards say what a part does; they carry no strategy tips.
@@ -69,6 +69,11 @@ Cards say what a part does; they carry no strategy tips.
 | Sparkler | common, $3 · 8 · a ball's hit shoots out a spark, then it needs 1 s. A spark is a little bonus ball: it scores on what it touches as the ball that made it, slips through the flippers and fades after 4 s; at most 24 glow at once |
 | Rock Pile | uncommon, $4 · 10 · a ball's hit drops a spark for each rock (1 to start, +1 every 5 hits, up to 5, back to 1 each round), then it needs 2 s |
 | Firecracker | rare, $8 · 15 · once a ball, a hit sends up a rocket; 0.7 s later 6 sparks rain from the top of the table |
+| Splitter | uncommon, $7 · 10 a roll-over · the ball's pass splits off 2 sparks, one to each side; then it needs 5 s (tuned from $6 and 4 s) |
+| The Whale | legendary, $12 · 20 a hit · swallows every spark that touches it (8 each); every 6th it spouts 6 sparks and 300 (3 spouts a ball) |
+| Insurance Policy | uncommon, $5 · scores nothing · if the last ball of a round drains short of the goal, 10 sparks rain from the top, once; then it leaves the table |
+| Spider Nest | rare, $8 · 15 a hit · 25% of the ball's hits lay an egg: a spark that hatches into 3 on the first part it hits |
+| Marble Jar | rare, $8 · 10 a hit · a marble every 25 hits of the ball, for the run (up to 5); every ball launched brings one spark per marble |
 | Wrecking Ball | legendary, $11 · 20 a hit · once a ball, a hit makes the ball 1.5× bigger for 6 s (it grows only with room round it): every hit it makes pays ×2 and shakes the table |
 | Broomstick | rare, $9 · 20 a roll-over · the ball rides it: straight the way it points, no gravity, for 1 s or until it touches anything; every part it flies past is zapped at ×2. Turn it to aim |
 | Free Ball Bucket | legendary, $11 · 200 a catch · a bucket slides along a rail you place; a ball that drops into it from above goes back to the plunger, not lost |

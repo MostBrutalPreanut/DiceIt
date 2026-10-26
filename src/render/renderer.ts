@@ -539,6 +539,10 @@ export class Renderer {
       case 'clock': { const c = game.scorer.clockState(), hits = PARTS.clock.recipe.clock!.hits; return { lit: game.scorer.madnessLeft(game.sim.time) > 0, seg: c.struck ? 12 : Math.floor((c.minutes / hits) * 12) }; }
       case 'altar': { const now = game.scorer.ritualNow(game.sim.time), a = game.scorer.altarOf(p); return { lit: !!now, seg: Math.min(8, Math.round((a.sets / PARTS.altar.recipe.altar!.sets) * 8)) }; }
       case 'bulb': return { lit: true };
+      case 'split': return { hit: pulse > 0.35, lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'whale': return { hit: pulse > 0.35, seg: game.scorer.whaleOf(p) % PARTS.whale.recipe.whale!.every };
+      case 'jar': return { hit: pulse > 0.35, seg: game.scorer.marblesOf(p) };
+      case 'nest': case 'insure': case 'wreck': return { hit: pulse > 0.35 };
       case 'grape': return { hit: pulse > 0.35, lit: game.scorer.grapeBunch(p).golden };
       case 'echo': return { hit: pulse > 0.35 };
       case 'spot': return { hit: pulse > 0.35, lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
@@ -778,7 +782,8 @@ export class Renderer {
         if (tr[4]) sprite(this.dotTex, tr[4].x, tr[4].y, d * 0.6, col, 0.25 * sp.left);
       }
       sprite(this.glowTex, sp.x, sp.y, d * 3, col, 0.7 * sp.left);
-      sprite(this.sparkTex ??= this.bakeSpark(), sp.x, sp.y, d * 1.9, 0xffffff, Math.min(1, 0.25 + sp.left));
+      if (sp.egg) sprite(this.dotTex, sp.x, sp.y, d * 1.6, 0xffffff, 1); // a Spider Nest's egg: a plain white dot
+      else sprite(this.sparkTex ??= this.bakeSpark(), sp.x, sp.y, d * 1.9, 0xffffff, Math.min(1, 0.25 + sp.left));
       this.sparkPool[used - 1].rotation = this.calm ? 0 : this.time * 5 + sp.id;
     }
     for (let i = used; i < this.sparkPool.length; i++) this.sparkPool[i].visible = false;

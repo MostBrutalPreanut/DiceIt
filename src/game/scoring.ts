@@ -53,6 +53,10 @@ export interface ScoreEvent {
 
 /** `n` sparks, scoring as ball `parent`: from a ring of radius `r` round (x, y), or falling from the top, after `delay` s. */
 export interface SparkBurst {
+  /** Aimed out these ways (radians), not all round (a Splitter). */
+  aim?: number[];
+  /** A Spider Nest's egg (it hatches on the first part it hits). */
+  egg?: boolean;
   n: number;
   x: number;
   y: number;
@@ -201,6 +205,8 @@ export class Scorer {
   /** Ritual Altar: what a test ball's altar has kept (a real round's goes on the part, through onKeep), and the ritual under way. */
   private kept = new Map<number, Partial<PartInstance>>();
   private ritual: { kind: Ritual; until: number; s: number; next: number; ballId: number; uid: number } | null = null;
+  /** The Whale: sparks each one has swallowed this ball, and how often it spouted. */
+  private whaleFed = new Map<number, { fed: number; spouts: number }>();
   /** Wrecking Ball: until when each ball is a wrecking ball. */
   private wrecking = new Map<number, number>();
   /** Echo Caves: the caves each ball has gone through in a row (any other part it hits breaks the chain). */
@@ -326,6 +332,7 @@ export class Scorer {
     this.madUntil = -1;
     this.echoes.clear();
     this.wrecking.clear();
+    this.whaleFed.clear();
     this.wizTypes.clear();
     this.wizUntil = -1;
     this.ritual = null;
@@ -689,6 +696,24 @@ export class Scorer {
     // a moving part scores only when its moving piece is hit (the duck, the roller), not its rail
     if (def.kind === 'mover' && !ev.mover) return out;
 
+    // the Whale swallows a spark; every so often it spouts them back out
+    if (r.whale && ev.swallow) {
+      const w = this.whaleFed.get(inst.uid) ?? { fed: 0, spouts: 0 };
+      w.fed++;
+      this.whaleFed.set(inst.uid, w);
+      const situ = this.situational(ev);
+      const pts = Math.round(r.whale.swallow * modFactor(inst.def, m) * situ.x);
+      out.push(this.award(inst, ev.t, ev.x, ev.y, 'hit', pts, 0, 0, [`${pts} swallowed`, ...situ.notes]));
+      if (w.fed % r.whale.every === 0 && w.spouts < r.whale.perBall) {
+        w.spouts++;
+        const big = Math.round(r.whale.points * modFactor(inst.def, m) * situ.x);
+        const e = this.award(inst, ev.t, inst.x, inst.y, 'bonus', big, 0, 0, [`${big} spout`, ...situ.notes], 'THAR SHE BLOWS!');
+        e.sparks = [{ n: r.whale.sparks, x: inst.x, y: inst.y + footprint(def) * 0.5, r: footprint(def) + 0.45, parent: ev.ballId }];
+        out.push(e);
+      }
+      return out;
+    }
+
     // a Spotlight: the ball's hit knocks it dark for a while (it scores nothing itself)
     if (r.spot) {
       if (ev.zap || ev.spark || this.coolingDown(inst.uid, ev.t)) return out;
@@ -834,6 +859,19 @@ export class Scorer {
         if (gem === 'topaz' && this.rng.next() < TOPAZ_CHANCE) n++;
         const bursts: SparkBurst[] = [];
         if (n) bursts.push({ n, x: inst.x, y: inst.y, r: footprint(PARTS[inst.def]) + 0.45, parent: ev.ballId });
+        if (r.split && !this.coolingDown(inst.uid, ev.t)) {
+          // a Splitter: two sparks split off the ball, one to each side
+          this.coolUntil.set(inst.uid, ev.t + r.split.cooldown * this.coolX(inst));
+          bursts.push({ n: r.split.n, x: inst.x, y: inst.y, r: footprint(PARTS[inst.def]) + 0.4, parent: ev.ballId, aim: [Math.PI - 0.35, 0.35] });
+          scored.label ??= 'SPLIT!';
+        }
+        if (r.nest && this.rng.next() < r.nest.chance) bursts.push({ n: 1, x: inst.x, y: inst.y, r: footprint(PARTS[inst.def]) + 0.45, parent: ev.ballId, egg: true });
+        if (r.jar) {
+          // a Marble Jar: every so many of the ball's hits add a marble, for the run
+          const hits = this.keepOf(inst, 'jarHits') + 1, marbles = Math.min(r.jar.max, Math.floor(hits / r.jar.every));
+          if (marbles > this.keepOf(inst, 'marbles')) scored.label ??= `MARBLE ${marbles}!`;
+          this.keep(inst, { jarHits: hits, marbles });
+        }
         if (r.rocket && (this.firedThisBall.get(inst.uid) ?? 0) < (gem === 'emerald' ? 2 : 1)) {
           this.firedThisBall.set(inst.uid, (this.firedThisBall.get(inst.uid) ?? 0) + 1);
           scored.rocket = { x: inst.x, y: inst.y };
@@ -1070,6 +1108,21 @@ export class Scorer {
     return [this.award(hutch, ev.t, ev.x, ev.y, 'hit', base, 0, money, [`${base} gremlin`, ...situ.notes], 'GOTCHA!')];
   }
 
+  /** A Marble Jar's marbles (every ball launched brings one spark per marble). */
+  marblesOf(inst: PartInstance): number {
+    return this.keepOf(inst, 'marbles');
+  }
+
+  /** The Whale: sparks it has swallowed this ball. */
+  whaleOf(inst: PartInstance): number {
+    return this.whaleFed.get(inst.uid)?.fed ?? 0;
+  }
+
+  /** An Insurance Policy pays out: a last word on the ledger (its sparks score as the ball). */
+  claimed(inst: PartInstance, t: number): ScoreEvent {
+    return this.award(inst, t, inst.x, inst.y, 'bonus', 0, 0, 0, ['one last try'], 'INSURED!');
+  }
+
   /** An Ice Sculpture has melted away: a last word on the ledger. */
   melted(inst: PartInstance, t: number): ScoreEvent {
     return this.award(inst, t, inst.x, inst.y, 'bonus', 0, 0, 0, ['melted away'], 'PUDDLE!');
@@ -1094,7 +1147,7 @@ export class Scorer {
   }
 
   /** What the scorer keeps on a part for the run: the game's copy (onKeep) or, for a test ball, its own. */
-  private keepOf<K extends 'sets' | 'rituals' | 'hp' | 'bursts'>(inst: PartInstance, key: K): number {
+  private keepOf<K extends 'sets' | 'rituals' | 'hp' | 'bursts' | 'jarHits' | 'marbles'>(inst: PartInstance, key: K): number {
     return this.kept.get(inst.uid)?.[key] ?? inst[key] ?? 0;
   }
 

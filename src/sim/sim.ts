@@ -24,7 +24,7 @@ export const NO_INPUT: Input = { left: false, right: false, plunge: false, nudge
 /** Physical things that happened. Scoring and presentation both consume this stream; neither feeds back. */
 export type SimEvent =
   /** `zap`: no ball touched it; the scorer made it score (a Tesla Coil's arc, a keg's blast...), `depth` zaps down a chain of kegs. The sim never sends one. */
-  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean; depth?: number; spark?: boolean; ride?: boolean; bucket?: boolean }
+  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean; depth?: number; spark?: boolean; ride?: boolean; bucket?: boolean; swallow?: boolean }
   | { type: 'partRelease'; t: number; uid: number; ballId: number }
   | { type: 'extraBall'; t: number; uid: number; ballId: number }
   | { type: 'retired'; t: number; ballId: number; x: number; y: number }
@@ -66,6 +66,8 @@ export interface SparkState {
   vx: number;
   vy: number;
   left: number;
+  /** A Spider Nest's egg: it hatches into sparks on the first part it hits. */
+  egg: boolean;
 }
 
 export interface FlipperState {
@@ -91,7 +93,12 @@ interface SparkRef {
   fadeAt: number;
   /** When it last scored on each part: a spark rattling against a part scores once every 0.25 s at most. */
   hitAt: Map<number, number>;
+  /** A Spider Nest's egg (see SparkState.egg). */
+  egg: boolean;
 }
+
+/** A Spider Nest's egg hatches into this many sparks. */
+const EGG_HATCH = 3;
 interface BallRef {
   id: number;
   body: any;
@@ -811,20 +818,24 @@ export class Sim {
    * Shoot out `n` sparks, scoring as ball `parent`: from a ring of radius `r` round (x, y), flying outwards, or, with
    * `top`, falling from across the top of the table (a firework's burst). Over the cap, the oldest start to fade.
    */
-  addSparks(n: number, x: number, y: number, parent: number, opts: { r?: number; top?: boolean } = {}) {
+  addSparks(n: number, x: number, y: number, parent: number, opts: { r?: number; top?: boolean; aim?: number[]; egg?: boolean } = {}) {
     for (let i = 0; i < n; i++) {
       let px: number, py: number, vx: number, vy: number;
-      if (opts.top) {
+      if (opts.aim?.length) {
+        // aimed (a Splitter): out the given ways, a little spread
+        const a = opts.aim[i % opts.aim.length] + this.rng.range(-0.1, 0.1), r = opts.r ?? 1.2, sp = this.rng.range(18, 22);
+        px = x + Math.cos(a) * r; py = y + Math.sin(a) * r; vx = Math.cos(a) * sp; vy = Math.sin(a) * sp;
+      } else if (opts.top) {
         px = this.rng.range(4, 20); py = this.rng.range(43, 47); vx = this.rng.range(-8, 8); vy = this.rng.range(-6, 6);
       } else {
         const a = this.rng.range(0, Math.PI * 2), r = opts.r ?? 1.2, s = this.rng.range(16, 24);
         px = x + Math.cos(a) * r; py = y + Math.sin(a) * r; vx = Math.cos(a) * s; vy = Math.sin(a) * s + 4;
       }
-      this.makeSpark(Math.min(LANE_WALL_X - 1, Math.max(1, px)), Math.min(TABLE_H - 2, Math.max(3, py)), vx, vy, parent);
+      this.makeSpark(Math.min(LANE_WALL_X - 1, Math.max(1, px)), Math.min(TABLE_H - 2, Math.max(3, py)), vx, vy, parent, opts.egg);
     }
   }
 
-  private makeSpark(x: number, y: number, vx: number, vy: number, parent: number) {
+  private makeSpark(x: number, y: number, vx: number, vy: number, parent: number, egg = false) {
     // over the cap: the oldest glowing spark starts its fade now (nothing is refused); far over it, the oldest goes
     const glowing = this.sparks.filter((s) => s.age < s.fadeAt);
     if (glowing.length >= SPARK_CAP) glowing[0].fadeAt = glowing[0].age;
@@ -845,7 +856,7 @@ export class Sim {
     sd.filter.maskBits = CAT.table; // walls and parts: never flippers, balls or other sparks
     B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), SPARK_R));
     B.b2Body_SetGravityScale(body, SPARK_GRAVITY);
-    const ref: SparkRef = { id, body, parent, age: 0, fadeAt: SPARK_GLOW, hitAt: new Map() };
+    const ref: SparkRef = { id, body, parent, age: 0, fadeAt: SPARK_GLOW, hitAt: new Map(), egg };
     this.sparks.push(ref);
     this.sparkById.set(id, ref);
   }
@@ -866,7 +877,7 @@ export class Sim {
   sparkStates(): SparkState[] {
     return this.sparks.map((s) => {
       const p = B.b2Body_GetPosition(s.body), v = B.b2Body_GetLinearVelocity(s.body);
-      return { id: s.id, x: p.x, y: p.y, vx: v.x, vy: v.y, left: s.age < s.fadeAt ? 1 : Math.max(0, 1 - (s.age - s.fadeAt) / SPARK_FADE) };
+      return { id: s.id, x: p.x, y: p.y, vx: v.x, vy: v.y, left: s.age < s.fadeAt ? 1 : Math.max(0, 1 - (s.age - s.fadeAt) / SPARK_FADE), egg: s.egg };
     });
   }
 
@@ -887,6 +898,11 @@ export class Sim {
     s.hitAt.set(uid, this.time);
     const p = B.b2Body_GetPosition(s.body), v = B.b2Body_GetLinearVelocity(s.body);
     this.events.push({ type: 'partHit', t: this.time, uid, ballId: s.parent, x: p.x, y: p.y, speed: Math.hypot(v.x, v.y), spark: true, ...extra });
+    if (s.egg) {
+      // a Spider Nest's egg hatches on the first part it hits
+      this.removeSpark(s);
+      this.addSparks(EGG_HATCH, p.x, p.y, s.parent, { r: 0.6 });
+    }
   }
 
   private inLane(b: BallRef) {
@@ -1078,6 +1094,13 @@ export class Sim {
         if (part.index === undefined) {
           const pr = this.parts.get(part.uid), sr = this.sparkById.get(spark.id);
           const def = pr && PARTS[pr.inst.def];
+          if (pr && sr && def?.recipe.whale) {
+            // the Whale swallows every spark that touches it
+            const sp = B.b2Body_GetPosition(sr.body);
+            this.events.push({ type: 'partHit', t: this.time, uid: pr.inst.uid, ballId: sr.parent, x: sp.x, y: sp.y, speed: 0, spark: true, swallow: true });
+            this.removeSpark(sr);
+            continue;
+          }
           if (pr && sr && def && (def.kind === 'bumper' || def.kind === 'kicker')) {
             const sp = B.b2Body_GetPosition(sr.body), v = B.b2Body_GetLinearVelocity(sr.body);
             const dx = sp.x - pr.inst.x, dy = sp.y - pr.inst.y, len = Math.hypot(dx, dy) || 1, k = dialValue(pr.inst, 'kick') * def.kickUnit * 0.6;

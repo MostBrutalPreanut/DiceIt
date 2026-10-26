@@ -9,7 +9,7 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 433 pass, 0 fail (31 files) |
+| Unit tests | 443 pass, 0 fail (32 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
 | Browser smoke test | 105 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.6 ms a frame; 3.5 ms with 4 balls, 24 sparks and zaps |
@@ -108,6 +108,11 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   (+2,336 / +11,571 over a plain Pop Bumper), Hutch +3,888 / +5,840. **Tuned**: a gremlin knock was 300 and made
   the Hutch +11,168 / +17,520 with no table room; at 100 it sits by the Ritual Altar. The Wrecking Ball is the weak
   one, as the review expected: it needs a playtest.
+- **More spark parts (after the build order)**: Splitter, The Whale, Insurance Policy, Spider Nest and Marble Jar. Gain
+  per round over a plain Pop Bumper, mid / late: Splitter +9,993 / +14,694 (about the Sparkler per dollar), Whale
+  +1,630 / +4,994, Spider Nest +365 / +2,080, Marble Jar +4 / +2,528. The tool's table has no other spark source for
+  the Whale to eat and never fills a Jar, so those are floors; the Insurance Policy only pays on a lost last ball.
+  **Tuned**: the Splitter was $6 with a 4 s wait and measured +10,480 / +20,025, twice the Sparkler; now $7 and 5 s.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

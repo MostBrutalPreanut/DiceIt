@@ -23,6 +23,7 @@ export const PART_VALUE: Record<PartId, number> = {
   clock: 0, altar: 0, bulb: 0, feet: 0, tray: 0, mirror: 0, wizard: 12, pinata: 9,
   grape: 4, echo: 3, spot: 3, bonsai: 4, capsule: 0, ice: 4, well: 2,
   wreck: 10, broom: 6, bucket: 8, hutch: 0,
+  split: 4, whale: 10, insure: 0, nest: 7, jar: 6,
 };
 /** How many of each it will own. (Level Lights need aiming in sets of two or more, which par does not do.) */
 export const PART_CAP: Record<PartId, number> = {
@@ -34,6 +35,7 @@ export const PART_CAP: Record<PartId, number> = {
   clock: 0, altar: 0, bulb: 0, feet: 0, tray: 0, mirror: 0, wizard: 1, pinata: 1,
   grape: 6, echo: 2, spot: 1, bonsai: 2, capsule: 0, ice: 1, well: 1,
   wreck: 1, broom: 1, bucket: 1, hutch: 0,
+  split: 2, whale: 1, insure: 0, nest: 1, jar: 1,
 };
 /** The first decal of the three it is offered (or the shop's) that appears in this list is the one it takes. */
 export const DECAL_PRIORITY: DecalId[] = [
