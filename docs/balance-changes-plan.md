@@ -30,16 +30,16 @@ How to use it:
 | **Cash decals**: "Just suggested solutions" | They become useful once money is tighter (phase 5); nothing to change on them. |
 | **Spin Doctor** (picked: offer only with a Spinner) | Already the case (`worth: owns(v, 'spinner')`). No change; its weak numbers come from tables without Spinners. |
 
-## Decisions (D1, D2 and D6 answered on 26 Oct; D3, D4 and D5 still open)
+## Decisions (all answered on 26 Oct)
 
 - **D1. Levels: decided, keep them per run** (up to 10, as now). The "levels past 10" item stays as is; no change.
 - **D2. Jammer: decided, as planned**: the single part that scored most in the last round scores nothing (6.4).
-- **D3. Whale numbers**: your note asks for no 3-a-ball limit, a cooldown, and sparks that pay more or less. The plan
-  proposes numbers in 7.3; confirm or change them.
-- **D4. Money numbers** (phase 5): the new payouts are a proposal, to be measured.
-- **D5. Big rail parts**: you picked "sell only in rounds 1–9" but wrote "sell them from round 1, but not only… a player
-  can choose to make space". The plan follows the note: they stay in the shop all run, and the card says when there is
-  no room for one (7.6).
+- **D3. Whale: decided** (26 Oct): swallowing stays the point (a swallowed spark is gone, and feeds the spout). No
+  3-spouts-a-ball limit, a 3 s rest after each spout (7.3).
+- **D4. Money: decided** (26 Oct): much less money. A cleared round pays a flat $4 and $1 for each ball left (5.1);
+  go to $3 + $1 if cash still piles up.
+- **D5. Big rail parts: decided** (26 Oct): they stay in the shop all run; a "Long" tag on their card, and "needs room"
+  when the table has no space for one (7.6).
 - **D6. Sparks and Mult: decided, sparks unchanged.** Only zaps lose their Mult (2.1); sparks keep giving Mult as today.
 ---
 
@@ -158,11 +158,14 @@ Bucket; `npx vite-node tools/research/runout.ts --builds=tools/research/builds -
 
 Your note: give less money so every purchase counts, and add a decal and a part that pay off saved money.
 
-5.1 **Lower payouts** (`payoutFor` in game.ts ~1354, `unusedBallPay` in mods.ts ~129):
-- round cleared: `3 + round` → **`2 + ceil(round / 2)`** (round 1: $3, round 10: $7, round 15: $10);
-- unused ball: $3 → **$2**;
-- boss and overshoot bonuses unchanged.
-- Target (measure with campaigns): median cash at the shop $10-25 all run without money parts or decals; never the $47 →
+5.1 **Much lower payouts** (`payoutFor` in game.ts ~1354, `unusedBallPay` in mods.ts ~129):
+- round cleared: `3 + round` → a flat **$4** (no growth with the round);
+- each ball left: $3 → **$1**;
+- if cash still piles up in the campaigns: **$3 + $1**;
+- boss bonus and overshoot unchanged for now; Ball Hog (a ball left pays $5 instead of $3) becomes **$3 instead of $1**
+  so it keeps its ×3, and its card follows;
+- with less money, prices may need a look (a $12 legendary is three rounds of pay): measure first.
+- Target (measure with campaigns): enough for about one part a round without money parts or decals; never the $47 →
   $138 pile-up of rounds 10-15 measured today.
 
 5.2 **New decal: Nest Egg** (uncommon): every ball starts at +0.1 Mult for every $5 you hold (up to +2).
@@ -206,15 +209,17 @@ normal flippers. **$2**. The card's contradiction ("needs no button" / "Left key
 
 7.2 **Left / Right Flipper: $4** (board: B): the large extra flipper, for skilled players.
 
-7.3 **The Whale** (D3, proposal): no 3-spouts-a-ball limit; a 3 s rest after each spout; a swallowed spark still scores
-the hit it would have made (so swallowing never loses points), then counts towards the spout.
+7.3 **The Whale** (D3): swallowing stays as it is (a swallowed spark is gone and counts towards the spout). No
+3-spouts-a-ball limit; a 3 s rest after each spout. If it still loses points in 10.1, the spout pays more (300 → 500) or
+comes every 5th spark instead of every 6th.
 
 7.4 **Spotlight**: dark for **4 s** after a ball hit, not 10 (board: A; stacking is 2.3).
 
 7.5 **Deflector**: 5 points a hit, and its Hot Shot +50% (board: C).
 
-7.6 **Big rail parts** (D5): Duck Gallery, Goal!, Roller Pop, Free Ball Bucket stay in the shop all run; when the table
-has no room for one, its card says so ("needs room: move or scrap a part first").
+7.6 **Big rail parts** (D5): Duck Gallery, Goal!, Roller Pop, Free Ball Bucket stay in the shop all run. Their cards get
+a **Long** tag (a new `PartTag`, display only: no decal reads it), and when the table has no room for one, the card says
+"needs room: move or scrap a part first".
 
 7.7 Numbers (board: A on each):
 
@@ -316,9 +321,9 @@ and the loop breakers (unless 10.2 finds a loop).
 | runout-points | A | |
 | time-items | Hourglass, Sudden Death | |
 | autopilot, loop-breakers | open | "already solved by other fixes?" (section 0) |
-| money-sink | open | less money overall; a decal and a part that use saved money (phase 5) |
+| money-sink | decided (D4) | much less money ($4 + $1 a ball left, or $3 + $1); a decal and a part that use saved money |
 | honest-builds | A | follows from the other fixes |
-| big-parts | A | sell from round 1 but not only; players can make space (D5) |
+| big-parts | decided (D5) | in the shop all run; a Long tag and "needs room" |
 | round3-boss | A | |
 | weak-players | open | see if a controllable Hand helps |
 | shortfuse | A | 45 s if still too hard |
@@ -335,7 +340,7 @@ and the loop breakers (unless 10.2 finds a loop).
 | cook-goal | A | |
 | gremlins | A | |
 | deflector | C | |
-| whale | open | no 3-a-ball limit, a cooldown, sparks paying more or less (D3) |
+| whale | decided (D3) | no 3-a-ball limit, a cooldown; swallowing stays the point |
 | spotlight | A | stacking fix also approved |
 | nest | A | |
 | jar | A | |
