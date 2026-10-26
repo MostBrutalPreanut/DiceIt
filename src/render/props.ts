@@ -1518,15 +1518,17 @@ function face(p: Prop, v: View, t: Theme, x: number, y: number, z: number, r: nu
 }
 
 /** A flipper at any angle (the sim's), drawn live: rubber band, coloured bat, metal pivot cap. */
-export function drawFlipper(g: Graphics, v: View, t: Theme, px: number, py: number, angle: number, sign: 1 | -1, length = FLIPPER_LENGTH, hand = false) {
+/** `dead`: the ball clock has run out and the flipper has no power; it goes grey. */
+export function drawFlipper(g: Graphics, v: View, t: Theme, px: number, py: number, angle: number, sign: 1 | -1, length = FLIPPER_LENGTH, hand = false, dead = false) {
   const p = new Prop(v, t);
   const k = length < FLIPPER_LENGTH ? 0.8 : 1;
   const tip: Pt = [px + Math.cos(angle) * length * sign, py + Math.sin(angle) * length * sign];
   const outline = hull([...ring(px, py, 0.58 * k, 16), ...ring(tip[0], tip[1], 0.28 * k, 12)]);
   const rubber = hull([...ring(px, py, 0.66 * k, 16), ...ring(tip[0], tip[1], 0.36 * k, 12)]);
   shadowPoly(g, v, t, rubber, 0.22);
-  p.prism(rubber, 0, 0.28, mat(t, t.role.flipper === t.paper ? t.accent : t.rubber));
-  p.prism(outline, 0.28, 0.24, mat(t, hand ? t.role.hand : t.role.flipper));
+  const grey = mix(t.paper, t.ink, 0.45), off = (c: string) => (dead ? mix(c, grey, 0.75) : c);
+  p.prism(rubber, 0, 0.28, mat(t, off(t.role.flipper === t.paper ? t.accent : t.rubber)));
+  p.prism(outline, 0.28, 0.24, mat(t, off(hand ? t.role.hand : t.role.flipper)));
   p.cyl(px, py, 0.24, 0.52, 0.12, mat(t, t.metal), { n: 16 });
   // a Helping Hand wears a little white glove on its pivot: it flips by itself
   if (hand) {

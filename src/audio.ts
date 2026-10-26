@@ -1223,6 +1223,47 @@ export class AudioFx {
     this.noise(o, t, 0.6, 0.25, { f: 180, type: 'lowpass' });
   }
 
+  /**
+   * The ball clock's last 10 s: a clockwork tick-tock, `left` seconds to go. It grows as the time runs down: louder,
+   * brighter and higher, and in the last 3 s it ticks twice a second with a little bell on each tick.
+   */
+  clockTick(left: number) {
+    const u = clamp01(1 - left / 10);
+    const v = this.voice('clockTick', 0.8 + 0.5 * u, 0.25, 0.1, 3, true);
+    if (!v) return;
+    const { o, t } = v;
+    const tock = (left > 3 ? Math.round(left) : Math.round(left * 2)) % 2 === 1;
+    const f = (tock ? 1500 : 2100) * (1 + 0.35 * u);
+    this.noise(o, t, 0.03, 0.4 + 0.3 * u, { f, q: 3 });
+    this.osc(o, t, tock ? 620 : 880, 0.06, 0.12 + 0.12 * u, { type: 'triangle', attack: 0.001 });
+    if (left <= 3) this.bell(o, t, midi(84 + (3 - Math.ceil(left)) * 2), 0.25, 0.04 + 0.02 * u, 3.5, 0.6);
+  }
+
+  /** The ball clock ran out: an alarm clock rings, then the flippers lose their power with a sagging groan and a clunk. */
+  timeUp() {
+    const v = this.voice('timeUp', 0.85, 1.8, 0.5, 1, true);
+    if (!v) return;
+    this.duck(0.35, 1.3);
+    const { o, t } = v;
+    // the alarm: two bells hammered fast
+    this.bell(o, t, midi(88), 0.75, 0.13, 2.76, 0.9);
+    this.bell(o, t, midi(91), 0.75, 0.1, 2.76, 0.9);
+    this.noise(o, t, 0.7, 0.08, { f: 4200, q: 3, hold: 0.45, trem: [24, 1] });
+    // the power going out of the flippers
+    this.osc(o, t + 0.55, 196, 0.85, 0.09, { type: 'sawtooth', to: 49, lp: 900, attack: 0.03 });
+    this.osc(o, t + 0.55, 147, 0.85, 0.1, { type: 'triangle', to: 41, lp: 700, attack: 0.03 });
+    this.noise(o, t + 1.25, 0.12, 0.25, { f: 500, type: 'lowpass' });
+    this.osc(o, t + 1.25, 95, 0.18, 0.3, { to: 45 });
+  }
+
+  /** A flipper button pressed with no power behind it: a dull, empty click (no snap). */
+  deadFlip() {
+    const v = this.voice('deadFlip', 0.5, 0.12, 0.12, 2);
+    if (!v) return;
+    this.noise(v.o, v.t, 0.03, 0.14, { f: 380, type: 'lowpass' });
+    this.osc(v.o, v.t, 70, 0.07, 0.18, { to: 52 });
+  }
+
   /** A nudge: the cabinet thumped. */
   nudge() {
     const v = this.voice('nudge', 0.7, 0.15, 0.08, 3);
