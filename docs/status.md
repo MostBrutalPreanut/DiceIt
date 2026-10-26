@@ -9,7 +9,7 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 317 pass, 0 fail (25 files) |
+| Unit tests | 328 pass, 0 fail (23 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
 | Browser smoke test | 104 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.5 ms a frame |
@@ -46,6 +46,11 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   as two.
 - **New parts** this pass: Trophy Cup (rare, kept Mult), Power Plate (uncommon, bumpers on it pay ×1.5), Hall of
   Fame (legendary, once a ball ×1.1 Mult for every part type on the table).
+- **Rank Lights and the Old Bell** (rare, step 1 of [borrowed-parts.md](borrowed-parts.md)): a pack of three
+  lights that ranks the ball up (×1.2, ×1.4, ×1.6 on its hits for 40 s), and a bell whose first hit each round earns
+  a notch; three notches ring it for ×1.2 Mult on every ball for the rest of the run. Measured with
+  `tools/power.ts`: Rank Lights sit between Lane Rollovers and X Lane per dollar (1,119 a $ mid, 3,306 late). The
+  bell's single-round number cannot show its rings; the par player now notches its bells between rounds.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven
