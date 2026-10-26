@@ -22,7 +22,7 @@ health; each of the ball's hits takes 1–4 by speed (a zap or a spark 1); at ze
 and the next shop offers a free pick of one of three parts (rolled as if three rounds later). Broken for the rest
 of the round, it comes back with 20 more health; its damage carries over. The cheap scalers (step 8): Grape Bunch,
 Echo Cave, Spotlight, Bonsai Bumper, Time Capsule, Ice Sculpture and Wishing Well, as approved (the Wishing Well's
-+Mult is capped at +3 a ball; the Ice Sculpture melts 3 a press, not 1, after measuring; a Time Capsule's prize uses the Piñata's free-pick box, legendaries only). See [balance-plan.md](balance-plan.md) §2 for their numbers. Step 9, the physics parts: the
++Mult is capped at +3 a ball; the Ice Sculpture melts 3 a press, not 1, after measuring; a Time Capsule's prize uses the Piñata's free-pick pop-up, legendaries only, with its own title). See [balance-plan.md](balance-plan.md) §2 for their numbers. Step 9, the physics parts: the
 Wrecking Ball (once a ball the ball grows 1.5× for 6 s, only where it has room, and its hits pay ×2), the
 Broomstick (the ball rides straight the way it points with no gravity for 1 s or until it touches anything,
 zapping what it flies past at ×2), the Free Ball Bucket (a sensor bucket on a rail you place; a ball dropping in
@@ -307,13 +307,15 @@ and the **Gremlin Hutch** (was Gremlins). Effort **M**: a decor strip in the lay
 drawing, and a shop slot type.
 
 ### 6.2.1 Decor as built (step 5)
-- **Where it stands:** on the cabinet itself, never on the playfield: the wooden corners above the dome (the top of
-  the walls) and the apron below the flippers, clear of the drain's stripes and the four decal slots. Both are always
-  on screen, even on a phone, where the scenery beside the cabinet is cropped. Decor cannot overlap other decor; table
-  parts and decor never block each other. While a piece is in hand, every spot it fits is dotted.
+- **Where it stands:** in the **decor screen**, a flat panel built into the head of the playfield, in the strip between
+  the top of the build area and the dome (where the ball only rolls past on its way in from the plunger). It is a
+  picture in the floor, drawn larger than a part: the ball rolls over it and it never sticks out of the cabinet. There
+  is room for **one piece of decor at a time**, so two never meet; to swap, store the one in the screen first. While a
+  piece is in hand the screen is ringed (in the accent when it is taken). Saves from when decor stood anywhere on the
+  cabinet keep their first piece in the screen and put the rest in the toolbox.
 - **What it is:** a part of kind `decor`: bought in the shop (one of each, so the shop never offers decor you own),
   kept in the toolbox, sold and moved like a part. It has no body in the sim, so the ball never touches it, and it
-  works only while it stands on the cabinet. Zaps, Hall of Fame's part types, Purist and Crowd Pleaser ignore it.
+  works only while it is in the decor screen. Zaps, Hall of Fame's part types, Purist and Crowd Pleaser ignore it.
 - **Midnight Clock** (uncommon, $6): every scoring hit (zaps and sparks too) is a minute from 9 PM; at midnight (180)
   it strikes: 20 s of every hit ×2 and every Lamp at full glow. Once a ball; the hands go back each round.
 - **Ritual Altar** (legendary, $12): every 8 completed sets (lane, bank, Level Light, Rank Light) start a 15 s

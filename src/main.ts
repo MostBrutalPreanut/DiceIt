@@ -12,6 +12,7 @@ import { Renderer, type DrawState } from './render/renderer';
 import type { Mood } from './render/props';
 import { FxOverlay } from './render/overlay';
 import { FACTORY, roleFill, themeById, THEMES, themeVars, type Theme } from './render/theme';
+import { onDecorSlot } from './sim/cabinet';
 import { DT, LANE_WALL_X, TABLE_W } from './sim/constants';
 import { canPlaceLedge, starterLayout } from './sim/layout';
 import { clampLedge, FLIPPER_PIVOTS, LEDGE, ledgeSeg } from './sim/table';
@@ -20,6 +21,7 @@ import type { Input, SimEvent } from './sim/sim';
 import { bossCard, decalCard, fmt, HUD_TIPS, partCard, rarityChip, roleVar, statsLine } from './ui/html';
 import { applyBackdrop, chase, makeBulbs, MultDial, Odometer } from './ui/hud';
 import { DecalPicker } from './ui/decalPick';
+import { PrizePicker } from './ui/prizePick';
 import './ui/decalPick.css';
 import { Flyers, setFlyEffects } from './ui/flyers';
 import { Menu, type SavedRunInfo } from './ui/menu';
@@ -28,6 +30,9 @@ import { Scoreboard, sourceOfSave, type RunResult } from './ui/scoreboard';
 import { Attract } from './attract';
 import { around, Tutorial, TUTORIAL_KEY, type Box, type Step } from './ui/tutorial';
 import './ui/tutorial.css';
+
+/** The developer's tools (the Machine & options drawer, the Test Lab) show only with ?dev in the address. */
+const DEV = new URLSearchParams(location.search).has('dev');
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORE = 'pinball-roguelite.run.v2';
@@ -102,10 +107,10 @@ async function main() {
   let ledgeDrag: { dy: number; y: number } | null = null;
   let hoverLedge = false;
   let pointer: { x: number; y: number } | null = null;
-  /** The same pointer on the cabinet (where decor stands: the apron, the tops of the walls). */
-  let pointerCab: { x: number; y: number } | null = null;
-  /** Where a part of this type would go under the pointer: on the table, or (decor) on the cabinet. */
-  const spotFor = (id: PartId, cx: number, cy: number) => (isDecor(id) ? renderer.toCabinet(cx, cy) : renderer.toSim(cx, cy));
+  /** Where a piece of decor would go under the pointer: into the decor screen at the head of the table, when it is over it. */
+  let pointerDecor: { x: number; y: number } | null = null;
+  /** Where a part of this type would go under the pointer: on the table, or (decor) into the decor screen. */
+  const spotFor = (id: PartId, cx: number, cy: number) => (isDecor(id) ? renderer.toDecor(cx, cy) : renderer.toSim(cx, cy));
   let ledgerTimer = 0;
   let lastMultBand = 1;
   let lastStamp = 0;
@@ -190,6 +195,9 @@ async function main() {
     tip.hidden = false;
     placeTip(cx, cy);
   };
+  /** The fee line under a picked part's buttons. */
+  const moveHint = (fee: number, broke: boolean, what: string) =>
+    broke ? `${what} costs $${fee} and you have $${game.money}.` : fee ? `${what} costs $${fee}, once a visit: after that it is free until the next round.` : `${what} is free right now.`;
   /** A part's live line: what it did this round; decor says how it stands instead (it is never hit). */
   const liveLine = (inst: PartInstance) => {
     if (PARTS[inst.def].recipe.wizard && inst.placed) {
@@ -199,14 +207,14 @@ async function main() {
     }
     if (PARTS[inst.def].recipe.capsule) { const c = PARTS[inst.def].recipe.capsule!; return game.capsuleRipe(inst) ? 'Ripe: remove it for a free legendary pick!' : `${inst.age ?? 0} of ${c.rounds} rounds on the table.`; }
     if (!isDecor(inst.def)) return statsLine(game.scorer.ledger.get(inst.uid));
-    if (!inst.placed) return 'In the toolbox: decor works only on the cabinet.';
+    if (!inst.placed) return 'In the toolbox: put it in the decor screen to use it.';
     const r = PARTS[inst.def].recipe;
     if (r.clock) { const t = game.scorer.label(inst); return t === 'MIDNIGHT' ? 'Midnight Madness: every hit pays double!' : `The clock says ${t}. Midnight comes at ${r.clock.hits} hits.`; }
     if (r.altar) {
       const a = game.scorer.altarOf(inst), now = game.scorer.ritualNow();
       return now ? `${RITUAL_NAMES[now.kind]} under way: ${Math.ceil(now.left)} s left.` : `${a.sets} of ${r.altar.sets} sets towards the next ritual: a ${RITUAL_NAMES[a.next]} (strength ${a.strength + 1}).`;
     }
-    return 'Working: it stands on the cabinet.';
+    return 'Working: it is in the decor screen.';
   };
   const tipPart = (def: PartDef, inst: PartInstance | undefined, cx: number, cy: number, live: boolean) => {
     const tip = $('tip');
@@ -215,7 +223,7 @@ async function main() {
     const row = inst ? game.scorer.ledger.get(inst.uid) : undefined;
     tip.innerHTML = partCard(def, inst, { ...ctxFor(def, inst), scorer: live ? game.scorer : undefined, mult: game.scorer.mult }, {
       stats: live && inst ? liveLine(inst) : live ? statsLine(row) : undefined,
-      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? `click it to move, store or sell it${inst && game.moveFee(inst) ? ` · moving costs $${game.moveFee(inst)}` : ''}` : 'in the workshop: click it to move, store or sell it') : inst ? 'click it, then the table · R turns it' : 'drag it onto the table (R turns it), or Buy to put it in the toolbox',
+      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? `click it to move, store or sell it${inst && game.moveFee(inst) ? ` · moving costs $${game.moveFee(inst)}` : ''}` : 'in the workshop: click it to move, store or sell it') : isDecor(def.id) ? (inst ? 'click it, then the decor screen' : 'drag it into the decor screen, or Buy to put it in the toolbox') : inst ? 'click it, then the table · R turns it' : 'drag it onto the table (R turns it), or Buy to put it in the toolbox',
     });
     tip.hidden = false;
     placeTip(cx, cy);
@@ -232,35 +240,18 @@ async function main() {
       <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}</div></div>`;
   }
 
-  /** A Piñata burst: one of three parts for free, above the shop, until you take one. */
+  /**
+   * A burst Piñata or a dug-up Time Capsule: three parts to take one of, free, as a pop-up (src/ui/prizePick.ts).
+   * Put away with Later, the prize waits behind a button at the top of the shop.
+   */
   function renderPrize() {
-    const box = $('prize'), prize = game.shop.prize;
-    box.hidden = !prize?.length || game.sandbox;
+    prizePicker.update();
+    const box = $('prize');
+    box.hidden = !prizePicker.waiting;
     if (box.hidden) return;
-    box.innerHTML = `<div class="lbl">Piñata prize: take one, free</div>` + prize!.map((id, i) => {
-      const def = PARTS[id];
-      return `<div class="offer r-${def.rarity}" data-pid="${id}"><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}</div>
-        <div class="name">${def.name}</div><div class="buyrow"><button class="buy" data-take="${i}" ${game.editable && game.hasRoomFor(id) ? '' : 'disabled'} title="${game.hasRoomFor(id) ? 'Into your toolbox, free' : 'Make room in your toolbox first'}">Take</button></div><div class="blurb">${def.blurb}</div></div>`;
-    }).join('');
-    for (const el of box.querySelectorAll<HTMLElement>('.offer[data-pid]')) {
-      const def = PARTS[el.dataset.pid as PartId];
-      el.onmouseenter = (e) => tipPart(def, undefined, e.clientX, e.clientY, false);
-      el.onmousemove = (e) => placeTip(e.clientX, e.clientY);
-      el.onmouseleave = () => { $('tip').hidden = true; };
-    }
-    for (const b of box.querySelectorAll<HTMLButtonElement>('button[data-take]')) {
-      b.onclick = () => {
-        audio.unlock();
-        const part = game.takePrize(Number(b.dataset.take));
-        if (!part) { say('TOOLBOX FULL'); return; }
-        armed = part.uid;
-        selected = part.uid;
-        audio.buy();
-        say('PRIZE TAKEN!');
-        persist();
-        refreshWorkshop();
-      };
-    }
+    const capsule = game.shop.prizeFrom === 'capsule';
+    box.innerHTML = `<button class="prizeChip" id="btnPrize"><img alt="" src="${iconURL(capsule ? 'capsule' : 'pinata', 48, 48)}"><span><b class="disp">${capsule ? 'Capsule prize' : 'Piñata prize'}</b><small>Take one part, free</small></span><span class="go disp">Open</span></button>`;
+    ($('btnPrize') as HTMLButtonElement).onclick = () => { audio.unlock(); prizePicker.reopen(); renderPrize(); };
   }
 
   /** Test Lab: every part in the game, free, instead of 4 rotating offers. */
@@ -413,11 +404,11 @@ async function main() {
         <div class="stats" id="selLive">${liveLine(part)}</div>
         ${def.recipe.well ? `<div class="btnrow"><button id="btnWish" ${game.wishesLeft(part) > 0 && game.money >= 1 ? '' : 'disabled'} title="Every $1 in it: +${def.recipe.well.points} to its hits and +${def.recipe.well.mult} Mult a hit, for the rest of the run">Throw in $1 (${game.wishesLeft(part)} left this visit)</button></div>` : ''}
         ${part.fixed ? '<div class="hint">Part of every machine: it stays where it is.</div>' : `<div class="btnrow acts">
-          <button id="btnMove" ${broke ? 'disabled' : ''} title="Pick it up and click the table to set it down${def.rotatable ? ' (R or the wheel turns it)' : ''}">Move ${price}</button>
+          ${isDecor(def.id) ? '' : `<button id="btnMove" ${broke ? 'disabled' : ''} title="Pick it up and click the table to set it down${def.rotatable ? ' (R or the wheel turns it)' : ''}">Move ${price}</button>`}
           <button id="btnStore" ${broke ? 'disabled' : ''}>To toolbox ${price}</button>
           <button id="btnSell" class="sell" ${scrap ? 'disabled' : ''}>${removeLabel(part)}</button>
         </div>
-        <div class="hint feehint">${broke ? `Moving it costs $${fee} and you have $${game.money}.` : fee ? `Moving it costs $${fee}, once a visit: after that it moves free until the next round.` : 'Moving it is free right now.'}</div>`}`;
+        <div class="hint feehint">${moveHint(fee, broke, isDecor(def.id) ? 'Taking it out' : 'Moving it')}</div>`}`;
       for (const input of card.querySelectorAll<HTMLInputElement>('input[data-dial]')) {
         for (const ev of ['pointerdown', 'keydown'] as const) input.addEventListener(ev, () => game.checkpoint());
         input.oninput = () => {
@@ -436,7 +427,9 @@ async function main() {
       const wishBtn = card.querySelector<HTMLButtonElement>('#btnWish');
       if (wishBtn) wishBtn.onclick = () => { if (game.wish(part.uid)) { audio.coinLand(); say('MAKE A WISH'); persist(); refreshWorkshop(); } };
       if (!part.fixed) {
-        $('btnMove').onclick = () => startMove(part.uid);
+        // decor has one place to be (the decor screen), so it has no Move: only out to the toolbox, or away
+        const move = card.querySelector<HTMLButtonElement>('#btnMove');
+        if (move) move.onclick = () => startMove(part.uid);
         $('btnStore').onclick = () => storeSelected();
         $('btnSell').onclick = () => removePart(part);
       }
@@ -544,6 +537,12 @@ async function main() {
   function renderUpgrades() {
     picker.update();
   }
+  const prizeRoot = Object.assign(document.createElement('div'), { id: 'prizeBox' });
+  const prizePicker = new PrizePicker(prizeRoot, {
+    game, audio, say, icon: (id, size) => iconURL(id, size, size),
+    taken: (part) => { armed = part.uid; selected = part.uid; afterHistory(); },
+    changed: () => renderPrize(),
+  });
 
   let bossKey = '';
   /** The next boss, named on the scoreboard: you see it coming and can build for it. */
@@ -582,7 +581,7 @@ async function main() {
     if (over === canvas) {
       const p = spotFor(d.id, cx, cy);
       part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y, d.angle) : game.buyAndPlace(d.slot, p.x, p.y, d.angle);
-      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); placedTip(part.uid); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? 'DECOR GOES ON THE CABINET' : 'NO ROOM THERE'); return false; }
+      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); placedTip(part.uid); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? (game.decor.length ? 'ONE DECOR AT A TIME: STORE THE OTHER FIRST' : 'DECOR GOES IN THE SCREEN UP TOP') : 'NO ROOM THERE'); return false; }
     } else if (over?.closest('#inventoryBox')) {
       part = d.slot === null ? game.grant(d.id, d.angle) : game.buy(d.slot, d.angle);
       if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(d.slot !== null && !game.hasRoomFor(d.id) ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
@@ -609,7 +608,7 @@ async function main() {
     if (!shopDrag.moving && !shopDrag.carry) return;
     const over = document.elementFromPoint(e.clientX, e.clientY);
     pointer = over === canvas ? renderer.toSim(e.clientX, e.clientY) : null;
-    pointerCab = over === canvas ? renderer.toCabinet(e.clientX, e.clientY) : null;
+    pointerDecor = over === canvas ? renderer.toDecor(e.clientX, e.clientY) : null;
     $('inventoryBox').classList.toggle('drop', !!over?.closest('#inventoryBox'));
   });
   addEventListener('pointerup', (e) => {
@@ -660,10 +659,10 @@ async function main() {
     }
     return best;
   };
-  /** The part under the pointer: one on the table, else decor on the cabinet. */
+  /** The part under the pointer: one on the table, else the decor in the decor screen. */
   const hitAt = (cx: number, cy: number) => {
-    const p = renderer.toSim(cx, cy), c = renderer.toCabinet(cx, cy);
-    return hitPart(p.x, p.y) ?? hitPart(c.x, c.y, game.decor);
+    const p = renderer.toSim(cx, cy);
+    return hitPart(p.x, p.y) ?? (onDecorSlot(p.x, p.y) ? game.decor[0] : undefined);
   };
 
   /** Is a sim point on the wall ledge? (Its handle is a little fatter than the rail.) */
@@ -679,7 +678,7 @@ async function main() {
     if (!game.editable || e.button !== 0) return;
     const p = renderer.toSim(e.clientX, e.clientY);
     pointer = p;
-    pointerCab = renderer.toCabinet(e.clientX, e.clientY);
+    pointerDecor = renderer.toDecor(e.clientX, e.clientY);
     if (carry) { putDown(); return; } // a part being moved: this click sets it down where it is
     if (armed === null && !hitAt(e.clientX, e.clientY) && onLedge(p.x, p.y)) {
       const y = game.layout.ledge ?? LEDGE.default;
@@ -716,13 +715,13 @@ async function main() {
   });
   canvas.addEventListener('pointermove', (e) => {
     pointer = renderer.toSim(e.clientX, e.clientY);
-    pointerCab = renderer.toCabinet(e.clientX, e.clientY);
+    pointerDecor = renderer.toDecor(e.clientX, e.clientY);
     hover = hitAt(e.clientX, e.clientY)?.uid ?? null;
     hoverLedge = hover === null && game.editable && (ledgeDrag !== null || onLedge(pointer.x, pointer.y));
     if (ledgeDrag) ledgeDrag.y = clampLedge(pointer.y + ledgeDrag.dy);
     hoverDecal = hover === null ? renderer.decalAt(e.clientX, e.clientY) : null;
     if (carry && game.editable) {
-      const q = isDecor(game.part(carry.uid)?.def ?? 'pop') ? pointerCab : pointer;
+      const q = isDecor(game.part(carry.uid)?.def ?? 'pop') ? pointerDecor! : pointer;
       if (game.place(carry.uid, q.x, q.y, !carry.moved)) carry.moved = true;
     }
     showTip(e.clientX, e.clientY);
@@ -737,7 +736,7 @@ async function main() {
     refreshWorkshop();
   });
   canvas.addEventListener('pointerleave', () => {
-    pointer = null; pointerCab = null; hover = null; hoverDecal = null; hoverLedge = false; $('tip').hidden = true;
+    pointer = null; pointerDecor = null; hover = null; hoverDecal = null; hoverLedge = false; $('tip').hidden = true;
     // a part being moved goes back to its spot when the pointer leaves the table
     if (carry) { dropCarry(); refreshWorkshop(); }
   });
@@ -886,6 +885,9 @@ async function main() {
   $('btnPause').onclick = () => openPause();
   $('btnSettings').onclick = () => { openPause(); menu.showSettings(); };
   $('btnReroll').onclick = () => { if (game.reroll()) { sayKey('reroll'); persist(); } else sayKey('broke'); refreshWorkshop(); };
+  // Machine & options (undo, the Test Lab, layout slots, the heatmap, the table's tilt) is a developer's drawer: it
+  // shows only with ?dev in the address, and without it nothing can leave the Test Lab switched on
+  $('machineBox').hidden = !DEV;
   const sandbox = $('sandbox') as HTMLInputElement;
   sandbox.checked = game.sandbox;
   sandbox.onchange = () => {
@@ -1227,6 +1229,7 @@ async function main() {
     cash.disabled = !(game.mode === 'round' && sc.goalReached);
     ($('btnUndo') as HTMLButtonElement).disabled = !game.canUndo;
     ($('btnRedo') as HTMLButtonElement).disabled = !game.canRedo;
+    if (game.sandbox && !DEV) { game.sandbox = false; game.enforceToolbox(); } // an old save from the Test Lab
     $('labTools').hidden = !game.sandbox;
     document.body.classList.toggle('still', calm || game.sim.tilted);
 
@@ -1554,7 +1557,7 @@ async function main() {
       ? { y: ledgeDrag?.y ?? game.layout.ledge ?? LEDGE.default, valid: !ledgeDrag || canPlaceLedge(game.layout, ledgeDrag.y), moving: !!ledgeDrag }
       : null;
     const armedPart = armed != null ? game.part(armed) : undefined;
-    const ptr = (id: PartId) => (isDecor(id) ? pointerCab : pointer);
+    const ptr = (id: PartId) => (isDecor(id) ? pointerDecor : pointer);
     const sp = shopDrag ? ptr(shopDrag.id) : null, ap = armedPart ? ptr(armedPart.def) : null;
     drawState.ghost = game.editable && (shopDrag?.moving || shopDrag?.carry) && sp
       ? { def: shopDrag.id, x: sp.x, y: sp.y, angle: PARTS[shopDrag.id].rotatable ? shopDrag.angle : 0, valid: game.canDropAt(shopDrag.id, sp.x, sp.y) }

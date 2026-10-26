@@ -281,7 +281,7 @@ export const WHEEL = [
 export type WheelAward = (typeof WHEEL)[number]['id'];
 /** A gremlin knocked out by the ball: points, $ (up to `moneyCap` a round from all gremlins); back GREMLIN_OUT s later. */
 export const GREMLIN = { points: 100, money: 1, moneyCap: 5 };
-/** Is this decor (it stands on the cabinet, never on the table)? */
+/** Is this decor (a picture in the decor screen at the head of the table, never among the parts)? */
 export const isDecor = (id: PartId) => PARTS[id].kind === 'decor';
 
 /** The parts a gem fits: any that scores when hit, one that fires once a ball, one that goes dark or recharges, one that grows. */
@@ -794,7 +794,7 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { points: 30, per: 'roll-over', wizard: { max: 8, seconds: 30, balls: 2 }, perLevel: 5 }, dials: [],
   },
 
-  // ---- decor: it stands on the cabinet (the apron, the corners above the dome), never on the table; balls never touch it ----
+  // ---- decor: a flat picture in the decor screen at the head of the table (one at a time); the ball rolls over it ----
   clock: {
     id: 'clock', name: 'Midnight Clock', blurb: 'Every hit ticks it on. At midnight, hits pay double for a while.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1,
     shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 0, recipe: { clock: { hits: 180, seconds: 20, x: 2 } }, dials: [],
@@ -1055,7 +1055,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     if (c?.nudge) lines.push({ tag: 'note', text: `Your nudges shove the ball ${Math.round((c.nudge - 1) * 100)}% harder, for no more tilt.` });
     if (c?.pay) lines.push({ tag: 'money', text: `Every round you clear pays $${c.pay} more.` });
     if (c?.mirror) lines.push({ tag: 'money', text: 'Every second round, the shop shows one more part.' });
-    lines.push({ tag: 'note', text: 'Decor: it stands on the cabinet (on the apron, or on the corners above the dome), never on the table. It takes no room there, the ball never touches it, and it works only while it stands on the cabinet. One of each.' });
+    lines.push({ tag: 'note', text: 'Decor: it works in the decor screen at the top of the table, which holds one piece at a time. It takes no room from your parts.' });
     return lines;
   }
   const factor = (inst ? dialFactor(inst) : 1) * modFactor(def.id, mods);
