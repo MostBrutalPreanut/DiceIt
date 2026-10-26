@@ -276,7 +276,7 @@ export function playRound(g: Game, o: PlayOpts): RoundTrace {
       cutting = true;
       // end the ball: drain every ball in play (they time out on the next step)
       const sim = g.sim as unknown as { balls: { age: number }[] };
-      for (const b of sim.balls) b.age = 1e9;
+      for (const b of sim.balls) b.age = 1e15;
     }
   }
   r.wallMs = performance.now() - wall0;
