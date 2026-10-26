@@ -23,30 +23,24 @@ How to use it:
 |---|---|
 | **Printer**: "How did it catch 50 times if it only works 3 times a ball? Was it 20 of these on the board?" | One Printer on the table. The ball falls into it about 50 times a round (each catch scores 40 and holds the ball 0.6 s); it only *prints* a new ball 3 times a ball (`printCap`). Its power is the sure multiball every ball, which is what 2.2 cuts. |
 | **Gold Leaf**: "Up to 5× of what? What is the base?" | The part's own base points (`recipe.points`). A Pop Bumper (20) can gain at most +100, a Thunder Bumper (60) +300. It grows +1 every time the part scores. |
-| **Levels**: "I think the level up was designed as up to 5, and resets by the end of the ball… When was this changed?" | Levels have always been for the rest of the run: they arrived in commit `70c2ae1` ("per-run part levels (max 5)"), and the cap went to 10 in `537e358` (25 Oct, the points-÷5 rebalance). What resets every ball is a Pop Bumper's *growth* (+1 per Pop hit, up to +20). Switching levels to "up to 5, reset each ball" is a big redesign: see **Decision D1**. |
+| **Levels**: "I think the level up was designed as up to 5, and resets by the end of the ball… When was this changed?" | Levels have always been for the rest of the run: they arrived in commit `70c2ae1` ("per-run part levels (max 5)"), and the cap went to 10 in `537e358` (25 Oct, the points-÷5 rebalance). What resets every ball is a Pop Bumper's *growth* (+1 per Pop hit, up to +20). Decided: levels stay per run (D1). |
 | **Long Fuse**: "spawning new balls does NOT refresh the timer, the wording makes it sound like it" | Right: the clock belongs to the ball you launch, and every ball it turns into (printed, twin, Wizard, Gumball) shares it. Two code paths break that today (a Bucket catch in the run-out, a twin left in the lane): fixed in 4.2. Wording audit in 4.3. |
 | **Autopilot / loop breakers**: "I think we already solved this in another fix?" | Mostly yes: closing time (4.1) ends every run-out loop the tests found, the Mag-Grab rest (3.4) breaks the ping-pong, and the Wheel and Printer limits (3.1, 3.2) remove the other two engines. A loop during play is now bounded by the ball clock. So no new loop rule now; 10.2 re-tests it, and Overheat is the fallback if a loop survives. |
 | **Weak players**: "See if making it controllable helps" | Covered by the Helping Hand redesign (7.1), then measured in 10.2. |
 | **Cash decals**: "Just suggested solutions" | They become useful once money is tighter (phase 5); nothing to change on them. |
 | **Spin Doctor** (picked: offer only with a Spinner) | Already the case (`worth: owns(v, 'spinner')`). No change; its weak numbers come from tables without Spinners. |
 
-## Decisions still open (do not implement until answered)
+## Decisions (D1, D2 and D6 answered on 26 Oct; D3, D4 and D5 still open)
 
-- **D1. Levels per run or per ball?** Today: per run, up to 10, and Level Up / Golden Age add on top (up to 13). Your note
-  asks for "up to 5, back to the start at the end of every ball" (like Space Cadet). That changes every leveled part's
-  late value, the Level Light, Level Up, Golden Age and the Tesla-to-Level-Light combo. If you want it, it should be its
-  own phase after phase 4, measured on its own. Until then: no change (the "levels past 10" item stays as is).
-- **D2. Jammer**: your note says "B (the jammed part scores half) or jam the highest-scoring part, not the type". The plan
-  uses **the single part that scored most in the last round scores nothing** (6.4); say if you prefer B.
+- **D1. Levels: decided, keep them per run** (up to 10, as now). The "levels past 10" item stays as is; no change.
+- **D2. Jammer: decided, as planned**: the single part that scored most in the last round scores nothing (6.4).
 - **D3. Whale numbers**: your note asks for no 3-a-ball limit, a cooldown, and sparks that pay more or less. The plan
   proposes numbers in 7.3; confirm or change them.
 - **D4. Money numbers** (phase 5): the new payouts are a proposal, to be measured.
 - **D5. Big rail parts**: you picked "sell only in rounds 1–9" but wrote "sell them from round 1, but not only… a player
   can choose to make space". The plan follows the note: they stay in the shop all run, and the card says when there is
   no room for one (7.6).
-- **D6. Sparks and Mult**: your Big Boi note says "mult stuff overall must be bumped and not zapped". The plan applies it
-  to zaps (2.1). Should sparks (little bonus balls) also stop giving Mult? Today they do. The plan leaves sparks alone.
-
+- **D6. Sparks and Mult: decided, sparks unchanged.** Only zaps lose their Mult (2.1); sparks keep giving Mult as today.
 ---
 
 ## Phase 1. Close the ceilings
@@ -329,7 +323,7 @@ and the loop breakers (unless 10.2 finds a loop).
 | weak-players | open | see if a controllable Hand helps |
 | shortfuse | A | 45 s if still too hard |
 | overlord | A | −20% Mult if still too hard |
-| jammer | open | B, or jam the top part instead of the type (D2) |
+| jammer | decided: jam the top part (D2) | B, or jam the top part instead of the type |
 | nightshift | B | dim the lights / darken the board a little |
 | taxman | A | |
 | crossedwires | C | |
@@ -337,7 +331,7 @@ and the loop breakers (unless 10.2 finds a loop).
 | wheel-zilch | B | |
 | wheel-card | A | |
 | hand-card | open | covered by the redesign: a small cheap flipper |
-| levels-cap | open | question about per-ball levels (D1) |
+| levels-cap | decided: keep per run | question answered in section 0 (D1) |
 | cook-goal | A | |
 | gremlins | A | |
 | deflector | C | |
