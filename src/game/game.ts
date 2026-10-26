@@ -1,4 +1,4 @@
-import { makePart, MAX_LEVEL, PARTS, PART_IDS, rarityWeight, sellPrice, SHOP_IDS, type PartDef, type PartId, type PartInstance, type Rarity } from '../data/parts';
+import { footprint, gemFits, isDecor, isInlay, makePart, MAX_LEVEL, PARTS, PART_IDS, rarityWeight, sellPrice, SHOP_IDS, type PartDef, type PartId, type PartInstance, type Rarity } from '../data/parts';
 import { neutralMods, simModsOf, type Mods } from '../data/mods';
 import {
   BOSS_EVERY, computeMods, DECAL_SLOTS, DECALS, rollDecalPick, SKIP_PAY,
@@ -7,13 +7,13 @@ import {
 } from '../data/decals';
 import { BOSSES, bossOf, FINAL_ROUND, planBosses, type BossDef, type BossId } from '../data/bosses';
 import type { MachineId } from '../data/bigboi';
-import { canPlace, canPlaceLedge, ensureBigBoi, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
+import { canPlace, canPlaceLedge, decorParts, ensureBigBoi, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
 import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
 import { clampLedge, LEDGE } from '../sim/table';
 import { GOALS, GOAL_GROWTH } from '../data/goals';
 import { Rng } from '../sim/rng';
 import { createSim, NO_INPUT, type Input, type Sim, type SimEvent } from '../sim/sim';
-import { Scorer, type ScoreEvent } from './scoring';
+import { Scorer, type ScoreEvent, type SparkBurst } from './scoring';
 
 export type Mode = 'workshop' | 'round' | 'roundEnd' | 'runOver';
 
@@ -93,6 +93,8 @@ export interface RunSave {
   /** The run's bosses, in order. */
   bosses?: BossId[];
   won?: boolean;
+  /** Old Bell rings so far this run (absent in older saves). */
+  rings?: number;
 }
 
 /** Validate a saved run from storage. Returns null for anything that is not a v2 save. */
@@ -111,7 +113,7 @@ export function parseRun(json: string): RunSave | null {
  * from round 1, uncommons from round 2, rares from round 4 and legendaries from round 7. Big Boi is never sold.
  */
 export function rollOffers(rng: Rng, n = SHOP_SLOTS, round = 1, exclude: PartId[] = []): PartId[] {
-  const w = (id: PartId) => PARTS[id].weight * rarityWeight(PARTS[id].rarity, round);
+  const w = (id: PartId) => (round < (PARTS[id].from ?? 0) ? 0 : PARTS[id].weight * rarityWeight(PARTS[id].rarity, round));
   const pool = SHOP_IDS.filter((id) => !exclude.includes(id) && w(id) > 0);
   const out: PartId[] = [];
   while (out.length < n && pool.length) {
@@ -184,6 +186,12 @@ export class Game {
   goalOverride: number | null = null;
   /** Every point the run has scored in its rounds (the lose screen's total). */
   runScore = 0;
+  /** Sparks owed to the table later (a Firecracker's burst): when, and what. */
+  private pendingSparks: (SparkBurst & { at: number })[] = [];
+  /** The part the last gem from the toolbox went into (the UI selects it). */
+  lastInlaid: number | null = null;
+  /** Old Bell rings this run: every ball's Mult is ×1.2 for each, for the rest of the run (selling the bell keeps them). */
+  rings = 0;
   /** Parts the toolbox had no room for and that were sold instead; the UI reports these and clears the list. */
   soldOverflow: { def: PartId; refund: number }[] = [];
 
@@ -199,13 +207,13 @@ export class Game {
    */
   private newScorer(goal: number, persistent = false) {
     const base = {
-      mods: this.mods, machine: this.machine, seed: this.seed * 31 + this.round, baseMult: this.startMult(this.mods),
+      mods: this.mods, machine: this.machine, seed: this.seed * 31 + this.round, baseMult: this.startMult(this.mods), rings: this.rings,
       balls: () => this.sim.ballCount, lastBall: () => this.mode === 'round' && this.ballsLeft <= 1, cash: () => this.money,
     };
     if (persistent) {
       const boss = this.boss;
       const later = boss?.decalsOffUntilHalf && !this.fixedMods ? (() => { const m = this.roundMods(true); return { mods: m, at: goal / 2, baseMult: this.startMult(m) }; })() : undefined;
-      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), onPolish: (inst, by, cap) => this.polish(inst, by, cap), jam: boss?.jam, later });
+      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), onPolish: (inst, by, cap) => this.polish(inst, by, cap), onNotch: (inst, n) => this.notch(inst, n), onLeaf: (inst, cap) => this.leaf(inst, cap), onKeep: (inst, patch) => Object.assign(inst, patch), jam: boss?.jam, later });
     }
     return new Scorer(goal, () => this.layout.parts, base); // a test ball's level-ups stay in its own scorer
   }
@@ -233,6 +241,21 @@ export class Game {
     return inst.polish;
   }
 
+  /** An Old Bell's notch for the round: at `notches` it rings (one more ring for the run) and starts again. True if it rang. */
+  notch(inst: PartInstance, notches: number): boolean {
+    const n = (inst.notches ?? 0) + 1;
+    const rang = n >= notches;
+    inst.notches = rang ? 0 : n;
+    if (rang) this.rings++;
+    return rang;
+  }
+
+  /** Gold Leaf: its part is worth +1 more (at most `cap`), for the rest of the run. Returns what it adds now. */
+  leaf(inst: PartInstance, cap: number): number {
+    inst.leaf = Math.min(cap, (inst.leaf ?? 0) + 1);
+    return inst.leaf;
+  }
+
   /** Level a part up for the rest of the run (at most MAX_LEVEL). Returns its new level. */
   levelUp(inst: PartInstance, n = 1): number {
     inst.level = Math.min(MAX_LEVEL, (inst.level ?? 0) + n);
@@ -249,6 +272,11 @@ export class Game {
 
   get placed(): PartInstance[] {
     return placedParts(this.layout);
+  }
+
+  /** The decor standing on the cabinet. */
+  get decor(): PartInstance[] {
+    return decorParts(this.layout);
   }
 
   get toolboxSlots(): number {
@@ -272,6 +300,7 @@ export class Game {
     this.layout.parts = this.layout.parts.filter((q) => q.uid !== inst.uid);
     if (inst.placed) this.sim.removePart(inst.uid);
     this.soldOverflow.push({ def: inst.def, refund });
+    if (inst.inlay) this.returnGem(inst.inlay);
     return refund;
   }
 
@@ -308,9 +337,36 @@ export class Game {
   /** The mods for a round: the decals, and the boss on top. `withDecals` false is The Auditor's opening. */
   private roundMods(withDecals = true): Mods {
     if (this.fixedMods) return this.fixedMods;
-    const m = computeMods(withDecals ? this.decals : []);
+    const m = this.withDecor(computeMods(withDecals ? this.decals : []));
     this.boss?.mods?.(m);
     return m;
+  }
+
+  /** The cabinet upgrades on the cabinet add their little bit (decor in the toolbox does nothing). */
+  private withDecor(m: Mods): Mods {
+    for (const p of decorParts(this.layout)) {
+      const c = PARTS[p.def].recipe.cab;
+      if (!c) continue;
+      m.lampRadius += c.lampRadius ?? 0;
+      m.lampBonus += c.lampBonus ?? 0;
+      m.nudge *= c.nudge ?? 1;
+      m.cabinetPay += c.pay ?? 0;
+      if (c.mirror && this.round % 2 === 0) m.shopSlots += 1;
+    }
+    return m;
+  }
+
+  /** Decor went on or off the cabinet: a cabinet upgrade works (or stops) at once, the shop included. */
+  private decorChanged(id: PartId) {
+    if (!isDecor(id) || this.fixedMods || this.mode !== 'workshop') return;
+    this.mods = this.workshopMods();
+    this.scorer.mods = this.mods;
+    this.fitShop();
+  }
+
+  /** Decor the run owns (placed or in the toolbox): the shop never offers a second of any. */
+  private ownedDecor(): PartId[] {
+    return this.layout.parts.filter((p) => isDecor(p.def)).map((p) => p.def);
   }
 
   /** The mods the current round will be played with (the decals, and the boss on top), for tools that measure a machine. */
@@ -320,13 +376,26 @@ export class Game {
 
   /** The mods in the workshop: the decals alone. */
   private workshopMods(): Mods {
-    return this.fixedMods ?? computeMods(this.decals);
+    return this.fixedMods ?? this.withDecor(computeMods(this.decals));
   }
 
   // ---- mode changes -----------------------------------------------------------
 
   private resetSim() {
     this.sim.reset(this.layout, { seed: this.seed++, mods: simModsOf(this.mods), ballClock: this.mods.ballClock });
+    this.pendingSparks = [];
+  }
+
+  /** The scorer asked for sparks: shoot them out now, or keep them for later (a firework bursts after its flight). */
+  private spawnSparks(score: ScoreEvent[]) {
+    for (const s of score) for (const b of s.sparks ?? []) {
+      if (b.delay) this.pendingSparks.push({ ...b, at: this.sim.time + b.delay });
+      else this.sim.addSparks(b.n, b.x, b.y, b.parent, { r: b.r, top: b.top });
+    }
+    if (!this.pendingSparks.length) return;
+    const due = this.pendingSparks.filter((b) => b.at <= this.sim.time);
+    this.pendingSparks = this.pendingSparks.filter((b) => b.at > this.sim.time);
+    for (const b of due) this.sim.addSparks(b.n, b.x, b.y, b.parent, { r: b.r, top: b.top });
   }
 
   get ballsPerRound() {
@@ -362,6 +431,7 @@ export class Game {
 
   continueAfterRound() {
     this.round++;
+    this.mods = this.workshopMods(); // the new round's shop (the Side Mirror counts the rounds)
     this.shop = this.freshShop(new Rng(this.runSeed * 1000 + this.round), this.shop);
     this.resolved = null;
     // after every boss (rounds 3, 6, 9...) the machine owes you a decal: one of three
@@ -376,7 +446,7 @@ export class Game {
     const n = this.mods.shopSlots;
     const keep = (prev?.locked ?? []).filter((i) => i < n && prev!.offers[i]);
     const kept = keep.map((i) => prev!.offers[i]!) as PartId[];
-    const fresh = rollOffers(rng, n - keep.length, this.round, kept);
+    const fresh = rollOffers(rng, n - keep.length, this.round, [...kept, ...this.ownedDecor()]);
     const offers: (PartId | null)[] = [];
     for (let i = 0; i < n; i++) offers.push(keep.includes(i) ? prev!.offers[i] : fresh.shift() ?? null);
     const bargain = this.mods.bargain ? Math.floor(rng.next() * n) : null;
@@ -443,7 +513,7 @@ export class Game {
   private fitShop() {
     const rng = new Rng(this.runSeed * 31 + this.round * 7 + this.decals.length);
     const extra = this.mods.shopSlots - this.shop.offers.length;
-    if (extra > 0) this.shop.offers.push(...rollOffers(rng, extra, this.round, this.shop.offers.filter((x): x is PartId => !!x)));
+    if (extra > 0) this.shop.offers.push(...rollOffers(rng, extra, this.round, [...this.shop.offers.filter((x): x is PartId => !!x), ...this.ownedDecor()]));
     if (!this.mods.bargain) this.shop.bargain = null;
     else if (this.shop.bargain == null || !this.shop.offers[this.shop.bargain]) {
       const open = this.shop.offers.map((id, i) => (id ? i : -1)).filter((i) => i >= 0);
@@ -509,6 +579,7 @@ export class Game {
 
   newRun(machine: MachineId = this.machine) {
     this.runScore = 0;
+    this.rings = 0;
     this.machine = machine;
     this.layout = starterLayout();
     // the starting bumpers wait in the toolbox: put them wherever you like, free to place and to move this visit
@@ -611,7 +682,7 @@ export class Game {
   applyArrangement(a: Arrangement): { placed: number; missing: number } {
     if (!this.editable) return { placed: 0, missing: 0 };
     this.checkpoint();
-    for (const p of this.layout.parts) if (!p.fixed) p.placed = false;
+    for (const p of this.layout.parts) if (!p.fixed && !isDecor(p.def)) p.placed = false; // the decor stays on the cabinet
     let placed = 0, missing = 0;
     for (const e of a.parts) {
       if (!(e.def in PARTS) || e.def === 'mega') { missing++; continue; }
@@ -686,7 +757,7 @@ export class Game {
   save(): RunSave {
     return {
       v: 2, layout: this.layout, money: this.money, round: this.round, shop: this.shop, sandbox: this.sandbox, runSeed: this.runSeed,
-      picks: this.decals, pending: this.pending, runScore: this.runScore, machine: this.machine, bosses: this.bossPlan, won: this.won,
+      picks: this.decals, pending: this.pending, runScore: this.runScore, machine: this.machine, bosses: this.bossPlan, won: this.won, rings: this.rings,
     };
   }
 
@@ -705,6 +776,7 @@ export class Game {
     this.won = !!s.won;
     this.resolved = null;
     this.runScore = s.runScore ?? 0;
+    this.rings = s.rings ?? 0;
     this.history = [];
     this.future = [];
     this.layout.parts = this.layout.parts.filter((p) => p.def in PARTS);
@@ -778,10 +850,56 @@ export class Game {
     return spots;
   }
 
-  /** Buy an offer straight onto the board at (x, y), dragged from the shop: it needs room on the table, not in the toolbox. */
+  // ---- gems (inlays): set into a part on the table, one each ----------------------------------------------
+
+  /** The part a gem dropped at (x, y) goes into: the nearest placed part under the point that it fits. */
+  inlayTarget(gem: PartId, x: number, y: number): PartInstance | undefined {
+    let best: PartInstance | undefined, bd = Infinity;
+    for (const p of this.placed) {
+      if (p.fixed || !gemFits(gem, p.def)) continue;
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d <= footprint(PARTS[p.def]) + 0.3 && d < bd) { best = p; bd = d; }
+    }
+    return best;
+  }
+
+  /** Could this go at (x, y)? A part on a free spot; a gem into a part it fits. */
+  canDropAt(id: PartId, x: number, y: number, ignoreUid?: number): boolean {
+    return isInlay(id) ? !!this.inlayTarget(id, x, y) : canPlace(this.layout, id, x, y, ignoreUid);
+  }
+
+  /** Set a gem into a part. The gem it replaces goes back to the toolbox (or is sold, if there is no room). */
+  private setInlay(gem: PartInstance, target: PartInstance) {
+    const old = target.inlay;
+    target.inlay = gem.def;
+    delete target.leaf; // Gold Leaf's points go with its leaf
+    this.layout.parts = this.layout.parts.filter((q) => q.uid !== gem.uid);
+    if (old) this.returnGem(old);
+  }
+
+  /** A gem out of its part: back in the toolbox, or sold if the toolbox is full. */
+  private returnGem(id: PartId) {
+    const inst = makePart(id, this.layout.nextUid++);
+    inst.fresh = true;
+    this.layout.parts.push(inst);
+    if (!this.sandbox && this.inventory.length > this.toolboxSlots) this.sellOverflow(inst);
+  }
+
+  /** Buy an offer straight onto the board at (x, y), dragged from the shop: it needs room on the table, not in the toolbox. A gem goes into the part there. */
   buyAndPlace(slot: number, x: number, y: number, angle = 0): PartInstance | null {
     const id = this.shop.offers[slot];
     if (!this.editable || !id) return null;
+    if (isInlay(id)) {
+      const target = this.inlayTarget(id, x, y), cost = this.priceAt(slot);
+      if (!target || !this.canAfford(cost)) return null;
+      this.checkpoint();
+      if (!this.sandbox) this.money -= cost;
+      this.sold(slot);
+      const gem = makePart(id, this.layout.nextUid++);
+      this.layout.parts.push(gem);
+      this.setInlay(gem, target);
+      return target;
+    }
     const cost = this.priceAt(slot);
     if (!this.canAfford(cost) || !canPlace(this.layout, id, x, y)) return null;
     const spots = this.packSpots(id, x, y);
@@ -798,6 +916,7 @@ export class Game {
       if (at) this.sim.updatePart(inst);
     });
     this.clearHeat();
+    this.decorChanged(id);
     return pack[0];
   }
 
@@ -808,8 +927,14 @@ export class Game {
 
   /** Test Lab: any part, free, straight onto the board. */
   grantAndPlace(id: PartId, x: number, y: number, angle = 0): PartInstance | null {
-    if (!this.editable || !this.sandbox || id === 'mega' || !canPlace(this.layout, id, x, y)) return null;
+    if (!this.editable || !this.sandbox || id === 'mega' || !this.canDropAt(id, x, y)) return null;
     this.checkpoint();
+    if (isInlay(id)) {
+      const target = this.inlayTarget(id, x, y)!, gem = makePart(id, this.layout.nextUid++);
+      this.layout.parts.push(gem);
+      this.setInlay(gem, target);
+      return target;
+    }
     return this.addPlaced(id, x, y, angle);
   }
 
@@ -819,6 +944,7 @@ export class Game {
     this.layout.parts.push(inst);
     this.clearHeat();
     this.sim.updatePart(inst);
+    this.decorChanged(id);
     return inst;
   }
 
@@ -881,6 +1007,8 @@ export class Game {
     this.money += value;
     this.layout.parts = this.layout.parts.filter((q) => q.uid !== uid);
     this.sim.removePart(uid);
+    if (p.inlay) this.returnGem(p.inlay); // its gem comes out first
+    this.decorChanged(p.def);
     return value;
   }
 
@@ -889,6 +1017,14 @@ export class Game {
   /** Put an inventory part on the board (or move a placed one). */
   place(uid: number, x: number, y: number, checkpoint = false): boolean {
     const p = this.part(uid);
+    if (p && isInlay(p.def)) { // a gem from the toolbox goes into the part under it
+      const target = this.editable ? this.inlayTarget(p.def, x, y) : undefined;
+      if (!target) return false;
+      if (checkpoint) this.checkpoint();
+      this.setInlay(p, target);
+      this.lastInlaid = target.uid;
+      return true;
+    }
     if (!this.editable || !p || p.fixed || !canPlace(this.layout, p.def, x, y, uid)) return false;
     const moving = p.placed && (p.x !== x || p.y !== y);
     if (moving && this.moveFee(p) > this.money) return false;
@@ -900,6 +1036,7 @@ export class Game {
     p.placed = true;
     delete p.fresh;
     this.sim.updatePart(p);
+    this.decorChanged(p.def);
     return true;
   }
 
@@ -913,9 +1050,10 @@ export class Game {
     this.checkpoint();
     this.payMove(p);
     this.clearHeat();
-    if (this.toolboxFull) return this.sellOverflow(p);
+    if (this.toolboxFull) { const refund = this.sellOverflow(p); this.decorChanged(p.def); return refund; }
     p.placed = false;
     this.sim.updatePart(p);
+    this.decorChanged(p.def);
     return null;
   }
 
@@ -991,6 +1129,8 @@ export class Game {
       for (const s of this.scorer.consume(ev)) result.score.push(s);
       if (ev.type === 'tilt') result.game.push({ type: 'tilt' });
     }
+    for (const s of this.scorer.tick(this.sim.time)) result.score.push(s); // a Powder Keg's fuse burns down
+    this.spawnSparks(result.score);
     if (!wasGoal && this.scorer.goalReached) result.game.push({ type: 'goal' });
     // a ball ends when the LAST ball on the table is gone (the Ball Printer makes multiball)
     if (this.mode === 'round' && this.sim.ballCount === 0 && !this.sim.awaitingPlunge) this.endBall(false, result);
@@ -1002,6 +1142,8 @@ export class Game {
     if (forced) this.sim.reset(this.layout, { seed: this.seed++, mods: simModsOf(this.mods), ballClock: this.mods.ballClock }); // Cash Out: clear the table at once
     this.ballsLeft--;
     out.push({ type: 'ballEnd', ballsLeft: this.ballsLeft });
+    this.sim.clearSparks(); // a ball's sparks go out with it
+    this.pendingSparks = [];
     if (this.scorer.goalReached || this.ballsLeft <= 0) this.runScore += this.scorer.score;
     if (this.scorer.goalReached) {
       this.payout = this.computePayout();
@@ -1061,6 +1203,7 @@ export function payoutFor(i: { round: number; ballsLeft: number; score: number; 
   lines.push({ label: `Round ${i.round} cleared`, amount: Math.max(0, 3 + i.round - m.payCut) });
   if (i.boss) lines.push({ label: 'Boss beaten', amount: 2 + m.bossBonus });
   if (m.roundBonus > 0) lines.push({ label: 'Sponsor', amount: m.roundBonus });
+  if (m.cabinetPay > 0) lines.push({ label: 'Coin Tray', amount: m.cabinetPay });
   if (i.ballsLeft > 0) lines.push({ label: `${i.ballsLeft} unused ball${i.ballsLeft > 1 ? 's' : ''} x $${m.unusedBallPay}`, amount: m.unusedBallPay * i.ballsLeft });
   const interest = Math.min(m.interestCap, Math.floor(i.money / 5) * m.interestPer);
   if (interest > 0) lines.push({ label: `Interest on $${i.money}`, amount: interest });

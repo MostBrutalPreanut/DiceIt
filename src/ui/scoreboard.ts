@@ -2,7 +2,7 @@
 // localStorage on this device only. The records are plain data, ranked and capped here, so the rules are tested
 // without a browser; the menu draws them.
 import { DECALS, type DecalId } from '../data/decals';
-import { PARTS, type PartId } from '../data/parts';
+import { isDecor, PARTS, type PartId } from '../data/parts';
 import type { MachineId } from '../data/bigboi';
 import type { Game, RunSave } from '../game/game';
 
@@ -104,7 +104,7 @@ type Source = Parameters<typeof recordOf>[0];
 /** A run as the scoreboard sees it, from a save (while the game itself is busy with the attract table). */
 export const sourceOfSave = (run: RunSave): Source => ({
   machine: run.machine ?? 'factory', round: run.round, mode: 'workshop', runScore: run.runScore ?? 0, won: !!run.won,
-  decals: run.picks ?? [], placed: run.layout.parts.filter((p) => p.placed), layout: run.layout,
+  decals: run.picks ?? [], placed: run.layout.parts.filter((p) => p.placed && !isDecor(p.def)), layout: run.layout,
 });
 
 /** The scoreboard in storage, and the run in progress that will go on it. */

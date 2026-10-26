@@ -1,10 +1,11 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
-import { dialValue, footprint, lampStats, LEVEL_RADIUS, PARTS, SMALL_FLIPPER, type PartId, type PartInstance } from '../data/parts';
+import { dialValue, footprint, gemFits, isDecor, isInlay, lampStats, LEVEL_RADIUS, PARTS, SMALL_FLIPPER, type PartId, type PartInstance } from '../data/parts';
 import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
-import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, FLIPPER_REST, TABLE_W } from '../sim/constants';
+import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, FLIPPER_REST, SPARK_R, TABLE_W } from '../sim/constants';
 import { FLIPPER_PIVOTS, ledgeSeg } from '../sim/table';
-import { flat, label, P, Prop, ribbon, unP, type Pt, type View } from './draw';
+import { APRON_Z as APRON_TOP, decorFits, decorZ, WALL_TOP } from '../sim/cabinet';
+import { flat, label, P, Prop, ribbon, star, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
 import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
 import { DotMatrix } from './dmd';
@@ -30,6 +31,25 @@ export interface DrawState {
 export const TIP_K = 0.9;
 /** At this Mult Big Boi puts his sunglasses on. */
 export const COOL_MULT = 3;
+/** A ranked ball's ring and ribbon (Rank Lights): Silver, Gold, Diamond, the same on every machine. */
+const RANK_COLOURS = ['#dfe6ee', '#ffd23f', '#8ff0ff'] as const;
+/** Zaps: how long an arc of lightning stays on screen, and how many are drawn in one frame (the score counts them all). */
+const ARC_LIFE = 0.22;
+const ARCS_DRAWN = 12;
+/** A Firecracker's rocket flies to the top of the table, where its sparks burst as it lands. */
+const ROCKET_FLIGHT = PARTS.firecracker.recipe.rocket!.delay;
+const ROCKET_TOP = { x: 12, y: 45 };
+/**
+ * The effects budget (borrowed-parts §7): when frames run long for a while the extras go, cheapest-to-lose first.
+ * Strain 1 (and low graphics) drops the sparks' ghosts and floor glow; strain 2 also draws arcs straight and fewer of them. A frame
+ * time (ms, smoothed) over UP raises it after a second; one under DOWN for three seconds lowers it again.
+ */
+const STRAIN_UP = 22;
+const STRAIN_DOWN = 17.5;
+/** A cheap repeatable 0..1 noise for the lightning's zigzag. */
+const jit = (a: number, b: number, c: number) => { const s = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453; return s - Math.floor(s); };
+/** The height decor stands at: the apron's top or the cabinet walls' (a spot off the cabinet reads as the walls'). */
+const cabZ = (x: number, y: number) => decorZ(x, y) ?? WALL_TOP;
 /** k is quantised so the baked textures can be shared between frames of the tip animation. */
 const K_STEP = 0.02;
 const quantK = (k: number) => Math.round(k / K_STEP) * K_STEP;
@@ -52,6 +72,27 @@ export class Renderer {
   private partLayer = new Container();
   private ballG = new Graphics();
   private topG = new Graphics();
+  /** Zaps: lightning from a Tesla Coil to each part it made score, for a moment. */
+  private arcs: { x1: number; y1: number; x2: number; y2: number; age: number; seed: number; z1?: number }[] = [];
+  /** Laser Turret beams and the shockwave rings of blasts and booms, for a moment each. */
+  private beams: { x1: number; y1: number; x2: number; y2: number; age: number }[] = [];
+  private rings: { x: number; y: number; r: number; age: number; color: string }[] = [];
+  /** Where each kind of decor could stand (a grid of spots on the cabinet), for the hint while one is in hand. */
+  private decorSpots = new Map<PartId, Pt[]>();
+  /** Firecracker rockets on their way up. */
+  private rockets: { x: number; y: number; age: number; smoke: number }[] = [];
+  /** Sparks: pooled sprites (halo, white-hot core and two ghosts behind each) and each spark's last few spots. */
+  private sparkLayer = new Container();
+  private sparkPool: Sprite[] = [];
+  private sparkTrails = new Map<number, { x: number; y: number }[]>();
+  private dotTex!: Texture;
+  /** A spark itself: a four-point star sticker in the theme's spark colour (baked per theme). */
+  private sparkTex: Texture | null = null;
+  /** How strained the frame rate is (0, 1 or 2), from the smoothed frame time; see STRAIN_UP. */
+  strain = 0;
+  private low = false;
+  private frameMs = 16.7;
+  private strainClock = 0;
   private tiltLayer = new Container();
   particles!: Particles;
   dmd!: DotMatrix;
@@ -104,10 +145,11 @@ export class Renderer {
     this.partLayer.sortableChildren = true;
     this.particles = new Particles(this.app.renderer, this.theme);
     this.dmd = new DotMatrix(this.theme);
-    this.machine.addChild(this.staticSprite, this.dmd.view, this.glowLayer, this.floorFx, this.partLayer, this.ballG, this.particles.layer, this.topG);
+    this.machine.addChild(this.staticSprite, this.dmd.view, this.glowLayer, this.floorFx, this.partLayer, this.ballG, this.sparkLayer, this.particles.layer, this.topG);
     this.world.addChild(this.machine);
     this.app.stage.addChild(this.world, this.tiltLayer);
     this.glowTex = makeGlowTexture();
+    this.dotTex = makeDotTexture();
     this.partLayer.addChild(this.plungerG);
     this.layout();
     // Pixi only follows window resizes on its own; the stage can also change size with the page
@@ -117,6 +159,8 @@ export class Renderer {
   setTheme(t: Theme) {
     this.theme = t;
     this.flush();
+    this.sparkTex?.destroy(true);
+    this.sparkTex = null;
     this.particles.bake(t);
     this.dmd.setTheme(t);
   }
@@ -129,6 +173,7 @@ export class Renderer {
 
   /** Graphics quality (settings): low draws at 1x with no particle debris, smoke or glow; high is the full look. */
   setQuality(low: boolean) {
+    this.low = low;
     this.particles.lite = low;
     this.glowLayer.visible = !low;
     const res = low ? 1 : Math.min(window.devicePixelRatio || 1, 2);
@@ -192,6 +237,20 @@ export class Renderer {
     return { x, y };
   }
 
+  /**
+   * Pointer position (client px) -> a spot on the cabinet, for decor: on the top of the walls if the pointer is over
+   * them, else on the apron (both stand higher than the floor, so the floor's point would be off).
+   */
+  toCabinet(clientX: number, clientY: number) {
+    const r = this.app.canvas.getBoundingClientRect();
+    const local = this.machine.toLocal({ x: clientX - r.left, y: clientY - r.top });
+    const on = (z: number) => { const [x, y] = unP({ ...this.view, oy: this.view.oy - z * this.view.kz * this.view.S }, local.x, local.y); return { x, y }; };
+    const top = on(WALL_TOP);
+    if (decorZ(top.x, top.y) === WALL_TOP) return top;
+    const apron = on(APRON_TOP);
+    return decorZ(apron.x, apron.y) === APRON_TOP ? apron : top;
+  }
+
   /** Sim point (with height) -> client px, for the HTML overlay effects and the smoke test. */
   toClient(x: number, y: number, z = 0) {
     const r = this.app.canvas.getBoundingClientRect();
@@ -216,6 +275,40 @@ export class Renderer {
   onScore(ev: ScoreEvent) {
     const t = this.theme, def = PARTS[ev.def], color = roleFill(t, ev.def);
     this.pulses.set(ev.uid, 1);
+    if (ev.beam) {
+      this.beams.push({ ...ev.beam, age: 0 });
+      if (this.beams.length > 6) this.beams.shift();
+    }
+    if (ev.blast) {
+      // a keg's blast or the gong's boom: a shockwave ring across the floor (and, for a keg, the bang itself)
+      this.rings.push({ x: ev.x, y: ev.y, r: ev.blast, age: 0, color: roleFill(t, ev.def) });
+      if (this.rings.length > 8) this.rings.shift();
+      if (ev.def === 'keg') { this.particles.debris(ev.x, ev.y, 10, 1.3); this.particles.smokeAt(ev.x, ev.y + 0.2, 2.2, 1.4); this.particles.puff(ev.x, ev.y, 0.4, 2); }
+      if (!this.calm) this.trauma = Math.min(1, this.trauma + (ev.def === 'keg' ? 0.5 : 0.3));
+    }
+    if (ev.rocket) {
+      this.rockets.push({ x: ev.rocket.x, y: ev.rocket.y, age: 0, smoke: 0 });
+      this.particles.puff(ev.x, ev.y, 0.3, 1.2);
+      this.particles.smokeAt(ev.x, ev.y + 0.2, 1.4);
+    }
+    if (ev.spark) {
+      // a spark's hit: a flash and a small number, no debris and no shake (there can be a lot of them)
+      this.particles.sparkle(ev.x + (Math.random() - 0.5) * 0.6, ev.y + (Math.random() - 0.5) * 0.4, 0.6, 0.5, false, true);
+      this.particles.sticker(ev.points.toLocaleString('en-US'), '', roleFill(t, 'sparkler'), ev.x, ev.y, 1.2, 0.5, ev.points);
+      return;
+    }
+    if (ev.zap) {
+      // a zap: a crackle of sparks on the part (and an arc of lightning from a coil); no debris, no shake (there can be many)
+      if (ev.zap.by === 'arc') this.arcs.push({ x1: ev.zap.x, y1: ev.zap.y, x2: ev.x, y2: ev.y, age: 0, seed: this.arcs.length + ev.uid * 7 + ev.t });
+      // the Altar's Tempest: a bolt straight down out of the sky; its Inferno: the part bursts into flame
+      if (ev.zap.by === 'storm') { this.arcs.push({ x1: ev.x + (Math.random() - 0.5) * 3, y1: ev.y + 2, z1: 14, x2: ev.x, y2: ev.y, age: 0, seed: ev.uid * 13 + ev.t }); if (!this.calm) this.trauma = Math.min(1, this.trauma + 0.12); }
+      if (ev.zap.by === 'fire') { this.particles.smokeAt(ev.x, ev.y + 0.2, 1.2, 0.6); this.particles.sparkle(ev.x, ev.y, 1.2, 0.8, true, true); }
+      if (this.arcs.length > ARCS_DRAWN * 2) this.arcs.shift();
+      this.particles.sparkle(ev.x + (Math.random() - 0.5), ev.y + (Math.random() - 0.5) * 0.6, 0.8, 0.7, false, true);
+      if (ev.label) this.particles.sticker(ev.label, '', color, ev.x, ev.y, 2.2, 1, 0);
+      else this.particles.sticker(ev.points.toLocaleString('en-US'), '', roleFill(t, ({ arc: 'tesla', beam: 'laser', blast: 'keg', boom: 'gong', storm: 'altar', fire: 'firecracker' } as const)[ev.zap.by]), ev.x, ev.y, 1.4, 0.55, ev.points);
+      return;
+    }
     if (ev.tier !== undefined) this.lastTier.set(ev.uid, { tier: ev.tier, glow: 1 });
     if (ev.spins) {
       const sp = this.spin.get(ev.uid) ?? { angle: 0, speed: 0 };
@@ -310,6 +403,7 @@ export class Renderer {
 
   draw(game: Game, dt: number, st: DrawState) {
     this.time += dt;
+    this.updateStrain(dt);
     // the part cache is bounded; it is only ever emptied between frames, never while sprites are being assigned
     if (this.cache.size > 1600) { for (const c of this.cache.values()) c.tex.destroy(true); this.cache.clear(); }
     const qk = quantK(this.k);
@@ -342,6 +436,11 @@ export class Renderer {
     this.drawFlippers(game);
     this.drawPlunger(game);
     this.drawBalls(game);
+    this.drawSparks(game);
+    this.drawRockets(dt);
+    this.drawArcs(dt);
+    this.drawBeams(dt);
+    this.drawRings(dt);
     for (let i = this.glowUsed; i < this.glowPool.length; i++) this.glowPool[i].visible = false;
     this.particles.update(dt, this.view);
     this.dmd.update(dt);
@@ -402,13 +501,20 @@ export class Renderer {
     const pulse = this.pulses.get(p.uid) ?? 0;
     switch (p.def) {
       case 'mega': return { hit: pulse > 0.35, follow: true, mood: this.moodFor(game, pulse) };
-      case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': case 'trophy': return { hit: pulse > 0.35 };
+      case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': case 'trophy': case 'tesla': case 'gong': return { hit: pulse > 0.35 };
+      case 'keg': { const k = game.scorer.kegState(p.uid, game.sim.time); return { hit: pulse > 0.35, lit: !tilted && k === 'lit', armed: k !== 'spent' }; }
+      case 'laser': return { hit: pulse > 0.35, lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'sparkler': return { hit: pulse > 0.35, lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'rocks': return { hit: pulse > 0.35, seg: game.scorer.rocksOf(p) };
+      case 'firecracker': return { hit: pulse > 0.35, armed: !game.scorer.rocketSpent(p) };
       case 'piggy': return { hit: pulse > 0.35, seg: game.scorer.piggies.get(p.uid) ?? 0 };
       case 'xlane': return { lit: !tilted && !game.mods.lightsOut && !game.scorer.coolingDown(p.uid, game.sim.time) };
       case 'fame': return { lit: !tilted && !game.mods.lightsOut && !this.discoFired(game, p.uid) };
       case 'disco': return { lit: !tilted && !game.mods.lightsOut && game.scorer.label(p) !== null && !this.discoFired(game, p.uid) };
       case 'magnet': case 'jackpot': return { busy: heldNear(p.x, p.y) };
       case 'lane': return { lit, letter: lanes.get(p.uid) };
+      case 'rank': return { lit };
+      case 'bell': return { hit: pulse > 0.35, lit: !game.scorer.firedThisRoundOf(p.uid), seg: game.scorer.notchesOf(p) };
       case 'uplight': return { lit, target: 'pop' };
       case 'lamp': return { lit, bright: tilted ? 0 : game.scorer.lampLevel(p.uid) };
       case 'strip': return { lit };
@@ -419,6 +525,9 @@ export class Renderer {
       case 'kickback': return { armed: !tilted && (kick.get(p.uid) ?? true) };
       case 'saver': { const s = savers.get(p.uid); return { armed: !tilted && (s ? s.armed && s.left > 0 : true) }; }
       case 'printer': return { busy: heldNear(p.x, p.y) };
+      case 'clock': { const c = game.scorer.clockState(), hits = PARTS.clock.recipe.clock!.hits; return { lit: game.scorer.madnessLeft(game.sim.time) > 0, seg: c.struck ? 12 : Math.floor((c.minutes / hits) * 12) }; }
+      case 'altar': { const now = game.scorer.ritualNow(game.sim.time), a = game.scorer.altarOf(p); return { lit: !!now, seg: Math.min(8, Math.round((a.sets / PARTS.altar.recipe.altar!.sets) * 8)) }; }
+      case 'bulb': return { lit: true };
       default: return {};
     }
   }
@@ -448,9 +557,10 @@ export class Renderer {
     const twinkle = this.twinkleClock <= 0;
     if (twinkle) this.twinkleClock = 0.45;
 
-    for (const p of game.placed) {
+    for (const p of [...game.placed, ...game.decor]) {
       seen.add(p.uid);
       const def = PARTS[p.def];
+      const z = isDecor(p.def) ? cabZ(p.x, p.y) : 0; // decor stands on the cabinet
       let pulse = this.pulses.get(p.uid) ?? 0;
       if (pulse > 0) { pulse = Math.max(0, pulse - dt * 4.5); this.pulses.set(p.uid, pulse); }
       const sp = this.spin.get(p.uid);
@@ -463,17 +573,21 @@ export class Renderer {
       if (lt) { lt.glow = Math.max(0, lt.glow - dt * 0.7); if (lt.glow === 0) this.lastTier.delete(p.uid); }
       const ps = this.partState(game, p, lanes, banks, kick, savers, heldNear);
       if (def.recipe.perLevel) ps.level = game.scorer.levelOf(p);
+      if (p.inlay) ps.gem = p.inlay;
       // glows live on the floor, under every part: lamps, lit inserts, armed kickbacks, a ready saver
       const r = footprint(def);
-      if (!tilted) {
+      if (!tilted && !z) {
         if (p.def === 'lamp' && ps.bright) this.glow(p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, 0.12 + 0.09 * ps.bright);
         if (p.def === 'strip' && ps.lit) this.glow(p.x, p.y, 4.6, t.role.strip, 0.5 + 0.2 * Math.sin(this.time * 10));
         if (p.def === 'lane' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.lane, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.7, p.y + 0.5, 0.3, 0.7, false, true); }
         if (p.def === 'uplight' && ps.lit) this.glow(p.x, p.y, r * 2.3, t.role.pop, 0.7);
+        if (p.def === 'rank' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.rank, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.5, p.y + 0.6, 0.3, 0.6, false, true); }
         if (p.def === 'kickback' && ps.armed) this.glow(p.x, p.y, r * 1.7, t.role.kickback, 0.45);
         if (p.def === 'saver' && ps.armed) this.glow(p.x, p.y, r * 2, t.role.saver, 0.55);
         if ((p.def === 'xlane' || p.def === 'disco') && ps.lit) this.glow(p.x, p.y, r * 2, t.role[p.def], 0.6);
         if (p.def === 'golden') this.glow(p.x, p.y, r * 1.8, t.role.golden, 0.35);
+        if (p.def === 'keg' && ps.lit) this.glow(p.x, p.y, r * 2.2, t.role.coin, 0.4 + 0.25 * Math.sin(this.time * 30));
+        if (p.def === 'laser' && ps.lit) this.glow(p.x, p.y, r * 1.6, t.role.laser, 0.3);
         // the Cook's order: the one part he lit glows until it is hit
         if (game.scorer.order === p.uid) {
           this.glow(p.x, p.y, r * 2.2, t.accent, 0.55 + 0.25 * Math.sin(this.time * 6));
@@ -501,7 +615,7 @@ export class Renderer {
         this.parts.set(p.uid, pv);
       }
       if (pv.sprite.texture !== b.tex) { pv.sprite.texture = b.tex; pv.sprite.anchor.set(b.ax, b.ay); }
-      const [X, Y] = P(v, p.x, p.y);
+      const [X, Y] = P(v, p.x, p.y, z);
       const sh = this.shakes.get(p.uid);
       let jx = 0, jy = 0;
       if (sh) {
@@ -519,8 +633,8 @@ export class Renderer {
       pv.sprite.scale.set(1 + sq, 1 - sq);
 
       // selection: a dashed paper ring; hover: a ring in the part's colour
-      if (st.selectedUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.6, t.paper, v.lw * 1.4, t.ink);
-      else if (st.hoverUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.5, roleFill(t, p.def), v.lw * 1.1);
+      if (st.selectedUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.6, t.paper, v.lw * 1.4, t.ink, z);
+      else if (st.hoverUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.5, roleFill(t, p.def), v.lw * 1.1, undefined, z);
       if (def.kind === 'lamp' && (st.selectedUid === p.uid || st.hoverUid === p.uid)) {
         dashedRing(fx, v, p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, v.lw, t.ink);
       }
@@ -550,13 +664,30 @@ export class Renderer {
       if (!pv) { pv = { sprite: new Sprite() }; this.partLayer.addChild(pv.sprite); this.parts.set(-1, pv); }
       pv.sprite.texture = b.tex;
       pv.sprite.anchor.set(b.ax, b.ay);
-      const [X, Y] = P(v, st.ghost.x, st.ghost.y);
+      const gz = isDecor(st.ghost.def) ? cabZ(st.ghost.x, st.ghost.y) : 0;
+      const [X, Y] = P(v, st.ghost.x, st.ghost.y, gz);
       pv.sprite.position.set(X, Y);
       pv.sprite.zIndex = 100000;
       pv.sprite.alpha = 0.6;
       pv.sprite.scale.set(1);
       pv.sprite.tint = st.ghost.valid ? 0xffffff : num(mix(t.accent, '#ffffff', 0.25));
-      dashedRing(fx, v, st.ghost.x, st.ghost.y, footprint(def), st.ghost.valid ? t.ink : t.accent, v.lw);
+      if (isInlay(st.ghost.def)) {
+        // a gem in hand: every part it fits is ringed in the gem's colour (it goes into the one it is dropped on)
+        for (const q of game.placed) if (!q.fixed && gemFits(st.ghost.def, q.def)) dashedRing(fx, v, q.x, q.y, footprint(PARTS[q.def]) + 0.35, t.role[st.ghost.def], v.lw * 1.4, t.ink);
+      } else dashedRing(fx, v, st.ghost.x, st.ghost.y, footprint(def), st.ghost.valid ? t.ink : t.accent, v.lw, undefined, gz);
+      if (isDecor(st.ghost.def)) {
+        // decor in hand: the cabinet's free spots are dotted (the apron, the corners above the dome)
+        let spots = this.decorSpots.get(st.ghost.def);
+        if (!spots) {
+          spots = [];
+          for (let y = -1; y < 54; y += 0.75) for (let x = -1.5; x < 28; x += 0.75) if (decorFits(footprint(def), x, y)) spots.push([x, y]);
+          this.decorSpots.set(st.ghost.def, spots);
+        }
+        for (const [x, y] of spots) {
+          const [X, Y] = P(v, x, y, cabZ(x, y) + 0.03);
+          fx.circle(X, Y, Math.max(1, v.S * 0.08)).fill({ color: t.paper, alpha: 0.7 });
+        }
+      }
     } else {
       const pv = this.parts.get(-1);
       if (pv) { pv.sprite.destroy(); this.parts.delete(-1); }
@@ -574,6 +705,145 @@ export class Renderer {
     const [X, Y] = P(this.view, at.x, at.y - m.y);
     mv.sprite.position.set(X + jx, Y + jy);
     mv.sprite.zIndex = -at.y * 100 + 2;
+  }
+
+  /** Smoothed frame time drives the strain level (see STRAIN_UP); a paused frame (dt 0) says nothing. */
+  private updateStrain(dt: number) {
+    if (dt <= 0) return;
+    this.frameMs += (dt * 1000 - this.frameMs) * 0.1;
+    if (this.frameMs > STRAIN_UP && this.strain < 2) {
+      this.strainClock += dt;
+      if (this.strainClock > 1) { this.strain++; this.strainClock = 0; this.frameMs = 16.7; }
+    } else if (this.frameMs < STRAIN_DOWN && this.strain > 0) {
+      this.strainClock += dt;
+      if (this.strainClock > 3) { this.strain--; this.strainClock = 0; }
+    } else this.strainClock = 0;
+  }
+
+  /**
+   * Sparks: a halo in the spark colour round a white-hot core, two fainter ghosts on the way it came, and a warm
+   * spot on the floor; all pooled sprites, no Graphics. As a spark fades it shrinks and dims.
+   */
+  private drawSparks(game: Game) {
+    const v = this.view, col = num(this.theme.role.sparkler), sparks = game.sim.sparkStates();
+    const extras = this.strain < 1 && !this.calm && !this.low;
+    let used = 0;
+    const sprite = (tex: Texture, x: number, y: number, d: number, tint: number, alpha: number) => {
+      let s = this.sparkPool[used++];
+      if (!s) { s = new Sprite(tex); s.anchor.set(0.5); this.sparkLayer.addChild(s); this.sparkPool.push(s); }
+      s.texture = tex;
+      s.rotation = 0;
+      s.visible = true;
+      const [X, Y] = P(v, x, y, SPARK_R);
+      s.position.set(X, Y);
+      s.width = s.height = d;
+      s.tint = tint;
+      s.alpha = alpha;
+    };
+    const live = new Set<number>();
+    for (const sp of sparks) {
+      live.add(sp.id);
+      const tr = this.sparkTrails.get(sp.id) ?? [];
+      tr.unshift({ x: sp.x, y: sp.y });
+      if (tr.length > 5) tr.pop();
+      this.sparkTrails.set(sp.id, tr);
+      const d = (0.45 + 0.55 * sp.left) * SPARK_R * 2 * v.S;
+      if (extras) {
+        this.glow(sp.x, sp.y, 1.3, this.theme.role.sparkler, 0.22 * sp.left);
+        if (tr[2]) sprite(this.dotTex, tr[2].x, tr[2].y, d * 0.8, col, 0.45 * sp.left);
+        if (tr[4]) sprite(this.dotTex, tr[4].x, tr[4].y, d * 0.6, col, 0.25 * sp.left);
+      }
+      sprite(this.glowTex, sp.x, sp.y, d * 3, col, 0.7 * sp.left);
+      sprite(this.sparkTex ??= this.bakeSpark(), sp.x, sp.y, d * 1.9, 0xffffff, Math.min(1, 0.25 + sp.left));
+      this.sparkPool[used - 1].rotation = this.calm ? 0 : this.time * 5 + sp.id;
+    }
+    for (let i = used; i < this.sparkPool.length; i++) this.sparkPool[i].visible = false;
+    for (const id of [...this.sparkTrails.keys()]) if (!live.has(id)) this.sparkTrails.delete(id);
+  }
+
+  private bakeSpark(): Texture {
+    const t = this.theme, R = 28, g = new Graphics();
+    g.poly(flat(star(0, 0, R, R * 0.4, 4, -Math.PI / 2))).fill(t.role.sparkler).stroke({ width: 4, color: t.ink, join: 'round' });
+    g.circle(0, 0, R * 0.26).fill(WHITE);
+    const tex = this.app.renderer.generateTexture({ target: g, frame: new Rectangle(-R - 4, -R - 4, R * 2 + 8, R * 2 + 8), resolution: 2, antialias: true });
+    g.destroy();
+    return tex;
+  }
+
+  /** Firecracker rockets: a bright head trailing smoke up the table; at the top they burst (the sim's sparks follow). */
+  private drawRockets(dt: number) {
+    const v = this.view, g = this.topG, col = this.theme.role.firecracker;
+    for (const r of this.rockets) {
+      r.age += dt;
+      const u = Math.min(1, r.age / ROCKET_FLIGHT), e = u * u * (3 - 2 * u);
+      const x = r.x + (ROCKET_TOP.x - r.x) * e + Math.sin(u * 9) * 0.4 * (1 - u), y = r.y + (ROCKET_TOP.y - r.y) * e;
+      const z = 1 + Math.sin(u * Math.PI) * 3;
+      r.smoke -= dt;
+      if (r.smoke <= 0 && !this.calm) { r.smoke = 0.06; this.particles.smokeAt(x, y, z * 0.6, 0.5); }
+      const [X, Y] = P(v, x, y, z);
+      g.circle(X, Y, v.S * 0.5).fill({ color: col, alpha: 0.45 });
+      g.circle(X, Y, v.S * 0.22).fill({ color: WHITE });
+      if (u >= 1) {
+        for (let i = 0; i < 6; i++) this.particles.sparkle(ROCKET_TOP.x + (Math.random() - 0.5) * 8, ROCKET_TOP.y + (Math.random() - 0.5) * 3, 3 + Math.random() * 2, 1.1, i % 2 === 0);
+        this.rings.push({ x: ROCKET_TOP.x, y: ROCKET_TOP.y, r: 5, age: 0, color: col });
+        if (!this.calm) this.trauma = Math.min(1, this.trauma + 0.25);
+      }
+    }
+    this.rockets = this.rockets.filter((r) => r.age < ROCKET_FLIGHT);
+  }
+
+  /**
+   * Zaps: every live arc as a jagged bolt (a wide glow in the coil's colour under a white core), the newest
+   * ARCS_DRAWN only. The zigzag changes 30 times a second; in Calm mode it holds still.
+   */
+  private drawArcs(dt: number) {
+    for (const a of this.arcs) a.age += dt;
+    this.arcs = this.arcs.filter((a) => a.age < ARC_LIFE);
+    const v = this.view, g = this.topG, col = this.theme.role.tesla, beat = this.calm ? 0 : Math.floor(this.time * 30);
+    const straight = this.strain >= 2;
+    for (const a of this.arcs.slice(straight ? -ARCS_DRAWN / 2 : -ARCS_DRAWN)) {
+      const fade = Math.min(1, Math.max(0, 1 - a.age / ARC_LIFE)), n = straight ? 1 : 8;
+      const [x1, y1] = P(v, a.x1, a.y1, a.z1 ?? 1.9), [x2, y2] = P(v, a.x2, a.y2, 0.9);
+      const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
+      const amp = Math.min(v.S * 0.7, len * 0.12);
+      const pts: number[] = [];
+      for (let i = 0; i <= n; i++) {
+        const u = i / n, off = i === 0 || i === n ? 0 : (jit(a.seed, i, beat) - 0.5) * 2 * amp * Math.sin(Math.PI * u);
+        pts.push(x1 + dx * u + nx * off, y1 + dy * u + ny * off);
+      }
+      const line = (w: number, color: string, alpha: number) => {
+        g.moveTo(pts[0], pts[1]);
+        for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]);
+        g.stroke({ width: w, color, alpha, cap: 'round', join: 'round' });
+      };
+      if (!straight) line(v.S * 0.38, col, 0.45 * fade);
+      line(v.S * 0.12, WHITE, 0.95 * fade);
+    }
+  }
+
+  /** Laser beams: a straight bar of light across the table, a wide glow under a white core, fading fast. */
+  private drawBeams(dt: number) {
+    const LIFE = 0.3;
+    for (const b of this.beams) b.age += dt;
+    this.beams = this.beams.filter((b) => b.age < LIFE);
+    const v = this.view, g = this.topG, col = this.theme.role.laser;
+    for (const b of this.beams) {
+      const fade = Math.min(1, Math.max(0, 1 - b.age / LIFE));
+      const [x1, y1] = P(v, b.x1, b.y1, 1.2), [x2, y2] = P(v, b.x2, b.y2, 1.2);
+      g.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: v.S * 0.55 * fade + v.S * 0.1, color: col, alpha: 0.5 * fade, cap: 'round' });
+      g.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: v.S * 0.12, color: WHITE, alpha: fade, cap: 'round' });
+    }
+  }
+
+  /** Shockwave rings: from a blast or a boom, racing out across the floor to their reach and fading. */
+  private drawRings(dt: number) {
+    const LIFE = 0.45;
+    for (const r of this.rings) r.age += dt;
+    this.rings = this.rings.filter((r) => r.age < LIFE);
+    for (const r of this.rings) {
+      const u = Math.min(1, Math.max(0, r.age / LIFE)), ease = 1 - (1 - u) * (1 - u);
+      groundRing(this.floorFx, this.view, this.theme, r.x, r.y, Math.max(0.3, r.r * ease), r.color, this.view.lw * 3.4, 1 - u);
+    }
   }
 
   /** The Dragon's armour: a ring of shield plates round him, one per plate left. */
@@ -670,7 +940,8 @@ export class Renderer {
     g.clear();
     const live = new Set<number>();
     const wear = this.ballWear(game);
-    for (const b of game.sim.ballStates()) {
+    const balls = game.sim.ballStates();
+    for (const b of balls) {
       live.add(b.id);
       const tr = this.trails.get(b.id) ?? [];
       tr.push({ x: b.x, y: b.y });
@@ -678,10 +949,22 @@ export class Renderer {
       this.trails.set(b.id, tr);
       ballShadow(this.floorFx, v, t, b.x, b.y);
       const speed = Math.hypot(b.vx, b.vy);
-      // a fast ball leaves a tapered paper ribbon (air: soft, no outline)
-      if (!b.held && speed > 18 && tr.length > 3) ribbon(g, tr.map((q) => P(v, q.x, q.y, BALL_R)), v.S * 0.08, v.S * BALL_R * 1.7, t.paper, Math.min(0.75, (speed - 18) / 60));
+      const rank = game.scorer.rankOf(b.id, game.sim.time);
+      // a fast ball leaves a tapered paper ribbon (air: soft, no outline); a ranked ball's ribbon wears its rank
+      if (!b.held && speed > 18 && tr.length > 3) ribbon(g, tr.map((q) => P(v, q.x, q.y, BALL_R)), v.S * 0.08, v.S * BALL_R * 1.7, rank ? RANK_COLOURS[rank.step - 1] : t.paper, Math.min(0.75, (speed - 18) / 60));
+      // and it sheds glitter
+      if (rank && Math.random() < 0.08 + 0.06 * rank.step) this.particles.sparkle(b.x + (Math.random() - 0.5) * 0.6, b.y + (Math.random() - 0.5) * 0.6, BALL_R, 0.35 + 0.1 * rank.step, rank.step >= 2, true);
     }
-    for (const b of game.sim.ballStates()) drawBall(g, v, t, b.x, b.y, wear);
+    for (const b of balls) {
+      drawBall(g, v, t, b.x, b.y, wear);
+      // a ranked ball wears a ring of its rank's colour; it blinks in its last 5 s
+      const rank = game.scorer.rankOf(b.id, game.sim.time);
+      if (rank && (rank.left > 5 || Math.floor(rank.left * 4) % 2 === 0)) {
+        const [X, Y] = P(v, b.x, b.y, BALL_R), R = BALL_R * v.S;
+        g.circle(X, Y, R * 1.38).stroke({ width: v.lw * 1.6 + R * 0.32, color: t.ink, alpha: 0.85 });
+        g.circle(X, Y, R * 1.38).stroke({ width: R * 0.32, color: RANK_COLOURS[rank.step - 1] });
+      }
+    }
     for (const id of [...this.trails.keys()]) if (!live.has(id)) this.trails.delete(id);
   }
 
@@ -788,12 +1071,12 @@ function drawButton(v: View, t: Theme) {
 }
 
 /** A dashed ellipse on the floor round a part (selection, hover, lamp reach). */
-function dashedRing(g: Graphics, v: View, x: number, y: number, r: number, color: string, w: number, under?: string) {
+function dashedRing(g: Graphics, v: View, x: number, y: number, r: number, color: string, w: number, under?: string, z = 0) {
   const n = Math.max(12, Math.round(r * 5));
   for (const [width, col] of (under ? [[w + v.lw * 1.2, under], [w, color]] : [[w, color]]) as [number, string][]) {
     for (let i = 0; i < n; i++) {
       const a0 = (i / n) * Math.PI * 2, a1 = a0 + ((Math.PI * 2) / n) * 0.55;
-      const p0 = P(v, x + Math.cos(a0) * r, y + Math.sin(a0) * r, 0.03), p1 = P(v, x + Math.cos((a0 + a1) / 2) * r, y + Math.sin((a0 + a1) / 2) * r, 0.03), p2 = P(v, x + Math.cos(a1) * r, y + Math.sin(a1) * r, 0.03);
+      const p0 = P(v, x + Math.cos(a0) * r, y + Math.sin(a0) * r, z + 0.03), p1 = P(v, x + Math.cos((a0 + a1) / 2) * r, y + Math.sin((a0 + a1) / 2) * r, z + 0.03), p2 = P(v, x + Math.cos(a1) * r, y + Math.sin(a1) * r, z + 0.03);
       g.moveTo(p0[0], p0[1]).lineTo(p1[0], p1[1]).lineTo(p2[0], p2[1]);
     }
     g.stroke({ width, color: col, cap: 'round' });
@@ -812,6 +1095,20 @@ function dottedLine(g: Graphics, a: Pt, b: Pt, color: string, lw: number) {
 }
 
 /** One soft white radial gradient, tinted per glow: the only soft light on the table. */
+/** A small round dot with a soft rim: a spark's core and its ghosts. */
+function makeDotTexture(): Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const ctx = c.getContext('2d')!;
+  const gr = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.6, 'rgba(255,255,255,1)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gr;
+  ctx.fillRect(0, 0, 32, 32);
+  return Texture.from(c);
+}
+
 function makeGlowTexture(): Texture {
   const c = document.createElement('canvas');
   c.width = c.height = 128;

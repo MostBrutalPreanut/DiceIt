@@ -6,20 +6,12 @@ import { DECALS, type DecalIcon, type DecalLook, type DecalShape } from '../data
 import type { Rarity } from '../data/parts';
 import { LANE_WALL_X, TABLE_H, TABLE_W } from '../sim/constants';
 import { BIG_BOI_AT } from '../sim/layout';
-import { FLIPPER_PIVOTS, tableOutline, tableSegments } from '../sim/table';
+import { FLIPPER_PIVOTS, tableSegments } from '../sim/table';
+import { APRON_Z, apronPoly, DECAL_SLOT_POS, floorPoly, RIM, WALL_TOP } from '../sim/cabinet';
 import { box, flat, hull, label, P, Prop, ribbon, ring, shadow, shadowPoly, star, type Pt, type View } from './draw';
 import { mat, mix, WHITE, type Theme } from './theme';
 
-export const floorPoly = (): Pt[] => [...tableOutline(), [TABLE_W, 0], [0, 0]];
-export const apronPoly = (): Pt[] => [
-  [0, 0], [0, 14], [FLIPPER_PIVOTS.L.x + 0.36, FLIPPER_PIVOTS.L.y + 0.62], [8.6, 3.2], [15.4, 3.2],
-  [FLIPPER_PIVOTS.R.x - 0.36, FLIPPER_PIVOTS.R.y + 0.62], [LANE_WALL_X, 14], [LANE_WALL_X, 0],
-];
-/** The cabinet rim around the field, in sim units. */
-export const RIM = { cx: 13, cy: 26.1, hw: 14.6, hh: 27.5 };
-/** The four decal slots on the apron (sim x, y; they sit on the apron top, z = APRON_Z). */
-export const DECAL_SLOT_POS: Pt[] = [[2.6, 6.6], [5.6, 4.4], [18.4, 4.4], [21.4, 6.6]];
-export const APRON_Z = 0.5;
+export { APRON_Z, apronPoly, DECAL_SLOT_POS, floorPoly, RIM } from '../sim/cabinet';
 export const DECAL_TILT = [-8, 5, -4, 7];
 
 function rng(seed: number) { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); }
@@ -30,7 +22,7 @@ export interface StuckDecal { look: DecalLook; rarity: Rarity }
  * The cabinet as a diorama object (docs/concept/cabinet-a.png): the playfield sunk into a cabinet with thick
  * walls, a backbox carrying the DMD, the machine standing on little legs. Heights in sim units (ball diameters).
  */
-export const CAB = { wallH: 1.6, bottom: -6.5, legBottom: -10.5, boxScreenH: 6.8, boxY: 55, boxHH: 1.1 };
+export const CAB = { wallH: WALL_TOP, bottom: -6.5, legBottom: -10.5, boxScreenH: 6.8, boxY: 55, boxHH: 1.1 };
 const legs: Pt[] = [[-0.9, 52.2], [26.9, 52.2], [-0.9, -0.7], [26.9, -0.7]];
 const backboxH = (v: View) => CAB.boxScreenH / v.kz;
 

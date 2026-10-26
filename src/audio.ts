@@ -11,7 +11,7 @@
  * While a round is played the same tune gets going: faster, brighter, with a kick, a backbeat and a pumping bass,
  * more so as the goal gets close (setIntensity).
  */
-import type { PartId } from './data/parts';
+import { PARTS, type PartId } from './data/parts';
 
 const PENTATONIC = [0, 2, 4, 7, 9];
 const midi = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
@@ -489,7 +489,15 @@ export class AudioFx {
       case 'ding': this.dingDong(this.ladder(mult, 784, 7)); break;
       case 'sling': this.twang(this.ladder(mult, 165, 12)); break;
       case 'spinner': this.spin(opts.spins ?? 3); break;
-      case 'lane': this.laneRoll(); break;
+      case 'lane': case 'rank': this.laneRoll(); break;
+      case 'tesla': this.zap(true); this.bop(mult, 0.8); break;
+      case 'keg': if (opts.label === 'FUSE LIT!') this.fuse(); else this.bop(mult, 0.7); break;
+      case 'laser': this.bop(mult, 0.9); if (opts.label === 'PEW!') this.pew(); break;
+      case 'gong': this.gongHit(false); break;
+      case 'sparkler': this.fizz(); this.bop(mult, 1.1); break;
+      case 'firecracker': if (opts.label === 'WHOOSH!') this.rocket(); else this.bop(mult, 0.85); break;
+      case 'rocks': this.clack(); break;
+      case 'bell': if (notes.some((n) => n.endsWith(' toll'))) this.toll(false); else this.bop(mult, 0.95); break;
       case 'uplight': this.levelLight(this.ladder(mult, 1047, 12)); break;
       case 'lamp': this.lampGlow(opts.label); break;
       case 'vari': this.knock(opts.tier ?? 0); break;
@@ -859,6 +867,12 @@ export class AudioFx {
     else if (label === 'GOAL!' || id === 'goal') this.goalCheer();
     else if (label === 'JACKPOT!' || id === 'jackpot') this.jackpotFanfare();
     else if (label === 'ARMOUR BROKEN!') this.dragonRoar();
+    else if (label?.startsWith('THE BELL RINGS')) this.toll(true);
+    else if (label === 'KABOOM!') this.kaboom();
+    else if (label === 'BOOM!') this.gongHit(true);
+    else if (id === 'clock') this.midnight();
+    else if (id === 'altar') this.ritual(label === 'TEMPEST!' ? 0 : label === 'INFERNO!' ? 1 : 2);
+    else if (id === 'rank') this.rankUp(label?.startsWith('DIAMOND') ? 3 : label?.startsWith('GOLD') ? 2 : 1);
     else if (id === 'disco') this.disco();
     else if (id === 'xlane') this.swoosh(!label?.includes('MAXED'));
     else if (id === 'uplight') this.levelUp(!!label && /LEVEL/.test(label));
@@ -902,6 +916,127 @@ export class AudioFx {
     this.duck(0.6, 0.4);
     const n = levelled ? 6 : 2;
     for (let i = 0; i < n; i++) this.bell(v.o, v.t + i * 0.06, midi(76 + pent(i * 2)), 0.6, 0.14, 3.5, 0.7);
+  }
+
+  /** A zap: a short electric crackle with a buzz under it. One voice for a burst, so many zaps stay one sound. */
+  zap(big = false) {
+    const v = this.voice('zap', big ? 0.7 : 0.5, 0.25, 0.06, 2);
+    if (!v) return;
+    const { o, t } = v;
+    this.noise(o, t, big ? 0.2 : 0.12, 0.22, { f: 3800, type: 'highpass', trem: [70, 0.9] });
+    this.osc(o, t, 110, big ? 0.18 : 0.1, 0.07, { to: 90, attack: 0.002 });
+  }
+
+  /** A spark touching a part: the smallest tick. Many at once stay a patter, not a roar. */
+  tick() {
+    const v = this.voice('tick', 0.25, 0.06, 0.04, 3);
+    if (v) this.osc(v.o, v.t, rand(2600, 3400), 0.05, 0.06, { type: 'triangle', attack: 0.001 });
+  }
+
+  /** Sparkler: a short bright fizz. */
+  private fizz() {
+    const v = this.voice('fizz', 0.4, 0.3, 0.08, 2);
+    if (v) this.noise(v.o, v.t, 0.25, 0.14, { f: 6000, type: 'highpass', trem: [45, 0.7] });
+  }
+
+  /** Firecracker: a rising whistle as the rocket goes up, and the bang when it bursts at the top. */
+  private rocket() {
+    const v = this.voice('rocket', 0.7, 1.4, 0.2, 2, true);
+    if (!v) return;
+    const fly = PARTS.firecracker.recipe.rocket!.delay;
+    this.noise(v.o, v.t, fly, 0.16, { f: 2500, q: 2, attack: 0.05 });
+    this.osc(v.o, v.t, 700, fly, 0.05, { to: 2400, glide: fly, attack: 0.03 });
+    this.noise(v.o, v.t + fly, 0.6, 0.42, { f: 1400, type: 'lowpass' });
+    this.osc(v.o, v.t + fly, 140, 0.35, 0.3, { to: 45, attack: 0.002 });
+    for (let i = 0; i < 6; i++) this.noise(v.o, v.t + fly + 0.1 + i * rand(0.04, 0.08), 0.04, 0.12, { f: rand(3000, 6000), q: 3 });
+  }
+
+  /** Rock Pile: a dry stone clack. */
+  private clack() {
+    const v = this.voice('clack', 0.5, 0.15, 0.04, 3);
+    if (!v) return;
+    this.noise(v.o, v.t, 0.06, 0.3, { f: 1800, q: 4 });
+    this.osc(v.o, v.t, 320, 0.07, 0.12, { to: 180, attack: 0.001 });
+  }
+
+  /** Midnight Clock: twelve quick chimes over a low gong, then the madness. */
+  private midnight() {
+    const v = this.voice('midnight', 0.8, 2.6, 0.5, 1, true);
+    if (!v) return;
+    this.duck(0.5, 1.4);
+    for (let i = 0; i < 12; i++) this.bell(v.o, v.t + i * 0.12, midi(i % 2 ? 79 : 84), 0.5, 0.09, 3.5, 0.8);
+    this.bell(v.o, v.t, 98, 2.4, 0.2, 1.41, 1.5);
+  }
+
+  /** Ritual Altar: a low choir-ish drone (a stack of detuned saws), then the ritual's own colour. */
+  private ritual(kind: number) {
+    const v = this.voice('ritual', 0.8, 2.2, 0.5, 1, true);
+    if (!v) return;
+    this.duck(0.5, 1.2);
+    for (const [n, d] of [[45, -6], [52, 5], [57, -3]] as const) this.osc(v.o, v.t, midi(n), 1.8, 0.05, { type: 'sawtooth', lp: 900, attack: 0.25, hold: 0.8, detune: d });
+    if (kind === 0) this.noise(v.o, v.t + 0.2, 1.2, 0.3, { f: 600, type: 'lowpass', attack: 0.01 });
+    if (kind === 1) this.noise(v.o, v.t + 0.1, 1.4, 0.2, { f: 1800, q: 0.7, attack: 0.3, trem: [12, 0.4] });
+    if (kind === 2) for (let i = 0; i < 8; i++) this.noise(v.o, v.t + 0.3 + i * 0.09, 0.05, 0.12, { f: rand(3000, 6000), q: 3 });
+  }
+
+  /** The Altar's Tempest striking: a crack of thunder (one voice, however many strike). */
+  strike() {
+    const v = this.voice('strike', 0.6, 0.8, 0.12, 2);
+    if (!v) return;
+    this.noise(v.o, v.t, 0.08, 0.35, { f: 4000, type: 'highpass' });
+    this.noise(v.o, v.t + 0.03, 0.7, 0.3, { f: 500, type: 'lowpass' });
+  }
+
+  /** Powder Keg: the fuse catches and hisses. */
+  private fuse() {
+    const v = this.voice('fuse', 0.6, 0.6, 0.2, 2);
+    if (v) this.noise(v.o, v.t, 0.55, 0.18, { f: 5000, type: 'highpass', attack: 0.02, trem: [30, 0.6] });
+  }
+
+  /** Powder Keg: the bang, a thump under a rush of noise. */
+  private kaboom() {
+    const v = this.voice('kaboom', 0.9, 1.2, 0.15, 2, true);
+    if (!v) return;
+    this.duck(0.5, 0.6);
+    this.noise(v.o, v.t, 0.9, 0.5, { f: 700, type: 'lowpass' });
+    this.osc(v.o, v.t, 90, 0.6, 0.4, { to: 32, attack: 0.002 });
+  }
+
+  /** Laser Turret: a falling "pew". */
+  private pew() {
+    const v = this.voice('pew', 0.5, 0.3, 0.08, 3);
+    if (v) this.osc(v.o, v.t, 1900, 0.22, 0.12, { to: 260, type: 'square', attack: 0.002 });
+  }
+
+  /** Shockwave Gong: a brassy bong; the boom is a long, deep crash. */
+  private gongHit(boom: boolean) {
+    const v = this.voice(boom ? 'gongBoom' : 'gong', boom ? 0.9 : 0.55, boom ? 3 : 1.2, boom ? 0.3 : 0.12, boom ? 1 : 3, boom);
+    if (!v) return;
+    if (boom) this.duck(0.5, 1.2);
+    this.bell(v.o, v.t, boom ? 82 : 147, boom ? 2.8 : 1.1, boom ? 0.3 : 0.16, 1.41, boom ? 2.2 : 1.2);
+    if (boom) this.noise(v.o, v.t, 1.4, 0.18, { f: 1800, type: 'lowpass', attack: 0.01 });
+  }
+
+  /** Old Bell: one deep bronze toll; when it rings for the run, three, over a low hum. */
+  private toll(rings: boolean) {
+    const v = this.voice(rings ? 'tollRings' : 'toll', 0.8, rings ? 3.4 : 2, 0.4, 1, rings);
+    if (!v) return;
+    if (rings) this.duck(0.5, 1.4);
+    const n = rings ? 3 : 1;
+    for (let i = 0; i < n; i++) {
+      this.bell(v.o, v.t + i * 0.75, 196, 2.2, 0.26, 2.76, 1.1);
+      this.osc(v.o, v.t + i * 0.75, 98, 1.8, 0.08, { attack: 0.02 });
+    }
+  }
+
+  /** Rank Lights: a bugle-ish rising call, one note higher for every rank. */
+  private rankUp(step: number) {
+    const v = this.voice('rank', 0.7, 1.2, 0.2, 2, true);
+    if (!v) return;
+    this.duck(0.6, 0.4);
+    const notes = [0, 5, 9, 12, 16].slice(0, 2 + step);
+    notes.forEach((s, i) => this.mallet(v.o, v.t + i * 0.08, midi(67 + s), 0.5, 0.2));
+    this.bell(v.o, v.t + notes.length * 0.08, midi(79 + notes[notes.length - 1]), 0.8, 0.08, 3.5, 0.6);
   }
 
   /** Jackpot Scoop cashing in: a mellow brass fanfare and a shower of coins. */
