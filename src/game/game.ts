@@ -14,7 +14,7 @@ import { clampLedge, LEDGE } from '../sim/table';
 import { GOALS, GOAL_GROWTH } from '../data/goals';
 import { Rng } from '../sim/rng';
 import { createSim, NO_INPUT, type Input, type Sim, type SimEvent } from '../sim/sim';
-import { Scorer, type ScoreEvent, type SparkBurst } from './scoring';
+import { Scorer, SCORE_CEIL, type ScoreEvent, type SparkBurst } from './scoring';
 
 export type Mode = 'workshop' | 'round' | 'roundEnd' | 'runOver';
 
@@ -1298,12 +1298,12 @@ export class Game {
     this.pendingSparks = [];
     this.claim = false;
     this.wizardBalls = null;
-    if (this.scorer.goalReached || this.ballsLeft <= 0) this.runScore += this.scorer.score;
+    if (this.scorer.goalReached || this.ballsLeft <= 0) this.runScore = Math.min(SCORE_CEIL, this.runScore + this.scorer.score);
     if (this.scorer.goalReached) {
       this.payout = this.computePayout();
       this.money += this.payout.total;
       for (const d of this.decals) {
-        const g = decalGrowth(d, true, this.scorer.peakMult);
+        const g = decalGrowth(d, true, this.scorer.peakMult, this.scorer.ballStart);
         if (g) d.grown = Math.round(((d.grown ?? 0) + g) * 100) / 100; // Momentum and Afterglow keep Mult for the next rounds
       }
       this.mode = 'roundEnd';

@@ -217,12 +217,12 @@ describe('the new parts', () => {
     expect(s.mult).toBeCloseTo(1.05 ** 10, 1);
   });
 
-  it('a Disco Ball multiplies the Mult by 2.5 and lights every Lamp, once a ball', () => {
+  it('a Disco Ball multiplies the Mult by 1.5 and lights every Lamp, once a ball', () => {
     const parts = [makePart('disco', 1, 6, 30, true), makePart('lamp', 2, 12, 30, true)];
     const s = scorer(parts);
     const e = s.consume(hit(1))[0];
     expect(e.base).toBe(200);
-    expect(s.mult).toBeCloseTo(2.5);
+    expect(s.mult).toBeCloseTo(1.5);
     expect(s.isLit(2)).toBe(true);
     expect(s.consume(hit(1))).toEqual([]);
     s.startBall();

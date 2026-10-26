@@ -56,11 +56,20 @@ describe('Mult that is kept from round to round', () => {
     expect(g.scorer.mult).toBeCloseTo(2);
   });
 
-  it('Afterglow keeps 15% of the best Mult of every round', () => {
+  it('Afterglow keeps 10% of the Mult gained in every round, never what it already kept', () => {
     const g = new Game();
     g.decals = [{ id: 'afterglow' }];
     clearRound(g, 8);
-    expect(g.decals[0].grown).toBeCloseTo(1.2);
+    expect(g.decals[0].grown).toBeCloseTo(0.7); // 10% of 8 - 1
+    clearRound(g, 1.7 + 7); // the next round starts at 1.7 and gains 7 again
+    expect(g.decals[0].grown).toBeCloseTo(1.4);
+  });
+
+  it('Afterglow grows linearly, it never compounds', () => {
+    const g = new Game();
+    g.decals = [{ id: 'afterglow', grown: 50 }];
+    clearRound(g, 51 + 10); // a round that gains 10 keeps 1, however much is kept already
+    expect(g.decals[0].grown).toBeCloseTo(51);
   });
 
   it('what a decal has kept is written on it, and survives a save', () => {

@@ -101,7 +101,7 @@ export const BOSS_EVERY = 3;
 const N = {
   sponsor: 2, interestPer: 5, interestCap: 5, coupon: 1, ballHog: 5, toolbox: 2, overshoot: 2, ticket: 8, collector: 1, bond: 1,
   head: 0.5, lucky: 7, luckyX: 3, overclock: 0.5, lampRadius: 2, lampBonus: 0.04, glass: 1.5, combo: 2, spin: 2, spinBoost: 1.5,
-  multiball: 2, lastCall: 2, thriftyPer: 0.01, thriftyCap: 0.5, fanClub: 3, momentum: 0.5, afterglow: 0.15,
+  multiball: 2, lastCall: 2, thriftyPer: 0.01, thriftyCap: 0.5, fanClub: 2, momentum: 0.5, afterglow: 0.1,
   bounce: 0.3, heavyPoints: 0.25, heavyNudge: 0.6, glassGravity: 0.8, glassSpin: 1.5, goldEvery: 10, goldCap: 5, fuse: 20,
   bumper: 1.5, catch: 0.75, target: 2, targetEase: 0.8, lightShow: 1.5, purist: 2, puristTypes: 4, crowd: 0.04, empty: 0.25,
 } as const;
@@ -109,8 +109,9 @@ const N = {
 const owns = (v: RunView, id: PartId) => v.owned.some((p) => p.def === id);
 const ownsAny = (v: RunView, ids: PartId[]) => ids.some((id) => owns(v, id));
 const ownedTypes = (v: RunView) => [...new Set(v.owned.map((p) => p.def))];
-const levelableTypes = (v: RunView) => ownedTypes(v).filter((id) => PARTS[id].recipe.perLevel);
-const scoringTypes = (v: RunView) => ownedTypes(v).filter((id) => PARTS[id].recipe.points || id === 'mega');
+// Overclock and Level Up never pick Big Boi (Fan Club is his)
+const levelableTypes = (v: RunView) => ownedTypes(v).filter((id) => id !== 'mega' && PARTS[id].recipe.perLevel);
+const scoringTypes = (v: RunView) => ownedTypes(v).filter((id) => id !== 'mega' && PARTS[id].recipe.points);
 const pct = (f: number) => `${Math.round(f * 100)}%`;
 const nm = (id?: PartId) => (id ? PARTS[id].name + 's' : 'a part type');
 const C = { gold: '#ffc43d', green: '#55d08f', teal: '#3cc3b1', blue: '#62b8ff', purple: '#8a63f2', pink: '#ff7fb0', red: '#ff6b6b', orange: '#ff9a3c', lime: '#a3d143', grey: '#b8b2cc' };
@@ -182,7 +183,7 @@ export const DECALS: Record<DecalId, DecalDef> = {
     text: () => `Every round you clear adds +${N.momentum} to the Mult every ball starts at, for as long as this decal stays.`,
     mods: () => {}, look: { shape: 'banner', color: C.lime, icon: 'trend' } },
   afterglow: { id: 'afterglow', name: 'Afterglow', kind: 'score', rarity: 'rare', grows: 'peak',
-    text: () => `At the end of every round, this decal keeps ${pct(N.afterglow)} of the highest Mult you reached: every ball after starts that much higher.`,
+    text: () => `At the end of every round, this decal keeps ${pct(N.afterglow)} of the Mult you gained that round: every ball after starts that much higher.`,
     mods: () => {}, look: { shape: 'star', color: '#ff8fd0', icon: 'sunset' } },
 
   // ---- Ball: the ball and the table ----
@@ -278,10 +279,13 @@ export function rollDecalPick(seed: number, v: RunView, bossNo: number, count = 
 export const decalTitle = (o: DecalPick) => DECALS[o.id].name + (o.target ? ` · ${PARTS[o.target].name}s` : '');
 export const decalText = (o: DecalPick) => DECALS[o.id].text(o.target) + (o.grown ? ` Kept so far: +${Math.round(o.grown * 100) / 100} Mult.` : '');
 
-/** What a growing decal keeps at the end of a round: Momentum for a cleared round, Afterglow a share of the round's best Mult. */
-export function decalGrowth(o: DecalPick, cleared: boolean, peakMult: number): number {
+/**
+ * What a growing decal keeps at the end of a round: Momentum for a cleared round, Afterglow a share of the Mult gained
+ * that round (the round's best Mult less the Mult its balls started at), so what it already kept is never counted again.
+ */
+export function decalGrowth(o: DecalPick, cleared: boolean, peakMult: number, startMult = 0): number {
   const g = DECALS[o.id].grows;
   if (g === 'cleared') return cleared ? N.momentum : 0;
-  if (g === 'peak') return Math.round(N.afterglow * peakMult * 100) / 100;
+  if (g === 'peak') return Math.round(N.afterglow * Math.max(0, peakMult - startMult) * 100) / 100;
   return 0;
 }

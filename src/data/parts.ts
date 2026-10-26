@@ -326,17 +326,19 @@ export function gemFits(gem: PartId, part: PartId): boolean {
   }
 }
 
+/** What every part that zaps says about it (Tesla Coil, Powder Keg, Laser Turret, Shockwave Gong, Ritual Altar). */
+export const ZAP_NO_MULT = 'Zapped parts score their points, but only the ball itself raises your Mult.';
 /** A zapped part cannot be zapped again for this long (seconds). */
 export const ZAP_COOLDOWN = 0.5;
 /**
  * The parts a zap can hit: the ones a ball scores on by touching them. Not saucers, the goal or the Kickback (they
  * need the ball itself), not a drop-target bank (a zap never moves anything), nor flippers, savers, bars or floor
- * pieces. And never a ×Mult part (X Lane, the Golden Bumper, the Disco Ball, Hall of Fame, Rank Lights): zaps pay
- * points, and a ×Mult stays a shot the ball has to make.
+ * pieces. And never a ×Mult part (X Lane, the Golden Bumper, the Disco Ball, Hall of Fame, Rank Lights) nor a Level
+ * Light: zaps pay points, and a ×Mult or a level stays a shot the ball has to make.
  */
 export const zappable = (id: PartId) => {
   const k = PARTS[id].kind, r = PARTS[id].recipe;
-  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule || r.bucket || r.insure || r.ring) return false;
+  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule || r.bucket || r.insure || r.ring || r.levelUp) return false;
   return k === 'bumper' || k === 'kicker' || k === 'spinner' || k === 'rollover' || k === 'lamp' || k === 'target' || k === 'mover';
 };
 
@@ -627,12 +629,12 @@ export const PARTS: Record<PartId, PartDef> = {
   fame: {
     id: 'fame', name: 'Hall of Fame', blurb: 'Once a ball, roll over: ×Mult per kind of part on your table.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 2,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 150, per: 'pass', typeX: 0.1, perBall: 1, perLevel: 40 }, dials: [],
+    recipe: { points: 150, per: 'pass', typeX: 0.1, xmultCap: 3, perBall: 1, perLevel: 40 }, dials: [],
   },
   disco: {
-    id: 'disco', name: 'Disco Ball', blurb: 'Roll over once a ball: huge ×Mult, and every Lamp lights. Boogie.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
+    id: 'disco', name: 'Disco Ball', blurb: 'Roll over once a ball: ×Mult, and every Lamp lights. Boogie.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 200, per: 'pass', xmult: 2.5, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
+    recipe: { points: 200, per: 'pass', xmult: 1.5, xmultCap: 3, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
   },
   goal: {
     id: 'goal', name: 'Goal!', blurb: 'Shoot past the goalie for points and ×Mult. He is very serious.', kind: 'goal', rarity: 'legendary', tags: ['target'], cost: 12, weight: 2,
@@ -1048,6 +1050,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     if (r.altar) {
       const st = { sets: inst?.sets ?? 0, rituals: inst?.rituals ?? 0 }, s = Math.min(MAX_STRENGTH, st.rituals);
       lines.push({ tag: 'combo', text: `Every ${r.altar.sets} sets you complete (Lane Rollovers, drop-target banks, Level Lights, Rank Lights) start a ${r.altar.seconds} s ritual, in turn: Tempest (lightning strikes ${tempestRate(s)} random parts a second), Inferno (every hit of the ball also zaps the ${infernoReach(s)} parts nearest it), Swarm (${swarmSparks(s)} sparks rain down from the top).` });
+      lines.push({ tag: 'note', text: ZAP_NO_MULT });
       lines.push({ tag: 'grow', text: `Every ritual makes the next one stronger (up to ${MAX_STRENGTH} times). The count carries on from round to round${inst ? `: ${st.sets} of ${r.altar.sets} sets now, next a ${RITUAL_NAMES[RITUALS[st.rituals % RITUALS.length]]}` : ''}.` });
     }
     const c = r.cab;
@@ -1093,7 +1096,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.bucket) lines.push({ tag: 'set', text: `A bucket slides along its rail. A ball that drops into it from above goes back to the plunger: it is not lost. Place the rail where it is a shot, not a gift.` });
   if (r.grape) lines.push({ tag: 'combo', text: `It pays once more for every Grape Bunch touching it (set snug against it). ${r.grape.golden} or more in one bunch turn golden: they all pay double.` });
   if (r.echo) lines.push({ tag: 'combo', text: `×2 for every other Echo Cave the ball went through just before it, with nothing else hit in between (up to ×${r.echo.cap}). Line them up along one shot.` });
-  if (r.spot) lines.push({ tag: 'lamp', text: `While it is lit, every part within ${r.spot.reach} units pays ×${r.spot.x} (Spotlights multiply). A hit of the ball knocks it dark for ${r.spot.dark} s: build round it, then keep the ball off it. It scores nothing itself.` });
+  if (r.spot) lines.push({ tag: 'lamp', text: `While it is lit, every part within ${r.spot.reach} units pays ×${r.spot.x} (Spotlights multiply, and a part counts at most 2). A hit of the ball knocks it dark for ${r.spot.dark} s: build round it, then keep the ball off it. It scores nothing itself.` });
   if (r.spot) lines.push({ tag: 'note', text: 'Zaps and sparks never knock it dark: only the ball itself does.' });
   if (r.bonsai) lines.push({ tag: 'grow', text: `+${r.bonsai} for every round it has stayed on the table without being moved${inst?.age ? ` (+${r.bonsai * inst.age} now)` : ''}. Moving it starts the count again.` });
   if (r.capsule) lines.push({ tag: 'note', text: `Scores nothing. After ${r.capsule.rounds} rounds on the table${inst ? ` (${Math.min(inst.age ?? 0, r.capsule.rounds)} so far)` : ''}, remove it: the next shop offers you one of ${r.capsule.pick} legendary parts, free. Removed earlier, it pays nothing back.` });
@@ -1110,8 +1113,9 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     lines.push({ tag: 'combo', text: `It lights a segment for every different part type the ball itself hits this ball (zaps and sparks do not count): one segment for each part type on your table that scores, up to ${r.wizard.max}, counted when the round starts${need ? `. Right now: hit ${need} types` : ''}.` });
     lines.push({ tag: 'spawn', text: `Light them all and WIZARD MODE starts: for ${r.wizard.seconds} s, ${r.wizard.balls} more balls fly out of it (they leave again when it ends), every ×Mult limit is lifted and every Lamp is at full glow. Once a round.` });
   }
-  if (r.typeX) lines.push({ tag: 'mult', text: `The first time a ball rolls over it each ball: your Mult ×${xg(1 + r.typeX)} for every different part type on your table (Big Boi too)${ctx.types ? `, ×${num(Math.round((1 + (r.typeX) * mods.multGain) ** ctx.types * 100) / 100)} now` : ''}.` });
-  if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} the first time a ball rolls over it each ball.` });
+  const allCap = (what: string) => (r.xmultCap ? ` (all ${what} together: up to ×${xg(r.xmultCap)} a ball)` : '');
+  if (r.typeX) lines.push({ tag: 'mult', text: `The first time a ball rolls over it each ball: your Mult ×${xg(1 + r.typeX)} for every different part type on your table (Big Boi too)${ctx.types ? `, ×${num(Math.round((1 + (r.typeX) * mods.multGain) ** ctx.types * 100) / 100)} now` : ''}${allCap('Halls of Fame')}.` });
+  if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} the first time a ball rolls over it each ball${allCap(`${def.name}s`)}.` });
   if (r.money && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.money} per ${per}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
   if (r.moneyEvery && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $1 every ${r.moneyEvery.n} hits, up to $${r.moneyEvery.cap} a round.` });
   if (r.variety) lines.push({ tag: 'grow', text: `+${f(r.variety)} for every different part type this ball has hit.` });
@@ -1133,7 +1137,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   }
   if (r.zap) {
     const at = (k: number) => k * r.zap!.perLevels;
-    lines.push({ tag: 'combo', text: `Every hit arcs lightning to the ${r.zap.arcs} nearest parts that score when the ball touches them (one more at level ${at(1)}${r.zap.maxArcs - r.zap.arcs > 1 ? ` and ${at(2)}` : ''}): each one scores as if the ball had hit it. A part can be zapped at most once every ${ZAP_COOLDOWN} s, a zap never arcs on, and saucers, the goal, the Kickback, drop targets and ×Mult parts cannot be zapped.` });
+    lines.push({ tag: 'combo', text: `Every hit arcs lightning to the ${r.zap.arcs} nearest parts that score when the ball touches them (one more at level ${at(1)}${r.zap.maxArcs - r.zap.arcs > 1 ? ` and ${at(2)}` : ''}): each one scores as if the ball had hit it. A part can be zapped at most once every ${ZAP_COOLDOWN} s, a zap never arcs on, and saucers, the goal, the Kickback, drop targets, Level Lights and ×Mult parts cannot be zapped.` }, { tag: 'note', text: ZAP_NO_MULT });
   }
   if (r.sparks || r.rocks || r.rocket || r.keg?.sparks) lines.push({ tag: 'note', text: `A spark: a little bonus ball that flies off, scores on what it touches (as the ball that made it), slips through the flippers and fades after ${SPARK_LIFE} s. It never costs a ball.` });
   if (r.sparks) lines.push({ tag: 'spawn', text: `Every hit of the ball shoots out ${r.sparks.n === 1 ? 'a spark' : `${r.sparks.n} sparks`}, then it needs ${r.sparks.cooldown} s.` });
@@ -1142,7 +1146,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.keg) lines.push({ tag: 'combo', text: `A hit lights the fuse. ${r.keg.fuse} s later it blows: ${f(r.keg.blast)} points, ${r.keg.sparks ? `a spark flies out, ` : ''}and every part within ${r.keg.radius} units is zapped (it scores as if the ball had hit it). A blast lights any other Powder Keg it reaches, up to ${r.keg.chain} kegs in a row. Then it is spent for ${r.keg.rearm} s.` });
   if (r.beam) lines.push({ tag: 'combo', text: `Every hit fires a laser beam through it in a random direction, right across the table: every part on the beam is zapped. Then it needs ${r.beam.cooldown} s to recharge.` });
   if (r.boom) lines.push({ tag: 'combo', text: `Every ${r.boom.every}th hit of a ball, it booms: every part on the table is zapped once. Nothing moves.` });
-  if (r.keg || r.beam || r.boom) lines.push({ tag: 'note', text: `A part can be zapped at most once every ${ZAP_COOLDOWN} s; saucers, the goal, the Kickback, drop targets and ×Mult parts cannot be zapped.` });
+  if (r.keg || r.beam || r.boom) lines.push({ tag: 'note', text: `A part can be zapped at most once every ${ZAP_COOLDOWN} s; saucers, the goal, the Kickback, drop targets, Level Lights and ×Mult parts cannot be zapped. ${ZAP_NO_MULT}` });
   if (r.bell) lines.push({ tag: 'mult', text: `Its first hit each round pays ${f(r.bell.first)} instead, and adds a notch${inst?.notches ? ` (${inst.notches} of ${r.bell.notches} now)` : ''}. At ${r.bell.notches} notches it rings: your Mult ×${xg(r.bell.x)} on every ball for the rest of the run (rings stack), and the notches start again. Sell it and its notches go; the rings stay.` });
   if (r.tiers && def.id === 'vari') {
     const stiff = (inst ? dialValue(inst, 'stiff') : 1) * mods.tierEase;
@@ -1183,7 +1187,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     lines.push({ tag: 'note', text: 'The goalie slides across the mouth of the goal and blocks the ball.' });
   }
   if (r.strip) lines.push({ tag: 'lamp', text: `Lies under the floor: other parts can stand on it. Every time anything pays a bonus (a set, a jackpot, a level up...), it lights for ${r.strip.seconds} s, and every part standing on it pays +${Math.round(r.strip.bonus * 100)}%.` });
-  if (r.plate) lines.push({ tag: 'score', text: `Lies in the floor: other parts can stand on it. Every bumper within ${num(r.plate.reach)} of it (Big Boi too) pays ×${num(r.plate.x)}, and plates multiply.` });
+  if (r.plate) lines.push({ tag: 'score', text: `Lies in the floor: other parts can stand on it. Every bumper within ${num(r.plate.reach)} of it (Big Boi too) pays ×${num(r.plate.x)}, and plates multiply: a part counts at most 2 plates.` });
   if (def.id === 'mega') lines.push(...bigBoiLines(ctx.machine, factor, mods));
   if (inst?.inlay && PARTS[inst.inlay]) {
     // the gem's own sentence, about "its part", said of this part: "every time it scores..."

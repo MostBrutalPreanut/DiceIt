@@ -333,7 +333,7 @@ export function refreshMods(g: Game, s: Setup) {
 /** After a measured round: age parts, grow Momentum/Afterglow as if cleared, and ready the next round on the same Game. */
 export function nextRound(g: Game, s: Setup, cleared = true) {
   for (const d of g.decals) {
-    const gr = decalGrowth(d, cleared, g.scorer.peakMult);
+    const gr = decalGrowth(d, cleared, g.scorer.peakMult, g.scorer.ballStart);
     if (gr) d.grown = Math.round(((d.grown ?? 0) + gr) * 100) / 100;
   }
   const r = g.round;

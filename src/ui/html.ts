@@ -3,10 +3,10 @@ import type { Mods } from '../data/mods';
 import { DECALS, KIND_NAMES, decalText, decalTitle, type DecalPick } from '../data/decals';
 import { bigBoiOf, type MachineId } from '../data/bigboi';
 import type { BossDef } from '../data/bosses';
-import type { Scorer } from '../game/scoring';
+import { SCORE_CEIL, type Scorer } from '../game/scoring';
 
 export const fmt = (n: number) =>
-  n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : Math.round(n).toLocaleString('en-US');
+  !(n < SCORE_CEIL) ? 'MAXED' : n >= 1e12 ? (n / 1e12).toFixed(2) + 'T' : n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : Math.round(n).toLocaleString('en-US');
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const num = (n: number) => (Math.round(n * 100) / 100).toString();

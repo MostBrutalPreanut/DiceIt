@@ -132,6 +132,14 @@ export interface ScorerOpts {
   later?: { mods: Mods; at: number; baseMult: number };
 }
 
+/** The score guard: no score, run total or Mult ever goes past this (the HUD shows MAXED). Nothing in a sane run gets near it. */
+export const SCORE_CEIL = 1e15;
+/** A part counts at most this many Power Plates, and at most this many Spotlights (the strongest ones). */
+export const STACK_MAX = 2;
+/** The product of the `n` biggest multipliers. */
+const strongest = (xs: number[], n: number) => xs.sort((a, b) => b - a).slice(0, n).reduce((a, x) => a * x, 1);
+const ceil = (n: number) => (Number.isFinite(n) ? Math.min(SCORE_CEIL, n) : SCORE_CEIL);
+
 export class Scorer {
   score = 0;
   mult: number;
@@ -331,6 +339,11 @@ export class Scorer {
     this.ringX = Math.round(this.gainX(x) ** this.rings * 1000) / 1000;
   }
 
+  /** The Mult every ball of this round starts at (Afterglow keeps a share of what the round gained over it). */
+  get ballStart() {
+    return this.ballStartMult();
+  }
+
   /** The Mult a ball starts at: the base, times the Old Bells' rings. */
   private ballStartMult() {
     return Math.round(this.baseMult * this.ringX * 1000) / 1000;
@@ -414,12 +427,12 @@ export class Scorer {
   /** Power Plates under this part: what they multiply it by (1 if none, or if it is not a bumper). */
   plateXAt(inst: PartInstance): number {
     if (!hasTag(inst.def, 'bumper') || PARTS[inst.def].recipe.plate) return 1;
-    let x = 1;
+    const xs: number[] = [];
     for (const pl of this.placed()) {
       const r = PARTS[pl.def].recipe.plate;
-      if (r && Math.hypot(pl.x - inst.x, pl.y - inst.y) <= r.reach) x *= r.x;
+      if (r && Math.hypot(pl.x - inst.x, pl.y - inst.y) <= r.reach) xs.push(r.x);
     }
-    return x;
+    return strongest(xs, STACK_MAX);
   }
 
   /** Grape Bunch: once more for every bunch touching it; a cluster of enough of them (touching, chained) pays double. */
@@ -458,12 +471,12 @@ export class Scorer {
   /** Spotlights: ×their x for each lit one within reach (Spotlights multiply). */
   spotXAt(inst: PartInstance, t = this.now): number {
     if (PARTS[inst.def].recipe.spot) return 1;
-    let x = 1;
+    const xs: number[] = [];
     for (const sp of this.placed()) {
       const r = PARTS[sp.def].recipe.spot;
-      if (r && !this.jammed.has(sp.def) && !this.coolingDown(sp.uid, t) && Math.hypot(sp.x - inst.x, sp.y - inst.y) <= r.reach) x *= r.x;
+      if (r && !this.jammed.has(sp.def) && !this.coolingDown(sp.uid, t) && Math.hypot(sp.x - inst.x, sp.y - inst.y) <= r.reach) xs.push(r.x);
     }
-    return x;
+    return strongest(xs, STACK_MAX);
   }
 
   /** Hall of Fame: ×(1 + per) for every different part type on the table (Big Boi too). */
@@ -619,9 +632,10 @@ export class Scorer {
       this.heat.set(this.curBall, (this.heat.get(this.curBall) ?? 0) + held);
     }
     // the Old Bells' rings multiply the whole Mult, so every +Mult a ball gains counts ×ringX too
-    this.mult = Math.round((this.mult + multGain * this.ringX) * xmult * 1000) / 1000;
+    this.mult = ceil(Math.round((this.mult + multGain * this.ringX) * xmult * 1000) / 1000);
     this.peakMult = Math.max(this.peakMult, this.mult);
-    this.score += points;
+    points = Math.min(ceil(points), SCORE_CEIL - this.score);
+    this.score = ceil(this.score + points);
     this.money += money;
     if (this.score >= this.goal) this.goalReached = true;
     if (kind === 'bonus') this.flashStrips(t);
@@ -858,18 +872,21 @@ export class Scorer {
         money = gold + coins + every + piggy;
       }
       // Mult: plus, times, and per spin
-      let multGain = this.gain(this.take(this.multPaid, inst.def, r.mult ?? 0, r.multCap));
-      if (r.mult && multGain < this.gain(r.mult) - 1e-9) notes.push('Mult maxed for this ball');
-      if (r.well && inst.well) multGain += this.gain(this.take(this.multPaid, 'well', r.well.mult * inst.well, r.well.multCap));
-      if (r.spinMult) multGain += this.gain(this.take(this.multPaid, 'spin', r.spinMult * m.spinMult * spins, (r.spinMultCap ?? 0) * m.spinMult));
-      const xmult = r.typeX ? this.typeXNow(r.typeX) : r.xmult ? this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
+      // a zap scores the part's points but never raises the Mult: Mult comes from the ball itself
+      const zapped = !!ev.zap;
+      let multGain = zapped ? 0 : this.gain(this.take(this.multPaid, inst.def, r.mult ?? 0, r.multCap));
+      if (r.mult && !zapped && multGain < this.gain(r.mult) - 1e-9) notes.push('Mult maxed for this ball');
+      if (r.well && inst.well && !zapped) multGain += this.gain(this.take(this.multPaid, 'well', r.well.mult * inst.well, r.well.multCap));
+      if (r.spinMult && !zapped) multGain += this.gain(this.take(this.multPaid, 'spin', r.spinMult * m.spinMult * spins, (r.spinMultCap ?? 0) * m.spinMult));
+      if (zapped && (r.mult || r.spinMult || (r.well && inst.well))) notes.push('zapped: no Mult');
+      const xmult = zapped ? 1 : r.typeX ? this.takeX(inst.def, this.typeXNow(r.typeX), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : r.xmult ? this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
       const base = Math.round((pts + leaf + level + grown + variety + pot + bonsai + well) * spins * tierX * factor * mf * ruby * (1 + lamp.sum) * (1 + strip) * plate * edge * bunch * echo * spot * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
       const twice = gem === 'opal' ? 2 : 1; // an Opal counts every hit twice for growth
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + twice);
       if (r.feeds) this.hitsByType.set(r.feeds.id, this.hitsOf(r.feeds.id) + r.feeds.n * twice);
       this.typesHit.add(inst.def);
       if (r.jackpot) this.potFrom.set(inst.uid, this.ballHits);
-      if (r.keep) {
+      if (r.keep && !zapped) {
         const before = inst.polish ?? 0;
         const now = this.onPolish ? this.onPolish(inst, r.keep.per * twice, r.keep.cap) : Math.min(r.keep.cap, before + r.keep.per * twice);
         notes.push(now > before ? `+${Math.round((now - before) * 100) / 100} kept Mult` : 'fully polished');
@@ -1015,7 +1032,7 @@ export class Scorer {
    * The three Lane Rollovers of a pack make a set: when all three are lit it pays its bonus, and they go dark.
    * (Lanes from no pack, from an old save or the Test Lab, make sets of any three.)
    */
-  private checkLaneSet(lane: PartInstance, ev: { t: number; x: number; y: number; ballId?: number }, inst = lane): ScoreEvent[] {
+  private checkLaneSet(lane: PartInstance, ev: { t: number; x: number; y: number; ballId?: number; zap?: boolean }, inst = lane): ScoreEvent[] {
     const r = PARTS.lane.recipe, m = this.mods, size = r.setSize ?? 3;
     const lit = this.placed().filter((p) => p.def === 'lane' && p.group === lane.group && this.lit.has(p.uid));
     if (!r.setBonus || lit.length < size) return [];
@@ -1023,7 +1040,7 @@ export class Scorer {
     if (this.take(this.setsPaid, 'lane', 1, r.setCap) === 0) return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`${r.setCap} sets this ball`], 'LANE SETS MAXED')];
     const situ = this.situational(ev);
     const pts = Math.round(r.setBonus.points * m.setFactor * modFactor('lane', m) * situ.x);
-    return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, this.gain(r.setBonus.mult * m.setFactor), 0, [`${pts} set bonus`, ...situ.notes], 'LANES COMPLETE'), ...this.setDone(ev)];
+    return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, ev.zap ? 0 : this.gain(r.setBonus.mult * m.setFactor), 0, [`${pts} set bonus`, ...situ.notes], 'LANES COMPLETE'), ...this.setDone(ev)];
   }
 
   /**
