@@ -49,9 +49,6 @@ const SYMBOLS: Record<HintSymbol, Op[]> = {
   plus: [add(rect(9.2, 2.5, 5.6, 19)), add(rect(2.5, 9.2, 19, 5.6))],
   arrow: [add(poly(12, 1.5, 21.5, 12, 15.5, 12, 15.5, 22.5, 8.5, 22.5, 8.5, 12, 2.5, 12))],
   ring: [add(circle(12, 12, 7.8), 3.6), add(circle(12, 12, 2.4))],
-  jar: [add(rect(5.5, 2, 13, 3.2)), add('M7 6.2h10v1.6c2 .9 3.2 2.9 3.2 5v6.2a3 3 0 0 1-3 3H6.8a3 3 0 0 1-3-3v-6.2c0-2.1 1.2-4.1 3.2-5z')],
-  duck: [add(ellipse(10.5, 15.5, 8.5, 5.5)), add(circle(16, 8, 4.4)), add(poly(19.6, 6.6, 23.5, 8.6, 19.6, 10.4)), sub(circle(16.8, 7.2, 1.2))],
-  receipt: [add('M4.5 1.5h15v21l-2.5-1.6-2.5 1.6-2.5-1.6-2.5 1.6-2.5-1.6-2.5 1.6z'), sub(rect(7.5, 6, 9, 1.8)), sub(rect(7.5, 10, 9, 1.8)), sub(rect(7.5, 14, 6, 1.8))],
 };
 
 /** How far each solid pixel is from the shape's edge (two-pass chamfer): the deepest one is where a hint fits best. */
@@ -104,10 +101,34 @@ function hintMask(hint: Hint, size: number): HTMLCanvasElement {
 }
 
 /**
- * A baked icon as a flat silhouette in `ink` (its soft shadow stays soft), with `hint` cut out of the middle of its
- * thickest part. Shapes too thin for a hint (a flipper, a rail) keep only their outline.
+ * A picture baked in the same frame as the icon, cut out of its silhouette as an engraving: everything in it but its
+ * ink lines (`lines`, the theme's ink) becomes a hole, so a locked decal shows its own picture.
  */
-export function silhouette(src: HTMLCanvasElement, hint?: Hint, ink = '#1d1822'): HTMLCanvasElement {
+function engrave(g: CanvasRenderingContext2D, art: HTMLCanvasElement, lines: string) {
+  const n = parseInt(lines.slice(1), 16), lr = (n >> 16) & 255, lg = (n >> 8) & 255, lb = n & 255;
+  const w = g.canvas.width, h = g.canvas.height;
+  const m = document.createElement('canvas');
+  m.width = w; m.height = h;
+  const mg = m.getContext('2d', { willReadFrequently: true })!;
+  mg.drawImage(art, 0, 0, w, h);
+  const img = mg.getImageData(0, 0, w, h), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    // how far from the ink colour: lines stay, any fill (even a dark one) goes, anti-aliased edges in between
+    const far = Math.hypot(d[i] - lr, d[i + 1] - lg, d[i + 2] - lb) / 255;
+    d[i + 3] = Math.round(d[i + 3] * Math.max(0, Math.min(1, (far - 0.08) / 0.12)));
+  }
+  mg.putImageData(img, 0, 0);
+  g.globalCompositeOperation = 'destination-out';
+  g.drawImage(m, 0, 0);
+}
+
+/**
+ * A baked icon as a flat silhouette in `ink` (its soft shadow stays soft), with `hint` cut out of the middle of its
+ * thickest part, or (a canvas) that picture engraved into it. Shapes too thin for a hint (a flipper, a rail) keep
+ * only their outline.
+ */
+export function silhouette(src: HTMLCanvasElement, hint?: Hint | HTMLCanvasElement, opts: { ink?: string; lines?: string } = {}): HTMLCanvasElement {
+  const ink = opts.ink ?? '#1d1822';
   const w = src.width, h = src.height;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
@@ -117,6 +138,7 @@ export function silhouette(src: HTMLCanvasElement, hint?: Hint, ink = '#1d1822')
   g.fillStyle = ink;
   g.fillRect(0, 0, w, h);
   if (!hint) return c;
+  if (hint instanceof HTMLCanvasElement) { engrave(g, hint, opts.lines ?? '#000000'); return c; }
   const spot = deepest(g.getImageData(0, 0, w, h).data, w, h);
   // the hint fills most of the largest circle that fits inside the shape, and is left off when that is tiny
   const size = Math.min(spot.r * 1.6, Math.min(w, h) * 0.5);

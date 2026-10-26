@@ -9,7 +9,7 @@ import { flat, label, P, Prop, ribbon, star, unP, type Pt, type View } from './d
 import { Particles } from './particles';
 import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawGremlin, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
 import { DotMatrix } from './dmd';
-import { APRON_Z, arrowInserts, buildMachine, CAB, DECAL_SLOT_POS, decalSprite, dmdRect, machineExtent, RIM, type StuckDecal } from './scene';
+import { APRON_Z, arrowInserts, buildMachine, CAB, DECAL_SLOT_POS, decalArt, decalSprite, dmdRect, machineExtent, RIM, type StuckDecal } from './scene';
 import { BALL_WEAR, mat, mix, num, roleFill, WHITE, type Theme } from './theme';
 
 export interface DrawState {
@@ -1042,6 +1042,14 @@ export class Renderer {
   decalIcon(look: StuckDecal['look'], rarity: StuckDecal['rarity'], size: number): HTMLCanvasElement {
     const holder = new Container();
     holder.addChild(decalSprite(this.theme, { look, rarity }, size / 2, size / 2, size * 0.33, 1, -6));
+    return this.toCanvas(holder, size, size, 2);
+  }
+
+  /** Only the picture on a decal, where decalIcon() draws it (the Library cuts it out of a locked decal's shadow). */
+  decalArtIcon(look: StuckDecal['look'], size: number): HTMLCanvasElement {
+    const holder = new Container(), art = decalArt(this.theme, look, size * 0.33, -6);
+    art.position.set(size / 2, size / 2);
+    holder.addChild(art);
     return this.toCanvas(holder, size, size, 2);
   }
 

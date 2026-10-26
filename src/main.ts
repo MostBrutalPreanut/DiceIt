@@ -30,7 +30,7 @@ import { Scoreboard, sourceOfSave, type RunResult } from './ui/scoreboard';
 import { Attract } from './attract';
 import { around, Tutorial, TUTORIAL_KEY, type Box, type Step } from './ui/tutorial';
 import './ui/tutorial.css';
-import { decalHint, discover, LIBRARY_KEY, LIBRARY_PARTS, ownedPartIds, PART_HINTS, parseLibrary, partKnown, decalKnown, LIBRARY_DECALS } from './data/library';
+import { discover, LIBRARY_KEY, LIBRARY_PARTS, ownedPartIds, partHint, parseLibrary, partKnown, decalKnown, LIBRARY_DECALS } from './data/library';
 import { silhouette } from './ui/silhouette';
 import './ui/library.css';
 import { countNames, Feedback, TOPICS, type TopicGroup } from './ui/feedback';
@@ -111,10 +111,10 @@ async function main() {
     if (kind === 'boi') url = boiURL(id as MachineId, 'happy');
     else if (kind === 'decal') {
       const d = DECALS[id as DecalId], c = renderer.decalIcon(d.look, d.rarity, 96);
-      url = (locked ? silhouette(c, decalHint(id as DecalId)) : c).toDataURL();
+      url = (locked ? silhouette(c, renderer.decalArtIcon(d.look, 96), { lines: theme.ink }) : c).toDataURL();
     } else {
       const c = renderer.icon(id as PartId, 96, 96, { theme });
-      url = (locked ? silhouette(c, PART_HINTS[id as PartId]) : c).toDataURL();
+      url = (locked ? silhouette(c, partHint(id as PartId)) : c).toDataURL();
     }
     icons.set(key, url);
     return url;

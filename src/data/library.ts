@@ -1,4 +1,4 @@
-import { PART_IDS, PARTS, RARITIES, type PartId, type PartInstance, type Rarity } from './parts';
+import { isDecor, isInlay, PART_IDS, PARTS, RARITIES, type PartId, type PartInstance, type Rarity } from './parts';
 import { DECAL_IDS, DECALS, type DecalId, type DecalPick } from './decals';
 
 /**
@@ -6,6 +6,11 @@ import { DECAL_IDS, DECALS, type DecalId, type DecalPick } from './decals';
  * a black silhouette with ??? for a name; a part shows up the first time a run owns it (bought, won from a Piñata
  * or a Time Capsule), a decal the first time it is stuck on the apron. Big Boi and the Pop Bumper come with every
  * machine, so they are known from the start. The Test Lab hands out everything for free: nothing found there counts.
+ *
+ * Nothing here is a copy of the game's content: the shelves are PART_IDS and DECAL_IDS, and every picture (the
+ * silhouettes too) is baked from the same drawing code as the table each time the game loads. A new part or decal
+ * turns up in the Library as a silhouette by itself, a redrawn one shows its new look, and a removed one drops out
+ * of the saved Library (parseLibrary).
  */
 export const LIBRARY_KEY = 'pinball-roguelite.library.v1';
 
@@ -106,13 +111,14 @@ export function progress(lib: Library): { parts: Progress; decals: Progress; byR
 }
 
 /**
- * The little shape cut out of a silhouette, so parts that look alike in black can still be told apart: the Clock
- * shows a clock face, the Spare Bulb a bulb. A symbol (drawn by src/ui/silhouette.ts) or a few letters.
+ * The little shape cut out of a part's silhouette, so parts that look alike in black can still be told apart: the
+ * Clock shows a clock face, the Spare Bulb a bulb. A symbol (drawn by src/ui/silhouette.ts) or a few letters.
+ * (A locked decal needs none of these: its own picture is cut out of its shadow.)
  */
 export type HintSymbol =
   | 'clock' | 'bulb' | 'feet' | 'coin' | 'eyes' | 'flame' | 'shine' | 'note' | 'cup' | 'bell' | 'bolt' | 'crosshair' | 'crown' | 'star'
   | 'sparkle' | 'chevron' | 'magnet' | 'egg' | 'moon' | 'hat' | 'leaf' | 'snow' | 'drop' | 'sun' | 'hourglass' | 'candy' | 'shield'
-  | 'fork' | 'dots' | 'marbles' | 'plus' | 'arrow' | 'ring' | 'jar' | 'duck' | 'receipt';
+  | 'fork' | 'dots' | 'marbles' | 'plus' | 'arrow' | 'ring';
 export type Hint = HintSymbol | { text: string };
 
 export const PART_HINTS: Partial<Record<PartId, Hint>> = {
@@ -128,10 +134,10 @@ export const PART_HINTS: Partial<Record<PartId, Hint>> = {
   ruby: { text: 'R' }, garnet: { text: 'G' }, opal: { text: 'O' }, goldleaf: 'leaf', redseal: { text: 'S' }, topaz: 'sparkle', emerald: { text: 'E' },
 };
 
-/** A decal's hint is what is printed on it: its glyph, or its icon. */
-export function decalHint(id: DecalId): Hint {
-  const look = DECALS[id].look;
-  if (look.icon === 'seven') return { text: '7' };
-  if (look.icon) return look.icon;
-  return { text: look.glyph ?? '?' };
+/**
+ * A part's hint: its own from PART_HINTS, else, for the kinds that all look alike in black (decor in its little
+ * screen, the gems), its first letter, so a part added later is never an anonymous blob.
+ */
+export function partHint(id: PartId): Hint | undefined {
+  return PART_HINTS[id] ?? (isDecor(id) || isInlay(id) ? { text: PARTS[id].name[0] } : undefined);
 }

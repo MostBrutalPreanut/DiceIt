@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ALWAYS_KNOWN, decalHint, decalIsNew, decalKnown, discover, emptyLibrary, LIBRARY_DECALS, LIBRARY_PARTS, ownedPartIds, PART_HINTS, parseLibrary, partIsNew, partKnown, progress } from '../src/data/library';
-import { PART_IDS, PARTS, RARITIES, makePart, isDecor } from '../src/data/parts';
-import { DECAL_IDS, DECALS } from '../src/data/decals';
+import { ALWAYS_KNOWN, decalIsNew, decalKnown, discover, emptyLibrary, LIBRARY_DECALS, LIBRARY_PARTS, ownedPartIds, PART_HINTS, partHint, parseLibrary, partIsNew, partKnown, progress } from '../src/data/library';
+import { PART_IDS, PARTS, RARITIES, makePart, isDecor, isInlay } from '../src/data/parts';
+import { DECAL_IDS } from '../src/data/decals';
 import { countNames, flush, makeEntry, MAX_MESSAGE, OUTBOX_MAX, readOutbox, writeOutbox, type FeedbackEntry } from '../src/ui/feedback';
 import { DEFAULT_KEYS, rebind } from '../src/ui/settings';
 
@@ -64,14 +64,12 @@ describe('the Library', () => {
     expect(back).toEqual(lib);
   });
 
-  it('gives every decor part a hint to cut out of its silhouette, and every decal its printed glyph or icon', () => {
-    for (const id of PART_IDS.filter(isDecor)) expect(PART_HINTS[id], id).toBeTruthy();
-    for (const id of ['ruby', 'garnet', 'opal', 'goldleaf', 'redseal', 'topaz', 'emerald'] as const) expect(PART_HINTS[id], id).toBeTruthy();
-    for (const id of DECAL_IDS) {
-      const h = decalHint(id), look = DECALS[id].look;
-      if (look.glyph) expect(h).toEqual({ text: look.glyph });
-      else expect(h).toBeTruthy();
-    }
+  it('gives every decor part and gem a hint to cut out of its silhouette, a part added later included', () => {
+    for (const id of PART_IDS.filter((id) => isDecor(id) || isInlay(id))) expect(partHint(id), id).toBeTruthy();
+    // without its own hint, decor or a gem falls back to its first letter; other parts keep a plain shadow
+    const plain = PART_IDS.find((id) => !isDecor(id) && !isInlay(id) && !PART_HINTS[id])!;
+    expect(partHint(plain)).toBeUndefined();
+    expect(partHint('clock')).toBe('clock');
   });
 });
 

@@ -22,7 +22,10 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
 
 - **Library** (main menu and pause menu): every part and decal, by rarity, kept on this device across runs. Found
   ones in colour with their full card; the rest are silhouettes named ??? with a hint cut out (decor and the
-  round lumps get a symbol, gems their first letter, decals what is printed on them). A part is found the first
+  round lumps get a symbol, gems their first letter, a decal its own picture engraved in it). Every picture, the
+  silhouettes too, is baked from the game's own drawing code when the game loads, and the shelves are the part
+  and decal lists themselves: a new or redrawn part or decal shows up in the Library by itself (new decor or gems
+  without a hint of their own get their first letter). A part is found the first
   time a run owns it, a decal when it is stuck on the apron; the display says NEW IN THE LIBRARY. Pictures are
   baked a few a frame, so the screen opens at once.
 - **Feedback** (`P`, or the menus' P feedback button): name, topic (the game's parts, your machine's parts and
