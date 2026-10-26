@@ -13,7 +13,7 @@ import { mean, place, playRound, pool, type RoundTrace } from './lib';
  * endless rounds (up to `endless`) to see how far the build carries.
  *   npx vite-node tools/research/campaign.ts --seeds=6 --out=file.json
  */
-export type Strategy = 'par' | 'seeker' | 'casual';
+export type Strategy = 'par' | 'seeker' | 'casual' | 'meta';
 export interface CampaignTask { seed: number; strategy: Strategy; profile: string; machine: MachineId; endless: number }
 
 /** The archetypes the seeker builds towards: core parts, support parts and the decals it wants (best first). */
@@ -22,7 +22,17 @@ export const ARCHETYPES: Record<string, { core: PartId[]; support: PartId[]; dec
   sparks: { core: ['sparkler', 'rocks', 'firecracker', 'split', 'whale', 'nest'], support: ['jar', 'keg', 'pinata', 'tesla', 'pop', 'gong', 'golden', 'trophy'], decals: ['lucky', 'headStart', 'momentum', 'afterglow', 'goldenAge', 'overclock', 'multiball', 'crowd'], decor: ['clock', 'hutch', 'altar'] },
   lights: { core: ['lane', 'xlane', 'rank', 'disco', 'fame', 'lamp'], support: ['bank', 'spot', 'strip', 'wizard', 'echo', 'spinner', 'trophy', 'bell'], decals: ['lightShow', 'sets', 'lamps', 'afterglow', 'momentum', 'headStart', 'spinDoctor', 'goldenAge'], decor: ['altar', 'bulb', 'clock'] },
   targets: { core: ['vari', 'bank', 'duck', 'goal', 'piggy', 'pinata'], support: ['sling', 'deflector', 'jar', 'spot', 'kickback', 'golden', 'trophy', 'echo'], decals: ['targetPractice', 'comboKing', 'sets', 'headStart', 'momentum', 'afterglow', 'goldenAge', 'overclock'], decor: ['hutch', 'altar', 'clock'] },
+  bigboi: { core: ['plate', 'tesla', 'spot', 'magnet', 'uplight'], support: ['gong', 'thunder', 'golden', 'trophy', 'pop', 'ding', 'keg'], decals: ['fanClub', 'overclock', 'bumperCar', 'momentum', 'purist', 'headStart', 'levelUp', 'afterglow'], decor: ['clock', 'hutch'] },
   multiball: { core: ['printer', 'gumball', 'wheel', 'bucket', 'magnet', 'jackpot'], support: ['saver', 'hand', 'golden', 'xlane', 'trophy', 'pop', 'ding', 'wizard'], decals: ['multiball', 'printerPlus', 'twin', 'extraBall', 'headStart', 'momentum', 'afterglow', 'safetyNet'], decor: ['hutch', 'clock', 'altar'] },
+};
+/** Where the meta player puts the Big Boi engine's pieces (the build finder's foreman-elevator layout). */
+const META_SPOTS: Partial<Record<PartId, [number, number][]>> = {
+  plate: [[10.04, 34.04], [13.96, 34.04], [10.04, 37.96], [13.96, 37.96]],
+  tesla: [[12, 41.2], [12, 30.8]],
+  uplight: [[9.25, 40.2], [14.75, 40.2]],
+  spot: [[7.6, 36], [16.4, 36], [12, 45.5]],
+  magnet: [[12, 26.3]],
+  gong: [[6, 43]],
 };
 const GENERIC_X: PartId[] = ['golden', 'xlane', 'disco', 'fame', 'trophy', 'bell', 'goal', 'wizard'];
 const GUARDS: PartId[] = ['hand', 'flipper', 'flipperR', 'saver', 'kickback', 'bucket', 'magnet'];
@@ -50,6 +60,7 @@ class Shopper {
     let v = value(id);
     const s = this.t.strategy;
     if (s === 'par') return PART_VALUE[id] ?? 0;
+    if (s === 'meta' && !this.arch) this.arch = 'bigboi';
     if (s === 'casual') {
       const rar = { common: 2, uncommon: 3, rare: 5, legendary: 8 }[PARTS[id].rarity];
       return isInlay(id) ? 0 : rar + this.rng.range(0, 3);
@@ -70,6 +81,12 @@ class Shopper {
 
   /** Pick an archetype from what the run owns (and what it has been offered). */
   chooseArch(g: Game) {
+    if (this.t.strategy === 'meta') {
+      // the meta player goes for the Big Boi engine; by round 8 with no Plate or Tesla it settles for what it has
+      if (!this.arch) this.arch = 'bigboi';
+      if (g.round >= 8 && this.arch === 'bigboi' && !g.layout.parts.some((p) => p.def === 'plate' || p.def === 'tesla')) { this.t = { ...this.t, strategy: 'seeker' }; this.arch = null; this.chooseArch(g); this.t = { ...this.t, strategy: 'meta' }; }
+      return;
+    }
     if (this.t.strategy !== 'seeker') return;
     if (this.arch && g.round < 8) return;
     const owned = g.layout.parts.map((p) => p.def);
@@ -90,7 +107,7 @@ class Shopper {
   shop(g: Game): { bought: string[]; spent: number; rerolls: number } {
     const bought: string[] = [];
     let spent = 0, rerolls = 0;
-    const maxRerolls = this.t.strategy === 'seeker' ? 4 : this.t.strategy === 'par' ? 2 : g.money > 15 ? 1 : 0;
+    const maxRerolls = this.t.strategy === 'seeker' || this.t.strategy === 'meta' ? 4 : this.t.strategy === 'par' ? 2 : g.money > 15 ? 1 : 0;
     for (let guard = 0; guard < 50; guard++) {
       const options = g.shop.offers
         .map((id, slot) => ({ id, slot }))
@@ -98,7 +115,7 @@ class Shopper {
         .map((o) => ({ ...o, score: (this.want(g, o.id) * (PARTS[o.id].pack ?? 1)) / g.priceAt(o.slot) }))
         .sort((a, b) => b.score - a.score);
       // a seeker keeps $ back for a core part it has locked
-      const reserve = this.t.strategy === 'seeker' ? Math.max(0, ...((g.shop.locked ?? []).map((i) => g.shop.offers[i]).filter((x): x is PartId => !!x).map((id) => g.priceOf(id)))) : 0;
+      const reserve = this.t.strategy === 'seeker' || this.t.strategy === 'meta' ? Math.max(0, ...((g.shop.locked ?? []).map((i) => g.shop.offers[i]).filter((x): x is PartId => !!x).map((id) => g.priceOf(id)))) : 0;
       const pick = options.find((o) => g.isLocked(o.slot) || g.money - g.priceAt(o.slot) >= reserve || g.priceAt(o.slot) >= reserve);
       if (pick && (this.t.strategy !== 'casual' || this.rng.next() < 0.85)) {
         const price = g.priceAt(pick.slot);
@@ -109,14 +126,14 @@ class Shopper {
         bought.push(pick.id); spent += price;
         continue;
       }
-      if (this.t.strategy === 'seeker') {
+      if (this.t.strategy === 'seeker' || this.t.strategy === 'meta') {
         // lock the best core offer it cannot afford yet
         const a = this.arch ? ARCHETYPES[this.arch] : null;
         const want = g.shop.offers.map((id, slot) => ({ id, slot })).filter((o): o is { id: PartId; slot: number } => !!o.id && !g.isLocked(o.slot) && g.priceAt(o.slot) > g.money && (!!a?.core.includes(o.id) || GENERIC_X.includes(o.id)));
         if (want.length && (g.shop.locked?.length ?? 0) < g.lockSlots) g.toggleLock(want[0].slot);
       }
       if (g.toolboxFull) break;
-      if (rerolls < maxRerolls && g.money - g.rerollCost >= (this.t.strategy === 'seeker' ? 5 : 3) && g.reroll()) { rerolls++; continue; }
+      if (rerolls < maxRerolls && g.money - g.rerollCost >= (this.t.strategy === 'seeker' || this.t.strategy === 'meta' ? 5 : 3) && g.reroll()) { rerolls++; continue; }
       break;
     }
     return { bought, spent, rerolls };
@@ -127,14 +144,15 @@ class Shopper {
     const ok = offers.map((_, i) => i).filter((i) => g.canTake(i));
     if (!ok.length) return -1;
     if (this.t.strategy === 'casual') return ok[Math.floor(this.rng.next() * ok.length)];
-    const list: DecalId[] = this.t.strategy === 'seeker' && this.arch ? [...ARCHETYPES[this.arch].decals, ...DECAL_PRIORITY] : DECAL_PRIORITY;
+    const list: DecalId[] = (this.t.strategy === 'seeker' || this.t.strategy === 'meta') && this.arch ? [...ARCHETYPES[this.arch].decals, ...DECAL_PRIORITY] : DECAL_PRIORITY;
     const own = new Set(g.layout.parts.map((p) => p.def));
     let best = ok[0], bestRank = Infinity;
     for (const i of ok) {
       const o = offers[i];
       let rank = list.indexOf(o.id);
       if (rank < 0) rank = 99;
-      if (o.target && this.t.strategy === 'seeker') {
+      if (o.target && this.t.strategy === 'meta' && this.arch === 'bigboi') { if (o.target !== 'mega') rank += 6; }
+      else if (o.target && (this.t.strategy === 'seeker' || this.t.strategy === 'meta')) {
         // a targeted decal is worth it on the part that scores most
         const top = Object.entries(this.lastPoints).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)).slice(0, 3).map(([k]) => k);
         if (!top.includes(o.target)) rank += 6;
@@ -174,9 +192,16 @@ function play(t: CampaignTask): CampaignResult {
     const { bought, spent, rerolls } = sh.shop(g);
     sh.chooseArch(g);
     // a seeker throws spare cash in its wells
-    if (t.strategy === 'seeker') for (const p of g.placed.filter((q) => PARTS[q.def].recipe.well)) while (g.money > 8 && g.wish(p.uid));
+    if (t.strategy === 'seeker' || t.strategy === 'meta') for (const p of g.placed.filter((q) => PARTS[q.def].recipe.well)) while (g.money > 8 && g.wish(p.uid));
     // a sold-out Time Capsule: dig it up for the prize
     for (const p of g.placed.filter((q) => g.capsuleRipe(q))) { g.sell(p.uid); sh.prize(g); }
+    if (t.strategy === 'meta' && sh.arch === 'bigboi') {
+      for (const p of g.inventory) {
+        const spots = META_SPOTS[p.def];
+        if (!spots) continue;
+        for (const [x, y] of spots) if (g.place(p.uid, x, y)) break;
+      }
+    }
     // lay out the machine (the player's own hands judge it); moving a part that already played costs $1
     const before = new Map(g.layout.parts.map((p) => [p.uid, `${p.x},${p.y},${p.angle},${p.placed}`]));
     const setup = { layout: g.layout, machine: g.machine, decals: g.decals, rings: g.rings, boss: g.boss?.id ?? null, round: g.round };
@@ -196,7 +221,7 @@ function play(t: CampaignTask): CampaignResult {
     g.money -= fees;
     // a seeker scraps its weakest part when a better one is stuck in the toolbox
     const scrapped: string[] = [];
-    if (t.strategy === 'seeker') {
+    if (t.strategy === 'seeker' || t.strategy === 'meta') {
       for (const loose of g.inventory.filter((p) => !isDecor(p.def) && !isInlay(p.def)).slice(0, 2)) {
         const weakest = g.placed.filter((p) => !p.fixed && p.def !== loose.def && !PARTS[p.def].pack).map((p) => ({ p, v: (sh.lastPoints[p.def] ?? 0) / Math.max(1, g.placed.filter((q) => q.def === p.def).length) })).sort((a, b) => a.v - b.v)[0];
         if (!weakest || sh.want(g, loose.def) < sh.want(g, weakest.p.def) * 1.3) continue;
