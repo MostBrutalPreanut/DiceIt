@@ -5,6 +5,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { PARTS, type PartId } from '../../src/data/parts';
 import { LANE_WALL_X, TABLE_H, TABLE_W } from '../../src/sim/constants';
+import { BIG_BOI_AT } from '../../src/sim/layout';
 import { FLIPPER_PIVOTS, tableOutline, tableSegments } from '../../src/sim/table';
 import {
   TYPE, box, coin, curl, debris, esc, f, groundRing, impact, line, P, poly, Prop, puff, ribbon, ring, scoreSticker, shadow, sparkle, stamp, type Pt, type View,
@@ -26,10 +27,10 @@ interface Placed { id: PartId; x: number; y: number; a?: number; st?: PartState 
 /** A mid-run build on the real table: the three starter pops plus a dozen bought parts. */
 const BUILD: Placed[] = [
   { id: 'lane', x: 9.6, y: 48.4, st: { lit: true, letter: '0' } }, { id: 'lane', x: 13, y: 48.9, st: { lit: true, letter: '1' } }, { id: 'lane', x: 16.4, y: 48.4, st: { letter: '2' } },
-  { id: 'pop', x: 17, y: 44.5, st: { value: '115' } }, { id: 'pop', x: 11, y: 45.5, st: { value: '115', hit: true } }, { id: 'pop', x: 6, y: 42, st: { value: '115' } },
-  { id: 'printer', x: 19.8, y: 39.6, a: 0, st: { smoke: true, value: '200' } },
+  { id: 'pop', x: 17, y: 44.5, st: {} }, { id: 'pop', x: 11, y: 45.5, st: { hit: true } }, { id: 'pop', x: 6, y: 42, st: {} },
+  { id: 'printer', x: 19.8, y: 39.6, a: 0, st: { smoke: true } },
   { id: 'coin', x: 18.6, y: 33.6 }, { id: 'coin', x: 5.6, y: 35.4 },
-  { id: 'mega', x: 12, y: 34.2, st: { value: '275', face: 'oof', hit: true } },
+  { id: 'mega', x: BIG_BOI_AT.x, y: BIG_BOI_AT.y, st: { face: 'oof', hit: true } },
   { id: 'deflector', x: 2.6, y: 30.5, a: 1.0 },
   { id: 'lamp', x: 15.6, y: 29.6, st: { lit: true, glow: 6 } },
   { id: 'uplight', x: 3.4, y: 25.4, st: { lit: true, target: 'pop' } }, { id: 'uplight', x: 7.6, y: 27.6, st: { target: 'pop' } },
@@ -55,9 +56,19 @@ function floorArt(v: View, t: Theme, clip: string) {
       const [X, Y] = at(x + 0.4, y + 0.4);
       out.push(`<circle cx="${f(X)}" cy="${f(Y)}" r="${f(v.S * 0.09)}" fill="${mix(t.floor2, t.shadeTint, 0.35)}"/>`);
     }
-    // a painted gear behind the centre and hazard stripes leading to the drain
-    const gear = ring(12, 34, 7.2, 48).map(([x, y], i) => { const k = i % 4 < 2 ? 1 : 0.86; return at(12 + (x - 12) * k, 34 + (y - 34) * k); });
-    out.push(`<path d="${poly(gear)}" fill="none" stroke="${mix(t.floor2, t.shadeTint, 0.25)}" stroke-width="${f(v.S * 0.5)}" stroke-linejoin="round"/>`);
+    // a funfair rosette painted under Big Boi (as in the game: src/render/scene.ts) and hazard stripes leading to the drain
+    const { x: cx, y: cy } = BIG_BOI_AT, around = (r: (a: number) => number, n = 96) => Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2; return at(cx + Math.cos(a) * r(a), cy + Math.sin(a) * r(a)); });
+    out.push(`<path d="${poly(around((a) => 6.5 + 1.05 * Math.abs(Math.cos(a * 6))))}" fill="${mix(t.accent, t.paper, 0.45)}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.6)}" stroke-linejoin="round"/>`);
+    out.push(`<path d="${poly(around(() => 5.7))}" fill="${t.floor}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.6)}"/>`);
+    for (let i = 0; i < 16; i += 2) {
+      const a0 = (i / 16) * Math.PI * 2, a1 = ((i + 1) / 16) * Math.PI * 2, wedge: Pt[] = [at(cx, cy)];
+      for (let k = 0; k <= 6; k++) { const a = a0 + ((a1 - a0) * k) / 6; wedge.push(at(cx + Math.cos(a) * 5.7, cy + Math.sin(a) * 5.7)); }
+      out.push(`<path d="${poly(wedge)}" fill="${mix(t.floor2, t.glow, 0.25)}"/>`);
+    }
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * Math.PI * 2, [X, Y] = at(cx + Math.cos(a) * 6.45, cy + Math.sin(a) * 6.45);
+      out.push(`<circle cx="${f(X)}" cy="${f(Y)}" r="${f(v.S * 0.24)}" fill="${i % 2 ? t.paper : t.glow}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.45)}"/>`);
+    }
     for (let x = -4; x < TABLE_W; x += 1.6) out.push(`<path d="${poly([at(x, 3.2), at(x + 0.8, 3.2), at(x + 2.2, 6.2), at(x + 1.4, 6.2)])}" fill="${t.ink}" opacity="0.85"/>`);
     for (let x = -4; x < TABLE_W; x += 1.6) out.push(`<path d="${poly([at(x + 0.8, 3.2), at(x + 1.6, 3.2), at(x + 3, 6.2), at(x + 2.2, 6.2)])}" fill="${t.role.coin}"/>`);
   } else if (t.floorArt === 'checker') {
@@ -70,7 +81,7 @@ function floorArt(v: View, t: Theme, clip: string) {
       out.push(`<path d="${poly([dome(1.02, a0), dome(1.02, a1), dome(0.86, a1), dome(0.86, a0)])}" fill="${i % 2 ? t.paper : t.accent}"/>`);
     }
     for (const [rr, c] of [[7.6, t.paper], [6.4, mix(t.paper, t.shadeTint, 0.12)], [5.9, t.paper]] as const)
-      out.push(`<path d="${poly(ring(12, 33.5, rr, 48).map(([x, y]) => at(x, y)))}" fill="${c}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.5)}"/>`);
+      out.push(`<path d="${poly(ring(BIG_BOI_AT.x, BIG_BOI_AT.y, rr, 48).map(([x, y]) => at(x, y)))}" fill="${c}" stroke="${t.ink}" stroke-width="${f(v.lw * 0.5)}"/>`);
   } else {
     const rnd = rng(7);
     for (let i = 0; i < 70; i++) {
@@ -78,7 +89,7 @@ function floorArt(v: View, t: Theme, clip: string) {
       out.push(`<path d="${poly(ring(x, y, r, 14, r * 0.7).map(([a, b]) => at(a, b)))}" fill="${t.floor2}"/>`);
     }
     // a cobbled path from the flippers to the keep
-    const path: Pt[] = [[12, 3], [11.4, 9], [12.8, 15], [11.6, 21], [12.4, 28], [12, 34]];
+    const path: Pt[] = [[12, 3], [11.4, 9], [12.8, 15], [11.6, 21], [12.4, 28], [BIG_BOI_AT.x, BIG_BOI_AT.y]];
     for (let i = 0; i < path.length - 1; i++) for (let k = 0; k < 6; k++) {
       const u = k / 6, x = path[i][0] + (path[i + 1][0] - path[i][0]) * u, y = path[i][1] + (path[i + 1][1] - path[i][1]) * u;
       for (const dx of [-0.85, 0.85]) {

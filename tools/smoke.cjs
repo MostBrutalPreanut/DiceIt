@@ -64,7 +64,16 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
 
   // real shop: buy the first affordable offer, place it, then undo and redo both steps
   let s = await state();
-  check(s.placed === 4 && s.inv === 0 && s.money === 6, 'starts with 3 bumpers and the fixed Big Boi placed, empty inventory, $6');
+  check(s.placed === 1 && s.inv === 3 && s.money === 6, 'a run starts with Big Boi on the table, the 3 starting bumpers in the toolbox, $6');
+  await page.click('#inventory .item');
+  const seat = await at(17, 44.5);
+  await page.mouse.move(seat.x, seat.y);
+  await page.mouse.click(seat.x, seat.y);
+  check((await state()).money === 6 && (await state()).placed === 2, 'placing a starting bumper is free');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { const g = window.__pinball.game; g.place(1, 17, 44.5); window.__pinball.seatStarters(); });
+  s = await state();
+  check(s.placed === 4 && s.inv === 0 && s.money === 6, 'with all three placed: 3 bumpers and Big Boi on the table, $6');
   await page.click('button[data-buy]:not([disabled])');
   s = await state();
   check(s.inv === 1 && s.money < 6, 'buying puts the part in the inventory and costs money');
@@ -152,7 +161,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.move(5, 5);
 
   // the toolbox holds four: buying stops, and storing into a full toolbox sells the part for half (after the $1 to move it)
-  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.money = 50; window.__pinball.refresh(); });
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.money = 50; window.__pinball.refresh(); });
   for (let i = 0; i < 4; i++) {
     await page.evaluate(() => { const g = window.__pinball.game; g.shop.offers = ['pop', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
     await page.click('button[data-buy="0"]');
@@ -172,7 +181,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.click('#toolSell');
   const sold = await state();
   check(sold.inv === 3 && sold.money === after.money + 3, 'Return gives back what it cost and frees the slot');
-  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
+  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.seatStarters(); window.__pinball.refresh(); });
 
   // buying by dragging: an offer dropped on the table lands on the board without going through the toolbox
   await page.evaluate(() => { const g = window.__pinball.game; g.money = 20; g.shop.offers = ['coin', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
@@ -193,7 +202,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.click(boi.x, boi.y);
   check(!/Return|Scrap|Move/.test(await page.innerText('#inspect')), 'the fixed Big Boi cannot be sold or moved');
   await page.keyboard.press('Escape');
-  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
+  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.seatStarters(); window.__pinball.refresh(); });
 
   // a shelf that is still rolling in cannot be grabbed or bought
   await page.evaluate(() => { const g = window.__pinball.game; g.money = 20; g.shop.offers = ['coin', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
@@ -243,7 +252,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   // the machine stays for the run: number keys no longer switch it
   await page.keyboard.press('Digit2');
   check(await page.evaluate(() => window.__pinball.game.machine) === 'factory', 'the machine cannot be switched mid-run');
-  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
+  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.seatStarters(); window.__pinball.refresh(); });
 
   // lock a shop offer: it is marked, and it is still there after a reroll
   const lockedId = await page.evaluate(() => window.__pinball.game.shop.offers[1]);
@@ -283,7 +292,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.evaluate(() => { window.__pinball.game.toWorkshop(); window.__pinball.refresh(); });
 
   // the between-rounds flow: a boss was just beaten, so a decal pick is owed before the next round
-  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
   check(await page.isVisible('#upgradeBox'), 'the decal picker shows over the table when one is owed');
   check(await page.locator('.dp-card').count() === 3, 'three decals are offered');
   const bossName = await page.evaluate(() => window.__pinball.game.bossAt(3).name);
@@ -300,22 +309,22 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(!(await page.isDisabled('#btnStart')), 'taking a decal unlocks Start round');
   await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
   check(!(await page.isVisible('#upgradeBox')) && (await page.evaluate(() => window.__pinball.game.decals.length)) === 1, 'the offer closes and the decal is on the apron');
-  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
   const cash = await page.evaluate(() => window.__pinball.game.money);
   await page.click('#btnSkip');
   check((await page.evaluate(() => window.__pinball.game.money)) === cash + 4, 'skipping pays $4');
   await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
   // the number keys pick straight away, S skips
-  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
   await page.keyboard.press('KeyS');
   check((await page.evaluate(() => window.__pinball.game.money)) === cash + 4 && !(await page.evaluate(() => window.__pinball.game.pending)), 'S skips for the cash');
   await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
-  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
   await page.keyboard.press('Digit3');
   await page.waitForFunction(() => window.__pinball.game.decals.length === 1, null, { timeout: 5000 }).catch(() => {});
   check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'a number key sticks that card');
   await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
-  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
+  await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.seatStarters(); window.__pinball.refresh(); });
 
   // a real round with the bot at the controls: the machine tips towards you while the ball is live
   await page.click('#btnStart');
@@ -333,7 +342,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   // visual snapshots: the workshop and a frozen play frame in every theme
   const shots = [];
   for (const theme of ['factory', 'diner', 'castle']) {
-    await page.evaluate((t) => { const d = window.__pinball; d.theme(t); d.game.newRun(); d.refresh(); }, theme);
+    await page.evaluate((t) => { const d = window.__pinball; d.theme(t); d.game.newRun(); window.__pinball.seatStarters(); d.refresh(); }, theme);
     await page.evaluate(() => window.__pinball.advance(0.5, 1));
     await page.screenshot({ path: `${out}/snap-${theme}-workshop.png` });
     const size0 = await page.evaluate(() => { const v = window.__pinball.renderer.view; return [v.S, v.k, v.oy].join(); });
@@ -347,10 +356,10 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
     check(/^#[0-9a-f]{6}$/.test(bg), `${theme}: the panels take the theme's tokens (${bg})`);
   }
   check(new Set(shots).size === 3, 'the three themes render differently');
-  await page.evaluate(() => { const d = window.__pinball; d.theme('factory'); d.game.newRun(); d.refresh(); });
+  await page.evaluate(() => { const d = window.__pinball; d.theme('factory'); d.game.newRun(); window.__pinball.seatStarters(); d.refresh(); });
 
   // a round cleared: the card counts in, a click skips to the end, then the button takes you on
-  await page.evaluate(() => { const d = window.__pinball; d.game.newRun(); d.refresh(); });
+  await page.evaluate(() => { const d = window.__pinball; d.game.newRun(); window.__pinball.seatStarters(); d.refresh(); });
   await page.click('#btnStart');
   await page.evaluate(() => { const d = window.__pinball; d.game.scorer.goal = 1; d.advance(6, 2); });
   await page.click('#btnCash');
@@ -363,7 +372,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(await page.evaluate(() => window.__pinball.game.mode) === 'workshop', 'the button goes on to the workshop');
 
   // losing: the whole page greys out under a summary with the map and the run's points
-  await page.evaluate(() => { const d = window.__pinball; d.game.newRun(); d.refresh(); });
+  await page.evaluate(() => { const d = window.__pinball; d.game.newRun(); window.__pinball.seatStarters(); d.refresh(); });
   await page.click('#btnStart');
   await page.evaluate(() => { const d = window.__pinball; d.game.scorer.goal = 1e12; d.advance(240, 2); });
   check(await page.evaluate(() => window.__pinball.game.mode) === 'runOver', 'a round against an impossible goal ends the run');

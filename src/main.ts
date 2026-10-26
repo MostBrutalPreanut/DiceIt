@@ -13,7 +13,7 @@ import type { Mood } from './render/props';
 import { FxOverlay } from './render/overlay';
 import { FACTORY, roleFill, themeById, THEMES, themeVars, type Theme } from './render/theme';
 import { DT } from './sim/constants';
-import { canPlace, canPlaceLedge } from './sim/layout';
+import { canPlace, canPlaceLedge, starterLayout } from './sim/layout';
 import { clampLedge, LEDGE, ledgeSeg } from './sim/table';
 import { Bot } from './sim/bot';
 import type { Input, SimEvent } from './sim/sim';
@@ -1360,6 +1360,8 @@ async function main() {
       for (let f = 0; f < Math.round(seconds * 60); f++) { attract.step(1 / 60); renderer.draw(game, 1 / 60, IDLE_DRAW); }
     },
     theme: (id: string) => pickTheme(id),
+    /** Put a new run's starting bumpers from the toolbox onto their old spots, settled in (moving them costs again), for checks written for that start. */
+    seatStarters() { for (const p of starterLayout().parts) if (!p.fixed && game.place(p.uid, p.x, p.y)) delete game.part(p.uid)!.loose; refreshWorkshop(); },
     refresh: () => refreshWorkshop(),
   };
   (window as unknown as { __pinball: typeof debug }).__pinball = debug;

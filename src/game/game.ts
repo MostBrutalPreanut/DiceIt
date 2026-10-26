@@ -511,6 +511,8 @@ export class Game {
     this.runScore = 0;
     this.machine = machine;
     this.layout = starterLayout();
+    // the starting bumpers wait in the toolbox: put them wherever you like, free to place and to move this visit
+    for (const p of this.layout.parts) if (!p.fixed) { p.placed = false; p.loose = true; }
     this.round = 1;
     this.money = START_MONEY;
     this.decals = [];

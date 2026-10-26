@@ -5,6 +5,7 @@ import { Container, Graphics, GraphicsContext } from 'pixi.js';
 import { DECALS, type DecalIcon, type DecalLook, type DecalShape } from '../data/decals';
 import type { Rarity } from '../data/parts';
 import { LANE_WALL_X, TABLE_H, TABLE_W } from '../sim/constants';
+import { BIG_BOI_AT } from '../sim/layout';
 import { FLIPPER_PIVOTS, tableOutline, tableSegments } from '../sim/table';
 import { box, flat, hull, label, P, Prop, ribbon, ring, shadow, shadowPoly, star, type Pt, type View } from './draw';
 import { mat, mix, WHITE, type Theme } from './theme';
@@ -169,9 +170,20 @@ function floorArt(g: Graphics, v: View, t: Theme) {
       const [X, Y] = at(x + 0.4, y + 0.4);
       g.circle(X, Y, v.S * 0.09).fill(mix(t.floor2, t.shadeTint, 0.35));
     }
-    // a painted gear behind the centre and hazard stripes leading to the drain
-    const gear = ring(12, 34, 7.2, 48).map(([x, y], i): Pt => { const k = i % 4 < 2 ? 1 : 0.86; return at(12 + (x - 12) * k, 34 + (y - 34) * k); });
-    g.poly(flat(gear)).stroke({ width: v.S * 0.5, color: mix(t.floor2, t.shadeTint, 0.25), join: 'round' });
+    // a funfair rosette painted under Big Boi: twelve round pink petals, a ring of marquee bulbs, a sunburst inside;
+    // and hazard stripes leading to the drain
+    const { x: cx, y: cy } = BIG_BOI_AT, around = (r: (a: number) => number, n = 96) => flat(Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2; return at(cx + Math.cos(a) * r(a), cy + Math.sin(a) * r(a)); }));
+    g.poly(around((a) => 6.5 + 1.05 * Math.abs(Math.cos(a * 6)))).fill(mix(t.accent, t.paper, 0.45)).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' });
+    g.poly(around(() => 5.7)).fill(t.floor).stroke({ width: v.lw * 0.6, color: t.ink });
+    for (let i = 0; i < 16; i += 2) {
+      const a0 = (i / 16) * Math.PI * 2, a1 = ((i + 1) / 16) * Math.PI * 2, wedge: Pt[] = [at(cx, cy)];
+      for (let k = 0; k <= 6; k++) { const a = a0 + ((a1 - a0) * k) / 6; wedge.push(at(cx + Math.cos(a) * 5.7, cy + Math.sin(a) * 5.7)); }
+      g.poly(flat(wedge)).fill(mix(t.floor2, t.glow, 0.25));
+    }
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * Math.PI * 2, [X, Y] = at(cx + Math.cos(a) * 6.45, cy + Math.sin(a) * 6.45);
+      g.circle(X, Y, v.S * 0.24).fill(i % 2 ? t.paper : t.glow).stroke({ width: v.lw * 0.45, color: t.ink });
+    }
     for (let x = -4; x < TABLE_W; x += 1.6) g.poly(flat([at(x, 3.2), at(x + 0.8, 3.2), at(x + 2.2, 6.2), at(x + 1.4, 6.2)])).fill({ color: t.ink, alpha: 0.85 });
     for (let x = -4; x < TABLE_W; x += 1.6) g.poly(flat([at(x + 0.8, 3.2), at(x + 1.6, 3.2), at(x + 3, 6.2), at(x + 2.2, 6.2)])).fill(t.role.coin);
   } else if (t.floorArt === 'checker') {
@@ -183,7 +195,7 @@ function floorArt(g: Graphics, v: View, t: Theme) {
       g.poly(flat([dome(1.02, a0), dome(1.02, a1), dome(0.86, a1), dome(0.86, a0)])).fill(i % 2 ? t.paper : t.accent);
     }
     for (const [rr, c] of [[7.6, t.paper], [6.4, mix(t.paper, t.shadeTint, 0.12)], [5.9, t.paper]] as const)
-      g.poly(flat(ring(12, 33.5, rr, 48).map(([x, y]) => at(x, y)))).fill(c).stroke({ width: v.lw * 0.5, color: t.ink });
+      g.poly(flat(ring(BIG_BOI_AT.x, BIG_BOI_AT.y, rr, 48).map(([x, y]) => at(x, y)))).fill(c).stroke({ width: v.lw * 0.5, color: t.ink });
   } else {
     const rnd = rng(7);
     for (let i = 0; i < 70; i++) {
@@ -227,7 +239,7 @@ const shrink = (pts: Pt[], c: Pt, k: number, dx = 0, dy = 0): Pt[] => pts.map(([
 function flagstones(g: Graphics, v: View, t: Theme, rnd: () => number) {
   const tones = t.art.rock ?? [t.rail];
   const scr = (pts: Pt[]) => flat(pts.map(([x, y]) => P(v, x, y)));
-  const mid = smooth([[12, 1.5], [11.4, 9], [12.8, 15], [11.6, 21], [12.4, 28], [12, 35]], 12);
+  const mid = smooth([[12, 1.5], [11.4, 9], [12.8, 15], [11.6, 21], [12.4, 28], [BIG_BOI_AT.x, BIG_BOI_AT.y]], 12); // the path leads up to Big Boi
   const len = [0];
   for (let i = 1; i < mid.length; i++) len.push(len[i - 1] + Math.hypot(mid[i][0] - mid[i - 1][0], mid[i][1] - mid[i - 1][1]));
   const L = len[len.length - 1], HW = 1.75;
