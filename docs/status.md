@@ -9,7 +9,7 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 422 pass, 0 fail (30 files) |
+| Unit tests | 433 pass, 0 fail (31 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
 | Browser smoke test | 105 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.6 ms a frame; 3.5 ms with 4 balls, 24 sparks and zaps |
@@ -98,6 +98,16 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   **Tuned**: the Ice Sculpture melts 3 points a flipper press, not 1. At 1 the bot's 60 presses a round left it
   scoring 70% of round 1 and lasting four rounds; at 3 it pays about 4,300 over a round and a half, the burst it is
   meant to be.
+- **The physics parts (step 9, the last of the build order)**: Wrecking Ball (once a ball, the ball grows 1.5× for 6 s
+  where it has room; its hits pay ×2 and shake the table), Broomstick (the ball rides straight the way it points, no
+  gravity, for 1 s or until it touches anything, zapping what it passes at ×2), Free Ball Bucket (a sensor bucket on
+  a rail; a ball dropping in from above goes back to the plunger) and the Gremlin Hutch (decor: 2 gremlins, 100 and
+  $1 a knock). Physics: a 1.5× ball against the flippers tunnelled 0 times in 600 trials with the safety net off,
+  and the escape fuzz on a table with all four had 0 escapes and 0 stuck balls in 200. Gain per round on the power
+  tool's table, mid / late: Bucket +8,553 / +15,280, Broomstick +2,658 / +7,271, Wrecking Ball -1,279 / +2,044
+  (+2,336 / +11,571 over a plain Pop Bumper), Hutch +3,888 / +5,840. **Tuned**: a gremlin knock was 300 and made
+  the Hutch +11,168 / +17,520 with no table room; at 100 it sits by the Ritual Altar. The Wrecking Ball is the weak
+  one, as the review expected: it needs a playtest.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

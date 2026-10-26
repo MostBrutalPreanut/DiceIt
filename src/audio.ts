@@ -498,6 +498,9 @@ export class AudioFx {
       case 'firecracker': if (opts.label === 'WHOOSH!') this.rocket(); else this.bop(mult, 0.85); break;
       case 'rocks': this.clack(); break;
       case 'pinata': this.thwack(); break;
+      case 'wreck': this.thunder(); break;
+      case 'broom': this.swoosh(true); break;
+      case 'bucket': this.saved(); break;
       case 'echo': this.laneRoll(); this.bop(mult, 0.6); break;
       case 'ice': this.chaChing(this.ladder(mult, 2093, 5)); break;
       case 'spot': this.thwack(); break;
@@ -877,6 +880,7 @@ export class AudioFx {
     else if (id === 'clock') this.midnight();
     else if (id === 'wizard') this.wizardMode();
     else if (label === 'PIÑATA!') this.pinataBurst();
+    else if (label === 'GOTCHA!') this.thwack();
     else if (id === 'altar') this.ritual(label === 'TEMPEST!' ? 0 : label === 'INFERNO!' ? 1 : 2);
     else if (id === 'rank') this.rankUp(label?.startsWith('DIAMOND') ? 3 : label?.startsWith('GOLD') ? 2 : 1);
     else if (id === 'disco') this.disco();

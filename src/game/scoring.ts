@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, grownPoints, hasTag, HOT_WINDOW, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, wizardNeed, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, GREMLIN, grownPoints, hasTag, HOT_WINDOW, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, wizardNeed, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { TABLE_H, TABLE_W } from '../sim/constants';
@@ -39,6 +39,10 @@ export interface ScoreEvent {
   blast?: number;
   /** Sparks to shoot out (the game hands them to the sim): a burst round the part, or rain from the top later. */
   sparks?: SparkBurst[];
+  /** Wrecking Ball: this ball grows for a while. */
+  grow?: { ballId: number; k: number; seconds: number };
+  /** Scored by a ball that is a Wrecking Ball right now (the table shakes). */
+  wreck?: boolean;
   /** More balls fly out from here (WIZARD MODE). */
   balls?: { n: number; x: number; y: number; uid: number };
   /** A Firecracker's rocket left from here. */
@@ -197,6 +201,8 @@ export class Scorer {
   /** Ritual Altar: what a test ball's altar has kept (a real round's goes on the part, through onKeep), and the ritual under way. */
   private kept = new Map<number, Partial<PartInstance>>();
   private ritual: { kind: Ritual; until: number; s: number; next: number; ballId: number; uid: number } | null = null;
+  /** Wrecking Ball: until when each ball is a wrecking ball. */
+  private wrecking = new Map<number, number>();
   /** Echo Caves: the caves each ball has gone through in a row (any other part it hits breaks the chain). */
   private echoes = new Map<number, number[]>();
   /** Piñatas that burst this round (broken until the next one). */
@@ -319,6 +325,7 @@ export class Scorer {
     this.clockStruck = false;
     this.madUntil = -1;
     this.echoes.clear();
+    this.wrecking.clear();
     this.wizTypes.clear();
     this.wizUntil = -1;
     this.ritual = null;
@@ -502,9 +509,11 @@ export class Scorer {
   }
 
   /** Multipliers that depend on the moment, not the part: the ball's rank, Thrifty, Multiball Madness, Last Call, Purist. */
-  private situational(ev?: { ballId?: number; t: number }): { x: number; notes: string[] } {
+  private situational(ev?: { ballId?: number; t: number; ride?: boolean }): { x: number; notes: string[] } {
     const m = this.mods, notes: string[] = [];
     let x = 1;
+    if (ev?.ride) { const b = PARTS.broom.recipe.ride!.x; x *= b; notes.push(`x${b} broomstick`); }
+    if (ev?.ballId !== undefined && (this.wrecking.get(ev.ballId) ?? -1) > ev.t) { const w = PARTS.wreck.recipe.wreck!.x; x *= w; notes.push(`x${w} wrecking ball`); }
     const rank = ev?.ballId === undefined ? null : this.rankOf(ev.ballId, ev.t);
     if (rank) { x *= rank.x; notes.push(`x${rank.x} ${rank.name.toLowerCase()} rank`); }
     if (m.cashPer > 0 && this.opts.cash) {
@@ -628,6 +637,7 @@ export class Scorer {
       this.saversUsed.add(ev.uid);
       return [];
     }
+    if (ev.type === 'gremlin') return this.gremlin(ev);
     if (ev.type !== 'partHit') return [];
     this.now = ev.t;
     const inst = this.getParts().find((p) => p.uid === ev.uid && p.placed);
@@ -840,6 +850,15 @@ export class Scorer {
       // the third notch rings the bell: ×1.2 on the Mult of this ball and every ball after it, for the rest of the run
       if (rang) out.push(this.ring(inst, ev));
       if (midnight) out.push(midnight);
+      if (r.wreck && !ev.zap && !ev.spark && !this.firedThisBall.has(inst.uid)) {
+        // the Wrecking Ball: once a ball, this ball gets big (and every hit it makes pays more) for a while
+        this.firedThisBall.set(inst.uid, 1);
+        this.wrecking.set(ev.ballId, ev.t + r.wreck.seconds);
+        scored.grow = { ballId: ev.ballId, k: r.wreck.k, seconds: r.wreck.seconds };
+        scored.label ??= 'WRECKING BALL!';
+      }
+      if ((this.wrecking.get(ev.ballId) ?? -1) > ev.t) scored.wreck = true;
+      if (r.bucket) scored.label ??= 'FREE BALL!';
       if (r.pinata) { const b = this.whack(inst, ev, tier ? r.tiers!.indexOf(tier) + 1 : 1); if (b) out.push(b); }
       // the Wizard Lamp: a segment for every type the ball itself hits; all lit, WIZARD MODE
       if (!ev.zap && !ev.spark) { this.wizTypes.add(inst.def); const w = this.wizardCheck(ev); if (w) out.push(w); }
@@ -1038,6 +1057,17 @@ export class Scorer {
     const e = this.award(inst, ev.t, inst.x, inst.y, 'bonus', 0, 0, this.mods.noCoins ? 0 : pn.money, [`${pn.sparks} sparks, $${pn.money}, a free part in the next shop`], 'PIÑATA!');
     e.sparks = [{ n: pn.sparks, x: inst.x, y: inst.y, r: footprint(PARTS[inst.def]) + 0.45, parent: ev.ballId }];
     return e;
+  }
+
+  /** A ball knocked out a gremlin: points (times the ball's Mult, like any hit), and a little money. */
+  private gremlin(ev: { t: number; uid: number; ballId: number; x: number; y: number }): ScoreEvent[] {
+    const hutch = this.getParts().find((p) => p.uid === ev.uid && p.placed);
+    if (!hutch) return [];
+    this.now = ev.t;
+    const situ = this.situational(ev);
+    const base = Math.round(GREMLIN.points * this.mods.pointsFactor * situ.x);
+    const money = this.mods.noCoins ? 0 : this.take(this.moneyPaid, 'gremlin', GREMLIN.money, GREMLIN.moneyCap);
+    return [this.award(hutch, ev.t, ev.x, ev.y, 'hit', base, 0, money, [`${base} gremlin`, ...situ.notes], 'GOTCHA!')];
   }
 
   /** An Ice Sculpture has melted away: a last word on the ledger. */

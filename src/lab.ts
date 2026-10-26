@@ -28,6 +28,7 @@ const STATES: Partial<Record<PartId, [string, PartState][]>> = {
   gong: [['idle', {}], ['hit', { hit: true }]],
   sparkler: [['ready', {}], ['hit', { hit: true }], ['recharging', { lit: false }]],
   firecracker: [['ready', {}], ['hit', { hit: true }], ['spent', { armed: false }]],
+  wreck: [['idle', {}], ['hit', { hit: true }]],
   grape: [['idle', {}], ['golden', { lit: true }]],
   spot: [['lit', {}], ['dark', { lit: false }]],
   bonsai: [['new', {}], ['5 rounds', { seg: 5 }]],

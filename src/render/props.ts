@@ -405,6 +405,45 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       }
       break;
     }
+    case 'wreck': {
+      // a wrecking ball: a heavy iron ball hanging on a chain from a little gantry
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r * 0.95, 0, 0.14, mat(t, t.paper));
+      const iron = mat(t, st.hit ? mix(t.role.wreck, WHITE, 0.4) : t.role.wreck);
+      p.face(hull([0, 0.35, 0.7, 1].flatMap((u) => ring(x, y, r * 0.75 * Math.sin(Math.PI * (0.15 + u * 0.7)), 22).map(([a, b]) => P(v, a, b, 0.25 + u * 1.5)))), iron.base);
+      p.face(ring(x - r * 0.25, y + r * 0.1, r * 0.18, 12).map(([a, b]) => P(v, a, b, 1.35)), iron.light, { sil: false, line: 0 });
+      p.cyl(x, y, 0.07, 1.75, 0.9, metal, { n: 8 });
+      p.cyl(x, y, 0.16, 2.65, 0.12, metal, { n: 10 });
+      break;
+    }
+    case 'broom': {
+      // a broomstick lying on a floor plate, bristles at the back, pointing the way the ball will fly
+      const c = Math.cos(angle), sn = Math.sin(angle), dir = (k: number): [number, number] => [x - sn * k, y + c * k], side = (k: number): [number, number] => [c * k, sn * k];
+      p.face(ring(x, y, r, 24).map(([a, b]) => P(v, a, b, 0.01)), mix(t.role.broom, t.shadeTint, 0.55), { line: 0.4 });
+      const [hx, hy] = dir(r * 0.95), [tx, ty] = dir(-r * 0.4);
+      p.op((g) => {
+        const a = P(v, hx, hy, 0.2), b = P(v, tx, ty, 0.2);
+        g.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: v.S * 0.18 + v.lw * 1.2, color: t.ink, cap: 'round' });
+        g.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: v.S * 0.18, color: st.hit ? WHITE : t.rim, cap: 'round' });
+      });
+      const [bx, by] = dir(-r * 0.75), [sx, sy] = side(r * 0.45);
+      p.face([P(v, tx + sx * 0.3, ty + sy * 0.3, 0.2), P(v, bx + sx, by + sy, 0.1), P(v, bx - sx, by - sy, 0.1), P(v, tx - sx * 0.3, ty - sy * 0.3, 0.2)], t.role.broom, { line: 0.4 });
+      // an arrow on the plate: the way it flies
+      const [ax, ay] = dir(r * 0.55), [l1x, l1y] = side(r * 0.25);
+      p.face([P(v, ...dir(r * 0.95), 0.02), P(v, ax + l1x, ay + l1y, 0.02), P(v, ax - l1x, ay - l1y, 0.02)], t.accent, { sil: false, line: 0.3 });
+      break;
+    }
+    case 'hutch': {
+      // decor: a little wooden hutch with a round door and two eyes peering out of the dark
+      shadow(under, v, t, x, y, r * 1.0, r * 0.8);
+      const wood = mat(t, mix(t.role.hutch, t.rim, 0.5)), roof = mat(t, t.role.hutch);
+      p.prism(box(x, y, r * 0.75, r * 0.55, 0), 0, 1.0, wood);
+      p.face([P(v, x - r * 0.9, y - r * 0.6, 1.0), P(v, x, y - r * 0.6, 1.9), P(v, x + r * 0.9, y - r * 0.6, 1.0)], roof.base, { line: 0.45 });
+      const door = Array.from({ length: 12 }, (_, i): Pt => { const a = Math.PI - (i / 11) * Math.PI; return P(v, x + Math.cos(a) * r * 0.32, y - r * 0.56, 0.05 + Math.sin(a) * 0.65); });
+      p.face([P(v, x - r * 0.32, y - r * 0.56, 0), ...door, P(v, x + r * 0.32, y - r * 0.56, 0)], t.ink, { sil: false, line: 0.3 });
+      for (const sx of [-1, 1]) { const [ex, ey] = P(v, x + sx * r * 0.12, y - r * 0.57, 0.4); p.op((g) => g.circle(ex, ey, S * 0.06).fill(t.role.goldleaf)); }
+      break;
+    }
     case 'grape': {
       // a bunch of grapes on a vine-leaf base; a big enough bunch turns gold
       shadow(under, v, t, x, y, r * 1.05, r * 1.05);
@@ -801,7 +840,7 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.cyl(x, y, 0.55, 0, 0.08, metal);
       break;
     }
-    case 'duck': case 'roller': case 'goal': {
+    case 'duck': case 'roller': case 'goal': case 'bucket': {
       const m = def.mover!, sh = def.shape.type === 'box' ? def.shape : { hw: 3, hh: 0.6 };
       const base = st.part !== 'mover', piece = st.part !== 'base';
       if (base) {
@@ -840,6 +879,13 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
             g.poly([bx, by - v.S * 0.08, bx - v.S * 0.32, by, bx, by + v.S * 0.1]).fill(t.accent).stroke({ width: v.lw * 0.5, color: t.ink, join: 'round' });
             g.circle(ex, ey, v.S * 0.07).fill(t.ink);
           });
+        } else if (id === 'bucket') {
+          // a bucket on runners: open at the top, so a ball dropping in is kept
+          const pail = mat(t, st.hit ? mix(t.role.bucket, WHITE, 0.4) : t.role.bucket);
+          shadow(under, v, t, px, py, 0.9, 0.5);
+          p.cyl(px, py, 0.6, 0, 0.75, pail);
+          p.cyl(px, py, 0.72, 0.75, 0.12, mat(t, t.metal));
+          p.face(ring(px, py, 0.6, 18).map(([a, b]) => P(v, a, b, 0.88)), t.ink, { sil: false, line: 0.3 });
         } else if (id === 'roller') {
           // a pop bumper on wheels
           shadow(under, v, t, px, py, 0.9, 0.9);
@@ -1045,16 +1091,27 @@ export function drawFlipper(g: Graphics, v: View, t: Theme, px: number, py: numb
 
 export interface BallWear { core: string; shade: string }
 /** The ball: near-white with an ink outline in every theme, the most readable thing on screen. */
-export function drawBall(g: Graphics, v: View, t: Theme, x: number, y: number, wear: BallWear) {
-  const r = BALL_R, [X, Y] = P(v, x, y, r), R = r * v.S;
+export function drawBall(g: Graphics, v: View, t: Theme, x: number, y: number, wear: BallWear, r = BALL_R) {
+  const [X, Y] = P(v, x, y, r), R = r * v.S;
   g.circle(X, Y, R + v.lw * 0.8).fill(t.ink);
   g.circle(X, Y, R).fill(wear.shade);
   g.circle(X - R * 0.18, Y - R * 0.18, R * 0.74).fill(wear.core);
   g.ellipse(X - R * 0.35, Y - R * 0.38, R * 0.3, R * 0.2).fill(WHITE);
   g.moveTo(X - R * 0.7, Y + R * 0.2).quadraticCurveTo(X - R * 0.3, Y + R * 0.7, X + R * 0.3, Y + R * 0.65).stroke({ width: R * 0.14, color: t.accent, alpha: 0.6, cap: 'round' });
 }
-export function ballShadow(g: Graphics, v: View, t: Theme, x: number, y: number) {
-  shadow(g, v, t, x + 0.15, y - 0.1, BALL_R * 0.9, BALL_R * 0.7, 0.3);
+export function ballShadow(g: Graphics, v: View, t: Theme, x: number, y: number, r = BALL_R) {
+  shadow(g, v, t, x + 0.15, y - 0.1, r * 0.9, r * 0.7, 0.3);
+}
+
+/** A gremlin: a little green imp with big ears and a grin, bobbing as it wanders (drawn live, it moves). */
+export function drawGremlin(g: Graphics, v: View, t: Theme, x: number, y: number, bob: number) {
+  const z = 0.5 + Math.sin(bob) * 0.15, [X, Y] = P(v, x, y, z), R = 0.55 * v.S, c = t.role.hutch;
+  shadow(g, v, t, x, y, 0.5, 0.4, 0.25);
+  g.poly([X - R * 0.7, Y - R * 0.3, X - R * 1.5, Y - R * 0.9, X - R * 0.5, Y - R * 0.75]).fill(c).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' });
+  g.poly([X + R * 0.7, Y - R * 0.3, X + R * 1.5, Y - R * 0.9, X + R * 0.5, Y - R * 0.75]).fill(c).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' });
+  g.circle(X, Y, R).fill(c).stroke({ width: v.lw * 0.9, color: t.ink });
+  for (const sx of [-1, 1]) { g.circle(X + sx * R * 0.35, Y - R * 0.2, R * 0.26).fill(WHITE).stroke({ width: v.lw * 0.4, color: t.ink }); g.circle(X + sx * R * 0.3, Y - R * 0.15, R * 0.11).fill(t.ink); }
+  g.moveTo(X - R * 0.4, Y + R * 0.3).quadraticCurveTo(X, Y + R * 0.65, X + R * 0.4, Y + R * 0.3).stroke({ width: v.lw * 0.6, color: t.ink, cap: 'round' });
 }
 
 /** The ground ring under a hit part: sells the contact and stays in the floor plane. */
