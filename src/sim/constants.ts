@@ -47,8 +47,10 @@ export const BALL_SEARCH_AFTER = 3.5;
 export const BALL_SEARCH_AGAIN = 1.5;
 /** Kicks a stuck ball gets before the search gives up and puts it back in the plunger lane (still the same ball). */
 export const BALL_SEARCH_KICKS = 2;
-/** A ball (with every ball it turns into) lasts at most this long after its first launch. Late-game balls hit it often, which keeps rounds near 2.5 minutes. */
+/** The ball clock: seconds from a ball's first launch (with every ball it turns into) until the flippers go dead. Late-game balls hit it often, which keeps rounds near 2.5 minutes. */
 export const BALL_TIMEOUT = 60;
+/** After the ball clock runs out, the balls roll out on their own for at most this long; any still on the table then are taken. */
+export const RUNOUT_MAX = 15;
 export const NUDGE_SPEED = 7;
 export const NUDGE_TILT = 0.4;
 export const TILT_DECAY = 0.3;
