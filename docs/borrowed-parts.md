@@ -29,7 +29,12 @@ zapping what it flies past at ×2), the Free Ball Bucket (a sensor bucket on a r
 from above goes back to the plunger) and the Gremlin Hutch (decor: 2 gremlins wander the table, 100 and $1 a knock,
 up to $5 a round, back 10 s later; a knock was 300 at first, tuned to 100). `npm run physics-report` now checks a 1.5× ball against the flippers (0
 tunnels in 600 trials, with or without the safety net) and runs the escape fuzz on a table with all four (0
-escapes, 0 stuck in 200 balls). **The build order of §4 is done.**
+escapes, 0 stuck in 200 balls). **The build order of §4 is done.** After it, the approved ideas that were never in the build order,
+the spark parts first: the Splitter (2 sparks off to the sides, then dark 5 s; $7, tuned from $6 and 4 s), the Whale (swallows sparks for 8;
+every 6th it spouts 6 sparks and 300, 3 spouts a ball), the Insurance Policy (the last ball drained short of the
+goal: 10 sparks from the top, once, then it is gone), the Spider Nest (25% of hits lay an egg that hatches into 3
+sparks on the first part it hits) and the Marble Jar (a marble every 25 hits, up to 5; every launch brings a spark
+per marble).
 
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show

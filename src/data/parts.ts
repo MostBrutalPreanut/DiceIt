@@ -22,7 +22,8 @@ export type PartId =
   | 'sparkler' | 'firecracker' | 'rocks'
   | 'clock' | 'altar' | 'bulb' | 'feet' | 'tray' | 'mirror' | 'wizard' | 'pinata'
   | 'grape' | 'echo' | 'spot' | 'bonsai' | 'capsule' | 'ice' | 'well'
-  | 'wreck' | 'broom' | 'bucket' | 'hutch';
+  | 'wreck' | 'broom' | 'bucket' | 'hutch'
+  | 'split' | 'whale' | 'insure' | 'nest' | 'jar';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip' | 'inlay' | 'decor';
 
@@ -217,6 +218,16 @@ export interface Recipe {
   ride?: { x: number };
   /** Free Ball Bucket: a ball dropping into the sliding bucket from above goes back to the plunger, not lost. */
   bucket?: boolean;
+  /** Splitter: the ball's pass splits off `n` sparks, left and right; then it is dark for `cooldown` s. */
+  split?: { n: number; cooldown: number };
+  /** The Whale: swallows every spark that touches it (`swallow` points each); every `every`th it spouts `sparks` sparks and `points`, up to `perBall` spouts a ball. */
+  whale?: { swallow: number; every: number; sparks: number; points: number; perBall: number };
+  /** Insurance Policy: if the last ball of a round drains short of the goal, `sparks` sparks rain from the top, once; then it is used up. */
+  insure?: { sparks: number };
+  /** Spider Nest: each of the ball's hits has a `chance` of laying an egg, a spark that hatches into 3 on the first part it hits. */
+  nest?: { chance: number };
+  /** Marble Jar: every `every` hits of the ball on it add a marble, for the run (up to `max`); every ball you launch brings one spark per marble. */
+  jar?: { every: number; max: number };
   /** Gremlin Hutch (decor): this many gremlins wander the table (see GREMLIN). */
   gremlins?: number;
   /** Ritual Altar (decor): every `sets` sets completed start a `seconds` s ritual (see RITUALS). */
@@ -306,7 +317,7 @@ export const ZAP_COOLDOWN = 0.5;
  */
 export const zappable = (id: PartId) => {
   const k = PARTS[id].kind, r = PARTS[id].recipe;
-  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule || r.bucket) return false;
+  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule || r.bucket || r.insure) return false;
   return k === 'bumper' || k === 'kicker' || k === 'spinner' || k === 'rollover' || k === 'lamp' || k === 'target' || k === 'mover';
 };
 
@@ -658,6 +669,31 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'onceABall' }, dials: [],
   },
 
+  split: {
+    id: 'split', name: 'Splitter', blurb: 'One ball in. Two sparks out.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 7, weight: 2,
+    shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 10, per: 'roll-over', split: { n: 2, cooldown: 5 }, perLevel: 2 }, dials: [],
+  },
+  whale: {
+    id: 'whale', name: 'The Whale', blurb: 'It eats sparks. Then it sneezes.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 12, weight: 1,
+    shape: { type: 'circle', r: 1.6 }, rotatable: false, kickUnit: 12,
+    recipe: { points: 20, per: 'hit', whale: { swallow: 8, every: 6, sparks: 6, points: 300, perBall: 3 }, perLevel: 4 }, dials: [kickDial(1.5)],
+  },
+  insure: {
+    id: 'insure', name: 'Insurance Policy', blurb: 'For when the last ball goes wrong. Once.', kind: 'target', rarity: 'uncommon', tags: ['guard'], cost: 5, weight: 1,
+    shape: { type: 'circle', r: 0.75 }, rotatable: false, kickUnit: 0,
+    recipe: { insure: { sparks: 10 } }, dials: [],
+  },
+  nest: {
+    id: 'nest', name: 'Spider Nest', blurb: 'Every so often, an egg. Every egg, trouble.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 1,
+    shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 9,
+    recipe: { points: 15, per: 'hit', nest: { chance: 0.25 }, perLevel: 3 }, dials: [kickDial(1.5)],
+  },
+  jar: {
+    id: 'jar', name: 'Marble Jar', blurb: 'Fill it up. Every ball brings friends.', kind: 'target', rarity: 'rare', tags: ['target'], cost: 8, weight: 1,
+    shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 10, per: 'hit', jar: { every: 25, max: 5 }, perLevel: 2 }, dials: [],
+  },
   wreck: {
     id: 'wreck', name: 'Wrecking Ball', blurb: 'Hit it and your ball gets big ideas.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 11, weight: 1,
     shape: { type: 'circle', r: 1.2 }, rotatable: false, kickUnit: 10,
@@ -814,6 +850,9 @@ export interface PartInstance {
   bursts?: number;
   /** Bonsai Bumper and Time Capsule: rounds played with it on the table (a Bonsai's count starts again when it is moved). */
   age?: number;
+  /** Marble Jar: the ball's hits on it so far this run, and the marbles they have added. */
+  jarHits?: number;
+  marbles?: number;
   /** Ice Sculpture: the points it has left (it melts). */
   ice?: number;
   /** Wishing Well: the $ thrown in, and how much this workshop visit (round number and $). */
@@ -971,6 +1010,11 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
   if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
   if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
+  if (r.split) lines.push({ tag: 'spawn', text: `When the ball rolls over it, ${r.split.n} sparks split off, one to each side. Then it needs ${r.split.cooldown} s.` });
+  if (r.whale) lines.push({ tag: 'spawn', text: `It swallows every spark that touches it (${r.whale.swallow} points each). Every ${r.whale.every}th it spouts: ${r.whale.sparks} sparks out of its blowhole and ${r.whale.points} points (${r.whale.perBall} spouts a ball at most).` });
+  if (r.insure) lines.push({ tag: 'note', text: `Scores nothing. If the last ball of a round drains short of the goal, ${r.insure.sparks} sparks rain down from the top, once, for one last try. Then the policy is used up and leaves the table.` }, { tag: 'note', text: 'A comeback, never a crutch: it pays out only on the last ball of a round you have not cleared.' });
+  if (r.nest) lines.push({ tag: 'spawn', text: `Every hit of the ball has a ${Math.round(r.nest.chance * 100)}% chance of laying an egg: a spark that hatches into 3 sparks on the first part it hits.` });
+  if (r.jar) lines.push({ tag: 'spawn', text: `Every ${r.jar.every} hits of the ball on it add a marble, for the rest of the run (up to ${r.jar.max})${inst?.marbles ? `; ${inst.marbles} in it now` : ''}. Every ball you launch brings one spark per marble.` });
   if (r.wreck) lines.push({ tag: 'combo', text: `Once a ball, a hit makes the ball ${r.wreck.k}× bigger for ${r.wreck.seconds} s (it grows only where it has room): every hit it makes pays ×${r.wreck.x}, and the table shakes.` });
   if (r.ride) lines.push({ tag: 'combo', text: `The ball rides it: it flies straight the way the broom points, with no gravity, for ${RIDE_SECONDS} s or until it touches anything. Every part it flies past is zapped, paying ×${r.ride.x}. Turn it to aim.` });
   if (r.bucket) lines.push({ tag: 'set', text: `A bucket slides along its rail. A ball that drops into it from above goes back to the plunger: it is not lost. Place the rail where it is a shot, not a gift.` });

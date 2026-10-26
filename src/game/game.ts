@@ -403,12 +403,12 @@ export class Game {
     }
     for (const s of score) for (const b of s.sparks ?? []) {
       if (b.delay) this.pendingSparks.push({ ...b, at: this.sim.time + b.delay });
-      else this.sim.addSparks(b.n, b.x, b.y, b.parent, { r: b.r, top: b.top });
+      else this.sim.addSparks(b.n, b.x, b.y, b.parent, { r: b.r, top: b.top, aim: b.aim, egg: b.egg });
     }
     if (!this.pendingSparks.length) return;
     const due = this.pendingSparks.filter((b) => b.at <= this.sim.time);
     this.pendingSparks = this.pendingSparks.filter((b) => b.at > this.sim.time);
-    for (const b of due) this.sim.addSparks(b.n, b.x, b.y, b.parent, { r: b.r, top: b.top });
+    for (const b of due) this.sim.addSparks(b.n, b.x, b.y, b.parent, { r: b.r, top: b.top, aim: b.aim, egg: b.egg });
   }
 
   get ballsPerRound() {
@@ -1197,14 +1197,39 @@ export class Game {
       for (const s of this.scorer.consume(ev)) result.score.push(s);
       if (ev.type === 'tilt') result.game.push({ type: 'tilt' });
       if (ev.type === 'flipper' && ev.on && this.mode === 'round') this.melt(result);
+      if (ev.type === 'launch') {
+        // a Marble Jar: every ball launched brings one spark per marble, down from the top
+        const n = this.placed.reduce((a, p) => a + (PARTS[p.def].recipe.jar ? this.scorer.marblesOf(p) : 0), 0);
+        if (n) this.sim.addSparks(n, 0, 0, ev.ballId, { top: true });
+      }
     }
     for (const s of this.scorer.tick(this.sim.time)) result.score.push(s); // a Powder Keg's fuse burns down
     this.spawnSparks(result.score);
     if (!wasGoal && this.scorer.goalReached) result.game.push({ type: 'goal' });
     // a ball ends when the LAST ball on the table is gone (the Ball Printer makes multiball)
-    if (this.mode === 'round' && this.sim.ballCount === 0 && !this.sim.awaitingPlunge) this.endBall(false, result);
+    if (this.mode === 'round' && this.sim.ballCount === 0 && !this.sim.awaitingPlunge && !this.insured(result)) this.endBall(false, result);
     return result;
   }
+
+  /**
+   * The last ball of a round has drained short of the goal: an Insurance Policy pays out once (its sparks rain from
+   * the top, scoring as that ball) and is used up. The ball ends when its sparks are gone. True while that holds it.
+   */
+  private insured(result: StepResult): boolean {
+    if (this.claim) return this.sim.sparkStates().length > 0 || this.pendingSparks.length > 0;
+    if (this.ballsLeft > 1 || this.scorer.goalReached) return false;
+    const policy = this.placed.find((p) => PARTS[p.def].recipe.insure);
+    if (!policy) return false;
+    const drained = [...result.sim].reverse().find((e) => e.type === 'drain');
+    this.claim = true;
+    this.layout.parts = this.layout.parts.filter((q) => q.uid !== policy.uid);
+    this.sim.removePart(policy.uid);
+    this.sim.addSparks(PARTS[policy.def].recipe.insure!.sparks, 0, 0, drained && 'ballId' in drained ? drained.ballId : 1, { top: true });
+    result.score.push(this.scorer.claimed(policy, this.sim.time));
+    return true;
+  }
+  /** An Insurance Policy is paying out on this ball. */
+  private claim = false;
 
   /** A flipper press in a round: every Ice Sculpture loses a point; one at zero is a puddle, and gone. */
   private melt(result: StepResult) {
@@ -1227,6 +1252,7 @@ export class Game {
     out.push({ type: 'ballEnd', ballsLeft: this.ballsLeft });
     this.sim.clearSparks(); // a ball's sparks go out with it
     this.pendingSparks = [];
+    this.claim = false;
     this.wizardBalls = null;
     if (this.scorer.goalReached || this.ballsLeft <= 0) this.runScore += this.scorer.score;
     if (this.scorer.goalReached) {

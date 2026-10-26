@@ -405,6 +405,67 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       }
       break;
     }
+    case 'split': {
+      // a Splitter: a floor insert with a wedge in the middle and an arrow out to each side
+      const lit = st.lit !== false, c = t.role.split;
+      p.face(ring(x, y, r, 24).map(([a, b]) => P(v, a, b, 0.01)), metal.mid, { line: 0.4 });
+      p.face(ring(x, y, r * 0.82, 24).map(([a, b]) => P(v, a, b, 0.02)), lit ? mix(c, WHITE, 0.25) : mix(c, t.shadeTint, 0.6), { line: 0.3, sil: false });
+      for (const sx of [-1, 1]) p.face([P(v, x + sx * r * 0.75, y, 0.03), P(v, x + sx * r * 0.3, y + r * 0.3, 0.03), P(v, x + sx * r * 0.3, y - r * 0.3, 0.03)], lit ? WHITE : mix(c, t.ink, 0.4), { sil: false, line: 0.3 });
+      p.prism(box(x, y, 0.12, r * 0.45, 0), 0, 0.5, mat(t, st.hit ? WHITE : t.metal));
+      break;
+    }
+    case 'whale': {
+      // the Whale: a big round blue whale with a white belly, a tail and a blowhole; it spouts when it is full
+      shadow(under, v, t, x, y, r * 1.05, r * 0.9);
+      const body = mat(t, st.hit ? mix(t.role.whale, WHITE, 0.4) : t.role.whale);
+      p.face(hull([0, 0.35, 0.7, 1].flatMap((u) => ring(x, y, r * 0.9 * Math.cos((u * Math.PI) / 2.3), 26, r * 0.75 * Math.cos((u * Math.PI) / 2.3)).map(([a, b]) => P(v, a, b, u * 1.5)))), body.base);
+      p.face(ring(x, y - r * 0.55, r * 0.55, 18, r * 0.2).map(([a, b]) => P(v, a, b, 0.45)), WHITE, { sil: false, line: 0.35 });
+      p.face([P(v, x + r * 0.8, y, 0.6), P(v, x + r * 1.35, y + r * 0.35, 1.2), P(v, x + r * 1.35, y - r * 0.35, 0.3)], body.shade, { line: 0.45 });
+      const [ex, ey] = P(v, x - r * 0.45, y - r * 0.4, 1.0), [hx, hy] = P(v, x, y, 1.55);
+      const full = Math.min(6, st.seg ?? 0);
+      p.op((g) => {
+        g.circle(ex, ey, S * 0.12).fill(t.ink);
+        g.ellipse(hx, hy, S * 0.16, S * 0.07).fill(t.ink);
+        for (let i = 0; i < full; i++) g.circle(hx + (i - (full - 1) / 2) * S * 0.18, hy - S * (0.35 + (i % 2) * 0.15), S * 0.08).fill(mix(t.role.whale, WHITE, 0.6)).stroke({ width: v.lw * 0.3, color: t.ink });
+      });
+      break;
+    }
+    case 'insure': {
+      // an Insurance Policy: a rolled-up certificate with a red wax seal, on a little stand; once used, it is gone
+      shadow(under, v, t, x, y, r * 1.0, r * 0.8);
+      p.cyl(x, y, r * 0.8, 0, 0.14, metal);
+      const paper = mat(t, st.hit ? WHITE : t.paper);
+      p.prism(box(x, y, r * 0.75, r * 0.3, 0, 0.25), 0.14, 0.55, paper);
+      p.face(ring(x + r * 0.2, y - r * 0.3, r * 0.22, 12).map(([a, b]) => P(v, a, b, 0.4)), t.role.redseal, { sil: false, line: 0.4 });
+      p.face(box(x - r * 0.2, y - r * 0.31, r * 0.3, 0.02, 0).map(([a, b]) => P(v, a, b, 0.5)), t.role.insure, { sil: false, line: 0.2 });
+      break;
+    }
+    case 'nest': {
+      // a Spider Nest: a grey web dome with a spider on top and a couple of eggs in it
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r, 0, 0.14, mat(t, t.paper));
+      const web = mat(t, st.hit ? mix(t.role.nest, WHITE, 0.4) : t.role.nest);
+      p.face(hull([0, 0.5, 1].flatMap((u) => ring(x, y, r * 0.85 * Math.cos((u * Math.PI) / 2.2), 20).map(([a, b]) => P(v, a, b, 0.14 + u * 1.1)))), web.base);
+      p.op((g) => {
+        for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2, [ax, ay] = P(v, x, y, 1.25), [bx, by] = P(v, x + Math.cos(a) * r * 0.8, y + Math.sin(a) * r * 0.8, 0.2); g.moveTo(ax, ay).lineTo(bx, by); }
+        g.stroke({ width: v.lw * 0.35, color: WHITE, alpha: 0.7 });
+        for (const [dx, dy] of [[-0.35, -0.4], [0.3, -0.45]] as const) { const [qx, qy] = P(v, x + dx * r, y + dy * r, 0.35); g.ellipse(qx, qy, S * 0.14, S * 0.11).fill(WHITE).stroke({ width: v.lw * 0.4, color: t.ink }); }
+        const [sx, sy] = P(v, x, y, 1.3);
+        g.circle(sx, sy, S * 0.2).fill(t.ink);
+        for (const k of [-1, 1]) for (let l = 0; l < 3; l++) g.moveTo(sx, sy).lineTo(sx + k * S * (0.35 + l * 0.05), sy - S * (0.2 - l * 0.18));
+        g.stroke({ width: v.lw * 0.5, color: t.ink, cap: 'round' });
+      });
+      break;
+    }
+    case 'jar': {
+      // a Marble Jar: a glass jar with a lid, the marbles in it at the bottom
+      shadow(under, v, t, x, y, r * 0.95, r * 0.95);
+      p.cyl(x, y, r * 0.75, 0, 1.3, mat(t, mix(t.role.jar, WHITE, st.hit ? 0.6 : 0.3)));
+      p.cyl(x, y, r * 0.6, 1.3, 0.2, metal);
+      const n = Math.min(5, st.seg ?? 0), cols = ['#ff5d8f', '#ffd23f', '#55d08f', '#62b8ff', '#8a63f2'];
+      p.op((g) => { for (let i = 0; i < n; i++) { const [mx, my] = P(v, x + (i - 2) * r * 0.25, y - r * 0.5, 0.3 + (i % 2) * 0.25); g.circle(mx, my, S * 0.15).fill(cols[i]).stroke({ width: v.lw * 0.4, color: t.ink }); } });
+      break;
+    }
     case 'wreck': {
       // a wrecking ball: a heavy iron ball hanging on a chain from a little gantry
       shadow(under, v, t, x, y, r * 1.05, r * 1.05);
