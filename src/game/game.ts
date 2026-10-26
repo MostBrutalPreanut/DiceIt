@@ -70,6 +70,8 @@ export interface ShopState {
   locked?: number[];
   /** Bargain Bin: the slot that is half price. */
   bargain?: number | null;
+  /** A Piñata burst last round: pick one of these, free (the others go). It waits until you pick. */
+  prize?: PartId[] | null;
 }
 
 /** Everything that survives a page reload. */
@@ -188,6 +190,8 @@ export class Game {
   runScore = 0;
   /** Sparks owed to the table later (a Firecracker's burst): when, and what. */
   private pendingSparks: (SparkBurst & { at: number })[] = [];
+  /** A Piñata burst this round: the next shop owes a free pick. */
+  private prizeDue = false;
   /** WIZARD MODE's extra balls, and when they leave: it is a 30 s multiball, not two balls for keeps. */
   private wizardBalls: { ids: number[]; until: number } | null = null;
   /** The part the last gem from the toolbox went into (the UI selects it). */
@@ -215,7 +219,7 @@ export class Game {
     if (persistent) {
       const boss = this.boss;
       const later = boss?.decalsOffUntilHalf && !this.fixedMods ? (() => { const m = this.roundMods(true); return { mods: m, at: goal / 2, baseMult: this.startMult(m) }; })() : undefined;
-      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), onPolish: (inst, by, cap) => this.polish(inst, by, cap), onNotch: (inst, n) => this.notch(inst, n), onLeaf: (inst, cap) => this.leaf(inst, cap), onKeep: (inst, patch) => Object.assign(inst, patch), jam: boss?.jam, later });
+      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), onPolish: (inst, by, cap) => this.polish(inst, by, cap), onNotch: (inst, n) => this.notch(inst, n), onLeaf: (inst, cap) => this.leaf(inst, cap), onKeep: (inst, patch) => Object.assign(inst, patch), onPrize: () => { this.prizeDue = true; }, jam: boss?.jam, later });
     }
     return new Scorer(goal, () => this.layout.parts, base); // a test ball's level-ups stay in its own scorer
   }
@@ -441,6 +445,11 @@ export class Game {
     this.round++;
     this.mods = this.workshopMods(); // the new round's shop (the Side Mirror counts the rounds)
     this.shop = this.freshShop(new Rng(this.runSeed * 1000 + this.round), this.shop);
+    if (this.prizeDue) {
+      // a Piñata burst: one of three parts, free; rarer than the shop's own (it rolls as if it were three rounds later)
+      this.shop.prize = rollOffers(new Rng(this.runSeed * 4241 + this.round), PARTS.pinata.recipe.pinata!.pick, this.round + 3, this.ownedDecor());
+      this.prizeDue = false;
+    }
     this.resolved = null;
     // after every boss (rounds 3, 6, 9...) the machine owes you a decal: one of three
     this.pending = (this.round - 1) % BOSS_EVERY === 0 ? this.rollPick() : null;
@@ -458,7 +467,7 @@ export class Game {
     const offers: (PartId | null)[] = [];
     for (let i = 0; i < n; i++) offers.push(keep.includes(i) ? prev!.offers[i] : fresh.shift() ?? null);
     const bargain = this.mods.bargain ? Math.floor(rng.next() * n) : null;
-    return { offers, rerolls: 0, locked: keep, bargain };
+    return { offers, rerolls: 0, locked: keep, bargain, prize: prev?.prize ?? null };
   }
 
   get lockSlots() {
@@ -588,6 +597,7 @@ export class Game {
   newRun(machine: MachineId = this.machine) {
     this.runScore = 0;
     this.rings = 0;
+    this.prizeDue = false;
     this.machine = machine;
     this.layout = starterLayout();
     // the starting bumpers wait in the toolbox: put them wherever you like, free to place and to move this visit
@@ -826,6 +836,17 @@ export class Game {
   }
 
   /** One shop offer's worth of parts: a pack's pieces know they belong together. */
+  /** Take the Piñata's prize: the part (or pack) goes into the toolbox for free, and the other two go. */
+  takePrize(i: number): PartInstance | null {
+    const id = this.shop.prize?.[i];
+    if (!this.editable || !id || !this.hasRoomFor(id)) return null;
+    this.checkpoint();
+    this.shop.prize = null;
+    const pack = this.makePack(id, 0);
+    for (const inst of pack) { inst.fresh = true; this.layout.parts.push(inst); }
+    return pack[0];
+  }
+
   private makePack(id: PartId, cost: number, angle = 0): PartInstance[] {
     const n = PARTS[id].pack ?? 1, first = this.layout.nextUid;
     return Array.from({ length: n }, (_, i) => {

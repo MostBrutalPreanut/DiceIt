@@ -9,7 +9,7 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 404 pass, 0 fail (28 files) |
+| Unit tests | 407 pass, 0 fail (29 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
 | Browser smoke test | 105 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.6 ms a frame; 3.5 ms with 4 balls, 24 sparks and zaps |
@@ -82,6 +82,12 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   round. Gain per round on the power tool's table, mid / late: +11,197 / +23,129 (+14,812 / +32,656 over a plain Pop
   Bumper, about Rank Lights per dollar). That table has only six types, so the lamp lights early; on a full board it
   needs eight.
+- **Piñata (step 7)**: rare, $9. 40 health; each of the ball's hits takes 1 to 4 by speed (a zap or a spark 1). At
+  zero it bursts: 15 sparks, $5 and a free pick of one of three parts above the next shop (rolled three rounds
+  ahead; it waits until taken, a reroll keeps it). Broken for the rest of the round, back next round with 20 more
+  health; the damage carries over. Gain per round on the power tool's table, mid / late: +5,731 / +13,848 (+9,346 /
+  +23,375 over a plain Pop Bumper), above the Tesla Coil at the same price, before the money and the free part. If
+  it plays too strong, the 15 sparks are the first thing to cut.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

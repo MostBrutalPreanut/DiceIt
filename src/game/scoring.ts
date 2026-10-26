@@ -94,6 +94,8 @@ export interface ScorerOpts {
   onNotch?: (inst: PartInstance, notches: number) => boolean;
   /** Called when Gold Leaf adds +1 to its part, for real (like onPolish). Returns what it adds now. */
   onLeaf?: (inst: PartInstance, cap: number) => number;
+  /** Called when a Piñata bursts in a real round: the next shop owes a free pick. */
+  onPrize?: () => void;
   /** Called when the scorer keeps something on a part for the run, for real (the Ritual Altar's count): the game writes it on the part. */
   onKeep?: (inst: PartInstance, patch: Partial<PartInstance>) => void;
   /** Old Bell rings so far this run: every ball's Mult is ×1.2 for each (default none). */
@@ -195,6 +197,8 @@ export class Scorer {
   /** Ritual Altar: what a test ball's altar has kept (a real round's goes on the part, through onKeep), and the ritual under way. */
   private kept = new Map<number, Partial<PartInstance>>();
   private ritual: { kind: Ritual; until: number; s: number; next: number; ballId: number; uid: number } | null = null;
+  /** Piñatas that burst this round (broken until the next one). */
+  private burst = new Set<number>();
   /** Wizard Lamp: its segments this round, the types the ball itself has hit this ball, whether it fired this round, until when WIZARD MODE lasts. */
   private wizNeed = 0;
   private wizTypes = new Set<PartId>();
@@ -265,6 +269,7 @@ export class Scorer {
     this.firedThisRound.clear();
     this.rockHits.clear();
     this.clockMin = 0;
+    this.burst.clear();
     this.wizNeed = wizardNeed(this.getParts());
     this.wizFired = false;
     this.jammed.clear();
@@ -642,6 +647,7 @@ export class Scorer {
     }
 
     if (r.points) {
+      if (r.pinata && this.burst.has(inst.uid)) return out; // a burst Piñata is broken until the next round
       const gem = inst.inlay;
       if (gem === 'redseal' && !this.sealing && (this.sealDark.get(inst.uid) ?? -1) > ev.t) return out; // dark after its double
       if (r.perBall && (this.firedThisBall.get(inst.uid) ?? 0) >= r.perBall * (gem === 'emerald' ? 2 : 1)) return out;
@@ -767,6 +773,7 @@ export class Scorer {
       // the third notch rings the bell: ×1.2 on the Mult of this ball and every ball after it, for the rest of the run
       if (rang) out.push(this.ring(inst, ev));
       if (midnight) out.push(midnight);
+      if (r.pinata) { const b = this.whack(inst, ev, tier ? r.tiers!.indexOf(tier) + 1 : 1); if (b) out.push(b); }
       // the Wizard Lamp: a segment for every type the ball itself hits; all lit, WIZARD MODE
       if (!ev.zap && !ev.spark) { this.wizTypes.add(inst.def); const w = this.wizardCheck(ev); if (w) out.push(w); }
       // the Altar's Inferno: the ball's every hit also zaps the parts nearest it
@@ -953,6 +960,27 @@ export class Scorer {
     return this.jammed.size ? Math.min(this.wizNeed, wizardNeed(this.getParts().filter((p) => !this.jammed.has(p.def)))) : this.wizNeed;
   }
 
+  /** A Piñata takes a hit (1 to 4 by the ball's speed, 1 from a zap or a spark); at zero it bursts. */
+  private whack(inst: PartInstance, ev: { t: number; x: number; y: number; ballId: number; zap?: boolean; spark?: boolean }, tierDamage: number): ScoreEvent | null {
+    const pn = this.recipe(inst.def).pinata!, st = this.pinataOf(inst);
+    const taken = st.max - st.left + (ev.zap || ev.spark ? 1 : tierDamage);
+    if (taken < st.max) { this.keep(inst, { hp: taken }); return null; }
+    this.keep(inst, { hp: 0, bursts: this.keepOf(inst, 'bursts') + 1 });
+    this.burst.add(inst.uid);
+    this.opts.onPrize?.();
+    const e = this.award(inst, ev.t, inst.x, inst.y, 'bonus', 0, 0, this.mods.noCoins ? 0 : pn.money, [`${pn.sparks} sparks, $${pn.money}, a free part in the next shop`], 'PIÑATA!');
+    e.sparks = [{ n: pn.sparks, x: inst.x, y: inst.y, r: footprint(PARTS[inst.def]) + 0.45, parent: ev.ballId }];
+    return e;
+  }
+
+  /** A Piñata's health: what it has left, its most, and whether it has burst this round. */
+  pinataOf(inst: PartInstance): { left: number; max: number; burst: boolean } {
+    const pn = this.recipe(inst.def).pinata;
+    if (!pn) return { left: 0, max: 0, burst: false };
+    const max = pn.health + pn.grow * this.keepOf(inst, 'bursts');
+    return { left: max - this.keepOf(inst, 'hp'), max, burst: this.burst.has(inst.uid) };
+  }
+
   /** The Midnight Clock's hands: minutes past 9 PM, and whether it has struck this ball. */
   clockState(): { minutes: number; struck: boolean } {
     return { minutes: this.clockMin, struck: this.clockStruck };
@@ -964,7 +992,7 @@ export class Scorer {
   }
 
   /** What the scorer keeps on a part for the run: the game's copy (onKeep) or, for a test ball, its own. */
-  private keepOf<K extends 'sets' | 'rituals'>(inst: PartInstance, key: K): number {
+  private keepOf<K extends 'sets' | 'rituals' | 'hp' | 'bursts'>(inst: PartInstance, key: K): number {
     return this.kept.get(inst.uid)?.[key] ?? inst[key] ?? 0;
   }
 

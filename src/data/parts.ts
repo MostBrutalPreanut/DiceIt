@@ -17,7 +17,7 @@ export type PartId =
   | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell' | 'tesla' | 'keg' | 'laser' | 'gong'
   | 'ruby' | 'garnet' | 'emerald' | 'opal' | 'goldleaf' | 'redseal' | 'topaz'
   | 'sparkler' | 'firecracker' | 'rocks'
-  | 'clock' | 'altar' | 'bulb' | 'feet' | 'tray' | 'mirror' | 'wizard';
+  | 'clock' | 'altar' | 'bulb' | 'feet' | 'tray' | 'mirror' | 'wizard' | 'pinata';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip' | 'inlay' | 'decor';
 
@@ -186,6 +186,12 @@ export interface Recipe {
    * ×Mult cap lifted, every Lamp at full glow. Once a round.
    */
   wizard?: { max: number; seconds: number; balls: number };
+  /**
+   * Piñata: it has `health` (and `grow` more after every burst); a ball's hit takes 1 to 4 by its speed (the
+   * Vari-Target's tiers), a zap or a spark 1. At zero it bursts: `sparks` sparks, $`money` and a free pick of one
+   * of `pick` parts in the next shop. Broken for the rest of the round; the damage it took is kept from round to round.
+   */
+  pinata?: { health: number; grow: number; sparks: number; money: number; pick: number };
   /** Ritual Altar (decor): every `sets` sets completed start a `seconds` s ritual (see RITUALS). */
   altar?: { sets: number; seconds: number };
   /**
@@ -621,6 +627,11 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'onceABall' }, dials: [],
   },
 
+  pinata: {
+    id: 'pinata', name: 'Piñata', blurb: 'Whack it till it bursts. Candy for everyone.', kind: 'target', rarity: 'rare', tags: ['target'], cost: 9, weight: 1,
+    shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 15, per: 'hit', tiers: VARI_TIERS, pinata: { health: 40, grow: 20, sparks: 15, money: 5, pick: 3 }, perLevel: 3 }, dials: [],
+  },
   wizard: {
     id: 'wizard', name: 'Wizard Lamp', blurb: 'Hit every kind of part. Then: magic.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 1,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
@@ -712,6 +723,9 @@ export interface PartInstance {
   /** Ritual Altar: sets completed towards its next ritual, and rituals done this run (each makes the next stronger). */
   sets?: number;
   rituals?: number;
+  /** Piñata: the damage it has taken towards its next burst, and how often it has burst this run. */
+  hp?: number;
+  bursts?: number;
   /**
    * Free to move until the next round: bought in this visit to the workshop, or its move already paid. `paid`
    * is what it cost, refunded if it goes back before a round is played with it.
@@ -863,6 +877,11 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
   if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
   if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
+  if (r.pinata) {
+    const max = r.pinata.health + r.pinata.grow * (inst?.bursts ?? 0), left = max - (inst?.hp ?? 0);
+    lines.push({ tag: 'combo', text: `It has ${max} health${inst?.hp ? ` (${left} left)` : ''}. Every hit of the ball takes 1 to 4, the faster the more (a zap or a spark takes 1).` });
+    lines.push({ tag: 'money', text: `At zero it bursts: ${r.pinata.sparks} sparks, $${r.pinata.money}, and the next shop offers you one of ${r.pinata.pick} parts for free. It stays broken for the rest of the round, then comes back with ${r.pinata.grow} more health. The damage it takes carries over from round to round.` });
+  }
   if (r.wizard) {
     const need = ctx.wizardNeed;
     lines.push({ tag: 'combo', text: `It lights a segment for every different part type the ball itself hits this ball (zaps and sparks do not count): one segment for each part type on your table that scores, up to ${r.wizard.max}, counted when the round starts${need ? `. Right now: hit ${need} types` : ''}.` });

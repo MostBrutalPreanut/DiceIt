@@ -231,6 +231,37 @@ async function main() {
       <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}</div></div>`;
   }
 
+  /** A Piñata burst: one of three parts for free, above the shop, until you take one. */
+  function renderPrize() {
+    const box = $('prize'), prize = game.shop.prize;
+    box.hidden = !prize?.length || game.sandbox;
+    if (box.hidden) return;
+    box.innerHTML = `<div class="lbl">Piñata prize: take one, free</div>` + prize!.map((id, i) => {
+      const def = PARTS[id];
+      return `<div class="offer r-${def.rarity}" data-pid="${id}"><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}</div>
+        <div class="name">${def.name}</div><div class="buyrow"><button class="buy" data-take="${i}" ${game.editable && game.hasRoomFor(id) ? '' : 'disabled'} title="${game.hasRoomFor(id) ? 'Into your toolbox, free' : 'Make room in your toolbox first'}">Take</button></div><div class="blurb">${def.blurb}</div></div>`;
+    }).join('');
+    for (const el of box.querySelectorAll<HTMLElement>('.offer[data-pid]')) {
+      const def = PARTS[el.dataset.pid as PartId];
+      el.onmouseenter = (e) => tipPart(def, undefined, e.clientX, e.clientY, false);
+      el.onmousemove = (e) => placeTip(e.clientX, e.clientY);
+      el.onmouseleave = () => { $('tip').hidden = true; };
+    }
+    for (const b of box.querySelectorAll<HTMLButtonElement>('button[data-take]')) {
+      b.onclick = () => {
+        audio.unlock();
+        const part = game.takePrize(Number(b.dataset.take));
+        if (!part) { say('TOOLBOX FULL'); return; }
+        armed = part.uid;
+        selected = part.uid;
+        audio.buy();
+        say('PRIZE TAKEN!');
+        persist();
+        refreshWorkshop();
+      };
+    }
+  }
+
   /** Test Lab: every part in the game, free, instead of 4 rotating offers. */
   function renderCatalog() {
     $('shopMoney').textContent = '$∞';
@@ -281,6 +312,7 @@ async function main() {
     rb.textContent = game.rerollCost ? `REROLL $${game.rerollCost}` : 'REROLL';
     rb.disabled = !game.canAfford(game.rerollCost) || !game.editable;
     $('offers').innerHTML = game.shop.offers.map((id, i) => (id ? offerHtml(id, game.priceAt(i), i) : `<div class="offer sold">Sold</div>`)).join('');
+    renderPrize();
     for (const b of $('offers').querySelectorAll<HTMLButtonElement>('button[data-lock]')) {
       b.onclick = (e) => {
         e.stopPropagation();

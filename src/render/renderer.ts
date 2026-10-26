@@ -328,6 +328,13 @@ export class Renderer {
       // only a strong hit shakes the whole table (a presentation shake: the sim never feels it)
       if (!this.calm && ev.points >= 400) this.trauma = Math.min(1, this.trauma + Math.min(0.45, (mag - 2.5) * 0.3));
     }
+    if (ev.label === 'PIÑATA!') {
+      // the burst: a cloud of candy confetti and a puff of paper
+      for (let i = 0; i < 14; i++) this.particles.sparkle(ev.x + (Math.random() - 0.5) * 4, ev.y + (Math.random() - 0.5) * 3, 0.5 + Math.random() * 2.5, 1.4, i % 3 === 0);
+      this.particles.debris(ev.x, ev.y, 12, 1.4);
+      this.particles.puff(ev.x, ev.y, 0.5, 2.2);
+      if (!this.calm) this.trauma = Math.min(1, this.trauma + 0.4);
+    }
     if (ev.kind === 'bonus') for (let i = 0; i < 4; i++) this.particles.sparkle(ev.x + (Math.random() - 0.5) * 3, ev.y + (Math.random() - 0.5) * 2, 1 + Math.random(), 1.2, i % 2 === 0);
     if (ev.label) this.particles.sticker(ev.label, '', color, ev.x, ev.y, 2.2, 1, 0);
     else this.particles.sticker(ev.points.toLocaleString('en-US'), '', color, ev.x, ev.y, 1.6, 0.62 + mag * 0.14, ev.points);
@@ -530,6 +537,7 @@ export class Renderer {
       case 'clock': { const c = game.scorer.clockState(), hits = PARTS.clock.recipe.clock!.hits; return { lit: game.scorer.madnessLeft(game.sim.time) > 0, seg: c.struck ? 12 : Math.floor((c.minutes / hits) * 12) }; }
       case 'altar': { const now = game.scorer.ritualNow(game.sim.time), a = game.scorer.altarOf(p); return { lit: !!now, seg: Math.min(8, Math.round((a.sets / PARTS.altar.recipe.altar!.sets) * 8)) }; }
       case 'bulb': return { lit: true };
+      case 'pinata': { const h = game.scorer.pinataOf(p); return { hit: pulse > 0.35, armed: !h.burst, seg: h.max ? Math.min(4, Math.floor(((h.max - h.left) / h.max) * 5)) : 0 }; }
       case 'wizard': { const w = game.scorer.wizardState(game.sim.time); return { hit: pulse > 0.35, lit: !tilted && w.left > 0, seg: w.lit, bright: w.need }; }
       default: return {};
     }

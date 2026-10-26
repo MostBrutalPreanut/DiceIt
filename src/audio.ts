@@ -497,6 +497,7 @@ export class AudioFx {
       case 'sparkler': this.fizz(); this.bop(mult, 1.1); break;
       case 'firecracker': if (opts.label === 'WHOOSH!') this.rocket(); else this.bop(mult, 0.85); break;
       case 'rocks': this.clack(); break;
+      case 'pinata': this.thwack(); break;
       case 'bell': if (notes.some((n) => n.endsWith(' toll'))) this.toll(false); else this.bop(mult, 0.95); break;
       case 'uplight': this.levelLight(this.ladder(mult, 1047, 12)); break;
       case 'lamp': this.lampGlow(opts.label); break;
@@ -872,6 +873,7 @@ export class AudioFx {
     else if (label === 'BOOM!') this.gongHit(true);
     else if (id === 'clock') this.midnight();
     else if (id === 'wizard') this.wizardMode();
+    else if (label === 'PIÑATA!') this.pinataBurst();
     else if (id === 'altar') this.ritual(label === 'TEMPEST!' ? 0 : label === 'INFERNO!' ? 1 : 2);
     else if (id === 'rank') this.rankUp(label?.startsWith('DIAMOND') ? 3 : label?.startsWith('GOLD') ? 2 : 1);
     else if (id === 'disco') this.disco();
@@ -958,6 +960,24 @@ export class AudioFx {
     if (!v) return;
     this.noise(v.o, v.t, 0.06, 0.3, { f: 1800, q: 4 });
     this.osc(v.o, v.t, 320, 0.07, 0.12, { to: 180, attack: 0.001 });
+  }
+
+  /** Piñata: a papery thwack. */
+  private thwack() {
+    const v = this.voice('thwack', 0.5, 0.2, 0.05, 3);
+    if (!v) return;
+    this.noise(v.o, v.t, 0.12, 0.3, { f: 900, q: 1.5 });
+    this.osc(v.o, v.t, 180, 0.1, 0.12, { to: 110, attack: 0.002 });
+  }
+
+  /** Piñata bursting: a crunch of paper, a party horn and a patter of falling candy. */
+  private pinataBurst() {
+    const v = this.voice('pinata', 0.8, 1.6, 0.4, 1, true);
+    if (!v) return;
+    this.duck(0.5, 0.8);
+    this.noise(v.o, v.t, 0.3, 0.45, { f: 1500, q: 0.8 });
+    this.osc(v.o, v.t + 0.12, 520, 0.5, 0.08, { type: 'sawtooth', lp: 2400, to: 700, glide: 0.4, attack: 0.02 });
+    for (let i = 0; i < 10; i++) this.noise(v.o, v.t + 0.3 + i * rand(0.05, 0.1), 0.04, 0.1, { f: rand(2500, 5000), q: 4 });
   }
 
   /** Wizard Lamp: WIZARD MODE, a long rising run of bells over a big chord. */
