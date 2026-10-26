@@ -20,12 +20,19 @@ each machine's Big Boi pulls the run towards a different build:
 
 ## 2. Part rarities
 
-| Rarity | In the shop from | Weight (× the part's own) | Price | Parts |
+| Rarity | Chance per offer, round 1 · 4 · 9 · 15 | Cascade roll (round 1 → 15) | Price | Parts |
 |---|---|---|---|---|
-| Common | round 1 | 1 | $1–4 | Pop Bumper, Cha-Ching Bumper, Slingshot, Spinner, Lane Rollover (pack of 3), Lamp, Vari-Target, Deflector, Kickback, **Sparkler** |
-| Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $4–7 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, Glow Strip, Roller Pop, **Power Plate**, X Lane, **Shockwave Gong**, **Rock Pile**, **Midnight Clock**, **Spare Bulb**, **Rubber Feet**, **Grape Bunch** (pack of 3), **Echo Cave**, **Spotlight**, **Bonsai Bumper**, **Ice Sculpture**, **Wishing Well**, **Splitter**, **Insurance Policy**, **Helping Hand** |
-| Rare | round 4 | 0.25, +0.1 a round, up to 1 | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup**, **Rank Lights** (pack of 3), **Old Bell**, **Tesla Coil**, **Powder Keg**, **Laser Turret**, **Firecracker**, **Coin Tray**, **Side Mirror**, **Piñata**, **Time Capsule**, **Broomstick**, **Spider Nest**, **Marble Jar**, **Gumball Machine**, **Bank Ring**, **Spider Wheel** |
-| Legendary | round 7 | 0.15, +0.07 a round, up to 0.6 | $11–13 | Golden Bumper, Disco Ball, Goal!, **Hall of Fame**, **Ritual Altar**, **Wizard Lamp**, **Wrecking Ball**, **Free Ball Bucket**, **Gremlin Hutch**, **The Whale** |
+| Common | 86% · 69% · 49% · 36% | whatever the rolls above miss | $1–4 | Pop Bumper, Cha-Ching Bumper, Slingshot, Spinner, Lane Rollover (pack of 3), Lamp, Vari-Target, Deflector, Kickback, **Sparkler** |
+| Uncommon | 12% · 23% · 30% · 29% | 12% → 45% | $4–7 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, Glow Strip, Roller Pop, **Power Plate**, X Lane, **Shockwave Gong**, **Rock Pile**, **Midnight Clock**, **Spare Bulb**, **Rubber Feet**, **Grape Bunch** (pack of 3), **Echo Cave**, **Spotlight**, **Bonsai Bumper**, **Ice Sculpture**, **Wishing Well**, **Splitter**, **Insurance Policy**, **Helping Hand** |
+| Rare | 2% · 7% · 16% · 23% | 2% → 26% | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup**, **Rank Lights** (pack of 3), **Old Bell**, **Tesla Coil**, **Powder Keg**, **Laser Turret**, **Firecracker**, **Coin Tray**, **Side Mirror**, **Piñata**, **Time Capsule**, **Broomstick**, **Spider Nest**, **Marble Jar**, **Gumball Machine**, **Bank Ring**, **Spider Wheel** |
+| Legendary | 0% · 0.5% · 4.5% · 12% | 0 until round 4, then 0.5% → 12% | $11–13 | Golden Bumper, Disco Ball, Goal!, **Hall of Fame**, **Ritual Altar**, **Wizard Lamp**, **Wrecking Ball**, **Free Ball Bucket**, **Gremlin Hutch**, **The Whale** |
+
+Every shop offer rolls its rarity as a cascade (`RARITY_ODDS` in `src/data/parts.ts`): the legendary chance first, then
+the rare, then the uncommon; the first that lands is the offer's rarity, and if none does it is a common. Then a part of
+that rarity is picked by its own shop weight (a rarity with nothing left to sell passes the offer down). The odds climb
+every round, a step more after each boss; no legendary shows before the first boss is beaten, and commons stay over a
+third of the shop even in round 15. The gems (round 7) and four decor pieces (round 4) still wait for their round, and a
+Piñata's prize rolls as if it were three rounds later.
 
 Rarer parts are physically bigger and do more. Every part does at least two things, and many feed or starve each other.
 Cards say what a part does; they carry no strategy tips.
