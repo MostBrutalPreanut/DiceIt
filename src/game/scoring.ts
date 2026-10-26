@@ -263,6 +263,17 @@ export class Scorer {
     return b;
   }
 
+  /** Power Plates under this part: what they multiply it by (1 if none, or if it is not a bumper). */
+  plateXAt(inst: PartInstance): number {
+    if (!hasTag(inst.def, 'bumper') || PARTS[inst.def].recipe.plate) return 1;
+    let x = 1;
+    for (const pl of this.placed()) {
+      const r = PARTS[pl.def].recipe.plate;
+      if (r && Math.hypot(pl.x - inst.x, pl.y - inst.y) <= r.reach) x *= r.x;
+    }
+    return x;
+  }
+
   /** How often a part has fired this ball (Disco Ball). */
   firedOf(uid: number) {
     return this.firedThisBall.get(uid) ?? 0;
@@ -333,7 +344,7 @@ export class Scorer {
     const lvl = (r.perLevel ?? 0) * this.effLevel(inst);
     const variety = r.variety ? r.variety * this.variety : 0;
     const order = this.order === inst.uid ? ORDER.x : 1;
-    return Math.round((r.points + lvl + grown + variety + this.potOf(inst)) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * (1 + this.stripBonusAt(inst)) * order);
+    return Math.round((r.points + lvl + grown + variety + this.potOf(inst)) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * (1 + this.stripBonusAt(inst)) * this.plateXAt(inst) * order);
   }
 
   /** The short number drawn on the part itself ("100", "10/spin", "+25%", "x1.25"). */
@@ -341,6 +352,7 @@ export class Scorer {
     const def = PARTS[inst.def];
     if (this.jammed.has(inst.def)) return 'JAMMED';
     if (def.kind === 'lamp') return this.mods.lightsOut ? 'OFF' : `+${Math.round(lampStats(dialValue(inst, 'radius'), this.mods).bonus * this.lampLevel(inst.uid) * 100)}%`;
+    if (def.recipe.plate) return `x${def.recipe.plate.x}`;
     if (def.kind === 'strip') return this.mods.lightsOut ? 'OFF' : `+${Math.round((def.recipe.strip?.bonus ?? 0) * 100)}%`;
     const r = this.recipe(inst.def);
     if (r.xmult && !r.points) return this.mods.lightsOut ? 'OFF' : `x${(1 + (r.xmult - 1) * this.mods.multGain).toFixed(2)}`;
@@ -494,6 +506,8 @@ export class Scorer {
       if (lamp.sum) notes.push(`+${Math.round(lamp.sum * 100)}% lamp`);
       const strip = this.stripBonusAt(inst);
       if (strip) notes.push(`+${Math.round(strip * 100)}% glow strip`);
+      const plate = this.plateXAt(inst);
+      if (plate > 1) notes.push(`x${Math.round(plate * 100) / 100} power plate`);
       const edge = r.edgeShot && ev.edge ? r.edgeShot.x : 1;
       if (edge > 1) notes.push(`x${edge} edge shot`);
       this.roundHits++;
@@ -535,7 +549,7 @@ export class Scorer {
       if (r.mult && multGain < this.gain(r.mult) - 1e-9) notes.push('Mult maxed for this ball');
       if (r.spinMult) multGain += this.gain(this.take(this.multPaid, 'spin', r.spinMult * m.spinMult * spins, (r.spinMultCap ?? 0) * m.spinMult));
       const xmult = r.xmult ? this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
-      const base = Math.round((r.points + level + grown + variety + pot) * spins * tierX * factor * mf * (1 + lamp.sum) * (1 + strip) * edge * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
+      const base = Math.round((r.points + level + grown + variety + pot) * spins * tierX * factor * mf * (1 + lamp.sum) * (1 + strip) * plate * edge * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
       if (r.feeds) this.hitsByType.set(r.feeds.id, this.hitsOf(r.feeds.id) + r.feeds.n);
       this.typesHit.add(inst.def);

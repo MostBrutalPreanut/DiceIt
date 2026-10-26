@@ -10,7 +10,7 @@ import { bigBoiOf, DRAGON, ORDER, type MachineId } from './bigboi';
 
 export type PartId =
   | 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver' | 'vari'
-  | 'ding' | 'piggy' | 'magnet' | 'thunder' | 'jackpot' | 'xlane' | 'golden' | 'disco' | 'trophy'
+  | 'ding' | 'piggy' | 'magnet' | 'thunder' | 'jackpot' | 'xlane' | 'golden' | 'disco' | 'trophy' | 'plate'
   | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip';
@@ -135,6 +135,8 @@ export interface Recipe {
   edgeShot?: { edge: number; x: number };
   /** Glow Strip: lights for `seconds` after any bonus anywhere, and while lit every part standing on it pays +`bonus`. */
   strip?: { seconds: number; bonus: number; reach: number };
+  /** Power Plate: a floor plate; every bumper standing within `reach` of it pays `x` times (plates multiply). */
+  plate?: { x: number; reach: number };
 }
 
 /** One step of a vari-target: balls at least `from` fast (scaled by the part's Stiffness) pay `x` times. */
@@ -329,6 +331,11 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'box', hw: 4, hh: 0.45 }, rotatable: false, kickUnit: 0,
     recipe: { strip: { seconds: 5, bonus: 0.5, reach: 1.6 } }, dials: [],
   },
+  plate: {
+    id: 'plate', name: 'Power Plate', blurb: 'A humming plate in the floor. Bumpers on it hit harder.', kind: 'strip', rarity: 'uncommon', tags: ['bumper'], cost: 6, weight: 2,
+    shape: { type: 'circle', r: 1.5 }, rotatable: false, kickUnit: 0,
+    recipe: { plate: { x: 1.5, reach: 3 } }, dials: [],
+  },
   roller: {
     id: 'roller', name: 'Roller Pop', blurb: 'A pop bumper on a rail. It will not sit still.', kind: 'mover', rarity: 'uncommon', tags: ['bumper'], cost: 6, weight: 2,
     shape: { type: 'box', hw: 3.6, hh: 0.9 }, rotatable: false, kickUnit: 0,
@@ -338,9 +345,9 @@ export const PARTS: Record<PartId, PartDef> = {
 
   // ---- rare: from round 4 ----
   printer: {
-    id: 'printer', name: 'Ball Printer', blurb: 'Eats one ball. Prints two. Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 7, weight: 2,
+    id: 'printer', name: 'Ball Printer', blurb: 'Eats one ball. Prints two. Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 4, perLevel: 10 },
+    recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 3, perLevel: 10 },
     dials: [
       {
         id: 'hold', label: 'Hold', min: 0.2, max: 2, step: 0.1, default: 0.6,
@@ -623,6 +630,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     lines.push({ tag: 'note', text: 'The goalie slides across the mouth of the goal and blocks the ball.' });
   }
   if (r.strip) lines.push({ tag: 'lamp', text: `Lies under the floor: other parts can stand on it. Every time anything pays a bonus (a set, a jackpot, a level up...), it lights for ${r.strip.seconds} s, and every part standing on it pays +${Math.round(r.strip.bonus * 100)}%.` });
+  if (r.plate) lines.push({ tag: 'score', text: `Lies in the floor: other parts can stand on it. Every bumper within ${num(r.plate.reach)} of it (Big Boi too) pays ×${num(r.plate.x)}, and plates multiply.` });
   if (def.id === 'mega') lines.push(...bigBoiLines(ctx.machine, factor, mods));
   return lines;
 }

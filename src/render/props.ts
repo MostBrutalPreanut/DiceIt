@@ -449,6 +449,21 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       }
       break;
     }
+    case 'plate': {
+      // a round plate set into the floor: a ring of rivets and a glowing core
+      const rr = def.shape.type === 'circle' ? def.shape.r : 1.5;
+      p.face(ring(x, y, rr, 30).map(([a, b]) => P(v, a, b, 0.005)), metal.mid, { line: 0.4 });
+      p.face(ring(x, y, rr * 0.78, 28).map(([a, b]) => P(v, a, b, 0.01)), mix(t.role.plate, t.shadeTint, 0.35), { line: 0.3, sil: false });
+      p.face(ring(x, y, rr * 0.42, 22).map(([a, b]) => P(v, a, b, 0.015)), mix(t.role.plate, WHITE, 0.3), { line: 0.3, sil: false });
+      p.op((g) => {
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * Math.PI * 2;
+          const [X, Y] = P(v, x + Math.cos(a) * rr * 0.9, y + Math.sin(a) * rr * 0.9, 0.02);
+          g.circle(X, Y, v.S * 0.07).fill(metal.light).stroke({ width: v.lw * 0.25, color: t.ink });
+        }
+      });
+      break;
+    }
     case 'strip': {
       // an LED strip set into the floor: a row of little bulbs, all lit while it parties
       const sh = def.shape.type === 'box' ? def.shape : { hw: 4, hh: 0.45 };

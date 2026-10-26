@@ -95,7 +95,7 @@ describe('the limits are written on the parts', () => {
     expect(text('mega')).toContain('up to +5 a ball');
     expect(text('coin')).toContain('up to $5 a round');
     expect(text('lane')).toContain('At most 5 sets a ball');
-    expect(text('printer')).toContain('at most 4 printed in one ball');
+    expect(text('printer')).toContain('at most 3 printed in one ball');
   });
 
   it('the Gold Ball card states its cap', () => {
@@ -149,7 +149,7 @@ describe('the ball clock', () => {
 });
 
 describe('the printer limit', () => {
-  it('prints at most 4 balls in one ball, and a new ball lets it print again', () => {
+  it('prints at most 3 balls in one ball, and a new ball lets it print again', () => {
     const sim = createSim({ parts: [makePart('printer', 1, 12, 30, true)], gravity: 50, nextUid: 2 });
     sim.spawnBall();
     let extras = 0;
@@ -165,7 +165,7 @@ describe('the printer limit', () => {
       }
     };
     drop(10);
-    expect(extras).toBe(4);
+    expect(extras).toBe(3);
     sim.spawnBall();
     const before = extras;
     drop(2);

@@ -53,7 +53,7 @@ describe('rarities', () => {
   it('every scoring part does at least two things (points plus a second effect, said on its card)', () => {
     for (const id of PART_IDS) {
       // (the Spinner, the Lamp and the Glow Strip say both of their things in one sentence)
-      if (id === 'mega' || id === 'spinner' || id === 'lamp' || id === 'strip' || PARTS[id].kind === 'flipper') continue;
+      if (id === 'mega' || id === 'spinner' || id === 'lamp' || id === 'strip' || id === 'plate' || PARTS[id].kind === 'flipper') continue;
       const lines = describePart(PARTS[id], makePart(id, 1));
       expect(lines.length, id).toBeGreaterThanOrEqual(2);
     }

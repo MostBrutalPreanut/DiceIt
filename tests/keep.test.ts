@@ -133,3 +133,19 @@ describe('moving and removing parts costs money', () => {
     expect(g.money).toBe(20);
   });
 });
+
+describe('Power Plate', () => {
+  it('bumpers standing near it pay ×1.5, two plates multiply, and other parts are untouched', async () => {
+    const { Scorer } = await import('../src/game/scoring');
+    const parts = [makePart('plate', 1, 12, 30, true), makePart('pop', 2, 12, 30, true), makePart('lane', 3, 13, 31, true), makePart('pop', 4, 20, 40, true)];
+    const s = new Scorer(1e9, () => parts);
+    s.startBall();
+    const near = s.consume(hit(2))[0];
+    expect(near.base).toBe(30); // 20 x 1.5
+    expect(near.notes).toContain('x1.5 power plate');
+    expect(s.consume(hit(3))[0].base).toBe(10); // a lane is not a bumper
+    expect(s.consume(hit(4))[0].base).toBe(21); // far away: 20 + 1 grown
+    parts.push(makePart('plate', 5, 13, 30, true));
+    expect(s.consume(hit(2))[0].base).toBe(Math.round(22 * 2.25));
+  });
+});
