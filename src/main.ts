@@ -109,7 +109,7 @@ async function main() {
   say('INSERT COIN');
 
   /** What the recipe sentences need to know: this part type's level and the run's upgrades. */
-  const ctxFor = (def: PartDef, inst?: PartInstance) => ({ level: inst ? game.scorer.levelOf(inst) : 0, mods: game.mods, machine: game.machine });
+  const ctxFor = (def: PartDef, inst?: PartInstance) => ({ level: inst ? game.scorer.levelOf(inst) : 0, mods: game.mods, machine: game.machine, types: new Set(game.placed.map((p) => p.def)).size });
   /** A part's definition on this run's machine (Big Boi's recipe depends on it). */
   const defFor = (id: PartId) => defOn(id, game.machine);
 

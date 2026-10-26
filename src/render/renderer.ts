@@ -410,6 +410,7 @@ export class Renderer {
       case 'pop': case 'coin': case 'sling': case 'ding': case 'thunder': case 'golden': case 'trophy': return { hit: pulse > 0.35 };
       case 'piggy': return { hit: pulse > 0.35, seg: game.scorer.piggies.get(p.uid) ?? 0 };
       case 'xlane': return { lit: !tilted && !game.mods.lightsOut && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'fame': return { lit: !tilted && !game.mods.lightsOut && !this.discoFired(game, p.uid) };
       case 'disco': return { lit: !tilted && !game.mods.lightsOut && game.scorer.label(p) !== null && !this.discoFired(game, p.uid) };
       case 'magnet': case 'jackpot': return { busy: heldNear(p.x, p.y) };
       case 'lane': return { lit, letter: lanes.get(p.uid) };

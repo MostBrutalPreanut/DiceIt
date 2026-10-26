@@ -365,6 +365,21 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       out.addChild(L);
       return out;
     }
+    case 'fame': {
+      // a star plaque set in the floor under a little marquee of bulbs: lit until it has fired this ball
+      const lit = st.lit !== false, c = t.role.fame;
+      p.face(ring(x, y, r, 30).map(([a, b]) => P(v, a, b, 0.01)), lit ? mix(c, WHITE, 0.25) : mix(c, t.shadeTint, 0.6), { line: 0.4 });
+      p.face(ring(x, y, r * 0.72, 26).map(([a, b]) => P(v, a, b, 0.015)), lit ? mix(t.paper, c, 0.2) : mix(t.paper, t.shadeTint, 0.5), { line: 0.3, sil: false });
+      p.face(star(x, y, r * 0.6, r * 0.26, 5, Math.PI / 2).map(([a, b]) => P(v, a, b, 0.02)), lit ? c : mix(c, t.shadeTint, 0.5), { line: 0.45, sil: false });
+      p.op((g) => {
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          const [X, Y] = P(v, x + Math.cos(a) * r * 0.86, y + Math.sin(a) * r * 0.86, 0.03);
+          g.circle(X, Y, v.S * 0.08).fill(lit ? WHITE : mix(c, t.shadeTint, 0.6)).stroke({ width: v.lw * 0.25, color: t.ink });
+        }
+      });
+      break;
+    }
     case 'disco': {
       // a mirror ball on a post over a floor insert: it sparkles until it has fired this ball
       const lit = st.lit !== false, c = t.role.disco;

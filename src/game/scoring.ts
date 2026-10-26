@@ -274,6 +274,12 @@ export class Scorer {
     return x;
   }
 
+  /** Hall of Fame: ×(1 + per) for every different part type on the table (Big Boi too). */
+  typeXNow(per: number): number {
+    const types = new Set(this.placed().map((p) => p.def)).size;
+    return Math.round(this.gainX(1 + per) ** types * 1000) / 1000;
+  }
+
   /** How often a part has fired this ball (Disco Ball). */
   firedOf(uid: number) {
     return this.firedThisBall.get(uid) ?? 0;
@@ -355,6 +361,7 @@ export class Scorer {
     if (def.recipe.plate) return `x${def.recipe.plate.x}`;
     if (def.kind === 'strip') return this.mods.lightsOut ? 'OFF' : `+${Math.round((def.recipe.strip?.bonus ?? 0) * 100)}%`;
     const r = this.recipe(inst.def);
+    if (r.typeX) return this.mods.lightsOut ? 'OFF' : `x${this.typeXNow(r.typeX).toFixed(2)}`;
     if (r.xmult && !r.points) return this.mods.lightsOut ? 'OFF' : `x${(1 + (r.xmult - 1) * this.mods.multGain).toFixed(2)}`;
     const n = this.baseNow(inst);
     if (n === null) return null;
@@ -548,7 +555,7 @@ export class Scorer {
       let multGain = this.gain(this.take(this.multPaid, inst.def, r.mult ?? 0, r.multCap));
       if (r.mult && multGain < this.gain(r.mult) - 1e-9) notes.push('Mult maxed for this ball');
       if (r.spinMult) multGain += this.gain(this.take(this.multPaid, 'spin', r.spinMult * m.spinMult * spins, (r.spinMultCap ?? 0) * m.spinMult));
-      const xmult = r.xmult ? this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
+      const xmult = r.typeX ? this.typeXNow(r.typeX) : r.xmult ? this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
       const base = Math.round((r.points + level + grown + variety + pot) * spins * tierX * factor * mf * (1 + lamp.sum) * (1 + strip) * plate * edge * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
       if (r.feeds) this.hitsByType.set(r.feeds.id, this.hitsOf(r.feeds.id) + r.feeds.n);

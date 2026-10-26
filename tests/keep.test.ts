@@ -149,3 +149,18 @@ describe('Power Plate', () => {
     expect(s.consume(hit(2))[0].base).toBe(Math.round(22 * 2.25));
   });
 });
+
+describe('Hall of Fame', () => {
+  it('once a ball, multiplies the Mult by ×1.08 for every different part type on the table', async () => {
+    const { Scorer } = await import('../src/game/scoring');
+    const parts = [makePart('fame', 1, 12, 30, true), makePart('pop', 2, 6, 30, true), makePart('pop', 3, 18, 30, true), makePart('lane', 4, 12, 40, true)];
+    const s = new Scorer(1e9, () => parts);
+    s.startBall();
+    const e = s.consume(hit(1))[0];
+    expect(e.label).toBe(`MULT x${(1.08 ** 3).toFixed(2)}`); // fame, pop and lane
+    expect(s.mult).toBeCloseTo(1.08 ** 3, 2);
+    expect(s.consume(hit(1))).toEqual([]); // once a ball
+    s.startBall();
+    expect(s.consume(hit(1))[0].kind).toBe('bonus');
+  });
+});
