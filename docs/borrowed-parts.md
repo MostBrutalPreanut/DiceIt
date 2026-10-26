@@ -17,7 +17,10 @@ Opal, Gold Leaf, Red Seal and Emerald (step 3); sparks with the Sparkler, the Ro
 Powder Keg's spark and the Topaz, plus the effects budget of §7 (step 4, see §7.3). Decor (step 5, see §6.4): the Midnight Clock, the Ritual
 Altar and four cabinet upgrades (Spare Bulb, Rubber Feet, Coin Tray, Side Mirror). The Wizard Lamp (step 6): a legendary
 rollover with one segment per scoring part type on the table (up to 8); the ball lighting them all starts WIZARD
-MODE (2 more balls, no ×Mult limits and every Lamp ablaze for 30 s, once a round). See [balance-plan.md](balance-plan.md) §2 for their numbers.
+MODE (2 more balls, no ×Mult limits and every Lamp ablaze for 30 s, once a round). The Piñata (step 7): a rare target with 40
+health; each of the ball's hits takes 1–4 by speed (a zap or a spark 1); at zero it bursts into 15 sparks and $5,
+and the next shop offers a free pick of one of three parts (rolled as if three rounds later). Broken for the rest
+of the round, it comes back with 20 more health; its damage carries over. See [balance-plan.md](balance-plan.md) §2 for their numbers.
 
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show

@@ -24,7 +24,7 @@ each machine's Big Boi pulls the run towards a different build:
 |---|---|---|---|---|
 | Common | round 1 | 1 | $1–4 | Pop Bumper, Cha-Ching Bumper, Slingshot, Spinner, Lane Rollover (pack of 3), Lamp, Vari-Target, Deflector, Kickback, **Sparkler** |
 | Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $4–7 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, Glow Strip, Roller Pop, **Power Plate**, X Lane, **Shockwave Gong**, **Rock Pile**, **Midnight Clock**, **Spare Bulb**, **Rubber Feet** |
-| Rare | round 4 | 0.25, +0.1 a round, up to 1 | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup**, **Rank Lights** (pack of 3), **Old Bell**, **Tesla Coil**, **Powder Keg**, **Laser Turret**, **Firecracker**, **Coin Tray**, **Side Mirror** |
+| Rare | round 4 | 0.25, +0.1 a round, up to 1 | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup**, **Rank Lights** (pack of 3), **Old Bell**, **Tesla Coil**, **Powder Keg**, **Laser Turret**, **Firecracker**, **Coin Tray**, **Side Mirror**, **Piñata** |
 | Legendary | round 7 | 0.15, +0.07 a round, up to 0.6 | $11–13 | Golden Bumper, Disco Ball, Goal!, **Hall of Fame**, **Ritual Altar**, **Wizard Lamp** |
 
 Rarer parts are physically bigger and do more. Every part does at least two things, and many feed or starve each other.
@@ -69,6 +69,7 @@ Cards say what a part does; they carry no strategy tips.
 | Sparkler | common, $3 · 8 · a ball's hit shoots out a spark, then it needs 1 s. A spark is a little bonus ball: it scores on what it touches as the ball that made it, slips through the flippers and fades after 4 s; at most 24 glow at once |
 | Rock Pile | uncommon, $4 · 10 · a ball's hit drops a spark for each rock (1 to start, +1 every 5 hits, up to 5, back to 1 each round), then it needs 2 s |
 | Firecracker | rare, $8 · 15 · once a ball, a hit sends up a rocket; 0.7 s later 6 sparks rain from the top of the table |
+| Piñata | rare, $9 · 15 a hit · 40 health (+20 after each burst); a ball's hit takes 1 to 4 by its speed (the Vari-Target's tiers), a zap or a spark 1. At zero it bursts: 15 sparks, $5 and a free pick of one of three parts in the next shop (rolled three rounds ahead); broken for the rest of the round. Its damage carries over rounds |
 | Wizard Lamp | legendary, $13 · 30 a roll-over · a segment for every scoring part type on the table when the round starts (Big Boi and itself too, up to 8); each type the ball itself hits lights one (zaps and sparks do not). All lit: WIZARD MODE, 2 more balls out of it, every ×Mult limit lifted and every Lamp at full glow for 30 s. Once a round |
 | Midnight Clock | decor, uncommon, $6 · every scoring hit anywhere (zaps and sparks too) is a minute from 9 PM; at midnight (180) it strikes: for 20 s every hit ×2 and every Lamp at full glow. Once a ball; back to 9 PM each round |
 | Ritual Altar | decor, legendary, $12 · every 8 completed sets (lanes, banks, Level Lights, Rank Lights; the count carries over rounds) start a 15 s ritual in turn: Tempest (2 + s random zaps a second), Inferno (each ball hit zaps the 1 + s nearest parts), Swarm (8 + 4s sparks); s = rituals done, up to 4 |

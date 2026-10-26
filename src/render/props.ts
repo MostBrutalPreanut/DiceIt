@@ -405,6 +405,27 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       }
       break;
     }
+    case 'pinata': {
+      // a piñata on a post: a fat paper drum in frilly bands of colour with a pointy hat; cracks show its damage,
+      // and once it has burst only the post and a few paper shreds are left
+      const stripes = ['#ff5d8f', '#ffd23f', '#3cc3b1', '#62b8ff', '#ff9f1c'], R = r * 0.85;
+      shadow(under, v, t, x, y, r * 1.0, r * 1.0);
+      p.cyl(x, y, r * 0.55, 0, 0.14, metal);
+      p.cyl(x, y, 0.1, 0.14, 0.7, mat(t, t.rim), { n: 10 });
+      if (st.armed === false) {
+        for (const [dx, dy, c] of [[-0.4, 0.1, 0], [0.35, -0.2, 2], [0.1, 0.4, 3]] as const) p.face(star(x + dx * r, y + dy * r, 0.28, 0.12, 3, dx).map(([a, b]) => P(v, a, b, 0.03)), stripes[c], { line: 0.3 });
+        break;
+      }
+      for (let i = 0; i < 5; i++) p.cyl(x, y, R * (i === 0 || i === 4 ? 0.85 : 1), 0.84 + i * 0.32, 0.32, mat(t, st.hit ? mix(stripes[i], WHITE, 0.4) : stripes[i]));
+      p.face(hull([...ring(x, y, R * 0.7, 18).map(([a, b]) => P(v, a, b, 2.44)), P(v, x, y, 3.3)]), t.role.pinata, { line: 0.45 });
+      const cracks = st.seg ?? 0;
+      for (let i = 0; i < cracks; i++) {
+        const a = -0.9 + i * 0.6, z0 = 1.0 + (i % 2) * 0.6;
+        const pts = [0, 1, 2, 3].map((k) => P(v, x + Math.cos(a + k * 0.12) * R * 1.01, y - Math.abs(Math.sin(a)) * R * 0.3 - R * 0.75, z0 + k * 0.22 * (k % 2 ? 1 : -0.4)));
+        p.op((g) => { g.moveTo(pts[0][0], pts[0][1]); for (const q of pts.slice(1)) g.lineTo(q[0], q[1]); g.stroke({ width: v.lw * 0.7, color: t.ink, cap: 'round', join: 'round' }); });
+      }
+      break;
+    }
     case 'wizard': {
       // the Wizard Lamp: a round floor insert, a ring of segments (one per part type to hit) round a wizard's hat;
       // a segment lights for each type the ball has hit, and in WIZARD MODE they all blaze in rainbow colours
