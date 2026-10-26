@@ -8,6 +8,9 @@ import { SAVER_WINDOW, SPARK_FADE, SPARK_GLOW } from '../sim/constants';
 import { neutralMods, type Mods } from './mods';
 import { bigBoiOf, DRAGON, ORDER, type MachineId } from './bigboi';
 
+/** Broomstick: a ride lasts at most this long (the sim's RIDE_TIME); a gremlin is out this long (GREMLIN_OUT). */
+const RIDE_SECONDS = 1;
+const GREMLIN_OUT_S = 10;
 /** How long a spark lasts, all told. */
 const SPARK_LIFE = SPARK_GLOW + SPARK_FADE;
 
@@ -18,7 +21,8 @@ export type PartId =
   | 'ruby' | 'garnet' | 'emerald' | 'opal' | 'goldleaf' | 'redseal' | 'topaz'
   | 'sparkler' | 'firecracker' | 'rocks'
   | 'clock' | 'altar' | 'bulb' | 'feet' | 'tray' | 'mirror' | 'wizard' | 'pinata'
-  | 'grape' | 'echo' | 'spot' | 'bonsai' | 'capsule' | 'ice' | 'well';
+  | 'grape' | 'echo' | 'spot' | 'bonsai' | 'capsule' | 'ice' | 'well'
+  | 'wreck' | 'broom' | 'bucket' | 'hutch';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip' | 'inlay' | 'decor';
 
@@ -207,6 +211,14 @@ export interface Recipe {
   ice?: { melt: number };
   /** Wishing Well: in the workshop, throw in $1 at a time (up to `perRound` a round): each adds +`points` to its hits and +`mult` Mult a hit (up to +`multCap` a ball from all wells). */
   well?: { perRound: number; points: number; mult: number; multCap: number };
+  /** Wrecking Ball: once a ball, a hit makes the ball `k` times bigger for `seconds` (only where it has room to grow); every hit it makes pays ×`x`. */
+  wreck?: { k: number; seconds: number; x: number };
+  /** Broomstick: the ball rides it (straight the way it points, no gravity, for a second or until it touches anything); every part it flies past is zapped, paying ×`x`. */
+  ride?: { x: number };
+  /** Free Ball Bucket: a ball dropping into the sliding bucket from above goes back to the plunger, not lost. */
+  bucket?: boolean;
+  /** Gremlin Hutch (decor): this many gremlins wander the table (see GREMLIN). */
+  gremlins?: number;
   /** Ritual Altar (decor): every `sets` sets completed start a `seconds` s ritual (see RITUALS). */
   altar?: { sets: number; seconds: number };
   /**
@@ -237,6 +249,8 @@ export function wizardNeed(parts: PartInstance[]): number {
   const types = new Set(parts.filter((p) => p.placed && PARTS[p.def].kind !== 'decor' && PARTS[p.def].recipe.points).map((p) => p.def));
   return Math.min(PARTS.wizard.recipe.wizard!.max, types.size);
 }
+/** A gremlin knocked out by the ball: points, $ (up to `moneyCap` a round from all gremlins); back GREMLIN_OUT s later. */
+export const GREMLIN = { points: 100, money: 1, moneyCap: 5 };
 /** Is this decor (it stands on the cabinet, never on the table)? */
 export const isDecor = (id: PartId) => PARTS[id].kind === 'decor';
 
@@ -292,7 +306,7 @@ export const ZAP_COOLDOWN = 0.5;
  */
 export const zappable = (id: PartId) => {
   const k = PARTS[id].kind, r = PARTS[id].recipe;
-  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule) return false;
+  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule || r.bucket) return false;
   return k === 'bumper' || k === 'kicker' || k === 'spinner' || k === 'rollover' || k === 'lamp' || k === 'target' || k === 'mover';
 };
 
@@ -342,6 +356,8 @@ export interface Mover {
   restitution: number;
   /** Ball speed a hit on it adds, away from it (a moving bumper). */
   kick?: number;
+  /** The piece is a sensor the ball passes into (the Free Ball Bucket), not something it bounces off. */
+  sensor?: boolean;
 }
 
 export interface PartDef {
@@ -642,6 +658,22 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'onceABall' }, dials: [],
   },
 
+  wreck: {
+    id: 'wreck', name: 'Wrecking Ball', blurb: 'Hit it and your ball gets big ideas.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 11, weight: 1,
+    shape: { type: 'circle', r: 1.2 }, rotatable: false, kickUnit: 10,
+    recipe: { points: 20, per: 'hit', wreck: { k: 1.5, seconds: 6, x: 2 }, perLevel: 4 }, dials: [kickDial(2)],
+  },
+  broom: {
+    id: 'broom', name: 'Broomstick', blurb: 'Hop on. Hold tight. Mind the walls.', kind: 'rollover', rarity: 'rare', tags: ['ball'], cost: 9, weight: 1,
+    shape: { type: 'circle', r: 0.9 }, rotatable: true, kickUnit: 0,
+    recipe: { points: 20, per: 'roll-over', ride: { x: 2 }, perLevel: 4 }, dials: [],
+  },
+  bucket: {
+    id: 'bucket', name: 'Free Ball Bucket', blurb: 'Land the ball in the bucket. Keep the ball.', kind: 'mover', rarity: 'legendary', tags: ['guard'], cost: 11, weight: 1,
+    shape: { type: 'box', hw: 3.4, hh: 0.7 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 200, per: 'catch', bucket: true }, dials: [],
+    mover: { travel: 2.5, speed: 2.6, shape: { type: 'box', hw: 0.85, hh: 0.45 }, y: 0, restitution: 0.3, sensor: true },
+  },
   grape: {
     id: 'grape', name: 'Grape Bunch', blurb: 'Grapes like company. Lots of company.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, pack: 3, weight: 2,
     shape: { type: 'circle', r: 0.7 }, rotatable: false, kickUnit: 8,
@@ -696,6 +728,10 @@ export const PARTS: Record<PartId, PartDef> = {
   altar: {
     id: 'altar', name: 'Ritual Altar', blurb: 'Complete your sets. Something answers.', kind: 'decor', rarity: 'legendary', tags: [], cost: 12, weight: 1,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0, recipe: { altar: { sets: 8, seconds: 15 } }, dials: [],
+  },
+  hutch: {
+    id: 'hutch', name: 'Gremlin Hutch', blurb: 'Two gremlins loose on your table. Bonk them.', kind: 'decor', rarity: 'legendary', tags: ['money'], cost: 12, weight: 1,
+    shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0, recipe: { gremlins: 2 }, dials: [],
   },
   bulb: {
     id: 'bulb', name: 'Spare Bulb', blurb: 'A brighter bulb for every Lamp.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 4,
@@ -899,6 +935,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     return lines;
   }
   if (def.kind === 'decor') {
+    if (r.gremlins) lines.push({ tag: 'money', text: `${r.gremlins} gremlins wander your table, drifting through parts (only the ball can touch them). A ball that knocks one out: ${GREMLIN.points} points and $${GREMLIN.money} (up to $${GREMLIN.moneyCap} a round); it is back ${GREMLIN_OUT_S} s later.` });
     if (r.clock) lines.push({ tag: 'mult', text: `Every scoring hit on the table (zaps and sparks too) moves its hands on a minute, from 9 PM. At midnight (${r.clock.hits} hits) it strikes twelve: for ${r.clock.seconds} s every hit pays ×${r.clock.x}, and every Lamp is at full glow. Once a ball; then the hands go back to 9 PM, and they go back each round too.` });
     if (r.altar) {
       const st = { sets: inst?.sets ?? 0, rituals: inst?.rituals ?? 0 }, s = Math.min(MAX_STRENGTH, st.rituals);
@@ -934,6 +971,9 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
   if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
   if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
+  if (r.wreck) lines.push({ tag: 'combo', text: `Once a ball, a hit makes the ball ${r.wreck.k}× bigger for ${r.wreck.seconds} s (it grows only where it has room): every hit it makes pays ×${r.wreck.x}, and the table shakes.` });
+  if (r.ride) lines.push({ tag: 'combo', text: `The ball rides it: it flies straight the way the broom points, with no gravity, for ${RIDE_SECONDS} s or until it touches anything. Every part it flies past is zapped, paying ×${r.ride.x}. Turn it to aim.` });
+  if (r.bucket) lines.push({ tag: 'set', text: `A bucket slides along its rail. A ball that drops into it from above goes back to the plunger: it is not lost. Place the rail where it is a shot, not a gift.` });
   if (r.grape) lines.push({ tag: 'combo', text: `It pays once more for every Grape Bunch touching it (set snug against it). ${r.grape.golden} or more in one bunch turn golden: they all pay double.` });
   if (r.echo) lines.push({ tag: 'combo', text: `×2 for every other Echo Cave the ball went through just before it, with nothing else hit in between (up to ×${r.echo.cap}). Line them up along one shot.` });
   if (r.spot) lines.push({ tag: 'lamp', text: `While it is lit, every part within ${r.spot.reach} units pays ×${r.spot.x} (Spotlights multiply). A hit of the ball knocks it dark for ${r.spot.dark} s: build round it, then keep the ball off it. It scores nothing itself.` });

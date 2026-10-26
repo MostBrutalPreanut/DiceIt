@@ -1,5 +1,5 @@
 import * as B from 'phaser-box2d/dist/PhaserBox2D.js';
-import { dialValue, PARTS, SMALL_FLIPPER, triPoints, zappable, type PartInstance } from '../data/parts';
+import { dialValue, footprint, PARTS, SMALL_FLIPPER, triPoints, zappable, type PartInstance } from '../data/parts';
 import {
   BALL_R, BALL_SEARCH_AFTER, BALL_SEARCH_AGAIN, BALL_SEARCH_KICKS, BALL_SPAWN, BALL_TIMEOUT, CAT, DT, FLIPPER_LENGTH, FLIPPER_REST,
   FLIPPER_SPEED_DOWN, FLIPPER_SPEED_UP, FLIPPER_TORQUE, FLIPPER_UP, LANE_FLOOR_Y, LANE_TOP_Y,
@@ -24,10 +24,12 @@ export const NO_INPUT: Input = { left: false, right: false, plunge: false, nudge
 /** Physical things that happened. Scoring and presentation both consume this stream; neither feeds back. */
 export type SimEvent =
   /** `zap`: no ball touched it; the scorer made it score (a Tesla Coil's arc, a keg's blast...), `depth` zaps down a chain of kegs. The sim never sends one. */
-  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean; depth?: number; spark?: boolean }
+  | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean; depth?: number; spark?: boolean; ride?: boolean; bucket?: boolean }
   | { type: 'partRelease'; t: number; uid: number; ballId: number }
   | { type: 'extraBall'; t: number; uid: number; ballId: number }
   | { type: 'retired'; t: number; ballId: number; x: number; y: number }
+  /** A ball knocked a Gremlin Hutch's gremlin out (it is back GREMLIN_OUT s later). */
+  | { type: 'gremlin'; t: number; uid: number; ballId: number; x: number; y: number }
   | { type: 'ballSaved'; t: number; uid: number; ballId: number }
   | { type: 'launch'; t: number; ballId: number; power: number }
   | { type: 'drain'; t: number; ballId: number; reason: 'drain' | 'timeout' }
@@ -47,7 +49,14 @@ export interface BallState {
   vy: number;
   inLane: boolean;
   held: boolean;
+  /** Its radius (a Wrecking Ball makes it bigger for a while). */
+  r: number;
+  /** Riding a Broomstick. */
+  riding: boolean;
 }
+
+/** A Gremlin Hutch's gremlin, for drawing: where it is, and whether it is knocked out. */
+export interface GremlinState { x: number; y: number; out: boolean }
 
 /** A spark, for drawing: where it is, and how much of it is left (1 = glowing, falling to 0 as it fades). */
 export interface SparkState {
@@ -99,6 +108,12 @@ interface BallRef {
   searchAt: { x: number; y: number; t: number } | null;
   /** Put back in the plunger lane by a ball search: its next launch opens no new save window. */
   relaunched: boolean;
+  /** Its circle (a Wrecking Ball resizes it). */
+  shape: any;
+  /** Wrecking Ball: this many times bigger until `until`; `on` once there was room to grow. */
+  big?: { k: number; until: number; on: boolean };
+  /** Broomstick: flying straight, no gravity, until `until` or the first thing it touches; the parts it has passed. */
+  ride?: { until: number; vx: number; vy: number; passed: Set<number> };
 }
 interface FlipperRef {
   fid: number;
@@ -130,7 +145,18 @@ interface PartRef {
   readyAt?: number;
   /** The sliding piece (duck, goalie, roller): its kinematic body, where it is along its rail, and how fast it goes. */
   mover?: { body: any; dir: 1 | -1; speedX: number };
+  /** Gremlin Hutch: its gremlins, each a little sensor body that wanders the table (`out` until it is back). */
+  gremlins?: { body: any; ph: number; out: number }[];
 }
+
+/** Gremlins: how long one stays knocked out, how big one is, and the box of the table they wander. */
+export const GREMLIN_OUT = 10;
+const GREMLIN_R = 0.6;
+/** A gremlin's path at time t: two slow, different sines, so the pair never walk in step. */
+const gremlinAt = (t: number, ph: number) => ({ x: 12 + 8.5 * Math.sin(t * 0.31 + ph), y: 31 + 13.5 * Math.sin(t * 0.19 + ph * 1.7) });
+/** Broomstick: how long a ride lasts at most, and how fast it flies. */
+const RIDE_TIME = 1;
+const RIDE_SPEED = 32;
 
 /** The three drop targets of a bank, as offsets along the part's long axis. */
 const BANK_OFFSETS = [-1.75, 0, 1.75];
@@ -182,6 +208,8 @@ export class Sim {
 
   private worldId: any;
   private ground: any;
+  /** Where the wall ledge is (the Wrecking Ball checks the walls for room). */
+  private ledge?: number;
   private balls: BallRef[] = [];
   private sparks: SparkRef[] = [];
   private sparkById = new Map<number, SparkRef>();
@@ -263,6 +291,7 @@ export class Sim {
     this.netsUsed = 0;
     this.clockStart = null;
     this.printed = 0;
+    this.ledge = layout.ledge;
     this.buildTable(layout.ledge);
     this.flippers.push(
       this.buildFlipper('L', FLIPPER_PIVOTS.L.x, FLIPPER_PIVOTS.L.y),
@@ -273,6 +302,7 @@ export class Sim {
 
   private teardown() {
     this.clearSparks();
+    for (const p of this.parts.values()) for (const g of p.gremlins ?? []) B.b2DestroyBody(g.body);
     for (const b of this.balls) B.b2DestroyBody(b.body);
     for (const p of this.parts.values()) { if (p.mover) B.b2DestroyBody(p.mover.body); if (!p.flipper) B.b2DestroyBody(p.body); }
     for (const f of this.flippers) B.b2DestroyBody(f.body); // also destroys its joint
@@ -359,6 +389,7 @@ export class Sim {
   addPart(inst: PartInstance) {
     if (!inst.placed || this.parts.has(inst.uid)) return;
     const def = PARTS[inst.def];
+    if (def.kind === 'decor' && def.recipe.gremlins) { this.addHutch(inst, def.recipe.gremlins); return; }
     if (def.kind === 'decor' || def.kind === 'inlay') return;
 
     if (def.kind === 'flipper') {
@@ -437,6 +468,7 @@ export class Sim {
     const sd = B.b2DefaultShapeDef();
     sd.friction = 0.1;
     sd.restitution = m.restitution;
+    sd.isSensor = !!m.sensor; // the Free Ball Bucket: the ball drops into it
     sd.userData = { kind: 'part', uid: ref.inst.uid, mover: true };
     if (m.shape.type === 'circle') B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), m.shape.r));
     else {
@@ -495,6 +527,7 @@ export class Sim {
     for (const b of this.balls) if (b.held?.uid === uid) this.release(b);
     if (p.flipper) this.flippers = this.flippers.filter((f) => f !== p.flipper);
     if (p.mover) B.b2DestroyBody(p.mover.body);
+    for (const g of p.gremlins ?? []) B.b2DestroyBody(g.body);
     B.b2DestroyBody(p.body);
     this.parts.delete(uid);
   }
@@ -579,9 +612,9 @@ export class Sim {
     // balls never touch each other (or sparks): only the table and the flippers
     sd.filter.categoryBits = CAT.ball;
     sd.filter.maskBits = CAT.table | CAT.flipper;
-    B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), BALL_R));
+    const shape = B.b2CreateCircleShape(body, sd, new B.b2Circle(V(0, 0), BALL_R));
     B.b2Body_SetGravityScale(body, this.mods.ballGravity);
-    this.balls.push({ id, body, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0, preSpeed: 0, searches: 0, searchAt: null, relaunched: false });
+    this.balls.push({ id, body, shape, age: 0, slowTime: 0, prevLocal: new Map(), held: null, saveUntil: 0, preSpeed: 0, searches: 0, searchAt: null, relaunched: false });
     return id;
   }
 
@@ -606,7 +639,7 @@ export class Sim {
     return this.balls.map((b) => {
       const p = B.b2Body_GetPosition(b.body);
       const v = B.b2Body_GetLinearVelocity(b.body);
-      return { id: b.id, x: p.x, y: p.y, vx: v.x, vy: v.y, inLane: p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y, held: b.held !== null };
+      return { id: b.id, x: p.x, y: p.y, vx: v.x, vy: v.y, inLane: p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y, held: b.held !== null, r: b.big?.on ? BALL_R * b.big.k : BALL_R, riding: !!b.ride };
     });
   }
 
@@ -751,11 +784,15 @@ export class Sim {
         B.b2Body_SetLinearVelocity(b.body, V(v.x + (dx / d) * a, v.y + (dy / d) * a));
       }
     }
+    this.stepBigBalls(t);
+    this.stepRides(t);
+    this.stepGremlins(t);
     for (const b of this.balls) {
       const v = B.b2Body_GetLinearVelocity(b.body);
       b.preSpeed = Math.hypot(v.x, v.y);
     }
     B.b2World_Step(this.worldId, this.dt, this.substeps);
+    this.ridePasses();
 
     this.processContacts();
     this.processSensors();
@@ -897,6 +934,131 @@ export class Sim {
     }
   }
 
+  /** Wrecking Ball: make a ball bigger for a while. It grows only where there is room (see stepBigBalls). */
+  growBall(id: number, k: number, seconds: number, now = false) {
+    const b = this.balls.find((x) => x.id === id);
+    if (!b) return;
+    b.big = { k, until: this.time + seconds, on: b.big?.on ?? false };
+    if (now && !b.big.on) { B.b2Shape_SetCircle(b.shape, new B.b2Circle(V(0, 0), BALL_R * k)); b.big.on = true; } // test hook: grow at once
+  }
+
+  /** A big ball's time is up: back to its size. A grow that is due happens only with clear room round the ball. */
+  private stepBigBalls(t: number) {
+    for (const b of this.balls) {
+      if (!b.big) continue;
+      if (t >= b.big.until) {
+        if (b.big.on) B.b2Shape_SetCircle(b.shape, new B.b2Circle(V(0, 0), BALL_R));
+        b.big = undefined;
+      } else if (!b.big.on && !b.held && this.roomFor(b, BALL_R * b.big.k)) {
+        B.b2Shape_SetCircle(b.shape, new B.b2Circle(V(0, 0), BALL_R * b.big.k));
+        b.big.on = true;
+      }
+    }
+  }
+
+  /** Is there room round this ball for it to be `r` big? Clear of every wall, solid part and flipper (and not in the lane). */
+  private roomFor(b: BallRef, r: number): boolean {
+    const p = B.b2Body_GetPosition(b.body);
+    if (this.inLane(b)) return false;
+    for (const sg of tableSegments(this.ledge)) {
+      const dx = sg.x2 - sg.x1, dy = sg.y2 - sg.y1, u = Math.max(0, Math.min(1, ((p.x - sg.x1) * dx + (p.y - sg.y1) * dy) / (dx * dx + dy * dy || 1)));
+      if (Math.hypot(p.x - (sg.x1 + u * dx), p.y - (sg.y1 + u * dy)) < r + 0.05) return false;
+    }
+    for (const pr of this.parts.values()) {
+      const def = PARTS[pr.inst.def];
+      if (def.kind === 'decor' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'spinner' || def.kind === 'saucer' || def.kind === 'kickback' || def.kind === 'saver' || def.kind === 'strip') continue;
+      const q = pr.mover ? B.b2Body_GetPosition(pr.mover.body) : { x: pr.inst.x, y: pr.inst.y };
+      const fr = pr.mover ? footprint({ ...def, shape: def.mover!.shape }) : footprint(def);
+      if (Math.hypot(p.x - q.x, p.y - q.y) < fr + r + 0.05) return false;
+    }
+    for (const f of this.flippers) if (Math.hypot(p.x - f.pivotX, p.y - f.pivotY) < f.length + r + 0.3) return false;
+    return true;
+  }
+
+  /** Broomstick: the ball flies straight the way the broom points, with no gravity, for a moment. */
+  private startRide(b: BallRef, broom: PartInstance) {
+    const vx = -Math.sin(broom.angle) * RIDE_SPEED, vy = Math.cos(broom.angle) * RIDE_SPEED;
+    b.ride = { until: this.time + RIDE_TIME, vx, vy, passed: new Set([broom.uid]) };
+    B.b2Body_SetGravityScale(b.body, 0);
+    B.b2Body_SetLinearVelocity(b.body, V(vx, vy));
+  }
+
+  private endRide(b: BallRef) {
+    b.ride = undefined;
+    B.b2Body_SetGravityScale(b.body, this.mods.ballGravity);
+  }
+
+  /** A riding ball holds its line until its time is up. */
+  private stepRides(t: number) {
+    for (const b of this.balls) {
+      if (!b.ride) continue;
+      if (t >= b.ride.until || b.held) this.endRide(b);
+      else B.b2Body_SetLinearVelocity(b.body, V(b.ride.vx, b.ride.vy));
+    }
+  }
+
+  /** Every part a riding ball flies past (close, without touching) is zapped, once a ride. */
+  private ridePasses() {
+    for (const b of this.balls) {
+      if (!b.ride) continue;
+      const p = B.b2Body_GetPosition(b.body);
+      for (const pr of this.parts.values()) {
+        if (b.ride.passed.has(pr.inst.uid) || PARTS[pr.inst.def].kind === 'decor') continue;
+        if (Math.hypot(p.x - pr.inst.x, p.y - pr.inst.y) > footprint(PARTS[pr.inst.def]) + BALL_R + 0.8) continue;
+        b.ride.passed.add(pr.inst.uid);
+        this.events.push({ type: 'partHit', t: this.time, uid: pr.inst.uid, ballId: b.id, x: pr.inst.x, y: pr.inst.y, speed: RIDE_SPEED, zap: true, ride: true, mover: PARTS[pr.inst.def].kind === 'mover' || undefined });
+      }
+    }
+  }
+
+  /** Gremlin Hutch: its gremlins, little sensors only a ball can touch, wandering the table. */
+  private addHutch(inst: PartInstance, n: number) {
+    const bd = B.b2DefaultBodyDef();
+    bd.type = B.b2BodyType.b2_staticBody;
+    const body = B.b2CreateBody(this.worldId, bd);
+    const gremlins = Array.from({ length: n }, (_, i) => {
+      const ph = inst.uid * 1.37 + i * 2.4, at = gremlinAt(this.time, ph);
+      const gd = B.b2DefaultBodyDef();
+      gd.type = B.b2BodyType.b2_kinematicBody;
+      gd.position = V(at.x, at.y);
+      const gb = B.b2CreateBody(this.worldId, gd);
+      const sd = B.b2DefaultShapeDef();
+      sd.isSensor = true;
+      sd.userData = { kind: 'gremlin', uid: inst.uid, i };
+      sd.filter.categoryBits = CAT.table;
+      sd.filter.maskBits = CAT.ball;
+      B.b2CreateCircleShape(gb, sd, new B.b2Circle(V(0, 0), GREMLIN_R));
+      return { body: gb, ph, out: 0 };
+    });
+    this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body, gremlins });
+  }
+
+  /** The gremlins walk their paths; a knocked-out one waits off the table until it is back. */
+  private stepGremlins(t: number) {
+    for (const p of this.parts.values()) for (const g of p.gremlins ?? []) {
+      const at = t < g.out ? { x: -20, y: -20 } : gremlinAt(t, g.ph);
+      B.b2Body_SetTransform(g.body, V(at.x, at.y), B.b2MakeRot(0));
+    }
+  }
+
+  private knockGremlin(uid: number, i: number, ballId: number) {
+    const g = this.parts.get(uid)?.gremlins?.[i];
+    if (!g || this.time < g.out) return;
+    const at = gremlinAt(this.time, g.ph);
+    g.out = this.time + GREMLIN_OUT;
+    this.events.push({ type: 'gremlin', t: this.time, uid, ballId, x: at.x, y: at.y });
+  }
+
+  /** Where the gremlins are, for drawing. */
+  gremlinStates(): GremlinState[] {
+    const out: GremlinState[] = [];
+    for (const p of this.parts.values()) for (const g of p.gremlins ?? []) {
+      const at = gremlinAt(this.time, g.ph);
+      out.push({ x: at.x, y: at.y, out: this.time < g.out });
+    }
+    return out;
+  }
+
   private processContacts() {
     const ev = B.b2World_GetContactEvents(this.worldId);
     // read everything first: a drop target destroys its shape, which invalidates later events on it
@@ -908,6 +1070,8 @@ export class Sim {
     for (const { a, b } of pairs) {
       const ball = a?.kind === 'ball' ? a : b?.kind === 'ball' ? b : null;
       const part = a?.kind === 'part' ? a : b?.kind === 'part' ? b : null;
+      // a Broomstick ride ends at the first thing the ball touches: a wall, a part, a flipper
+      if (ball) { const rb = this.balls.find((x) => x.id === ball.id); if (rb?.ride) this.endRide(rb); }
       const spark = a?.kind === 'spark' ? a : b?.kind === 'spark' ? b : null;
       if (spark && part) {
         // a spark bounces off what it hits (a bumper still kicks it) and scores on it; it never drops a target
@@ -1017,6 +1181,7 @@ export class Sim {
         }
         continue;
       }
+      if (s?.kind === 'gremlin' && v?.kind === 'ball') { this.knockGremlin(s.uid, s.i, v.id); continue; }
       if (s?.kind !== 'part' || v?.kind !== 'ball') continue;
       const pr = this.parts.get(s.uid);
       const br = this.balls.find((x) => x.id === v.id);
@@ -1028,6 +1193,18 @@ export class Sim {
 
       if (s.goal) {
         this.events.push({ ...hit, goal: true });
+      } else if (s.mover && def.recipe.bucket) {
+        // the Free Ball Bucket: a ball dropping in from above goes back to the plunger (it is not lost)
+        const bp = B.b2Body_GetPosition(br.body), mp = B.b2Body_GetPosition(pr.mover!.body);
+        if (vel.y > -1 || bp.y < mp.y) continue;
+        B.b2DestroyBody(br.body);
+        this.balls = this.balls.filter((x) => x !== br);
+        const at = this.laneSpot();
+        this.addBall(at.x, at.y, 0, 0);
+        this.awaitingPlunge = true;
+        this.plungeCharge = 0;
+        this.plungeWasHeld = true;
+        this.events.push({ ...hit, x: mp.x, y: mp.y, mover: true, bucket: true });
       } else if (def.kind === 'spinner') {
         const spins = Math.max(1, Math.min(Math.round(10 * this.mods.spinBoost), Math.round((speed / 10) * this.mods.spinBoost)));
         const drag = 1 - 0.08 * dialValue(pr.inst, 'drag');
@@ -1051,6 +1228,7 @@ export class Sim {
         this.events.push({ ...hit, kicked: true });
       } else if (def.kind === 'rollover' || def.kind === 'lamp') {
         this.events.push(hit);
+        if (def.recipe.ride && !br.ride) this.startRide(br, pr.inst);
       }
     }
   }

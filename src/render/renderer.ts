@@ -7,7 +7,7 @@ import { FLIPPER_PIVOTS, ledgeSeg } from '../sim/table';
 import { APRON_Z as APRON_TOP, decorFits, decorZ, WALL_TOP } from '../sim/cabinet';
 import { flat, label, P, Prop, ribbon, star, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
-import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
+import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawGremlin, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
 import { DotMatrix } from './dmd';
 import { APRON_Z, arrowInserts, buildMachine, CAB, DECAL_SLOT_POS, decalSprite, dmdRect, machineExtent, RIM, type StuckDecal } from './scene';
 import { BALL_WEAR, mat, mix, num, roleFill, WHITE, type Theme } from './theme';
@@ -328,6 +328,8 @@ export class Renderer {
       // only a strong hit shakes the whole table (a presentation shake: the sim never feels it)
       if (!this.calm && ev.points >= 400) this.trauma = Math.min(1, this.trauma + Math.min(0.45, (mag - 2.5) * 0.3));
     }
+    if (ev.wreck && !this.calm) this.trauma = Math.min(1, this.trauma + 0.2); // a wrecking ball shakes the table on every hit
+    if (ev.label === 'GOTCHA!') { this.particles.puff(ev.x, ev.y, 0.4, 1.6); this.particles.debris(ev.x, ev.y, 6, 1); }
     if (ev.label === 'PIÑATA!') {
       // the burst: a cloud of candy confetti and a puff of paper
       for (let i = 0; i < 14; i++) this.particles.sparkle(ev.x + (Math.random() - 0.5) * 4, ev.y + (Math.random() - 0.5) * 3, 0.5 + Math.random() * 2.5, 1.4, i % 3 === 0);
@@ -527,7 +529,7 @@ export class Renderer {
       case 'uplight': return { lit, target: 'pop' };
       case 'lamp': return { lit, bright: tilted ? 0 : game.scorer.lampLevel(p.uid) };
       case 'strip': return { lit };
-      case 'duck': case 'roller': case 'goal': return { part: 'base' };
+      case 'duck': case 'roller': case 'goal': case 'bucket': return { part: 'base' };
       case 'bank': return { down: banks.get(p.uid) ?? [false, false, false] };
       case 'spinner': { const sp = this.spin.get(p.uid); return { spin: sp ? Math.floor((sp.angle / (Math.PI / 8)) % 8 + 8) % 8 : 0 }; }
       case 'vari': { const lt = this.lastTier.get(p.uid); return { seg: lt && lt.glow > 0.2 ? lt.tier + 1 : 0 }; }
@@ -969,7 +971,7 @@ export class Renderer {
       tr.push({ x: b.x, y: b.y });
       if (tr.length > 14) tr.shift();
       this.trails.set(b.id, tr);
-      ballShadow(this.floorFx, v, t, b.x, b.y);
+      ballShadow(this.floorFx, v, t, b.x, b.y, b.r);
       const speed = Math.hypot(b.vx, b.vy);
       const rank = game.scorer.rankOf(b.id, game.sim.time);
       // a fast ball leaves a tapered paper ribbon (air: soft, no outline); a ranked ball's ribbon wears its rank
@@ -978,16 +980,18 @@ export class Renderer {
       if (rank && Math.random() < 0.08 + 0.06 * rank.step) this.particles.sparkle(b.x + (Math.random() - 0.5) * 0.6, b.y + (Math.random() - 0.5) * 0.6, BALL_R, 0.35 + 0.1 * rank.step, rank.step >= 2, true);
     }
     for (const b of balls) {
-      drawBall(g, v, t, b.x, b.y, wear);
+      drawBall(g, v, t, b.x, b.y, wear, b.r);
       // a ranked ball wears a ring of its rank's colour; it blinks in its last 5 s
       const rank = game.scorer.rankOf(b.id, game.sim.time);
       if (rank && (rank.left > 5 || Math.floor(rank.left * 4) % 2 === 0)) {
-        const [X, Y] = P(v, b.x, b.y, BALL_R), R = BALL_R * v.S;
+        const [X, Y] = P(v, b.x, b.y, b.r), R = b.r * v.S;
         g.circle(X, Y, R * 1.38).stroke({ width: v.lw * 1.6 + R * 0.32, color: t.ink, alpha: 0.85 });
         g.circle(X, Y, R * 1.38).stroke({ width: R * 0.32, color: RANK_COLOURS[rank.step - 1] });
       }
     }
     for (const id of [...this.trails.keys()]) if (!live.has(id)) this.trails.delete(id);
+    // the Gremlin Hutch's gremlins, bobbing about (a knocked-out one is not there)
+    for (const [i, gr] of game.sim.gremlinStates().entries()) if (!gr.out) drawGremlin(g, v, t, gr.x, gr.y, this.time * 6 + i * 2);
   }
 
   /** TILT: every lamp goes out, the field dims, and a stamp says so. */

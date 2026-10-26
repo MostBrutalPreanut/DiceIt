@@ -22,7 +22,14 @@ health; each of the ball's hits takes 1–4 by speed (a zap or a spark 1); at ze
 and the next shop offers a free pick of one of three parts (rolled as if three rounds later). Broken for the rest
 of the round, it comes back with 20 more health; its damage carries over. The cheap scalers (step 8): Grape Bunch,
 Echo Cave, Spotlight, Bonsai Bumper, Time Capsule, Ice Sculpture and Wishing Well, as approved (the Wishing Well's
-+Mult is capped at +3 a ball; the Ice Sculpture melts 3 a press, not 1, after measuring; a Time Capsule's prize uses the Piñata's free-pick box, legendaries only). See [balance-plan.md](balance-plan.md) §2 for their numbers.
++Mult is capped at +3 a ball; the Ice Sculpture melts 3 a press, not 1, after measuring; a Time Capsule's prize uses the Piñata's free-pick box, legendaries only). See [balance-plan.md](balance-plan.md) §2 for their numbers. Step 9, the physics parts: the
+Wrecking Ball (once a ball the ball grows 1.5× for 6 s, only where it has room, and its hits pay ×2), the
+Broomstick (the ball rides straight the way it points with no gravity for 1 s or until it touches anything,
+zapping what it flies past at ×2), the Free Ball Bucket (a sensor bucket on a rail you place; a ball dropping in
+from above goes back to the plunger) and the Gremlin Hutch (decor: 2 gremlins wander the table, 100 and $1 a knock,
+up to $5 a round, back 10 s later; a knock was 300 at first, tuned to 100). `npm run physics-report` now checks a 1.5× ball against the flippers (0
+tunnels in 600 trials, with or without the safety net) and runs the escape fuzz on a table with all four (0
+escapes, 0 stuck in 200 balls). **The build order of §4 is done.**
 
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show
@@ -306,7 +313,8 @@ drawing, and a shop slot type.
 - **Cabinet upgrades**, each about half a decal: **Spare Bulb** ($6: Lamps +1 radius, +2% a step), **Rubber Feet**
   ($6: nudges 15% stronger, no more tilt), **Coin Tray** ($8: +$1 a cleared round), **Side Mirror** ($9: one more
   shop offer every second round). They fold into the run's mods, like decals.
-- **Not built yet:** the Gremlin Hutch (step 9, with the other moving physics).
+- **Gremlin Hutch** (step 9, legendary, $12): two gremlins wander the table through the parts; a ball that knocks
+  one out scores 100 and $1 (up to $5 a round), and it is back 10 s later.
 
 ### 6.3 The changed parts, as revised
 

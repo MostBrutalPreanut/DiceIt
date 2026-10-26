@@ -395,6 +395,7 @@ export class Game {
 
   /** The scorer asked for sparks: shoot them out now, or keep them for later (a firework bursts after its flight). */
   private spawnSparks(score: ScoreEvent[]) {
+    for (const s of score) if (s.grow) this.sim.growBall(s.grow.ballId, s.grow.k, s.grow.seconds);
     for (const s of score) if (s.balls) this.wizardBalls = { ids: this.sim.launchBalls(s.balls.n, s.balls.x, s.balls.y, s.balls.uid), until: s.t + (PARTS[s.def].recipe.wizard?.seconds ?? 0) };
     if (this.wizardBalls && this.sim.time >= this.wizardBalls.until) {
       for (const id of this.wizardBalls.ids) this.sim.retireBall(id);

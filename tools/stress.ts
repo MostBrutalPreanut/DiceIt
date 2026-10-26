@@ -16,6 +16,8 @@ export interface StressConfig {
   rescue?: boolean;
   /** Ball upgrades to fuzz with (a lighter or bouncier ball is a different physics problem). */
   mods?: Partial<SimMods>;
+  /** Fire a Wrecking Ball's grown ball (this many times the size) instead of a normal one. */
+  bigBall?: number;
   /** Called with a per-step trace of the first tunnelled trial. */
   onFirstTunnel?: (trace: string[]) => void;
 }
@@ -55,7 +57,9 @@ export function flipperTunnelTrials(cfg: StressConfig): StressResult {
     const phi = rng.range(-0.8, 0.8);
     const vx = (-n.x * Math.cos(phi) + tangent.x * Math.sin(phi)) * speed;
     const vy = (-n.y * Math.cos(phi) + tangent.y * Math.sin(phi)) * speed;
-    sim.addBall(surface.x + n.x * (1.2 + h), surface.y + n.y * (1.2 + h), vx, vy);
+    const lift = 1.2 + h + (cfg.bigBall ? 0.5 * (cfg.bigBall - 1) + 0.1 : 0);
+    const id = sim.addBall(surface.x + n.x * lift, surface.y + n.y * lift, vx, vy);
+    if (cfg.bigBall) sim.growBall(id, cfg.bigBall, 10, true);
 
     const pressAt = rng.next() < 0.3 ? 0 : rng.range(0, 0.6);
     const steps = Math.round(1.6 / cfg.dt);
