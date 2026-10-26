@@ -139,11 +139,11 @@ export const HUD_TIPS: Record<string, string> = {
   score: '<b>Score</b>: every hit adds its points × your Mult. Hover any part to see exactly what its next hit pays.',
   goal: '<b>Goal</b>: reach it before your balls run out to clear the round. Cash out (Tab) once it is hit, or keep playing for overshoot money.',
   mult: '<b>Mult</b>: multiplies every hit. It starts each ball at ×1.00 (plus decals like Head Start), Big Boi, sets, Spinners and X Lanes raise it, and it resets when the ball ends.',
-  balls: '<b>Balls</b>: the balls left this round. Each ball lasts until it drains or its clock runs out; a Ball Printer adds balls to the table, not to this count.',
+  balls: '<b>Balls</b>: the balls left this round. Each ball lasts until it drains; a Ball Printer adds balls to the table, not to this count.',
   money: '<b>Money</b>: spend it in the shop between rounds. Cha-Ching Bumpers pay coins during play (they land here), and every unused ball pays when you clear a round.',
   tilt: '<b>Tilt</b>: every nudge fills it and it drains slowly. Fill it and the machine tilts: lights out, flippers dead, the ball drains.',
   map: '<b>The run</b>: fifteen rounds on the path, a boss every third (the big stops) and the final boss at the end. The lit stop is where you are; the next boss is named below.',
   boss: '<b>Boss</b>: every third round a boss breaks one thing your machine relies on. You see it coming: build for it. Beat it and you pick one of three decals.',
   ledger: '<b>This round</b>: every point of the round, by the part type that scored it ($ is coins paid). Hover a part on the table for its own numbers.',
-  clock: '<b>Ball clock</b>: one clock per ball (with every ball it turns into). When it runs out the ball ends.',
+  clock: '<b>Ball clock</b>: one clock per ball (with every ball it turns into). When it runs out the flippers go dead and the balls roll out.',
 };

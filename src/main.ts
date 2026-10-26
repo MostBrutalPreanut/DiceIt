@@ -1045,7 +1045,11 @@ async function main() {
       case 'drain':
         audio.drain();
         if (game.mode === 'round' && game.sim.ballCount === 0) renderer.bigBoiMood('sad', 2.2); // a bad shot: Big Boi is sad
-        if (ev.reason === 'timeout' && game.mode === 'round') sayKey('clock'); else if (game.mode !== 'workshop' || ev.reason === 'timeout') sayKey('drain');
+        if (ev.reason !== 'timeout' && game.mode !== 'workshop') sayKey('drain');
+        break;
+      case 'timeUp':
+        sayKey('clock');
+        if (game.mode === 'round') renderer.bigBoiMood('sad', 2.2);
         break;
       case 'nudge': {
         audio.nudge();

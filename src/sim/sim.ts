@@ -4,7 +4,7 @@ import {
   BALL_R, BALL_SEARCH_AFTER, BALL_SEARCH_AGAIN, BALL_SEARCH_KICKS, BALL_SPAWN, BALL_TIMEOUT, CAT, DT, FLIPPER_LENGTH, FLIPPER_REST,
   FLIPPER_SPEED_DOWN, FLIPPER_SPEED_UP, FLIPPER_TORQUE, FLIPPER_UP, LANE_FLOOR_Y, LANE_TOP_Y,
   LANE_WALL_X, MAX_BALL_SPEED, MAX_BALLS, NUDGE_SPEED, NUDGE_TILT, PLUNGE_CHARGE_TIME, PLUNGE_DRIFT,
-  PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, SAVER_WINDOW, SPARK_CAP, SPARK_FADE, SPARK_GLOW, SPARK_GRAVITY, SPARK_R, SUBSTEPS,
+  PLUNGE_MAX, PLUNGE_MIN, PLUNGE_NOISE, RUNOUT_MAX, SAVER_WINDOW, SPARK_CAP, SPARK_FADE, SPARK_GLOW, SPARK_GRAVITY, SPARK_R, SUBSTEPS,
   TABLE_H, TABLE_W, TILT_DECAY, WALL_RESTITUTION,
 } from './constants';
 import { neutralMods, simModsOf, type SimMods } from '../data/mods';
@@ -32,7 +32,10 @@ export type SimEvent =
   | { type: 'gremlin'; t: number; uid: number; ballId: number; x: number; y: number }
   | { type: 'ballSaved'; t: number; uid: number; ballId: number }
   | { type: 'launch'; t: number; ballId: number; power: number }
+  /** `timeout`: the ball clock ran out RUNOUT_MAX s ago and the ball was still on the table. */
   | { type: 'drain'; t: number; ballId: number; reason: 'drain' | 'timeout' }
+  /** The ball clock ran out: the flippers, the nudge and the plunger go dead and the balls in play roll out. */
+  | { type: 'timeUp'; t: number }
   | { type: 'ballSpawn'; t: number; ballId: number }
   | { type: 'flipper'; t: number; side: 'L' | 'R'; on: boolean }
   | { type: 'nudge'; t: number; dir: number; tilt: number }
@@ -250,6 +253,8 @@ export class Sim {
   private ballClock = BALL_TIMEOUT;
   /** When the current ball was first launched (null until it is). The clock runs for the whole ball, so a Ball Printer cannot keep it alive forever by printing fresh balls. */
   private clockStart: number | null = null;
+  /** When the ball clock ran out (null while it has not): the run-out, until no ball is left in play. */
+  private runoutAt: number | null = null;
   /** Balls the printers have printed in the current ball. */
   private printed = 0;
   private sideOn = { L: false, R: false };
@@ -310,6 +315,7 @@ export class Sim {
     this.saversUsed.clear();
     this.netsUsed = 0;
     this.clockStart = null;
+    this.runoutAt = null;
     this.printed = 0;
     this.ledge = layout.ledge;
     this.buildTable(layout.ledge);
@@ -577,6 +583,7 @@ export class Sim {
     for (const p of this.parts.values()) if (p.bank && p.bank.down.some(Boolean)) this.resetBank(p);
     this.rearm();
     this.clockStart = null; // a new ball: a new clock, and the printers may print again
+    this.runoutAt = null;
     this.printed = 0;
     this.events.push({ type: 'ballSpawn', t: this.time, ballId: id });
     return id;
@@ -595,7 +602,7 @@ export class Sim {
   /** WIZARD MODE: up to `n` more balls fly out of a part, up the table (never past the most balls the table holds). */
   launchBalls(n: number, x: number, y: number, uid: number): number[] {
     const ids: number[] = [];
-    for (let k = 0; k < n && this.balls.length < MAX_BALLS; k++) {
+    for (let k = 0; k < n && this.balls.length < MAX_BALLS && !this.timeUp; k++) {
       const a = this.rng.range(-0.9, 0.9), s = this.rng.range(22, 30);
       const id = this.addBall(x, y, -Math.sin(a) * s, Math.cos(a) * s);
       ids.push(id);
@@ -645,7 +652,13 @@ export class Sim {
 
   /** Seconds left on the ball clock, or null before the ball is launched. */
   get clockLeft(): number | null {
+    if (this.timeUp) return 0;
     return this.clockStart === null ? null : Math.max(0, this.ballClock - (this.time - this.clockStart));
+  }
+
+  /** The ball clock has run out: no flippers, nudge or plunger until the balls in play are gone. */
+  get timeUp(): boolean {
+    return this.runoutAt !== null;
   }
 
   get clockTotal() {
@@ -710,7 +723,7 @@ export class Sim {
     // flippers: every flipper follows the button of its side
     for (const side of ['L', 'R'] as const) {
       const button = this.mods.swapFlippers ? (side === 'L' ? input.right : input.left) : side === 'L' ? input.left : input.right;
-      const want = button && !this.tilted;
+      const want = button && !this.tilted && !this.timeUp;
       if (want !== this.sideOn[side]) {
         this.sideOn[side] = want;
         this.events.push({ type: 'flipper', t, side, on: want });
@@ -724,8 +737,8 @@ export class Sim {
       B.b2RevoluteJoint_SetMotorSpeed(f.joint, f.sign * (f.on ? FLIPPER_SPEED_UP : -FLIPPER_SPEED_DOWN));
     }
 
-    // plunger: hold to charge, release to launch
-    if (this.awaitingPlunge) {
+    // plunger: hold to charge, release to launch (not while the balls run out)
+    if (this.awaitingPlunge && !this.timeUp) {
       if (input.plunge) {
         this.plungeCharge = Math.min(1, this.plungeCharge + this.dt / PLUNGE_CHARGE_TIME);
       } else if (this.plungeWasHeld && this.plungeCharge > 0.02) {
@@ -755,7 +768,7 @@ export class Sim {
     // multiball the others still are, so a ball back at the plunger does not lock the nudge)
     this.nudgeCooldown = Math.max(0, this.nudgeCooldown - this.dt);
     this.tiltMeter = Math.max(0, this.tiltMeter - TILT_DECAY * this.dt);
-    if (input.nudge !== 0 && this.balls.some((b) => !b.held && !this.inLane(b)) && this.nudgeCooldown === 0 && !this.tilted) {
+    if (input.nudge !== 0 && this.balls.some((b) => !b.held && !this.inLane(b)) && this.nudgeCooldown === 0 && !this.tilted && !this.timeUp) {
       this.nudgeCooldown = 0.15;
       this.tiltMeter += NUDGE_TILT;
       for (const b of this.balls) {
@@ -959,7 +972,7 @@ export class Sim {
     this.events.push({ type: 'partRelease', t: this.time, uid: pr.inst.uid, ballId: b.id });
 
     const def = PARTS[pr.inst.def];
-    for (let k = 0; def.recipe.spawn && k < def.recipe.spawn + this.mods.printerExtra && this.balls.length < MAX_BALLS && this.printed < (def.recipe.printCap ?? Infinity); k++) {
+    for (let k = 0; def.recipe.spawn && k < def.recipe.spawn + this.mods.printerExtra && this.balls.length < MAX_BALLS && this.printed < (def.recipe.printCap ?? Infinity) && !this.timeUp; k++) {
       this.printed++;
       const a2 = a + this.rng.range(0.3, 0.6) * (this.rng.next() < 0.5 ? -1 : 1);
       const id = this.addBall(pr.inst.x, pr.inst.y, -Math.sin(a2) * s * 0.9, Math.cos(a2) * s * 0.9);
@@ -974,7 +987,7 @@ export class Sim {
   private stepHands(t: number) {
     for (const f of this.flippers) {
       const a = f.auto;
-      if (!a || t < a.ready || this.tilted) continue;
+      if (!a || t < a.ready || this.tilted || this.timeUp) continue;
       const near = this.balls.find((b) => {
         if (b.held) return false;
         const p = B.b2Body_GetPosition(b.body), v = B.b2Body_GetLinearVelocity(b.body);
@@ -1329,9 +1342,10 @@ export class Sim {
         this.events.push({ ...hit, spins });
       } else if (def.kind === 'saucer' && def.recipe.lock) {
         // it locks only the last ball in play (one waiting in the lane does not count), and only once a round: in
-        // multiball, or once it has let its balls go, a ball just rolls through for its points
+        // multiball, once it has let its balls go, or after the ball clock (no plunger to fire the next one), a ball
+        // just rolls through for its points
         if (this.time < (pr.quietUntil ?? 0)) continue;
-        if (!pr.spent && this.balls.every((o) => o === br || this.inLane(o))) this.lockBall(br, pr, hit);
+        if (!pr.spent && !this.timeUp && this.balls.every((o) => o === br || this.inLane(o))) this.lockBall(br, pr, hit);
         else this.events.push(hit);
       } else if (def.kind === 'saucer') {
         if ([...this.balls].some((o) => o.held?.uid === pr.inst.uid)) continue; // one at a time
@@ -1359,20 +1373,24 @@ export class Sim {
 
   private checkBalls() {
     const t = this.time;
-    // the ball clock: once it runs out every ball on the table is lost (a ball waiting in the plunger lane is not in play)
-    const expired = this.clockStart !== null && t - this.clockStart > this.ballClock;
-    if (expired) this.clockStart = null;
+    // the ball clock: once it runs out the player's hands come off (no flippers, nudge or plunger) and the balls in
+    // play roll out on their own. A run-out that will not end (a ball the table keeps up) is cut short: those balls go.
+    if (!this.timeUp && this.clockStart !== null && t - this.clockStart > this.ballClock) {
+      this.runoutAt = t;
+      this.events.push({ type: 'timeUp', t });
+    }
+    const cut = this.runoutAt !== null && t - this.runoutAt > RUNOUT_MAX;
     for (const b of [...this.balls]) {
-      b.age += this.dt;
-      if (b.held && !expired) continue;
       const p = B.b2Body_GetPosition(b.body);
       const v = B.b2Body_GetLinearVelocity(b.body);
       const inLane = p.x > LANE_WALL_X - 0.1 && p.y < LANE_TOP_Y;
+      if (!inLane) b.age += this.dt; // seconds in play: the backstop for a ball the clock does not cover
+      if (b.held && !cut) continue;
 
       let reason: 'drain' | 'timeout' | null = null;
       if (p.y < 2.2 && !inLane) reason = 'drain';
-      else if (expired && !inLane) reason = 'timeout';
-      else if (b.age > BALL_TIMEOUT && !inLane) reason = 'timeout';
+      else if (cut && !inLane) reason = 'timeout';
+      else if (b.age > this.ballClock + RUNOUT_MAX) reason = 'timeout';
       // a ball that leaves the table any other way is a bug; treat it as a drain so a run can't soft-lock
       else if (p.x < -1 || p.x > TABLE_W + 1 || p.y > TABLE_H + 2) reason = 'drain';
 
@@ -1402,12 +1420,18 @@ export class Sim {
         b.slowTime = 0;
       }
     }
+    // the run-out is over once no ball is in play; one still waiting in the lane is fired as a new ball, on a new clock
+    if (this.timeUp && this.balls.every((b) => !b.held && this.inLane(b))) {
+      this.runoutAt = null;
+      this.clockStart = null;
+    }
   }
 
   /**
    * A ball that has stopped moving: kick it where it is, harder and in a wilder direction if it is still in the same
    * spot after the last kick, and after BALL_SEARCH_KICKS kicks put it back in the plunger lane. A ball search never
-   * costs the player the ball: the ball and its score carry on, and the ball clock keeps running.
+   * costs the player the ball: the ball and its score carry on, and the ball clock keeps running (after it runs out,
+   * a ball the kicks do not free leaves the table instead).
    */
   private ballSearch(b: BallRef, x: number, y: number) {
     const t = this.time;
@@ -1425,7 +1449,13 @@ export class Sim {
       this.events.push({ type: 'ballSearch', t, ballId: b.id });
       return;
     }
-    // nothing frees it: back to the plunger
+    // nothing frees it: back to the plunger, or, once the ball clock has run out (no plunger), off the table
+    if (this.timeUp) {
+      B.b2DestroyBody(b.body);
+      this.balls = this.balls.filter((x) => x !== b);
+      this.events.push({ type: 'drain', t, ballId: b.id, reason: 'timeout' });
+      return;
+    }
     const at = this.laneSpot(b);
     B.b2Body_SetTransform(b.body, V(at.x, at.y), B.b2MakeRot(0));
     B.b2Body_SetLinearVelocity(b.body, V(0, 0));
@@ -1465,7 +1495,7 @@ export class Sim {
 
   /** Shoot again: a ball that drains inside its save window goes back to the plunger lane, unspent. */
   private trySave(b: BallRef): boolean {
-    if (this.tilted || b.saveUntil < this.time) return false;
+    if (this.tilted || this.timeUp || b.saveUntil < this.time) return false;
     const saver = this.armedSaver();
     if (!saver && this.netsUsed >= this.mods.extraSaves) return false;
     if (saver) this.saversUsed.add(saver.inst.uid);

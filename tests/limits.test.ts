@@ -4,6 +4,7 @@ import { computeMods } from '../src/data/decals';
 import { describe as describePart, makePart, PARTS } from '../src/data/parts';
 import { playRounds, type Machine } from '../src/game/autobuild';
 import { Scorer } from '../src/game/scoring';
+import { RUNOUT_MAX } from '../src/sim/constants';
 import { createSim, NO_INPUT, type SimEvent } from '../src/sim/sim';
 import type { Layout } from '../src/sim/layout';
 
@@ -108,43 +109,79 @@ describe('the limits are written on the parts', () => {
 describe('the ball clock', () => {
   const empty = (): Layout => ({ parts: [], gravity: 50, nextUid: 1 });
 
-  it('ends a ball when the clock runs out, even though it is still in play', () => {
+  it('takes the controls away when it runs out, and the ball rolls out on its own', () => {
     const sim = createSim(empty(), { ballClock: 1 });
     sim.spawnBall();
-    let launchedAt = -1, timeoutAt = -1, drainAt = -1;
-    for (let i = 0; i < 240 * 8 && drainAt < 0; i++) {
-      for (const e of sim.step({ ...NO_INPUT, plunge: i < 240 })) {
+    let launchedAt = -1, upAt = -1;
+    const after: SimEvent[] = [];
+    for (let i = 0; i < 240 * 20 && sim.ballCount > 0; i++) {
+      // the player mashes everything once the time is up
+      const input = upAt < 0 ? { ...NO_INPUT, plunge: i < 240 } : { left: true, right: true, plunge: i % 2 === 0, nudge: i % 60 === 0 ? 1 : 0 };
+      for (const e of sim.step(input)) {
         if (e.type === 'launch') launchedAt = e.t;
-        if (e.type === 'drain') { drainAt = e.t; if (e.reason === 'timeout') timeoutAt = e.t; }
+        if (e.type === 'timeUp') upAt = e.t;
+        else if (upAt >= 0) after.push(e);
       }
+      if (upAt >= 0 && sim.ballCount > 0) expect(sim.clockLeft).toBe(0);
     }
-    expect(timeoutAt).toBeGreaterThan(0);
-    expect(timeoutAt - launchedAt).toBeGreaterThan(1);
-    expect(timeoutAt - launchedAt).toBeLessThan(1.1); // the clock, not the 2.5 s the ball would have lasted
+    expect(upAt - launchedAt).toBeGreaterThan(1);
+    expect(upAt - launchedAt).toBeLessThan(1.1); // the clock, not the 2.5 s the ball would have lasted
+    expect(sim.ballCount).toBe(0);
+    expect(after.filter((e) => e.type === 'flipper' || e.type === 'nudge' || e.type === 'launch')).toEqual([]);
+    expect(after.filter((e) => e.type === 'drain').map((e) => e.type === 'drain' && e.reason)).toEqual(['drain']); // it drained, it was not taken
+    expect(sim.timeUp).toBe(false); // nothing left in play: the run-out is over
   });
 
   it('runs for the whole ball: a ball added later does not get a fresh clock', () => {
     const sim = createSim(empty(), { ballClock: 2 });
     sim.spawnBall();
-    const timeouts: { id: number; t: number }[] = [];
+    const ups: number[] = [];
     let launched = false;
     for (let i = 0; i < 240 * 6; i++) {
       if (launched && i === 240 * 2) sim.addBall(12, 30, 0, 0); // a "printed" ball, 1 s into the clock
       for (const e of sim.step({ ...NO_INPUT, plunge: i < 230 })) {
         if (e.type === 'launch') launched = true;
-        if (e.type === 'drain' && e.reason === 'timeout') timeouts.push({ id: e.ballId, t: e.t });
+        if (e.type === 'timeUp') ups.push(e.t);
       }
     }
-    expect(timeouts.length).toBeGreaterThanOrEqual(1);
-    for (const t of timeouts) expect(t.t).toBeLessThan(3.2); // launched at ~1 s, so nothing outlives 3 s + a tick
+    expect(ups.length).toBe(1);
+    expect(ups[0]).toBeLessThan(3.2); // launched at ~1 s, so the hands come off at 3 s + a tick
   });
 
-  it('a ball waiting in the plunger lane is not lost when the clock runs out', () => {
+  it('takes a ball that will not roll out', () => {
+    const sim = createSim(empty(), { ballClock: 1, mods: { ballGravity: 0 } }); // nothing pulls it down to the drain
+    sim.spawnBall();
+    let upAt = -1, goneAt = -1;
+    for (let i = 0; i < 240 * 30 && goneAt < 0; i++) {
+      for (const e of sim.step({ ...NO_INPUT, plunge: i < 240 })) {
+        if (e.type === 'timeUp') upAt = e.t;
+        if (e.type === 'drain') { expect(e.reason).toBe('timeout'); goneAt = e.t; }
+      }
+    }
+    expect(upAt).toBeGreaterThan(0);
+    expect(goneAt).toBeGreaterThan(upAt);
+    expect(goneAt - upAt).toBeLessThan(RUNOUT_MAX + 0.1);
+  });
+
+  it('a ball waiting in the plunger lane is not lost: it cannot be fired during the run-out, then it is a new ball on a new clock', () => {
     const sim = createSim(empty(), { ballClock: 0.5, mods: { twin: true } });
     sim.spawnBall();
-    for (let i = 0; i < 240 * 4; i++) sim.step({ ...NO_INPUT, plunge: i < 230 });
-    expect(sim.ballStates().some((b) => b.inLane)).toBe(true);
+    let launches = 0, sawUp = false;
+    for (let i = 0; i < 240 * 10 && !(sawUp && !sim.timeUp); i++) {
+      for (const e of sim.step({ ...NO_INPUT, plunge: i < 230 || (sawUp && i % 120 < 60) })) {
+        if (e.type === 'launch') launches++;
+        if (e.type === 'timeUp') sawUp = true;
+      }
+    }
+    expect(sawUp).toBe(true);
+    expect(launches).toBe(1);
+    expect(sim.timeUp).toBe(false);
+    expect(sim.ballStates().length).toBe(1);
+    expect(sim.ballStates()[0].inLane).toBe(true);
     expect(sim.awaitingPlunge).toBe(true);
+    expect(sim.clockLeft).toBeNull();
+    for (let i = 0; i < 240 && launches < 2; i++) for (const e of sim.step({ ...NO_INPUT, plunge: i < 120 })) if (e.type === 'launch') launches++;
+    expect(launches).toBe(2);
   });
 });
 
