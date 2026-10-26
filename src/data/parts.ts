@@ -371,7 +371,7 @@ export const PARTS: Record<PartId, PartDef> = {
     dials: [{ id: 'hold', label: 'Hold', min: 0.4, max: 1.5, step: 0.1, default: 0.8, tradeoff: 'How long it keeps the ball before it fires it back out.', ends: ['quick', 'slow'], fmt: (v) => `${v.toFixed(1)} s` }, { ...powerDial('eject'), tradeoff: 'How hard it fires the ball back out.' }],
   },
   xlane: {
-    id: 'xlane', name: 'X Lane', blurb: 'Roll through it and your Mult multiplies.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 7, weight: 2,
+    id: 'xlane', name: 'X Lane', blurb: 'Roll through it and your Mult multiplies.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 7, weight: 3,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
     recipe: { xmult: 1.25, xmultCap: 3, cooldown: 3, lightsLane: true }, dials: [],
   },
@@ -384,17 +384,17 @@ export const PARTS: Record<PartId, PartDef> = {
 
   // ---- legendary: from round 7 ----
   golden: {
-    id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold. Pays in points, Mult and cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 2,
+    id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold. Pays in points, Mult and cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 3,
     shape: { type: 'circle', r: 1.5 }, rotatable: false, kickUnit: 15,
     recipe: { points: 120, per: 'hit', xmult: 1.05, xmultCap: 3, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
   },
   fame: {
-    id: 'fame', name: 'Hall of Fame', blurb: 'Every star of your table gets a plaque. The more stars, the louder the crowd.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 2,
+    id: 'fame', name: 'Hall of Fame', blurb: 'Every star of your table gets a plaque. The more stars, the louder the crowd.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 3,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
     recipe: { points: 150, per: 'pass', typeX: 0.1, perBall: 1, perLevel: 40 }, dials: [],
   },
   disco: {
-    id: 'disco', name: 'Disco Ball', blurb: 'Once a ball: the lamps go wild and the Mult goes through the roof.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
+    id: 'disco', name: 'Disco Ball', blurb: 'Once a ball: the lamps go wild and the Mult goes through the roof.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 3,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0,
     recipe: { points: 200, per: 'pass', xmult: 2.5, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
   },
