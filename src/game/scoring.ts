@@ -271,12 +271,12 @@ export class Scorer {
     return id === 'mega' ? bigBoiOf(this.machine).recipe : PARTS[id].recipe;
   }
 
-  /** The parts on the table (decor stands on the cabinet and is never hit). */
+  /** The parts on the table (decor sits in the decor screen and is never hit). */
   private placed() {
     return this.getParts().filter((p) => p.placed && !isDecor(p.def));
   }
 
-  /** The decor of this kind on the cabinet, if any (decor is one of a kind). */
+  /** The decor of this kind in the decor screen, if it is there (decor is one of a kind). */
   private decor(test: (r: Recipe) => unknown): PartInstance | undefined {
     return this.getParts().find((p) => p.placed && isDecor(p.def) && test(PARTS[p.def].recipe));
   }

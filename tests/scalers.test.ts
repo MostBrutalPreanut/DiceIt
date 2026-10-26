@@ -101,6 +101,7 @@ describe('Bonsai Bumper and Time Capsule', () => {
     expect(h.money).toBe(money);
     expect(h.shop.prize).toHaveLength(3);
     expect(h.shop.prize!.every((id) => PARTS[id].rarity === 'legendary')).toBe(true);
+    expect(h.shop.prizeFrom).toBe('capsule'); // its pop-up says Time Capsule, not Piñata
   });
 });
 

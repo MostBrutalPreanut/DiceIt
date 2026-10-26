@@ -7,7 +7,8 @@ import {
 } from '../data/decals';
 import { BOSSES, bossOf, FINAL_ROUND, planBosses, type BossDef, type BossId } from '../data/bosses';
 import type { MachineId } from '../data/bigboi';
-import { canPlace, canPlaceLedge, decorParts, WALL_GAP, ensureBigBoi, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
+import { canPlace, canPlaceLedge, decorParts, WALL_GAP, ensureBigBoi, inventoryParts, loadLayout, placedParts, settleDecor, starterLayout, type Layout } from '../sim/layout';
+import { decorSpot } from '../sim/cabinet';
 import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
 import { clampLedge, LEDGE } from '../sim/table';
 import { GOALS, GOAL_GROWTH } from '../data/goals';
@@ -70,8 +71,10 @@ export interface ShopState {
   locked?: number[];
   /** Bargain Bin: the slot that is half price. */
   bargain?: number | null;
-  /** A Piñata burst last round: pick one of these, free (the others go). It waits until you pick. */
+  /** A Piñata burst last round, or a Time Capsule was dug up: pick one of these, free (the others go). It waits until you pick. */
   prize?: PartId[] | null;
+  /** Where the prize came from (old saves: a Piñata). */
+  prizeFrom?: 'pinata' | 'capsule';
 }
 
 /** Everything that survives a page reload. */
@@ -193,6 +196,8 @@ export class Game {
   private history: string[] = [];
   private future: string[] = [];
   private runSeed = 1;
+  /** The run's seed: tells one run from the next (a reveal already played in one run plays again in a new one). */
+  get runId() { return this.runSeed; }
   /** Seed for the next sim reset (tools set it to vary the plunger and saucer randomness). */
   seed = 1;
   /** Tools: play a round against this goal instead of the table's (Infinity = play every ball out). */
@@ -294,7 +299,7 @@ export class Game {
     return placedParts(this.layout);
   }
 
-  /** The decor standing on the cabinet. */
+  /** The decor in the decor screen (one piece at most). */
   get decor(): PartInstance[] {
     return decorParts(this.layout);
   }
@@ -362,7 +367,7 @@ export class Game {
     return m;
   }
 
-  /** The cabinet upgrades on the cabinet add their little bit (decor in the toolbox does nothing). */
+  /** The cabinet upgrades in the decor screen add their little bit (decor in the toolbox does nothing). */
   private withDecor(m: Mods): Mods {
     for (const p of decorParts(this.layout)) {
       const c = PARTS[p.def].recipe.cab;
@@ -376,7 +381,7 @@ export class Game {
     return m;
   }
 
-  /** Decor went on or off the cabinet: a cabinet upgrade works (or stops) at once, the shop included. */
+  /** Decor went into or out of the decor screen: a cabinet upgrade works (or stops) at once, the shop included. */
   private decorChanged(id: PartId) {
     if (!isDecor(id) || this.fixedMods || this.mode !== 'workshop') return;
     this.mods = this.workshopMods();
@@ -476,6 +481,7 @@ export class Game {
     if (this.prizeDue) {
       // a Piñata burst: one of three parts, free; rarer than the shop's own (it rolls as if it were three rounds later)
       this.shop.prize = rollOffers(new Rng(this.runSeed * 4241 + this.round), PARTS.pinata.recipe.pinata!.pick, this.round + 3, this.ownedDecor(), this.ownedKinds());
+      this.shop.prizeFrom = 'pinata';
       this.prizeDue = false;
     }
     this.resolved = null;
@@ -495,7 +501,7 @@ export class Game {
     const offers: (PartId | null)[] = [];
     for (let i = 0; i < n; i++) offers.push(keep.includes(i) ? prev!.offers[i] : fresh.shift() ?? null);
     const bargain = this.mods.bargain ? Math.floor(rng.next() * n) : null;
-    return { offers, rerolls: 0, locked: keep, bargain, prize: prev?.prize ?? null };
+    return { offers, rerolls: 0, locked: keep, bargain, prize: prev?.prize ?? null, ...(prev?.prizeFrom ? { prizeFrom: prev.prizeFrom } : {}) };
   }
 
   get lockSlots() {
@@ -729,7 +735,7 @@ export class Game {
   applyArrangement(a: Arrangement): { placed: number; missing: number } {
     if (!this.editable) return { placed: 0, missing: 0 };
     this.checkpoint();
-    for (const p of this.layout.parts) if (!p.fixed && !isDecor(p.def)) p.placed = false; // the decor stays on the cabinet
+    for (const p of this.layout.parts) if (!p.fixed && !isDecor(p.def)) p.placed = false; // the decor stays in its screen
     let placed = 0, missing = 0;
     for (const e of a.parts) {
       if (!(e.def in PARTS) || e.def === 'mega') { missing++; continue; }
@@ -830,6 +836,7 @@ export class Game {
     this.layout.parts = this.layout.parts.filter((p) => p.def in PARTS);
     migrateParts(this.layout, s.levels);
     ensureBigBoi(this.layout);
+    settleDecor(this.layout);
     this.mods = this.workshopMods();
     this.enforceToolbox();
     this.soldOverflow = [];
@@ -891,12 +898,13 @@ export class Game {
     return w ? w.perRound - (p.wished?.round === this.round ? p.wished.n : 0) : 0;
   }
 
-  /** Take the Piñata's prize: the part (or pack) goes into the toolbox for free, and the other two go. */
+  /** Take the prize (a Piñata's, or a dug-up Time Capsule's): the part (or pack) goes into the toolbox for free, and the others go. */
   takePrize(i: number): PartInstance | null {
     const id = this.shop.prize?.[i];
     if (!this.editable || !id || !this.hasRoomFor(id)) return null;
     this.checkpoint();
     this.shop.prize = null;
+    delete this.shop.prizeFrom;
     const pack = this.makePack(id, 0);
     for (const inst of pack) { inst.fresh = true; this.layout.parts.push(inst); }
     return pack[0];
@@ -950,6 +958,7 @@ export class Game {
 
   /** Could this go at (x, y)? A part on a free spot; a gem into a part it fits. */
   canDropAt(id: PartId, x: number, y: number, ignoreUid?: number): boolean {
+    if (isDecor(id)) ({ x, y } = decorSpot(x, y));
     return isInlay(id) ? !!this.inlayTarget(id, x, y) : canPlace(this.layout, id, x, y, ignoreUid);
   }
 
@@ -986,6 +995,7 @@ export class Game {
       return target;
     }
     const cost = this.priceAt(slot);
+    if (isDecor(id)) ({ x, y } = decorSpot(x, y)); // decor drops into the decor screen
     if (!this.canAfford(cost) || !canPlace(this.layout, id, x, y)) return null;
     const spots = this.packSpots(id, x, y);
     if (!spots) return null;
@@ -1024,6 +1034,7 @@ export class Game {
   }
 
   private addPlaced(id: PartId, x: number, y: number, angle = 0): PartInstance {
+    if (isDecor(id)) ({ x, y } = decorSpot(x, y));
     const inst = makePart(id, this.layout.nextUid++, x, y, true);
     inst.angle = aimed(id, angle);
     this.layout.parts.push(inst);
@@ -1105,6 +1116,7 @@ export class Game {
       const pick: PartId[] = [];
       while (pick.length < PARTS.capsule.recipe.capsule!.pick && legend.length) pick.push(legend.splice(Math.floor(rng.next() * legend.length), 1)[0]);
       this.shop.prize = pick;
+      this.shop.prizeFrom = 'capsule';
     }
     return value;
   }
@@ -1122,6 +1134,7 @@ export class Game {
       this.lastInlaid = target.uid;
       return true;
     }
+    if (p && isDecor(p.def)) ({ x, y } = decorSpot(x, y));
     if (!this.editable || !p || p.fixed || !canPlace(this.layout, p.def, x, y, uid)) return false;
     const moving = p.placed && (p.x !== x || p.y !== y);
     if (moving && this.moveFee(p) > this.money) return false;

@@ -2,6 +2,7 @@ import { neutralMods, type Mods } from '../data/mods';
 import type { MachineId } from '../data/bigboi';
 import { PARTS, footprint, type PartId, type PartInstance } from '../data/parts';
 import { Bot } from '../sim/bot';
+import { DECOR_SLOT } from '../sim/cabinet';
 import { BUILD_AREA } from '../sim/constants';
 import { canPlace, cloneLayout, type Layout } from '../sim/layout';
 import { Rng } from '../sim/rng';
@@ -117,9 +118,9 @@ const ANGLE_STEP = Math.PI / 12;
 /** A random valid spot for a part, or null if the board has no room for it. */
 function randomSpot(layout: Layout, part: PartInstance, rng: Rng): { x: number; y: number } | null {
   const r = footprint(PARTS[part.def]);
-  const decor = PARTS[part.def].kind === 'decor'; // decor goes on the cabinet round the table
-  for (let i = 0; i < (decor ? 400 : 80); i++) {
-    const x = decor ? rng.range(-1.5, 27.5) : rng.range(BUILD_AREA.x0 + r, BUILD_AREA.x1 - r), y = decor ? rng.range(-1, 54) : rng.range(BUILD_AREA.y0 + r, BUILD_AREA.y1 - r);
+  if (PARTS[part.def].kind === 'decor') return canPlace(layout, part.def, DECOR_SLOT.x, DECOR_SLOT.y, part.uid) ? { ...DECOR_SLOT } : null; // the decor screen, if it is free
+  for (let i = 0; i < 80; i++) {
+    const x = rng.range(BUILD_AREA.x0 + r, BUILD_AREA.x1 - r), y = rng.range(BUILD_AREA.y0 + r, BUILD_AREA.y1 - r);
     if (canPlace(layout, part.def, x, y, part.uid)) return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
   }
   return null;

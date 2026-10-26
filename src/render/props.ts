@@ -4,9 +4,10 @@
 // renderer; what is drawn here is baked once per part x state x theme into a texture.
 import { Container, Graphics } from 'pixi.js';
 import { MAX_LEVEL, PARTS, type PartId } from '../data/parts';
+import { decorPanel } from '../sim/cabinet';
 import { BALL_R, FLIPPER_LENGTH } from '../sim/constants';
 import { box, flat, hull, label, P, Prop, ring, shadow, shadowPoly, star, type Pt, type View } from './draw';
-import { mat, mix, mixHue, WHITE, type Theme } from './theme';
+import { mat, mix, mixHue, WHITE, type Mat, type Theme } from './theme';
 
 export interface PartState {
   /** Lane Rollover: its letter of the theme's word, and whether it is lit. */
@@ -38,11 +39,13 @@ export interface PartState {
   bright?: number;
   /** The gem set into the part (an inlay): a little stone at its front. */
   gem?: PartId;
+  /** Decor drawn as an icon (the shop, the toolbox, its card): a small square screen instead of the whole decor screen. */
+  badge?: boolean;
 }
 export type Mood = 'happy' | 'oof' | 'sad' | 'shocked' | 'cool' | 'blink';
 
 export const stateKey = (st: PartState) =>
-  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0, st.part ?? '', st.bright ?? '', st.gem ?? ''].join('.');
+  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0, st.part ?? '', st.bright ?? '', st.gem ?? '', st.badge ? 1 : 0].join('.');
 
 const ringS = (cx: number, cy: number, r: number, n = 20, ry = r): Pt[] => ring(cx, cy, r, n, ry);
 
@@ -78,7 +81,9 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       else { // the coin bumper's cap is a coin, whatever the theme
         p.face(ring(x, y, r * 0.62).map(([a, b]) => P(v, a, b, 0.9)), cap.light, { sil: false, line: 0.35 });
         const [cx, cy] = P(v, x, y, 0.9);
-        const d = label('$', S * 0.62, t.ink);
+        // a milled edge round the coin, and a fat dollar sign stamped in it
+        p.op((g) => { for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2, [X, Y] = P(v, x + Math.cos(a) * r * 0.75, y + Math.sin(a) * r * 0.75, 0.9); g.circle(X, Y, S * 0.04).fill(cap.shade); } });
+        const d = label('$', S * 0.95, cap.shade, { stroke: t.ink, strokeW: v.lw * 0.9 });
         d.position.set(cx, cy);
         d.scale.y = v.k;
         out.addChild(body, d);
@@ -188,13 +193,21 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       break;
     }
     case 'lamp': {
-      shadow(under, v, t, x, y, 0.6, 0.6);
-      p.cyl(x, y, 0.55, 0, 0.14, metal);
-      p.cyl(x, y, 0.13, 0.14, 1.5, mat(t, t.ink));
-      const [BX, BY] = P(v, x, y, 1.95);
-      p.face(ringS(BX, BY, 0.5 * S, 24), st.lit ? t.role.lamp : mix(t.role.lamp, t.shadeTint, 0.5));
-      p.op((g) => { g.circle(BX - 0.16 * S, BY - 0.18 * S, 0.11 * S).fill(WHITE); });
-      p.cyl(x, y, 0.42, 2.2, 0.16, mat(t, t.accent));
+      // a lamp post: a big glass globe on a short iron post under a little cap; lit, the globe shines in the lamp's colour
+      const lit = !!st.lit, c = t.role.lamp, iron = mat(t, mix(t.metal, t.ink, 0.55));
+      shadow(under, v, t, x, y, 0.62, 0.62);
+      p.cyl(x, y, 0.52, 0, 0.14, metal);
+      p.cyl(x, y, 0.3, 0.14, 0.12, iron);
+      p.cyl(x, y, 0.09, 0.26, 0.8, iron, { n: 12 });
+      p.cyl(x, y, 0.24, 1.02, 0.12, metal);
+      egg(p, v, x, y, 1.56, 0.56, 0.56, 0.5, 0, mat(t, lit ? mix(c, WHITE, 0.2) : mix(c, t.shadeTint, 0.55)), lit);
+      const [BX, BY] = P(v, x, y - 0.45, 1.5);
+      p.op((g) => {
+        if (lit) g.circle(BX, BY, S * 0.22).fill(WHITE);
+        g.moveTo(BX - S * 0.17, BY + S * 0.06).lineTo(BX - S * 0.08, BY - S * 0.07).lineTo(BX, BY + S * 0.05).lineTo(BX + S * 0.08, BY - S * 0.07).lineTo(BX + S * 0.17, BY + S * 0.06)
+          .stroke({ width: v.lw * 0.5, color: lit ? mix(c, t.ink, 0.45) : t.ink, cap: 'round', join: 'round' });
+      });
+      p.cyl(x, y, 0.16, 2.02, 0.1, iron, { n: 14 });
       break;
     }
     case 'printer': {
@@ -279,16 +292,25 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       break;
     }
     case 'ding': {
-      // a brass bell on a bumper skirt: it rings louder the more of the table the ball has seen
+      // a desk bell: a dark round base and a shiny dome with the plunger on top. Ding!
       shadow(under, v, t, x, y, r * 1.05, r * 1.05);
-      const bell = st.hit ? mat(t, mix(t.role.ding, WHITE, 0.4)) : role;
-      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
-      p.cyl(x, y, r * 0.55, 0.16, 0.3, metal);
-      const pts = [0, 0.25, 0.5, 0.75, 1].flatMap((u) => ring(x, y, r * (0.92 - 0.5 * u * u), 26).map(([a, b]) => P(v, a, b, 0.46 + u * 1.0)));
-      p.face(hull(pts), bell.base);
-      p.face(ring(x, y, r * 0.92, 26).map(([a, b]) => P(v, a, b, 0.46)), bell.shade, { sil: false, line: 0.4 });
-      p.face(ring(x - r * 0.2, y + r * 0.1, r * 0.18, 14).map(([a, b]) => P(v, a, b, 1.2)), bell.light, { sil: false, line: 0 });
-      p.cyl(x, y, 0.14, 1.46, 0.22, metal);
+      const dome = st.hit ? mat(t, mix(t.role.ding, WHITE, 0.4)) : role;
+      p.cyl(x, y, r * 0.96, 0, 0.28, mat(t, mix(t.rim, t.ink, 0.5)));
+      p.cyl(x, y, r * 0.84, 0.28, 0.06, metal);
+      const pts = [0, 0.25, 0.5, 0.75, 0.92, 1].flatMap((u) => ring(x, y, r * 0.8 * Math.cos((u * Math.PI) / 2), 26).map(([a, b]) => P(v, a, b, 0.34 + u * 0.92)));
+      const H = hull(pts), [cx] = P(v, x, y, 0.34);
+      p.face(H, dome.base);
+      const sh = hull(pts.filter((q) => q[0] > cx + r * 0.38 * S));
+      if (sh.length > 2) p.face(sh, dome.shade, { sil: false, line: 0 });
+      p.face(H, null, { sil: false });
+      const [hx, hy] = P(v, x - r * 0.38, y, 0.9);
+      p.op((g) => g.moveTo(hx, hy + S * 0.18).quadraticCurveTo(hx - S * 0.02, hy - S * 0.2, hx + S * 0.3, hy - S * 0.38).stroke({ width: S * 0.12, color: WHITE, cap: 'round', alpha: 0.85 }));
+      p.cyl(x, y, 0.07, 1.24, 0.24, metal, { n: 10 });
+      p.cyl(x, y, 0.2, 1.48, 0.1, metal);
+      if (st.hit) {
+        const [tx, ty] = P(v, x, y, 1.6);
+        p.op((g) => { for (const a of [-2.3, -1.57, -0.84]) g.moveTo(tx + Math.cos(a) * S * 0.45, ty + Math.sin(a) * S * 0.45).lineTo(tx + Math.cos(a) * S * 0.8, ty + Math.sin(a) * S * 0.8); g.stroke({ width: v.lw * 0.8, color: t.ink, cap: 'round' }); });
+      }
       break;
     }
     case 'ruby': case 'garnet': case 'opal': case 'goldleaf': case 'redseal': case 'emerald': case 'topaz': {
@@ -321,16 +343,16 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       break;
     }
     case 'laser': {
-      // a little laser turret: a domed head on a post, one big lens on top; dark while it recharges
+      // a laser turret: a domed head on a swivel, its barrel aimed out at you, a lens at the muzzle; dark while it recharges
       shadow(under, v, t, x, y, r * 1.05, r * 1.05);
       p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
-      p.cyl(x, y, r * 0.42, 0.16, 0.36, metal);
-      const head = st.hit ? mat(t, mix(t.role.laser, WHITE, 0.4)) : role;
-      const dome = [0, 0.4, 0.75, 1].flatMap((u) => ring(x, y, r * 0.78 * Math.cos((u * Math.PI) / 2.4), 24).map(([a, b]) => P(v, a, b, 0.52 + u * 0.7)));
-      p.face(hull(dome), head.base);
-      const ready = st.lit !== false;
-      p.face(ring(x, y - r * 0.08, r * 0.3, 18).map(([a, b]) => P(v, a, b, 1.2)), ready ? WHITE : mix(t.role.laser, t.ink, 0.5), { sil: false, line: 0.45 });
-      if (ready) p.face(ring(x, y - r * 0.08, r * 0.16, 14).map(([a, b]) => P(v, a, b, 1.22)), t.role.laser, { sil: false, line: 0 });
+      p.cyl(x, y, r * 0.42, 0.16, 0.34, metal);
+      const head = st.hit ? mat(t, mix(t.role.laser, WHITE, 0.4)) : role, ready = st.lit !== false, tl = 0.35;
+      egg(p, v, x, y + 0.08, 0.86, r * 0.66, r * 0.6, 0.42, 0, head);
+      p.prism(box(x, y + 0.2, 0.06, 0.22, 0), 1.2, 0.22, head);
+      tube(p, v, x, y - r * 0.55, 0.86, 0.2, r * 0.8, tl, metal, mix(t.metal, t.ink, 0.3));
+      p.face(tubeDisc(v, x, y - r * 0.55, 0.86, 0.13, r * 0.41, tl), ready ? t.role.laser : mix(t.role.laser, t.ink, 0.55), { sil: false, line: 0.35 });
+      if (ready) p.face(tubeDisc(v, x, y - r * 0.55, 0.86, 0.05, r * 0.42, tl, -0.03, 0.04), WHITE, { sil: false, line: 0 });
       break;
     }
     case 'gong': {
@@ -431,29 +453,50 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       break;
     }
     case 'insure': {
-      // an Insurance Policy: a rolled-up certificate with a red wax seal, on a little stand; once used, it is gone
-      shadow(under, v, t, x, y, r * 1.0, r * 0.8);
-      p.cyl(x, y, r * 0.8, 0, 0.14, metal);
-      const paper = mat(t, st.hit ? WHITE : t.paper);
-      p.prism(box(x, y, r * 0.75, r * 0.3, 0, 0.25), 0.14, 0.55, paper);
-      p.face(ring(x + r * 0.2, y - r * 0.3, r * 0.22, 12).map(([a, b]) => P(v, a, b, 0.4)), t.role.redseal, { sil: false, line: 0.4 });
-      p.face(box(x - r * 0.2, y - r * 0.31, r * 0.3, 0.02, 0).map(([a, b]) => P(v, a, b, 0.5)), t.role.insure, { sil: false, line: 0.2 });
+      // an Insurance Policy: a striped umbrella, open and ready for a rainy day; once used, it is gone
+      shadow(under, v, t, x, y, r * 1.15, r * 1.0);
+      const c = st.hit ? mix(t.role.insure, WHITE, 0.4) : t.role.insure, cream = st.hit ? WHITE : t.paper;
+      p.cyl(x, y, 0.05, 0, 1.3, mat(t, t.ink), { n: 8 });
+      // the hooked handle, at the foot of the shaft
+      const [hx, hy] = P(v, x, y, 0.28);
+      p.op((g) => {
+        for (const [w, col] of [[v.lw * 1.6 + S * 0.1, t.ink], [S * 0.1, t.rim]] as const) g.moveTo(hx, hy - S * 0.15).lineTo(hx, hy + S * 0.05).quadraticCurveTo(hx, hy + S * 0.3, hx + S * 0.2, hy + S * 0.25).quadraticCurveTo(hx + S * 0.34, hy + S * 0.18, hx + S * 0.3, hy).stroke({ width: w, color: col, cap: 'round', join: 'round' });
+      });
+      const R = r * 1.12, z0 = 1.2, apex = P(v, x, y, 1.85), n = 8;
+      const rim = (i: number): Pt => { const a = (i / n) * Math.PI * 2 + 0.2; return [x + Math.cos(a) * R, y + Math.sin(a) * R]; };
+      const wedges = Array.from({ length: n }, (_, i) => i).sort((a, b) => (rim(b)[1] + rim(b + 1)[1]) - (rim(a)[1] + rim(a + 1)[1]));
+      p.silhouette(hull([apex, ...Array.from({ length: n * 4 }, (_, i) => { const a = (i / (n * 4)) * Math.PI * 2; return P(v, x + Math.cos(a) * R, y + Math.sin(a) * R, z0); })]));
+      for (const i of wedges) {
+        const a0 = (i / n) * Math.PI * 2 + 0.2, a1 = ((i + 1) / n) * Math.PI * 2 + 0.2, pts: Pt[] = [apex];
+        // a scalloped edge: each panel sags between its ribs
+        for (let k = 0; k <= 6; k++) { const a = a0 + ((a1 - a0) * k) / 6, sag = Math.sin((k / 6) * Math.PI) * 0.16; pts.push(P(v, x + Math.cos(a) * R * (1 - sag * 0.4), y + Math.sin(a) * R * (1 - sag * 0.4), z0 + sag)); }
+        p.face(pts, i % 2 ? cream : c, { sil: false, line: 0.35 });
+      }
+      p.cyl(x, y, 0.06, 1.85, 0.22, mat(t, t.ink), { n: 8 });
       break;
     }
     case 'nest': {
-      // a Spider Nest: a grey web dome with a spider on top and a couple of eggs in it
+      // a Spider Nest: a silky white web dome with eggs peeking out, and its owner sitting on top, all legs and big eyes
       shadow(under, v, t, x, y, r * 1.05, r * 1.05);
       p.cyl(x, y, r, 0, 0.14, mat(t, t.paper));
-      const web = mat(t, st.hit ? mix(t.role.nest, WHITE, 0.4) : t.role.nest);
-      p.face(hull([0, 0.5, 1].flatMap((u) => ring(x, y, r * 0.85 * Math.cos((u * Math.PI) / 2.2), 20).map(([a, b]) => P(v, a, b, 0.14 + u * 1.1)))), web.base);
+      const silk = mat(t, st.hit ? WHITE : mix(t.role.nest, WHITE, 0.72)), spider = st.hit ? mix(t.role.nest, WHITE, 0.4) : t.role.nest;
+      const dome = [0, 0.4, 0.75, 1].flatMap((u) => ring(x, y, r * 0.88 * Math.cos((u * Math.PI) / 2.2), 24).map(([a, b]) => P(v, a, b, 0.14 + u * 1.0)));
+      p.face(hull(dome), silk.base);
+      const [ax, ay] = P(v, x, y, 1.14);
       p.op((g) => {
-        for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2, [ax, ay] = P(v, x, y, 1.25), [bx, by] = P(v, x + Math.cos(a) * r * 0.8, y + Math.sin(a) * r * 0.8, 0.2); g.moveTo(ax, ay).lineTo(bx, by); }
-        g.stroke({ width: v.lw * 0.35, color: WHITE, alpha: 0.7 });
-        for (const [dx, dy] of [[-0.35, -0.4], [0.3, -0.45]] as const) { const [qx, qy] = P(v, x + dx * r, y + dy * r, 0.35); g.ellipse(qx, qy, S * 0.14, S * 0.11).fill(WHITE).stroke({ width: v.lw * 0.4, color: t.ink }); }
-        const [sx, sy] = P(v, x, y, 1.3);
-        g.circle(sx, sy, S * 0.2).fill(t.ink);
-        for (const k of [-1, 1]) for (let l = 0; l < 3; l++) g.moveTo(sx, sy).lineTo(sx + k * S * (0.35 + l * 0.05), sy - S * (0.2 - l * 0.18));
-        g.stroke({ width: v.lw * 0.5, color: t.ink, cap: 'round' });
+        for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2, [bx, by] = P(v, x + Math.cos(a) * r * 0.86, y + Math.sin(a) * r * 0.86, 0.2); g.moveTo(ax, ay).lineTo(bx, by); }
+        for (const q of [0.35, 0.65]) { const pts = ring(x, y, r * 0.86 * Math.sin(q * Math.PI / 1.6 + 0.3), 24).map(([a, b]) => P(v, a, b, 0.14 + (1 - q) * 0.9)); g.poly(flat(pts)); }
+        g.stroke({ width: v.lw * 0.35, color: mix(t.role.nest, t.ink, 0.2), alpha: 0.45 });
+        for (const [dx, dy] of [[-0.5, -0.45], [0.42, -0.5], [0.05, -0.68]] as const) { const [qx, qy] = P(v, x + dx * r, y + dy * r, 0.35); g.ellipse(qx, qy, S * 0.16, S * 0.13).fill(t.paper).stroke({ width: v.lw * 0.45, color: t.ink }); g.circle(qx - S * 0.05, qy - S * 0.04, S * 0.035).fill(WHITE); }
+        // the spider: eight bent legs, a round body, two big eyes
+        const [sx, sy] = P(v, x, y, 1.3), L = S * 0.42;
+        for (const k of [-1, 1]) for (let l = 0; l < 4; l++) {
+          const a = (-0.75 + l * 0.5), kx = sx + k * Math.cos(a) * L * 0.6, ky = sy + Math.sin(a) * L * 0.6 - S * 0.12, ex = sx + k * Math.cos(a) * L, ey = sy + Math.sin(a) * L + S * 0.1;
+          for (const [w, col] of [[v.lw * 1.5 + S * 0.05, t.ink], [S * 0.05, spider]] as const) g.moveTo(sx, sy).lineTo(kx, ky).lineTo(ex, ey).stroke({ width: w, color: col, cap: 'round', join: 'round' });
+        }
+        g.ellipse(sx, sy, S * 0.27, S * 0.23).fill(spider).stroke({ width: v.lw * 0.8, color: t.ink });
+        for (const k of [-1, 1]) { g.circle(sx + k * S * 0.1, sy - S * 0.02, S * 0.08).fill(WHITE).stroke({ width: v.lw * 0.35, color: t.ink }); g.circle(sx + k * S * 0.1, sy, S * 0.04).fill(t.ink); }
+        g.moveTo(sx - S * 0.07, sy + S * 0.12).quadraticCurveTo(sx, sy + S * 0.17, sx + S * 0.07, sy + S * 0.12).stroke({ width: v.lw * 0.4, color: t.ink, cap: 'round' });
       });
       break;
     }
@@ -461,48 +504,59 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       // a Marble Jar: a glass jar with a lid, the marbles in it at the bottom
       shadow(under, v, t, x, y, r * 0.95, r * 0.95);
       p.cyl(x, y, r * 0.75, 0, 1.3, mat(t, mix(t.role.jar, WHITE, st.hit ? 0.6 : 0.3)));
-      p.cyl(x, y, r * 0.6, 1.3, 0.2, metal);
+      // a screw-top lid with a cloth cover tied on, and a paper label with a marble drawn on it
+      p.cyl(x, y, r * 0.66, 1.3, 0.2, metal);
+      p.cyl(x, y, r * 0.72, 1.42, 0.12, mat(t, t.accent));
+      p.face(ring(x, y, r * 0.5, 18).map(([a, b]) => P(v, a, b, 1.55)), mix(t.accent, WHITE, 0.3), { sil: false, line: 0.3 });
       const n = Math.min(5, st.seg ?? 0), cols = ['#ff5d8f', '#ffd23f', '#55d08f', '#62b8ff', '#8a63f2'];
-      p.op((g) => { for (let i = 0; i < n; i++) { const [mx, my] = P(v, x + (i - 2) * r * 0.25, y - r * 0.5, 0.3 + (i % 2) * 0.25); g.circle(mx, my, S * 0.15).fill(cols[i]).stroke({ width: v.lw * 0.4, color: t.ink }); } });
+      const [lx, ly] = P(v, x, y - r * 0.75, 0.82);
+      p.op((g) => {
+        for (let i = 0; i < n; i++) { const [mx, my] = P(v, x + (i - 2) * r * 0.25, y - r * 0.5, 0.25 + (i % 2) * 0.22); g.circle(mx, my, S * 0.15).fill(cols[i]).stroke({ width: v.lw * 0.4, color: t.ink }); }
+        g.roundRect(lx - S * 0.36, ly - S * 0.2, S * 0.72, S * 0.4, S * 0.06).fill(t.paper).stroke({ width: v.lw * 0.45, color: t.ink });
+        g.circle(lx, ly, S * 0.12).fill(t.role.jar).stroke({ width: v.lw * 0.35, color: t.ink });
+        g.circle(lx - S * 0.04, ly - S * 0.04, S * 0.035).fill(WHITE);
+      });
       break;
     }
     case 'wreck': {
-      // a wrecking ball: a heavy iron ball hanging on a chain from a little gantry
+      // a wrecking ball: a heavy iron ball hanging on a chain from a little crane at the back
       shadow(under, v, t, x, y, r * 1.05, r * 1.05);
       p.cyl(x, y, r * 0.95, 0, 0.14, mat(t, t.paper));
-      const iron = mat(t, st.hit ? mix(t.role.wreck, WHITE, 0.4) : t.role.wreck);
-      p.face(hull([0, 0.35, 0.7, 1].flatMap((u) => ring(x, y, r * 0.75 * Math.sin(Math.PI * (0.15 + u * 0.7)), 22).map(([a, b]) => P(v, a, b, 0.25 + u * 1.5)))), iron.base);
-      p.face(ring(x - r * 0.25, y + r * 0.1, r * 0.18, 12).map(([a, b]) => P(v, a, b, 1.35)), iron.light, { sil: false, line: 0 });
-      p.cyl(x, y, 0.07, 1.75, 0.9, metal, { n: 8 });
-      p.cyl(x, y, 0.16, 2.65, 0.12, metal, { n: 10 });
+      const iron = mat(t, st.hit ? mix(t.role.wreck, WHITE, 0.4) : t.role.wreck), arm = mat(t, t.role.bucket);
+      // the crane: a post at the back and a jib out over the ball
+      const px = x + r * 0.78, py = y + r * 0.5, ja = Math.atan2(py - y, px - x) , jl = Math.hypot(px - x, py - y);
+      p.prism(box(px, py, 0.15, 0.15, 0), 0.14, 2.9, arm);
+      p.prism(box((px + x) / 2, (py + y) / 2, jl / 2 + 0.12, 0.1, ja), 3.04, 0.18, arm);
+      p.prism(box(px - 0.3, py - 0.2, 0.08, 0.08, 0), 2.5, 0.54, arm);
+      const [jx, jy] = P(v, x, y, 3.04), [bx, by] = P(v, x, y, 1.82);
+      p.op((g) => {
+        for (const [w, col] of [[v.lw * 1.8 + S * 0.05, t.ink], [S * 0.05, t.metal]] as const) g.moveTo(jx, jy).lineTo(bx, by).stroke({ width: w, color: col, cap: 'round' });
+        for (let i = 1; i < 6; i++) { const q = i / 6; g.ellipse(jx + (bx - jx) * q, jy + (by - jy) * q, S * 0.07, S * 0.1).stroke({ width: v.lw * 0.45, color: t.ink }); }
+      });
+      egg(p, v, x, y, 1.12, r * 0.66, r * 0.66, 0.72, 0, iron);
+      p.cyl(x, y, 0.12, 1.8, 0.14, metal, { n: 10 });
       break;
     }
     case 'broom': {
-      // a broomstick lying on a floor plate, bristles at the back, pointing the way the ball will fly
+      // a magic broomstick floating over a floor plate, bristles at the back, pointing the way the ball will fly
       const c = Math.cos(angle), sn = Math.sin(angle), dir = (k: number): [number, number] => [x - sn * k, y + c * k], side = (k: number): [number, number] => [c * k, sn * k];
       p.face(ring(x, y, r, 24).map(([a, b]) => P(v, a, b, 0.01)), mix(t.role.broom, t.shadeTint, 0.55), { line: 0.4 });
-      const [hx, hy] = dir(r * 0.95), [tx, ty] = dir(-r * 0.4);
+      p.face(ring(x, y, r * 0.8, 24).map(([a, b]) => P(v, a, b, 0.015)), mix(t.role.broom, t.shadeTint, 0.35), { sil: false, line: 0.25 });
+      const [ax, ay] = dir(r * 0.72), [l1x, l1y] = side(r * 0.28);
+      p.face([P(v, ...dir(r * 1.0), 0.02), P(v, ax + l1x, ay + l1y, 0.02), P(v, ax - l1x, ay - l1y, 0.02)], t.accent, { sil: false, line: 0.3 });
+      const zb = 0.45, [hx, hy] = dir(r * 0.95), [tx, ty] = dir(-r * 0.25), [bx, by] = dir(-r * 1.05), [sx, sy] = side(r * 0.5);
+      shadowPoly(under, v, t, [[hx, hy], [tx + sx * 0.3, ty + sy * 0.3], [bx + sx, by + sy], [bx - sx, by - sy], [tx - sx * 0.3, ty - sy * 0.3]].map(([a, b]) => [a - 0.3, b + 0.3] as Pt), 0.18);
       p.op((g) => {
-        const a = P(v, hx, hy, 0.2), b = P(v, tx, ty, 0.2);
-        g.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: v.S * 0.18 + v.lw * 1.2, color: t.ink, cap: 'round' });
-        g.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: v.S * 0.18, color: st.hit ? WHITE : t.rim, cap: 'round' });
+        const a = P(v, hx, hy, zb), b = P(v, tx, ty, zb);
+        g.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: S * 0.2 + v.lw * 1.4, color: t.ink, cap: 'round' });
+        g.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: S * 0.2, color: st.hit ? WHITE : t.rim, cap: 'round' });
       });
-      const [bx, by] = dir(-r * 0.75), [sx, sy] = side(r * 0.45);
-      p.face([P(v, tx + sx * 0.3, ty + sy * 0.3, 0.2), P(v, bx + sx, by + sy, 0.1), P(v, bx - sx, by - sy, 0.1), P(v, tx - sx * 0.3, ty - sy * 0.3, 0.2)], t.role.broom, { line: 0.4 });
-      // an arrow on the plate: the way it flies
-      const [ax, ay] = dir(r * 0.55), [l1x, l1y] = side(r * 0.25);
-      p.face([P(v, ...dir(r * 0.95), 0.02), P(v, ax + l1x, ay + l1y, 0.02), P(v, ax - l1x, ay - l1y, 0.02)], t.accent, { sil: false, line: 0.3 });
-      break;
-    }
-    case 'hutch': {
-      // decor: a little wooden hutch with a round door and two eyes peering out of the dark
-      shadow(under, v, t, x, y, r * 1.0, r * 0.8);
-      const wood = mat(t, mix(t.role.hutch, t.rim, 0.5)), roof = mat(t, t.role.hutch);
-      p.prism(box(x, y, r * 0.75, r * 0.55, 0), 0, 1.0, wood);
-      p.face([P(v, x - r * 0.9, y - r * 0.6, 1.0), P(v, x, y - r * 0.6, 1.9), P(v, x + r * 0.9, y - r * 0.6, 1.0)], roof.base, { line: 0.45 });
-      const door = Array.from({ length: 12 }, (_, i): Pt => { const a = Math.PI - (i / 11) * Math.PI; return P(v, x + Math.cos(a) * r * 0.32, y - r * 0.56, 0.05 + Math.sin(a) * 0.65); });
-      p.face([P(v, x - r * 0.32, y - r * 0.56, 0), ...door, P(v, x + r * 0.32, y - r * 0.56, 0)], t.ink, { sil: false, line: 0.3 });
-      for (const sx of [-1, 1]) { const [ex, ey] = P(v, x + sx * r * 0.12, y - r * 0.57, 0.4); p.op((g) => g.circle(ex, ey, S * 0.06).fill(t.role.goldleaf)); }
+      const bristle = mat(t, t.role.broom), fan: Pt[] = [P(v, tx + sx * 0.32, ty + sy * 0.32, zb), P(v, bx + sx, by + sy, zb - 0.1), P(v, ...dir(-r * 1.2), zb - 0.12), P(v, bx - sx, by - sy, zb - 0.1), P(v, tx - sx * 0.32, ty - sy * 0.32, zb)];
+      p.face(fan, bristle.base, { line: 0.45 });
+      p.op((g) => { for (const k of [-0.6, -0.2, 0.2, 0.6]) { const q0 = P(v, tx + sx * 0.3 * k, ty + sy * 0.3 * k, zb), q1 = P(v, bx + sx * k * 0.9, by + sy * k * 0.9, zb - 0.1); g.moveTo(q0[0], q0[1]).lineTo(q1[0], q1[1]); } g.stroke({ width: v.lw * 0.4, color: bristle.shade }); });
+      const [w0x, w0y] = dir(-r * 0.33);
+      p.face(box(w0x, w0y, r * 0.2, 0.07, angle).map(([a, b]) => P(v, a, b, zb + 0.02)), t.accent, { sil: false, line: 0.35 });
+      for (const [k, s2, sz] of [[0.4, 1, 0.22], [-0.1, -1, 0.16], [0.75, -1, 0.14]] as const) { const [qx, qy] = dir(r * k), [ox, oy] = side(r * 0.55 * s2), [X, Y] = P(v, qx + ox, qy + oy, 0.9); p.op((g) => g.star(X, Y, 4, S * sz, S * sz * 0.38).fill(t.role.coin).stroke({ width: v.lw * 0.4, color: t.ink, join: 'round' })); }
       break;
     }
     case 'grape': {
@@ -519,25 +573,42 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       break;
     }
     case 'echo': {
-      // a stone arch over a dark hole in the floor: the ball rolls through and the cave answers
-      const stone = mat(t, st.hit ? mix(t.role.echo, WHITE, 0.35) : t.role.echo);
-      p.face(ring(x, y, r * 0.85, 24, r * 0.6).map(([a, b]) => P(v, a, b, 0.02)), mix(t.ink, t.role.echo, 0.25), { line: 0.4 });
-      for (const sx of [-1, 1]) p.prism(box(x + sx * r * 0.8, y, 0.22, 0.3, 0), 0, 1.3, stone);
-      const arch = Array.from({ length: 13 }, (_, i): Pt => { const a = Math.PI - (i / 12) * Math.PI; return P(v, x + Math.cos(a) * r * 0.8, y - 0.3, 1.3 + Math.sin(a) * 0.8); });
-      const inner = Array.from({ length: 13 }, (_, i): Pt => { const a = (i / 12) * Math.PI; return P(v, x + Math.cos(a) * r * 0.55, y - 0.3, 1.3 + Math.sin(a) * 0.5); });
-      p.face([...arch, ...inner], stone.base, { line: 0.45 });
+      // a rocky little hill with a dark cave mouth facing you; when the ball rolls in, the echoes ring out of it
+      shadow(under, v, t, x, y, r * 1.05, r * 0.85);
+      const stone = mat(t, st.hit ? mix(t.role.echo, WHITE, 0.35) : mix(t.role.echo, '#8d8a99', 0.45));
+      egg(p, v, x, y + 0.15, 0.1, r * 1.0, r * 0.62, 1.25, 0, stone, false);
+      const [cx0, cy0] = P(v, x, y + 0.15, 0.8);
+      p.op((g) => {
+        g.moveTo(cx0 - S * 0.62, cy0 - S * 0.1).lineTo(cx0 - S * 0.4, cy0 - S * 0.02).lineTo(cx0 - S * 0.3, cy0 - S * 0.2);
+        g.moveTo(cx0 + S * 0.35, cy0 - S * 0.32).lineTo(cx0 + S * 0.55, cy0 - S * 0.2).lineTo(cx0 + S * 0.62, cy0 + S * 0.02);
+        g.stroke({ width: v.lw * 0.5, color: t.ink, cap: 'round', join: 'round', alpha: 0.6 });
+      });
+      const mouth: Pt[] = [];
+      for (let i = 0; i <= 14; i++) { const a = Math.PI - (i / 14) * Math.PI; mouth.push([Math.cos(a) * 0.5, 0.04 + Math.sin(a) * 0.72]); }
+      p.face(xz(v, x, y - r * 0.5, mouth), mix(t.ink, t.role.echo, 0.15), { sil: false, line: 0.5 });
+      for (const [dx, dy, k] of [[-0.9, -0.15, 0.18], [0.85, -0.2, 0.15], [0.62, -0.62, 0.12]] as const) egg(p, v, x + dx * r, y + dy * r, 0.12, k, k * 0.8, k * 0.8, 0, stone, false);
+      if (st.hit) {
+        const [mx, my] = P(v, x, y - r * 0.55, 0.45);
+        p.op((g) => { for (let i = 1; i <= 3; i++) g.moveTo(mx - S * 0.22 * i, my + S * 0.05 * i).quadraticCurveTo(mx, my + S * 0.32 * i, mx + S * 0.22 * i, my + S * 0.05 * i); g.stroke({ width: v.lw * 0.7, color: t.ink, cap: 'round' }); });
+      }
       break;
     }
     case 'spot': {
-      // a stage spotlight on a little stand, its lens towards the table; dark while knocked out
-      shadow(under, v, t, x, y, r * 1.0, r * 1.0);
-      p.cyl(x, y, r * 0.75, 0, 0.16, metal);
-      p.cyl(x, y, 0.1, 0.16, 0.55, metal, { n: 10 });
-      const head = mat(t, st.hit ? mix(t.ink, WHITE, 0.3) : mix(t.ink, t.metal, 0.35));
-      p.cyl(x, y, r * 0.55, 0.71, 0.75, head);
-      const lit = st.lit !== false;
-      p.face(ring(x, y - r * 0.05, r * 0.42, 20).map(([a, b]) => P(v, a, b, 1.47)), lit ? mix(t.role.spot, WHITE, 0.45) : mix(t.role.spot, t.ink, 0.6), { sil: false, line: 0.4 });
-      if (lit) p.face(ring(x - r * 0.12, y + r * 0.05, r * 0.14, 10).map(([a, b]) => P(v, a, b, 1.48)), WHITE, { sil: false, line: 0 });
+      // a stage spotlight: a black can on a yoke, tipped up so its lens faces the table, barn doors over it; dark while it cools down
+      shadow(under, v, t, x, y, r * 1.0, r * 0.9);
+      const lit = st.lit !== false, can = mat(t, st.hit ? mix(t.ink, WHITE, 0.3) : mix(t.ink, t.metal, 0.3)), zc = 1.0, tl = 0.6;
+      p.cyl(x, y, r * 0.8, 0, 0.14, metal);
+      p.cyl(x, y, 0.09, 0.14, 0.4, metal, { n: 10 });
+      p.prism(box(x, y, 0.52, 0.08, 0), 0.5, 0.1, metal);
+      for (const sx of [-1, 1]) p.prism(box(x + sx * 0.48, y, 0.05, 0.08, 0), 0.6, 0.46, metal);
+      tube(p, v, x, y + 0.05, zc, 0.4, 0.6, tl, can, mix(t.ink, t.metal, 0.12));
+      p.face(tubeDisc(v, x, y + 0.05, zc, 0.29, 0.31, tl), lit ? mix(t.role.spot, WHITE, 0.35) : mix(t.role.spot, t.ink, 0.65), { sil: false, line: 0.4 });
+      if (lit) p.face(tubeDisc(v, x, y + 0.05, zc, 0.09, 0.32, tl, -0.1, 0.1), WHITE, { sil: false, line: 0 });
+      // the barn doors: a flap over the lens and one each side
+      const at = (u: number, w: number, k: number): Pt => P(v, x + u, y + 0.05 - Math.cos(tl) * k + Math.sin(tl) * w, zc + Math.sin(tl) * k + Math.cos(tl) * w);
+      p.face([at(-0.32, 0.4, 0.3), at(0.32, 0.4, 0.3), at(0.38, 0.62, 0.52), at(-0.38, 0.62, 0.52)], can.light, { line: 0.35 });
+      for (const sx of [-1, 1]) p.face([at(sx * 0.4, 0.3, 0.3), at(sx * 0.4, -0.3, 0.3), at(sx * 0.6, -0.34, 0.5), at(sx * 0.6, 0.34, 0.5)], sx < 0 ? can.light : can.mid, { line: 0.35 });
+      for (const sx of [-1, 1]) { const [kx, ky] = P(v, x + sx * 0.54, y, zc); p.op((g) => g.circle(kx, ky, S * 0.09).fill(t.accent).stroke({ width: v.lw * 0.4, color: t.ink })); }
       break;
     }
     case 'bonsai': {
@@ -555,24 +626,56 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       break;
     }
     case 'capsule': {
-      // a time capsule: a banded steel canister half sunk in the floor; once it is ripe, it twinkles
-      shadow(under, v, t, x, y, r * 1.0, r * 1.0);
-      const steel = mat(t, t.role.capsule);
-      p.cyl(x, y, r * 0.8, 0, 0.9, steel);
-      for (const z of [0.25, 0.65]) p.cyl(x, y, r * 0.82, z, 0.08, mat(t, mix(t.role.capsule, t.ink, 0.35)));
-      p.face(ring(x, y, r * 0.5, 18).map(([a, b]) => P(v, a, b, 0.92)), mix(t.role.capsule, WHITE, 0.3), { sil: false, line: 0.4 });
-      if (st.lit) { const [sx, sy] = P(v, x + r * 0.5, y, 1.6); p.op((g) => g.star(sx, sy, 4, S * 0.45, S * 0.15).fill(WHITE).stroke({ width: v.lw * 0.5, color: t.ink, join: 'round' })); }
+      // a time capsule: a banded steel canister poking out of a dirt mound, a spade stuck in beside it; ripe, it twinkles
+      shadow(under, v, t, x, y, r * 1.0, r * 0.9);
+      const steel = mat(t, t.role.capsule), dirt = mat(t, mix('#8a5a3b', t.shadeTint, 0.12));
+      egg(p, v, x, y, 0.05, r * 0.95, r * 0.8, 0.45, 0, dirt, false);
+      for (const [dx, dy] of [[-0.6, -0.35], [0.5, -0.5], [-0.15, -0.65]] as const) { const [cx, cy] = P(v, x + dx * r, y + dy * r, 0.08); p.op((g) => g.circle(cx, cy, S * 0.06).fill(dirt.shade)); }
+      // the capsule itself: a steel pill lying half out of the mound, a band round its middle and a hatch on its end
+      const cx = x - 0.12, cy = y + 0.05, cz = 0.5;
+      egg(p, v, cx, cy, cz, 0.62, 0.3, 0.3, 0, steel);
+      p.op((g) => {
+        const band = Array.from({ length: 13 }, (_, i) => { const a = Math.PI + (i / 12) * Math.PI; return P(v, cx, cy + Math.cos(a) * 0.3, cz - Math.sin(a) * 0.3); });
+        g.moveTo(band[0][0], band[0][1]); for (const q of band.slice(1)) g.lineTo(q[0], q[1]);
+        g.stroke({ width: S * 0.1 + v.lw, color: t.ink, cap: 'round' });
+        g.moveTo(band[0][0], band[0][1]); for (const q of band.slice(1)) g.lineTo(q[0], q[1]);
+        g.stroke({ width: S * 0.1, color: t.accent, cap: 'round' });
+        const [hx, hy] = P(v, cx - 0.42, cy - 0.12, cz + 0.12);
+        g.circle(hx, hy, S * 0.09).fill(mix(t.role.capsule, WHITE, 0.4)).stroke({ width: v.lw * 0.4, color: t.ink });
+      });
+      // the spade
+      const [s0x, s0y] = P(v, x + r * 0.62, y - r * 0.1, 0.25), [s1x, s1y] = P(v, x + r * 0.78, y - r * 0.1, 1.6);
+      p.op((g) => {
+        for (const [w, col] of [[v.lw * 1.6 + S * 0.08, t.ink], [S * 0.08, t.rim]] as const) g.moveTo(s0x, s0y).lineTo(s1x, s1y).stroke({ width: w, color: col, cap: 'round' });
+        g.roundRect(s1x - S * 0.14, s1y - S * 0.1, S * 0.28, S * 0.12, S * 0.05).fill(t.rim).stroke({ width: v.lw * 0.5, color: t.ink });
+        g.poly([s0x - S * 0.17, s0y - S * 0.12, s0x + S * 0.17, s0y - S * 0.12, s0x + S * 0.12, s0y + S * 0.14, s0x, s0y + S * 0.22, s0x - S * 0.12, s0y + S * 0.14]).fill(t.metal).stroke({ width: v.lw * 0.5, color: t.ink, join: 'round' });
+      });
+      if (st.lit) { const [sx, sy] = P(v, x - r * 0.5, y, 1.6); p.op((g) => { g.star(sx, sy, 4, S * 0.45, S * 0.15).fill(WHITE).stroke({ width: v.lw * 0.5, color: t.ink, join: 'round' }); g.star(sx + S * 0.55, sy - S * 0.35, 4, S * 0.25, S * 0.09).fill(t.role.coin).stroke({ width: v.lw * 0.4, color: t.ink, join: 'round' }); }); }
       break;
     }
     case 'ice': {
-      // an ice sculpture: a faceted crystal on a plinth that gets smaller as it melts, with a puddle round it
-      const left = 1 - Math.min(4, st.seg ?? 0) / 5;
-      p.face(ring(x, y, r * (1.1 - left * 0.3), 20).map(([a, b]) => P(v, a, b, 0.01)), mix(t.role.ice, t.floor, 0.4), { line: 0.3 });
-      p.cyl(x, y, r * 0.6, 0, 0.2, metal);
-      const ice = st.hit ? WHITE : t.role.ice, h = 0.6 + 1.6 * left, R = r * (0.35 + 0.35 * left);
-      const pts = [...ring(x, y, R, 6).map(([a, b]) => P(v, a, b, 0.2)), ...ring(x, y, R * 0.7, 6).map(([a, b]) => P(v, a, b, 0.2 + h * 0.75)), P(v, x, y, 0.2 + h)];
-      p.face(hull(pts), ice, { line: 0.45 });
-      p.face([P(v, x - R * 0.5, y, 0.4), P(v, x - R * 0.3, y, 0.2 + h * 0.8), P(v, x - R * 0.1, y, 0.5)], WHITE, { sil: false, line: 0 });
+      // an ice sculpture: a swan carved from ice on a little tray; it shrinks as it melts, and the puddle round it grows
+      const left = 1 - Math.min(4, st.seg ?? 0) / 5, k = 0.65 + 0.65 * left;
+      p.face(ring(x, y, r * (1.15 - left * 0.3), 22).map(([a, b]) => P(v, a, b, 0.01)), mix(t.role.ice, t.floor, 0.35), { line: 0.3 });
+      p.cyl(x, y, r * 0.7, 0, 0.18, metal);
+      const ice = mat(t, st.hit ? WHITE : t.role.ice), z0 = 0.18;
+      // the body (a slab with its tail swept up), a wing on its side, then the long S of the neck and the head
+      const body: Pt[] = [...blob(0.08 * k, z0 + 0.34 * k, 0.56 * k, 0.32 * k, 22, 2.2).filter(([, z]) => z >= z0 + 0.1 * k), [0.78 * k, z0 + 0.82 * k]];
+      slab(p, v, x, y, 0.26 * k, body, mix(ice.base, WHITE, 0.45), ice.base);
+      p.face(xz(v, x, y - 0.27 * k, [[-0.12 * k, z0 + 0.5 * k], [0.5 * k, z0 + 0.72 * k], [0.36 * k, z0 + 0.42 * k], [0.05 * k, z0 + 0.3 * k]]), mix(ice.base, WHITE, 0.55), { sil: false, line: 0.3 });
+      const neckC = (u: number): Pt => { const q = 1 - u; return [q * q * q * -0.3 + 3 * q * q * u * -0.78 + 3 * q * u * u * 0.06 + u * u * u * -0.36, q * q * q * 0.5 + 3 * q * q * u * 0.95 + 3 * q * u * u * 1.35 + u * u * u * 1.62]; };
+      const left2: Pt[] = [], right2: Pt[] = [];
+      for (let i = 0; i <= 12; i++) {
+        const u = i / 12, [a, b] = neckC(u), [a2, b2] = neckC(Math.min(1, u + 0.02)), [a1, b1] = neckC(Math.max(0, u - 0.02)), dx = a2 - a1, dz = b2 - b1, L = Math.hypot(dx, dz) || 1, w = (0.11 - u * 0.04);
+        left2.push([(a - (dz / L) * w) * k, z0 + (b + (dx / L) * w) * k]); right2.push([(a + (dz / L) * w) * k, z0 + (b - (dx / L) * w) * k]);
+      }
+      p.face(xz(v, x, y - 0.1 * k, [...left2, ...right2.reverse()]), ice.base, { line: 0.4 });
+      const [hu, hz] = neckC(1);
+      p.face(xz(v, x, y - 0.1 * k, blob(hu * k, z0 + hz * k, 0.13 * k, 0.11 * k, 14, 2)), ice.base, { line: 0.4 });
+      p.face(xz(v, x, y - 0.11 * k, [[(hu - 0.1) * k, z0 + (hz + 0.03) * k], [(hu - 0.36) * k, z0 + (hz - 0.06) * k], [(hu - 0.08) * k, z0 + (hz - 0.06) * k]]), mix(t.role.ice, t.accent, 0.35), { line: 0.35 });
+      const [ex, ey] = P(v, x + (hu - 0.03) * k, y - 0.12 * k, z0 + (hz + 0.03) * k);
+      p.op((g) => { g.circle(ex, ey, S * 0.035 * k + 0.6).fill(t.ink); const [gx, gy] = P(v, x + 0.25 * k, y - 0.27 * k, z0 + 0.6 * k); g.moveTo(gx, gy).lineTo(gx + S * 0.15 * k, gy + S * 0.12 * k).stroke({ width: v.lw * 0.7, color: WHITE, cap: 'round' }); });
+      if (left < 1) for (const [dx, dy] of [[-0.75, -0.55], [0.7, -0.45]] as const) { const [dX, dY] = P(v, x + dx * r, y + dy * r, 0.02); p.op((g) => g.ellipse(dX, dY, S * 0.1, S * 0.05).fill(mix(t.role.ice, WHITE, 0.3)).stroke({ width: v.lw * 0.3, color: t.ink })); }
       break;
     }
     case 'well': {
@@ -588,23 +691,59 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       break;
     }
     case 'pinata': {
-      // a piñata on a post: a fat paper drum in frilly bands of colour with a pointy hat; cracks show its damage,
-      // and once it has burst only the post and a few paper shreds are left
-      const stripes = ['#ff5d8f', '#ffd23f', '#3cc3b1', '#62b8ff', '#ff9f1c'], R = r * 0.85;
-      shadow(under, v, t, x, y, r * 1.0, r * 1.0);
-      p.cyl(x, y, r * 0.55, 0, 0.14, metal);
-      p.cyl(x, y, 0.1, 0.14, 0.7, mat(t, t.rim), { n: 10 });
+      // the classic piñata: a paper donkey in frilly bands of colour, standing on its four stubby legs. Cracks show its
+      // damage, and once it has burst only the legs, the bottom of its belly and the sweets are left
+      const hitW = (c: string) => (st.hit ? mix(c, WHITE, 0.4) : c);
+      const bands = PINATA.map(hitW), head = hitW(t.role.pinata), hoof = mix(t.ink, t.rim, 0.35);
+      const bx = x + 0.12, cz = 1.3, a = 0.82, ry = 0.36, rz = 0.42;
+      shadow(under, v, t, bx, y, r * 1.1, r * 0.62);
+      const legs: [number, number][] = [[-0.36, 0.17], [0.64, 0.17], [-0.56, -0.17], [0.44, -0.17]];
+      const leg = (u: number, w: number) => {
+        p.cyl(bx + u, y + w, 0.15, 0, 0.18, mat(t, hoof), { n: 14 });
+        p.cyl(bx + u, y + w, 0.15, 0.18, 0.4, mat(t, bands[1]), { n: 14 });
+        p.cyl(bx + u, y + w, 0.15, 0.58, 0.4, mat(t, bands[0]), { n: 14 });
+      };
       if (st.armed === false) {
-        for (const [dx, dy, c] of [[-0.4, 0.1, 0], [0.35, -0.2, 2], [0.1, 0.4, 3]] as const) p.face(star(x + dx * r, y + dy * r, 0.28, 0.12, 3, dx).map(([a, b]) => P(v, a, b, 0.03)), stripes[c], { line: 0.3 });
+        for (const [u, w] of legs) leg(u, w);
+        barrel(p, v, bx, y, cz, a, ry, rz, bands, 2);
+        candy(p, v, t, x - r * 0.8, y - r * 0.55, 0.2, PINATA[0]);
+        candy(p, v, t, x + r * 0.9, y - r * 0.3, -0.5, PINATA[2]);
+        candy(p, v, t, x + r * 0.15, y - r * 0.85, 0.9, PINATA[3]);
         break;
       }
-      for (let i = 0; i < 5; i++) p.cyl(x, y, R * (i === 0 || i === 4 ? 0.85 : 1), 0.84 + i * 0.32, 0.32, mat(t, st.hit ? mix(stripes[i], WHITE, 0.4) : stripes[i]));
-      p.face(hull([...ring(x, y, R * 0.7, 18).map(([a, b]) => P(v, a, b, 2.44)), P(v, x, y, 3.3)]), t.role.pinata, { line: 0.45 });
-      const cracks = st.seg ?? 0;
-      for (let i = 0; i < cracks; i++) {
-        const a = -0.9 + i * 0.6, z0 = 1.0 + (i % 2) * 0.6;
-        const pts = [0, 1, 2, 3].map((k) => P(v, x + Math.cos(a + k * 0.12) * R * 1.01, y - Math.abs(Math.sin(a)) * R * 0.3 - R * 0.75, z0 + k * 0.22 * (k % 2 ? 1 : -0.4)));
-        p.op((g) => { g.moveTo(pts[0][0], pts[0][1]); for (const q of pts.slice(1)) g.lineTo(q[0], q[1]); g.stroke({ width: v.lw * 0.7, color: t.ink, cap: 'round', join: 'round' }); });
+      for (const [u, w] of legs.slice(0, 2)) leg(u, w);
+      // the far ear and the tail behind, then the body: five frilly bands from the belly over the back
+      ear(p, v, bx - 0.74, y + 0.1, 2.2, 0.95, 0.34, mix(head, t.shadeTint, 0.25));
+      tail(p, v, t, bx + a - 0.04, y, 1.55, bands);
+      barrel(p, v, bx, y, cz, a, ry, rz, [...bands].reverse());
+      for (const [u, w] of legs.slice(2)) leg(u, w);
+      // the neck with a mane of fringe, and a big head with long ears
+      const hx = bx - 0.98, hz = 2.12;
+      slab(p, v, bx, y - 0.02, 0.17, [[-0.82, 1.2], [-0.42, 1.42], [-0.66, 2.2], [-1.06, 2.02]], mix(bands[1], WHITE, 0.35), bands[1]);
+      const mane: Pt[] = [];
+      for (let k = 0; k <= 6; k++) { const u = k / 6; mane.push([-0.72 + u * 0.32 + (k % 2 ? 0.13 : 0), 2.32 - u * 0.9]); }
+      mane.push([-0.36, 1.4], [-0.5, 1.36]);
+      p.face(xz(v, bx, y - 0.19, mane), hitW(t.accent), { line: 0.35 });
+      const tilt = -0.42, hd = blob(0, 0, 0.44, 0.29, 28, 2.6).map(([u, z]): Pt => [hx + u * Math.cos(tilt) - z * Math.sin(tilt), hz + u * Math.sin(tilt) + z * Math.cos(tilt)]);
+      slab(p, v, 0, y - 0.02, 0.18, hd, mix(head, WHITE, 0.3), head);
+      p.face(xz(v, hx - 0.26, y - 0.21, blob(0, hz - 0.16, 0.19, 0.16, 18, 2.4)), mix(head, WHITE, 0.55), { sil: false, line: 0.3 });
+      ear(p, v, hx + 0.1, y - 0.18, 2.22, 1.0, 0.2, head);
+      // the face: an eye with a lash, a nostril, a smile and a blush
+      const at = (u: number, z: number) => P(v, hx + u, y - 0.21, z);
+      const [ex, ey] = at(0.06, hz + 0.1), [nx, ny] = at(-0.36, hz - 0.11), [mx, my] = at(-0.2, hz - 0.27), [cx, cy] = at(0.12, hz - 0.12);
+      p.op((g) => {
+        g.ellipse(cx, cy, S * 0.12, S * 0.07).fill({ color: t.accent, alpha: 0.5 });
+        g.circle(ex, ey, S * 0.1).fill(t.ink);
+        g.circle(ex - S * 0.035, ey - S * 0.035, S * 0.035).fill(WHITE);
+        g.moveTo(ex + S * 0.05, ey - S * 0.08).lineTo(ex + S * 0.14, ey - S * 0.16).stroke({ width: v.lw * 0.45, color: t.ink, cap: 'round' });
+        g.circle(nx, ny, S * 0.04).fill(t.ink);
+        g.moveTo(mx - S * 0.11, my - S * 0.03).quadraticCurveTo(mx, my + S * 0.07, mx + S * 0.11, my - S * 0.04).stroke({ width: v.lw * 0.45, color: t.ink, cap: 'round' });
+      });
+      // cracks across its flank, one per fifth of its health gone
+      for (let i = 0; i < Math.min(4, st.seg ?? 0); i++) {
+        const u0 = -0.45 + i * 0.32, z0 = cz + 0.18 - (i % 2) * 0.3;
+        const pts = [0, 1, 2, 3].map((k) => P(v, bx + u0 + k * 0.08, y - ry, z0 - k * 0.11 + (k % 2) * 0.07));
+        p.op((g) => { g.moveTo(pts[0][0], pts[0][1]); for (const q of pts.slice(1)) g.lineTo(q[0], q[1]); g.stroke({ width: v.lw * 0.6, color: t.ink, cap: 'round', join: 'round' }); });
       }
       break;
     }
@@ -627,94 +766,6 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.face(hull([...ring(x, y, r * 0.3, 16).map(([a, b]) => P(v, a, b, 0.08)), P(v, x + r * 0.08, y + r * 0.05, 1.5)]), hat.base);
       const [sx, sy] = P(v, x - r * 0.05, y - r * 0.05, 0.6);
       p.op((g) => g.star(sx, sy, 5, S * 0.18, S * 0.08).fill(t.role.goldleaf).stroke({ width: v.lw * 0.4, color: t.ink, join: 'round' }));
-      break;
-    }
-    case 'clock': {
-      // a mantel clock: a wooden case on a plinth, a round face on its front; the hands creep from 9 to midnight
-      shadow(under, v, t, x, y, r * 1.0, r * 0.75);
-      const wood = mat(t, t.role.clock), hw = r * 0.62, d = r * 0.42;
-      p.prism(box(x, y, hw + 0.12, d + 0.1, 0), 0, 0.25, mat(t, mix(t.role.clock, t.ink, 0.25)));
-      p.prism(box(x, y, hw, d, 0), 0.25, 2.3, wood);
-      // a rounded top
-      p.face(hull([0, 0.35, 0.7, 1].flatMap((u) => [P(v, x - hw * Math.cos((u * Math.PI) / 2), y - d, 2.55 + Math.sin((u * Math.PI) / 2) * 0.55), P(v, x + hw * Math.cos((u * Math.PI) / 2), y - d, 2.55 + Math.sin((u * Math.PI) / 2) * 0.55)])), wood.base);
-      const R = hw * 0.78, zc = 1.75, tall = 1.9;
-      const disc = (k: number): Pt[] => Array.from({ length: 24 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return P(v, x + Math.cos(a) * R * k, y - d - 0.02, zc + Math.sin(a) * R * k * tall); });
-      p.face(disc(1), st.lit ? mix(t.accent, WHITE, 0.5) : t.paper, { line: 0.5 });
-      const seg = st.seg ?? 0, hour = Math.PI - (seg / 12) * (Math.PI / 2), minute = Math.PI / 2 - ((seg % 4) / 4) * Math.PI * 2;
-      const hand = (a: number, k: number, w: number) => {
-        const [cx, cy] = P(v, x, y - d - 0.03, zc), [hx, hy] = P(v, x + Math.cos(a) * R * k, y - d - 0.03, zc + Math.sin(a) * R * k * tall);
-        p.op((g) => g.moveTo(cx, cy).lineTo(hx, hy).stroke({ width: w, color: t.ink, cap: 'round' }));
-      };
-      hand(seg >= 12 ? Math.PI / 2 : hour, 0.55, v.lw * 1.2);
-      hand(minute, 0.85, v.lw * 0.8);
-      if (st.lit) { const [sx, sy] = P(v, x + hw * 0.9, y - d, 3.2); p.op((g) => g.star(sx, sy, 8, S * 0.55, S * 0.22).fill(t.accent).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' })); }
-      break;
-    }
-    case 'altar': {
-      // a stone altar: a carved block with eight runes (they light up as sets are completed) and two candles
-      shadow(under, v, t, x, y, r * 1.05, r * 0.8);
-      const stone = mat(t, t.role.altar), hw = r * 0.85, d = r * 0.5;
-      p.prism(box(x, y, hw + 0.1, d + 0.1, 0), 0, 0.3, mat(t, mix(t.role.altar, t.ink, 0.3)));
-      p.prism(box(x, y, hw, d, 0), 0.3, 1.25, stone);
-      p.prism(box(x, y, hw + 0.15, d + 0.12, 0), 1.55, 0.25, mat(t, mix(t.role.altar, WHITE, 0.15)));
-      const on = st.seg ?? 0;
-      for (let i = 0; i < 8; i++) {
-        const [rx, ry] = P(v, x - hw * 0.8 + (i * hw * 1.6) / 7, y - d - 0.02, 0.92 + (i % 2) * 0.22);
-        const lit = st.lit || i < on;
-        p.op((g) => g.circle(rx, ry, S * 0.1).fill(lit ? t.accent : mix(t.role.altar, t.ink, 0.45)).stroke({ width: v.lw * 0.4, color: t.ink }));
-      }
-      for (const dx of [-hw * 0.55, hw * 0.55]) {
-        p.cyl(x + dx, y, 0.16, 1.8, 0.75, mat(t, t.paper), { n: 12 });
-        const [fx, fy] = P(v, x + dx, y, 2.75);
-        const big = st.lit ? 1.6 : 1;
-        p.op((g) => {
-          g.ellipse(fx, fy - S * 0.12 * big, S * 0.13 * big, S * 0.24 * big).fill(st.lit ? t.accent : t.role.sparkler).stroke({ width: v.lw * 0.5, color: t.ink });
-          g.ellipse(fx, fy - S * 0.06 * big, S * 0.05 * big, S * 0.1 * big).fill(WHITE);
-        });
-      }
-      break;
-    }
-    case 'bulb': {
-      // a spare bulb on a little stand: a glass globe over a screw base
-      shadow(under, v, t, x, y, r * 0.9, r * 0.9);
-      p.cyl(x, y, r * 0.75, 0, 0.18, mat(t, t.paper));
-      p.cyl(x, y, r * 0.32, 0.18, 0.45, metal);
-      for (let i = 0; i < 3; i++) p.cyl(x, y, r * 0.34, 0.3 + i * 0.12, 0.05, mat(t, mix(t.metal, t.ink, 0.3)), { n: 16 });
-      const glass = mat(t, t.role.bulb);
-      const globe = [0, 0.3, 0.6, 0.85, 1].flatMap((u) => ring(x, y, r * 0.62 * Math.sin(Math.PI * (0.25 + u * 0.75)), 20).map(([a, b]) => P(v, a, b, 0.65 + u * 1.25)));
-      p.face(hull(globe), glass.base);
-      p.face(ring(x - r * 0.2, y + r * 0.1, r * 0.14, 10).map(([a, b]) => P(v, a, b, 1.45)), WHITE, { sil: false, line: 0 });
-      break;
-    }
-    case 'feet': {
-      // a rubber foot: a fat black stopper with a ribbed rim
-      shadow(under, v, t, x, y, r * 0.95, r * 0.95);
-      const rubber = mat(t, t.role.feet);
-      p.cyl(x, y, r * 0.85, 0, 0.35, rubber);
-      p.cyl(x, y, r * 0.7, 0.35, 0.3, mat(t, mix(t.role.feet, WHITE, 0.15)));
-      p.cyl(x, y, r * 0.3, 0.65, 0.12, metal);
-      break;
-    }
-    case 'tray': {
-      // a coin tray: a shallow brass dish with a little pile of coins in it
-      shadow(under, v, t, x, y, r * 1.0, r * 0.8);
-      const brass = mat(t, t.role.tray);
-      p.prism(box(x, y, r * 0.9, r * 0.6, 0, 0.25), 0, 0.3, brass);
-      p.face(box(x, y, r * 0.72, r * 0.45, 0, 0.2).map(([a, b]) => P(v, a, b, 0.3)), brass.shade, { sil: false, line: 0.35 });
-      for (const [dx, dy, n] of [[-0.25, 0.05, 3], [0.25, -0.05, 2]] as const) for (let i = 0; i < n; i++) p.cyl(x + dx * r, y + dy * r, r * 0.26, 0.22 + i * 0.1, 0.08, mat(t, t.role.coin), { n: 16 });
-      break;
-    }
-    case 'mirror': {
-      // a side mirror on a stalk: a round glass in a frame, catching the light
-      shadow(under, v, t, x, y, r * 0.8, r * 0.6);
-      p.cyl(x, y, r * 0.55, 0, 0.18, metal);
-      p.cyl(x, y, 0.1, 0.18, 1.1, metal, { n: 10 });
-      const R = r * 0.7, zc = 2.0, tall = 1.8;
-      const disc = (k: number): Pt[] => Array.from({ length: 24 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return P(v, x + Math.cos(a) * R * k, y - 0.05, zc + Math.sin(a) * R * k * tall); });
-      p.face(disc(1), t.role.mirror === undefined ? t.metal : mix(t.metal, t.ink, 0.2), { line: 0.5 });
-      p.face(disc(0.8), t.role.mirror, { sil: false, line: 0.3 });
-      const [gx, gy] = P(v, x - R * 0.3, y - 0.06, zc + R * 0.6);
-      p.op((g) => g.moveTo(gx, gy).lineTo(gx + S * 0.25, gy + S * 0.3).stroke({ width: v.lw * 0.9, color: WHITE, cap: 'round' }));
       break;
     }
     case 'tesla': {
@@ -764,17 +815,34 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       break;
     }
     case 'trophy': {
-      // a silver cup on a plinth: the more it is polished, the more it shines
-      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
-      const cup = st.hit ? mat(t, mix(t.role.trophy, WHITE, 0.45)) : role;
-      p.cyl(x, y, r, 0, 0.18, mat(t, t.paper));
-      p.cyl(x, y, r * 0.28, 0.18, 0.34, metal);
-      const bowl = [0, 0.25, 0.5, 0.75, 1].flatMap((u) => ring(x, y, r * (0.38 + 0.52 * Math.sqrt(u)), 26).map(([a, b]) => P(v, a, b, 0.52 + u * 0.78)));
-      p.face(hull(bowl), cup.base);
-      for (const sx of [-1, 1]) p.face(ring(x + sx * r * 0.86, y, r * 0.2, 12).map(([a, b]) => P(v, a, b, 1.0)), cup.shade, { sil: false, line: 0.5 });
-      p.face(ring(x, y, r * 0.9, 26).map(([a, b]) => P(v, a, b, 1.3)), cup.light, { sil: false, line: 0.45 });
-      p.face(ring(x, y, r * 0.66, 22).map(([a, b]) => P(v, a, b, 1.3)), cup.shade, { sil: false, line: 0.3 });
-      p.face(star(x, y + r * 0.05, r * 0.3, r * 0.13, 5, Math.PI / 2).map(([a, b]) => P(v, a, b, 1.0 - 0.1)), t.role.coin, { sil: false, line: 0.4 });
+      // a trophy cup on a wooden plinth: a stem, a tall bowl with a star on it and two handles
+      shadow(under, v, t, x, y, r * 1.0, r * 0.85);
+      const cup = st.hit ? mat(t, mix(t.role.trophy, WHITE, 0.45)) : role, pw = r * 0.62, pd = r * 0.5;
+      p.prism(box(x, y, pw, pd, 0, 0.06), 0, 0.4, mat(t, mix(t.rim, t.ink, 0.4)));
+      p.cyl(x, y, r * 0.36, 0.4, 0.1, cup);
+      p.cyl(x, y, 0.09, 0.5, 0.3, cup, { n: 12 });
+      p.cyl(x, y, 0.16, 0.72, 0.08, cup, { n: 14 });
+      // the handles first, so the bowl sits over their roots
+      p.op((g) => {
+        for (const sx of [-1, 1]) {
+          const a = P(v, x + sx * r * 0.5, y, 1.86), b = P(v, x + sx * r * 1.02, y, 1.86), c2 = P(v, x + sx * r * 0.9, y, 1.2), d = P(v, x + sx * r * 0.36, y, 1.1);
+          for (const [w, col] of [[S * 0.13 + v.lw * 1.6, t.ink], [S * 0.13, cup.mid]] as const) g.moveTo(a[0], a[1]).bezierCurveTo(b[0], b[1], c2[0], c2[1], d[0], d[1]).stroke({ width: w, color: col, cap: 'round' });
+        }
+      });
+      const bowl = [0, 0.15, 0.35, 0.6, 0.8, 1].flatMap((u) => ring(x, y, r * (0.2 + 0.46 * Math.sqrt(u)), 26).map(([a, b]) => P(v, a, b, 0.8 + u * 1.25)));
+      const H = hull(bowl), [cx] = P(v, x, y, 1);
+      p.face(H, cup.base);
+      const sh = hull(bowl.filter((q) => q[0] > cx + r * 0.34 * S));
+      if (sh.length > 2) p.face(sh, cup.shade, { sil: false, line: 0 });
+      p.face(H, null, { sil: false });
+      const lid = [0, 0.4, 0.75, 1].flatMap((u) => ring(x, y, r * 0.68 * Math.cos((u * Math.PI) / 2.2), 24).map(([a, b]) => P(v, a, b, 2.05 + u * 0.38)));
+      p.face(hull(lid), cup.light);
+      p.face(ring(x, y, r * 0.7, 24).map(([a, b]) => P(v, a, b, 2.05)), null, { sil: false, line: 0.4 });
+      p.cyl(x, y, 0.06, 2.4, 0.16, cup, { n: 8 });
+      egg(p, v, x, y, 2.66, 0.14, 0.14, 0.12, 0, cup);
+      p.face(star(0, 0, 0.24, 0.1, 5, -Math.PI / 2).map(([a, b]) => P(v, x + a, y - r * 0.55, 1.45 - b)), t.role.coin, { sil: false, line: 0.4 });
+      const [hx, hy] = P(v, x - r * 0.42, y, 1.4);
+      p.op((g) => g.moveTo(hx, hy + S * 0.2).quadraticCurveTo(hx - S * 0.04, hy - S * 0.05, hx + S * 0.04, hy - S * 0.24).stroke({ width: S * 0.09, color: WHITE, cap: 'round', alpha: 0.85 }));
       break;
     }
     case 'thunder': {
@@ -802,35 +870,64 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       break;
     }
     case 'piggy': {
-      // a piggy bank standing on its plate: the coin slot fills as it holds more
-      const c = Math.cos(angle), s = Math.sin(angle), hw = 1.1, hh = 0.55;
-      shadowPoly(under, v, t, box(x, y, hw + 0.1, hh + 0.1, angle, hh));
-      const pink = st.hit ? mat(t, mix(t.role.piggy, WHITE, 0.4)) : mat(t, t.role.piggy);
-      p.prism(box(x, y, hw, hh, angle, 0.12), 0, 0.1, metal);
-      p.prism(box(x, y, hw * 0.85, hh * 0.85, angle, hh * 0.8), 0.1, 0.95, pink);
-      for (const k of [-0.45, 0.45]) p.prism(box(x + k * c - 0.15 * s, y + k * s + 0.15 * c, 0.18, 0.12, angle), 1.05, 0.28, pink);
-      p.cyl(x + hw * 0.85 * c, y + hw * 0.85 * s, 0.26, 0.45, 0.3, mat(t, mix(t.role.piggy, t.shadeTint, 0.2)));
+      // a piggy bank: a round pink pig on four trotters, its face turned to you, a coin slot in its back that fills
+      // with gold the more it holds
+      const c = Math.cos(angle), s = Math.sin(angle), L = (lx: number, ly: number): Pt => [x + lx * c - ly * s, y + lx * s + ly * c];
+      const pink = mat(t, st.hit ? mix(t.role.piggy, WHITE, 0.4) : t.role.piggy);
+      shadow(under, v, t, x, y, 1.15, 0.62);
+      const legs = ([[-0.5, 0.24], [0.52, 0.24], [-0.5, -0.24], [0.52, -0.24]] as Pt[]).map(([a, b]) => L(a, b)).sort((a, b) => b[1] - a[1]);
+      for (const [lx, ly] of legs) p.cyl(lx, ly, 0.16, 0, 0.42, mat(t, pink.mid), { n: 14 });
+      // a curly tail at the back
+      const [tx, ty] = L(1.0, 0), [TX, TY] = P(v, tx, ty, 0.95);
+      p.op((g) => {
+        for (const [w, col] of [[v.lw * 1.6 + S * 0.07, t.ink], [S * 0.07, pink.base]] as const) {
+          g.moveTo(TX - S * 0.1, TY).bezierCurveTo(TX + S * 0.3, TY - S * 0.05, TX + S * 0.25, TY - S * 0.35, TX + S * 0.1, TY - S * 0.28).bezierCurveTo(TX - S * 0.02, TY - S * 0.22, TX + S * 0.12, TY - S * 0.05, TX + S * 0.32, TY - S * 0.12);
+          g.stroke({ width: w, color: col, cap: 'round', join: 'round' });
+        }
+      });
+      egg(p, v, x, y, 0.82, 0.95, 0.52, 0.55, angle, pink);
+      // the coin slot on its back; as it fills, a gold coin rises out of it
       const full = Math.min(1, (st.seg ?? 0) / 6);
-      p.face(box(x, y, 0.36, 0.06, angle).map(([a, b]) => P(v, a, b, 1.06)), full > 0 ? t.role.coin : t.ink, { sil: false, line: 0.3 });
-      if (full > 0) p.op((g) => { const [X, Y] = P(v, x, y, 1.15 + full * 0.25); g.circle(X, Y, v.S * 0.16).fill(t.role.coin).stroke({ width: v.lw * 0.4, color: t.ink }); });
+      const slot = box(...L(0.1, 0), 0.07, 0.3, angle).map(([a, b]) => P(v, a, b, 1.37));
+      if (full > 0) {
+        const [CX, CY] = P(v, ...L(0.1, 0), 1.37 + full * 0.3);
+        p.op((g) => g.ellipse(CX, CY, S * 0.2, S * 0.24).fill(t.role.coin).stroke({ width: v.lw * 0.6, color: t.ink }));
+      }
+      p.face(slot, t.ink, { sil: false, line: 0.3 });
+      // the head: ears up, eyes, and a snout with two nostrils, all looking at you
+      const [hx, hy] = L(-0.74, -0.08);
+      for (const sx of [-1, 1]) p.face(xz(v, hx + sx * 0.24, hy + 0.08, [[-0.2, 1.2], [0.2, 1.24], [sx * 0.16, 1.74]]), pink.mid, { line: 0.4 });
+      egg(p, v, hx, hy, 1.0, 0.44, 0.42, 0.4, 0, pink);
+      tube(p, v, hx, hy - 0.4, 0.92, 0.24, 0.26, 0.5, pink, mix(pink.base, WHITE, 0.25));
+      const [nx, ny] = P(v, hx, hy - 0.4 - 0.13 * Math.cos(0.5), 0.92 + 0.13 * Math.sin(0.5)), [ex, ey] = P(v, hx, hy - 0.34, 1.2), [bx, by] = P(v, hx, hy - 0.4, 0.86);
+      p.op((g) => {
+        for (const k of [-1, 1]) {
+          g.ellipse(nx + k * S * 0.08, ny, S * 0.04, S * 0.065).fill(t.ink);
+          g.circle(ex + k * S * 0.17, ey, S * 0.065).fill(t.ink);
+          g.circle(ex + k * S * 0.17 - S * 0.02, ey - S * 0.025, S * 0.022).fill(WHITE);
+          g.ellipse(bx + k * S * 0.3, by, S * 0.09, S * 0.05).fill({ color: t.accent, alpha: 0.45 });
+        }
+      });
       break;
     }
     case 'magnet': {
-      // a horseshoe magnet on a floor plate, aimed where it throws
-      const c = Math.cos(angle), s = Math.sin(angle);
+      // a horseshoe magnet on a floor plate, its silver tips aimed where it throws; busy, the field lines crackle
+      const c = Math.cos(angle), s = Math.sin(angle), L = (lx: number, ly: number): Pt => [x + lx * c - ly * s, y + lx * s + ly * c];
       aimArrow(p, v, t, x, y, angle, r + 0.2, t.role.magnet);
       p.face(ring(x, y, r, 28).map(([a, b]) => P(v, a, b, 0.01)), metal.mid, { line: 0.4 });
-      p.face(ring(x, y, r * 0.78, 28).map(([a, b]) => P(v, a, b, 0.02)), st.busy ? mix(t.role.magnet, WHITE, 0.5) : mix(t.role.magnet, t.shadeTint, 0.55), { line: 0.3, sil: false });
-      const red = mat(t, t.role.magnet);
-      const pt = (lx: number, ly: number): Pt => [x + lx * c - ly * s, y + lx * s + ly * c];
-      for (const side of [-1, 1]) {
-        const [ax, ay] = pt(side * 0.42, 0.05);
-        p.prism(box(ax, ay, 0.17, 0.42, angle), 0.02, 0.6, red);
-        const [tx, ty] = pt(side * 0.42, 0.55);
-        p.prism(box(tx, ty, 0.17, 0.12, angle), 0.02, 0.6, metal);
+      p.face(ring(x, y, r * 0.8, 28).map(([a, b]) => P(v, a, b, 0.02)), st.busy ? mix(t.role.magnet, WHITE, 0.5) : mix(t.role.magnet, t.shadeTint, 0.55), { line: 0.3, sil: false });
+      const ro = 0.64, ri = 0.3, cy = -0.05, legY = 0.42, shoe: Pt[] = [];
+      shoe.push([ro, legY], [ro, cy]);
+      for (let i = 1; i < 12; i++) { const a = -(i / 12) * Math.PI; shoe.push([Math.cos(a) * ro, cy + Math.sin(a) * ro]); }
+      shoe.push([-ro, cy], [-ro, legY], [-ri, legY], [-ri, cy]);
+      for (let i = 11; i > 0; i--) { const a = -(i / 12) * Math.PI; shoe.push([Math.cos(a) * ri, cy + Math.sin(a) * ri]); }
+      shoe.push([ri, cy], [ri, legY]);
+      p.prism(shoe.map(([a, b]) => L(a, b)), 0.02, 0.6, mat(t, t.role.magnet));
+      for (const sd of [-1, 1]) p.prism(box(...L(sd * (ro + ri) / 2, legY + 0.13), (ro - ri) / 2, 0.13, angle), 0.02, 0.6, metal);
+      if (st.busy) {
+        const [ax, ay] = P(v, ...L(-0.47, 0.75), 0.4), [bx, by] = P(v, ...L(0.47, 0.75), 0.4), [mx, my] = P(v, ...L(0, 1.2), 0.4);
+        p.op((g) => g.moveTo(ax, ay).quadraticCurveTo(mx, my - S * 0.3, bx, by).stroke({ width: v.lw * 0.6, color: t.ink, cap: 'round' }));
       }
-      const [bx, by] = pt(0, -0.42);
-      p.prism(box(bx, by, 0.59, 0.17, angle), 0.02, 0.6, red);
       break;
     }
     case 'jackpot': {
@@ -896,6 +993,11 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       });
       break;
     }
+    case 'clock': case 'altar': case 'hutch': case 'bulb': case 'feet': case 'tray': case 'mirror': {
+      // decor: a flat picture in the decor screen at the head of the table (or, as an icon, a small square screen)
+      decorScreen(p, v, t, id, x, y, st);
+      break;
+    }
     case 'flipper': case 'flipperR': {
       // the extra flipper itself is drawn live from the sim; the part shows its mounting plate
       p.cyl(x, y, 0.55, 0, 0.08, metal);
@@ -907,17 +1009,27 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       break;
     }
     case 'gumball': {
-      // a gumball machine: a glass globe of gumballs on a red stand, a chute where the ball goes in; locked balls show in the globe
-      shadow(under, v, t, x, y, r * 1.0, r * 1.0);
+      // a gumball machine: a red cast stand with a coin knob, a glass globe full of gumballs and a red cap; the chute in
+      // front is where the ball goes in, and locked balls show as big white balls in the globe
+      shadow(under, v, t, x, y, r * 0.9, r * 0.8);
       const red = mat(t, st.hit ? mix(t.role.gumball, WHITE, 0.4) : t.role.gumball);
-      p.face(ring(x, y, r * 0.9, 24).map(([a, b]) => P(v, a, b, 0.01)), t.ink, { line: 0.4 });
-      p.cyl(x, y + r * 0.3, r * 0.55, 0, 0.9, red);
-      p.face(hull([0, 0.4, 0.8, 1].flatMap((u) => ring(x, y + r * 0.3, r * 0.6 * Math.sin(Math.PI * (0.2 + u * 0.8)), 20).map(([a, b]) => P(v, a, b, 0.9 + u * 1.2)))), mix(t.role.jar, WHITE, 0.4));
-      const n = Math.min(3, st.seg ?? 0), cols = ['#ffd23f', '#55d08f', '#62b8ff', '#ff7fb0', '#ff9f1c', '#8a63f2'];
+      p.face(ring(x, y - r * 0.5, r * 0.36, 20, r * 0.28).map(([a, b]) => P(v, a, b, 0.01)), t.ink, { line: 0.4 });
+      p.cyl(x, y + 0.12, r * 0.5, 0, 0.18, red);
+      p.cyl(x, y + 0.12, r * 0.4, 0.18, 0.78, red);
+      const [kx, ky] = P(v, x, y + 0.12 - r * 0.4, 0.62);
+      p.op((g) => { g.circle(kx, ky, S * 0.2).fill(t.metal).stroke({ width: v.lw * 0.5, color: t.ink }); g.roundRect(kx - S * 0.05, ky - S * 0.16, S * 0.1, S * 0.32, S * 0.04).fill(mix(t.metal, t.ink, 0.35)); });
+      const gz = 1.55, gr = r * 0.6;
+      egg(p, v, x, y + 0.12, gz, gr, gr, gr * 0.95, 0, mat(t, mix(t.role.jar, WHITE, 0.55)), false);
+      const n = Math.min(3, st.seg ?? 0), cols = ['#ffd23f', '#55d08f', '#62b8ff', '#ff7fb0', '#ff9f1c', '#8a63f2', '#ff5d5d', '#3cc3b1', '#ffd23f'];
       p.op((g) => {
-        for (let i = 0; i < 6; i++) { const [cx, cy] = P(v, x + ((i % 3) - 1) * r * 0.28, y + r * 0.3, 1.2 + Math.floor(i / 3) * 0.4); g.circle(cx, cy, S * 0.12).fill(cols[i]).stroke({ width: v.lw * 0.3, color: t.ink }); }
-        for (let i = 0; i < n; i++) { const [cx, cy] = P(v, x + (i - 1) * r * 0.3, y + r * 0.3, 1.75); g.circle(cx, cy, S * 0.2).fill(WHITE).stroke({ width: v.lw * 0.6, color: t.ink }); }
+        const spots: [number, number][] = [[-0.45, -0.55], [0, -0.6], [0.45, -0.55], [-0.62, -0.15], [-0.2, -0.2], [0.22, -0.18], [0.62, -0.12], [-0.3, 0.22], [0.3, 0.25]];
+        spots.forEach(([a, b], i) => { const [cx, cy] = P(v, x + a * gr, y + 0.12 - gr * 0.5, gz + b * gr); g.circle(cx, cy, S * 0.13).fill(cols[i]).stroke({ width: v.lw * 0.3, color: t.ink }); });
+        for (let i = 0; i < n; i++) { const [cx, cy] = P(v, x + (i - (n - 1) / 2) * gr * 0.62, y + 0.12 - gr * 0.6, gz + 0.1); g.circle(cx, cy, S * 0.22).fill(WHITE).stroke({ width: v.lw * 0.6, color: t.ink }); }
+        const [hx, hy] = P(v, x - gr * 0.45, y, gz + gr * 0.45);
+        g.ellipse(hx, hy, S * 0.12, S * 0.08).fill({ color: WHITE, alpha: 0.9 });
       });
+      p.cyl(x, y + 0.12, gr * 0.45, gz + gr * 0.82, 0.18, red);
+      p.cyl(x, y + 0.12, 0.08, gz + gr * 0.82 + 0.18, 0.14, red, { n: 10 });
       break;
     }
     case 'ring': {
@@ -932,7 +1044,7 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
     case 'wheel': {
       // a Spider Wheel: a scoop under a wheel of eight coloured awards with a spider on the hub; the lit one is where it points
       shadow(under, v, t, x, y, r * 1.0, r * 1.0);
-      p.face(ring(x, y - r * 0.35, r * 0.45, 18).map(([a, b]) => P(v, a, b, 0.01)), t.ink, { line: 0.4 });
+      p.face(ring(x, y - r * 0.5, r * 0.32, 18, r * 0.24).map(([a, b]) => P(v, a, b, 0.01)), t.ink, { line: 0.4 });
       const cols = ['#ff5d8f', '#ffd23f', '#55d08f', '#ff9f1c', '#62b8ff', '#3cc3b1', '#8a63f2', '#b8b2cc'], R = r * 0.85, zc = 1.9, tall = 1.8, on = st.seg ?? -1;
       p.cyl(x - R * 0.9, y + 0.3, 0.1, 0, zc, metal, { n: 8 });
       p.cyl(x + R * 0.9, y + 0.3, 0.1, 0, zc, metal, { n: 8 });
@@ -943,7 +1055,13 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
         p.face(pts, st.lit && i === on ? WHITE : i === on ? mix(cols[i], WHITE, 0.4) : cols[i], { line: 0.35 });
       }
       const [hx, hy] = P(v, x, y + 0.3, zc);
-      p.op((g) => { g.circle(hx, hy, S * 0.22).fill(t.ink); g.poly([hx - S * 0.12, hy - R * S * tall * v.kz * 1.05, hx + S * 0.12, hy - R * S * tall * v.kz * 1.05, hx, hy - R * S * tall * v.kz * 0.8]).fill(t.accent).stroke({ width: v.lw * 0.5, color: t.ink }); });
+      p.op((g) => {
+        // the spider on the hub, legs out over the awards
+        for (const k of [-1, 1]) for (let l = 0; l < 4; l++) { const a = -0.8 + l * 0.52; g.moveTo(hx, hy).lineTo(hx + k * Math.cos(a) * S * 0.28, hy + Math.sin(a) * S * 0.28 - S * 0.06).lineTo(hx + k * Math.cos(a) * S * 0.45, hy + Math.sin(a) * S * 0.45 + S * 0.05); }
+        g.stroke({ width: v.lw * 0.6, color: t.ink, cap: 'round', join: 'round' });
+        g.circle(hx, hy, S * 0.2).fill(t.ink);
+        for (const k of [-1, 1]) g.circle(hx + k * S * 0.07, hy - S * 0.03, S * 0.05).fill(WHITE);
+        g.poly([hx - S * 0.12, hy - R * S * tall * v.kz * 1.05, hx + S * 0.12, hy - R * S * tall * v.kz * 1.05, hx, hy - R * S * tall * v.kz * 0.8]).fill(t.accent).stroke({ width: v.lw * 0.5, color: t.ink }); });
       break;
     }
     case 'duck': case 'roller': case 'goal': case 'bucket': {
@@ -1114,6 +1232,224 @@ function motif(p: Prop, v: View, t: Theme, x: number, y: number, r: number, z: n
     const dots = Array.from({ length: 6 }, (_, i) => { const a = (i / 6) * Math.PI * 2 + 0.3; return P(v, x + Math.cos(a) * r * 0.82, y + Math.sin(a) * r * 0.82, z); });
     p.op((g) => { for (const [X, Y] of dots) g.circle(X, Y, v.S * 0.07).fill(t.ink); });
   }
+}
+
+/**
+ * Decor, drawn flat into the decor screen at the head of the table: a metal bezel, a glass in the decor's own colour,
+ * and its picture lit up on the glass, the main motif in the middle and smaller ones out towards the ends. As a badge
+ * (an icon in the shop or the toolbox) it is a small square screen with the main motif alone.
+ */
+function decorScreen(p: Prop, v: View, t: Theme, id: PartId, x: number, y: number, st: PartState) {
+  const S = v.S, badge = !!st.badge, lit = !!st.lit;
+  // local screen coordinates (u across, w up): flat in the floor, or for a badge standing upright, facing you, unsquashed
+  const zc = 1.1 / v.kz;
+  const at = (u: number, w: number): Pt => (badge ? P(v, x + u, y, zc + w / v.kz) : P(v, x + u, y + w, 0.01));
+  const loc = (pts: Pt[]) => pts.map(([u, w]) => at(u, w));
+  const disc = (u: number, w: number, r: number, fill: string, line = 0.35, ry = r) => p.face(loc(ring(u, w, r, 22, ry)), fill, { sil: false, line });
+  // the glass is the decor's colour, darkened (the rubber feet, already dark, sit on grey glass instead)
+  const role = t.role[id], glass = id === 'feet' ? mix(t.metal, t.ink, 0.45) : mix(role, t.ink, lit ? 0.4 : 0.62);
+  const rel = (pts: Pt[]) => pts.map(([a, b]): Pt => [a - x, b - y]);
+  if (badge) { // a little stand under the upright screen
+    p.cyl(x, y, 0.9, 0, 0.14, mat(t, t.metal));
+    p.cyl(x, y, 0.16, 0.14, zc - 1.2 / v.kz, mat(t, t.metal), { n: 10 });
+  }
+  p.face(loc(badge ? box(0, 0, 1.75, 1.3, 0, 0.45) : rel(decorPanel(x, y, -0.3))), mix(t.metal, t.shadeTint, 0.15), { line: 0.45 });
+  p.face(loc(badge ? box(0, 0, 1.45, 1.0, 0, 0.32) : rel(decorPanel(x, y, 0.12))), glass, { sil: false, line: 0.4 });
+  // a sheen along the top of the glass
+  const sheen = badge ? [at(-1.1, 0.78), at(-0.3, 0.84)] : loc(rel(decorPanel(x, y, 0.45)).slice(5, 20));
+  p.op((g) => { g.moveTo(sheen[0][0], sheen[0][1]); for (const q of sheen.slice(1)) g.lineTo(q[0], q[1]); g.stroke({ width: v.lw * 0.7, color: WHITE, alpha: 0.28, cap: 'round' }); });
+  const wc = badge ? 0 : 0.12, R = badge ? 0.78 : 1.0;
+  /** The motifs either side of the middle: two mid-sized, two small ones near the ends (none on a badge). */
+  const sides: [number, number, number][] = badge ? [] : [[-3.4, 0.02, 0.62], [3.4, 0.02, 0.62], [-5.6, -0.3, 0.44], [5.6, -0.3, 0.44]];
+  const sparkle = (u: number, w: number, r: number, fill: string) => p.face(loc(star(u, w, r, r * 0.36, 4, Math.PI / 2)), fill, { sil: false, line: 0.3 });
+  switch (id) {
+    case 'clock': {
+      // the Midnight Clock: a clock face whose hands creep from 9 PM to midnight, a moon and stars either side
+      disc(0, wc, R, lit ? mix(t.accent, WHITE, 0.45) : t.paper, 0.45);
+      p.op((g) => { for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2, [X, Y] = at(Math.cos(a) * R * 0.78, wc + Math.sin(a) * R * 0.78); g.circle(X, Y, S * (i % 3 ? 0.04 : 0.07)).fill(t.ink); } });
+      const seg = st.seg ?? 0, mins = Math.min(180, seg * 15), hourA = Math.PI / 2 - ((9 + mins / 60) / 12) * Math.PI * 2, minA = Math.PI / 2 - (mins / 60) * Math.PI * 2;
+      const [cx, cy] = at(0, wc);
+      p.op((g) => {
+        for (const [a, k, w] of [[hourA, 0.5, 1.3], [minA, 0.76, 0.85]] as const) { const [hx, hy] = at(Math.cos(a) * R * k, wc + Math.sin(a) * R * k); g.moveTo(cx, cy).lineTo(hx, hy).stroke({ width: v.lw * w, color: t.ink, cap: 'round' }); }
+        g.circle(cx, cy, S * 0.07).fill(t.accent).stroke({ width: v.lw * 0.3, color: t.ink });
+      });
+      sides.forEach(([u, w, r], i) => {
+        if (i < 2) { disc(u, w, r, t.role.coin, 0.35); disc(u + r * 0.38 * (u < 0 ? 1 : -1), w + r * 0.2, r * 0.8, glass, 0); }
+        else sparkle(u, w, r * (lit ? 1.25 : 1), lit ? t.accent : t.paper);
+      });
+      break;
+    }
+    case 'altar': {
+      // the Ritual Altar: a sigil in the middle and eight runes, lit one by one as your sets are completed
+      disc(0, wc, R, lit ? t.accent : mix(role, t.ink, 0.2), 0.45);
+      p.face(loc(star(0, wc, R * 0.82, R * 0.34, 5, Math.PI / 2)), lit ? WHITE : t.role.coin, { sil: false, line: 0.3 });
+      if (!badge) for (let i = 0; i < 8; i++) {
+        const k = Math.floor(i / 2), side = i % 2 ? 1 : -1, u = side * (1.75 + k * 1.22), w = -0.05 - k * 0.12, on = lit || i < (st.seg ?? 0), h = 0.36;
+        p.face(loc(box(u, w, h * 0.8, h, 0, 0.12)), on ? t.accent : mix(role, t.paper, 0.15), { sil: false, line: 0.35 });
+        const [ax, ay] = at(u, w + h * 0.6), [bx, by] = at(u, w - h * 0.6), [cx2, cy2] = at(u + h * 0.45 * (k % 2 ? 1 : -1), w + h * 0.1);
+        p.op((g) => g.moveTo(ax, ay).lineTo(bx, by).moveTo(ax, ay).lineTo(cx2, cy2).stroke({ width: v.lw * 0.45, color: on ? WHITE : t.ink, cap: 'round' }));
+      }
+      break;
+    }
+    case 'hutch': {
+      // the Gremlin Hutch: a little arched door with two eyes in the dark, and paw prints running off either side
+      const door = (wd: number, ht: number): Pt[] => [[-wd, wc - ht * 0.55], ...Array.from({ length: 11 }, (_, i): Pt => { const a = Math.PI - (i / 10) * Math.PI; return [Math.cos(a) * wd, wc - ht * 0.55 + ht * 0.5 + Math.sin(a) * wd * 0.9]; }), [wd, wc - ht * 0.55]];
+      p.face(loc(door(R * 1.05, R * 1.9)), mix(role, t.rim, 0.4), { sil: false, line: 0.4 });
+      p.face(loc(door(R * 0.72, R * 1.55)), t.ink, { sil: false, line: 0.3 });
+      for (const k of [-1, 1]) disc(k * R * 0.26, wc + R * 0.1, 0.13, t.role.goldleaf, 0, 0.17);
+      if (!badge) for (const k of [-1, 1]) for (let j = 0; j < 4; j++) {
+        const u = k * (1.9 + j * 1.25), w = (j % 2 ? 0.25 : -0.2) - j * 0.08;
+        disc(u, w, 0.2, mix(role, t.paper, 0.35), 0, 0.17);
+        for (const d of [-1, 0, 1]) disc(u + d * 0.17 + k * 0.12, w + 0.22 - Math.abs(d) * 0.05, 0.07, mix(role, t.paper, 0.35), 0);
+      }
+      break;
+    }
+    case 'bulb': {
+      // the Spare Bulb: a big bulb glowing in the middle, smaller ones either side, all lit for the Lamps
+      const bulb = (u: number, w: number, r: number) => {
+        const [cx, cy] = at(u, w + r * 0.25);
+        p.op((g) => { for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; g.moveTo(cx + Math.cos(a) * r * S * 1.0, cy + Math.sin(a) * r * S * 0.86).lineTo(cx + Math.cos(a) * r * S * 1.35, cy + Math.sin(a) * r * S * 1.16); } g.stroke({ width: v.lw * 0.6, color: t.role.lamp, cap: 'round' }); });
+        disc(u, w + r * 0.25, r * 0.72, t.role.lamp, 0.4);
+        p.face(loc(box(u, w - r * 0.62, r * 0.3, r * 0.22, 0, 0.04)), t.metal, { sil: false, line: 0.35 });
+        disc(u - r * 0.22, w + r * 0.42, r * 0.16, WHITE, 0);
+      };
+      bulb(0, wc, R);
+      for (const [u, w, r] of sides) bulb(u, w, r);
+      break;
+    }
+    case 'feet': {
+      // the Rubber Feet: rubber stoppers seen from below, ridged rings round a screw, the cabinet's grip
+      const foot = (u: number, w: number, r: number) => {
+        disc(u, w, r, role, 0.4);
+        disc(u, w, r * 0.72, mix(role, WHITE, 0.15), 0.3);
+        disc(u, w, r * 0.45, mix(role, WHITE, 0.08), 0.3);
+        disc(u, w, r * 0.2, t.metal, 0.3);
+      };
+      foot(0, wc, R);
+      for (const [u, w, r] of sides) foot(u, w, r);
+      break;
+    }
+    case 'tray': {
+      // the Coin Tray: a brass tray in the middle with change in it, little piles of coins either side
+      const coin = (u: number, w: number, r: number) => { disc(u, w, r, t.role.coin, 0.35); disc(u, w, r * 0.62, mix(t.role.coin, WHITE, 0.3), 0.25); };
+      p.face(loc(box(0, wc, R * 1.55, R * 0.82, 0, 0.3)), role, { sil: false, line: 0.4 });
+      p.face(loc(box(0, wc, R * 1.3, R * 0.6, 0, 0.22)), mix(role, t.ink, 0.3), { sil: false, line: 0.3 });
+      for (const [du, dw] of [[-0.6, 0.1], [0.05, -0.12], [0.62, 0.15]] as const) coin(du * R, wc + dw * R, R * 0.36);
+      for (const [u, w, r] of sides) { coin(u - r * 0.3, w - r * 0.15, r * 0.6); coin(u + r * 0.32, w - r * 0.1, r * 0.6); coin(u, w + r * 0.3, r * 0.6); }
+      break;
+    }
+    case 'mirror': {
+      // the Side Mirror: an oval glass in a frame, with glints, and sparkles either side
+      disc(0, wc, R * 1.55, t.metal, 0.45, R * 0.95);
+      disc(0, wc, R * 1.35, role, 0.35, R * 0.78);
+      const [ax, ay] = at(-R * 0.75, wc - R * 0.1), [bx, by] = at(-R * 0.25, wc + R * 0.55), [cx, cy] = at(-R * 0.3, wc - R * 0.35), [dx, dy] = at(R * 0.05, wc + R * 0.1);
+      p.op((g) => g.moveTo(ax, ay).lineTo(bx, by).moveTo(cx, cy).lineTo(dx, dy).stroke({ width: v.lw * 0.8, color: WHITE, cap: 'round' }));
+      for (const [u, w, r] of sides) sparkle(u, w, r, WHITE);
+      break;
+    }
+  }
+}
+
+// ---- cut-out helpers: shapes drawn in the upright x-z plane (a gong, a clock face, a piñata's flank) ----
+/** The piñata's paper, the same in every machine (it is a party, not a theme). */
+const PINATA = ['#ff5d8f', '#ffd23f', '#3cc3b1', '#62b8ff', '#ff9f1c'];
+/** Upright profile points [u, z] standing at depth y, u along x from the anchor. */
+const xz = (v: View, x: number, y: number, pts: Pt[]): Pt[] => pts.map(([u, z]) => P(v, x + u, y, z));
+/** A rounded box (a superellipse) as a profile: e = 2 is an ellipse, higher is boxier. */
+const blob = (cu: number, cz: number, a: number, b: number, n = 24, e = 3): Pt[] =>
+  Array.from({ length: n }, (_, i) => {
+    const q = (i / n) * Math.PI * 2, c = Math.cos(q), s = Math.sin(q);
+    return [cu + a * Math.sign(c) * Math.pow(Math.abs(c), 2 / e), cz + b * Math.sign(s) * Math.pow(Math.abs(s), 2 / e)];
+  });
+/**
+ * A convex profile with a thickness of 2d: its far copy shows as the top edge (`top`), its near copy is the face.
+ * With `front` null only the solid is drawn, so the caller can paint the face itself.
+ */
+function slab(p: Prop, v: View, x: number, y: number, d: number, prof: Pt[], top: string, front: string | null, line = 0.4): Pt[] {
+  const near = xz(v, x, y - d, prof);
+  p.face(hull([...xz(v, x, y + d, prof), ...near]), top);
+  if (front) p.face(near, front, { sil: false, line });
+  return near;
+}
+/**
+ * A paper barrel lying along x (a piñata's body): a rounded box `a` long each way, its cross-section ry deep and rz
+ * tall, wrapped in bands of colour from its belly to its back, each with a frilled lower edge hanging over the band
+ * below. Only the side the viewer sees is drawn; `bands` limits it to the lowest few (a burst piñata's belly).
+ */
+function barrel(p: Prop, v: View, x: number, y: number, cz: number, a: number, ry: number, rz: number, cols: string[], bands = cols.length) {
+  const lo = Math.atan2(-rz * v.kz, ry * v.k), step = Math.PI / cols.length, n = 16;
+  const sq = (u: number) => Math.pow(Math.max(0, 1 - Math.pow(Math.abs(u), 4)), 0.25);
+  const at = (u: number, f: number): Pt => { const s = sq(u); return P(v, x + a * u, y - ry * s * Math.cos(f), cz + rz * s * Math.sin(f)); };
+  const all: Pt[] = [];
+  for (let i = 0; i <= n; i++) for (let j = 0; j <= 8; j++) all.push(at(-1 + (2 * i) / n, lo + (Math.min(bands, cols.length) * step * j) / 8));
+  p.face(hull(all), cols[0]);
+  for (let b = 0; b < Math.min(bands, cols.length); b++) {
+    const f0 = lo + b * step, f1 = f0 + step + (b === cols.length - 1 ? 0.02 : 0), pts: Pt[] = [];
+    const torn = b === bands - 1 && bands < cols.length;
+    for (let i = 0; i <= n * 2; i++) { const u = -1 + i / n; pts.push(at(u, b === 0 ? f0 : f0 - (i % 2 ? 0.16 : 0))); }
+    for (let i = n * 2; i >= 0; i--) { const u = -1 + i / n; pts.push(at(u, torn ? f1 - (i % 2 ? 0.3 : 0) : f1)); }
+    p.face(pts, cols[b], { sil: false, line: 0.3 });
+  }
+}
+/**
+ * A rounded solid (an egg, a pig's belly, a bulb): an ellipsoid rx by ry by rz centred at (x, y, z), turned by `a`,
+ * cel shaded like a cylinder (a shade crescent on the right, a highlight up on the left).
+ */
+function egg(p: Prop, v: View, x: number, y: number, z: number, rx: number, ry: number, rz: number, a: number, m: Mat, light = true) {
+  const c = Math.cos(a), s = Math.sin(a), pts: Pt[] = [];
+  for (let i = 0; i < 24; i++) for (let j = -4; j <= 4; j++) {
+    const th = (i / 24) * Math.PI * 2, ph = (j / 4) * (Math.PI / 2), lx = rx * Math.cos(th) * Math.cos(ph), ly = ry * Math.sin(th) * Math.cos(ph);
+    pts.push(P(v, x + lx * c - ly * s, y + lx * s + ly * c, z + rz * Math.sin(ph)));
+  }
+  const H = hull(pts), xs = H.map((q) => q[0]), ys = H.map((q) => q[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), w = x1 - x0, h = y1 - y0;
+  p.face(H, m.base);
+  const sh = hull(pts.filter((q) => q[0] > x0 + w * 0.72));
+  if (sh.length > 2) p.face(sh, m.shade, { sil: false, line: 0 });
+  if (light) p.op((g) => g.ellipse(x0 + w * 0.3, y0 + h * 0.28, w * 0.12, h * 0.08).fill(m.light));
+  p.face(H, null, { sil: false });
+  return H;
+}
+/**
+ * A tube pointing at the viewer (a spotlight's can, a gun barrel, a snout): centred at (x, y, z), `len` long, r round,
+ * its axis tipped up from the floor by `tilt` so its near face turns towards the camera. Returns the near face.
+ */
+function tube(p: Prop, v: View, x: number, y: number, z: number, r: number, len: number, tilt: number, m: Mat, face?: string): Pt[] {
+  const dy = -Math.cos(tilt), dz = Math.sin(tilt), uy = Math.sin(tilt), uz = Math.cos(tilt);
+  const rim = (k: number) => ring(0, 0, r, 22).map(([a, b]) => P(v, x + a, y + dy * k + uy * b, z + dz * k + uz * b));
+  const near = rim(len / 2), all = [...rim(-len / 2), ...near], cx = P(v, x, y, z)[0];
+  p.face(hull(all), m.mid);
+  const sh = hull(all.filter((q) => q[0] > cx + r * v.S * 0.35));
+  if (sh.length > 2) p.face(sh, m.shade, { sil: false, line: 0 });
+  p.face(near, face ?? m.base, { sil: false, line: 0.4 });
+  return near;
+}
+/** A disc on the near face of a `tube` (a lens, a muzzle, a nostril plate): same axis, `at` along it from the centre. */
+const tubeDisc = (v: View, x: number, y: number, z: number, r: number, at: number, tilt: number, du = 0, dw = 0): Pt[] =>
+  ring(0, 0, r, 18).map(([a, b]) => P(v, x + du + a, y - Math.cos(tilt) * at + Math.sin(tilt) * (b + dw), z + Math.sin(tilt) * at + Math.cos(tilt) * (b + dw)));
+/** A long donkey ear standing up from (x, y, z): a leaf `len` tall, leaning by `lean`, with a paler inside. */
+function ear(p: Prop, v: View, x: number, y: number, z: number, len: number, lean: number, c: string) {
+  const leaf = (w: number, k: number): Pt[] => [
+    ...Array.from({ length: 7 }, (_, i): Pt => { const u = i / 6; return [-w * Math.sin(u * Math.PI) + lean * u * k, z + len * u * k]; }),
+    ...Array.from({ length: 5 }, (_, i): Pt => { const u = 1 - (i + 1) / 6; return [w * Math.sin(u * Math.PI) + lean * u * k, z + len * u * k]; }),
+  ];
+  p.face(xz(v, x, y, leaf(0.16, 1)), c, { line: 0.4 });
+  p.face(xz(v, x, y - 0.01, leaf(0.08, 0.8)).map(([a, b]) => [a, b - 0.06 * v.kz * v.S]), mix(c, WHITE, 0.45), { sil: false, line: 0 });
+}
+/** The piñata's tail: a short stalk and a tassel of paper strips. */
+function tail(p: Prop, v: View, t: Theme, x: number, y: number, z: number, cols: string[]) {
+  p.face(xz(v, x, y, [[0, z], [0.18, z + 0.04], [0.22, z - 0.12], [0.04, z - 0.14]]), cols[2], { line: 0.35 });
+  for (let i = 0; i < 4; i++) {
+    const u = 0.16 + i * 0.05;
+    p.face(xz(v, x, y - 0.02 * i, [[u - 0.05, z - 0.1], [u + 0.05, z - 0.1], [u + 0.08 + i * 0.02, z - 0.6], [u - 0.01 + i * 0.02, z - 0.62]]), cols[(i + 3) % cols.length], { line: 0.3 });
+  }
+}
+/** A wrapped sweet lying on the floor: a round middle and a twist of paper each side. */
+function candy(p: Prop, v: View, t: Theme, x: number, y: number, a: number, c: string) {
+  const c0 = Math.cos(a), s0 = Math.sin(a), at = (u: number, w: number) => P(v, x + u * c0 - w * s0, y + u * s0 + w * c0, 0.12);
+  p.face([at(-0.2, 0), at(-0.42, 0.14), at(-0.42, -0.14)], mix(c, WHITE, 0.3), { line: 0.35 });
+  p.face([at(0.2, 0), at(0.42, 0.14), at(0.42, -0.14)], mix(c, WHITE, 0.3), { line: 0.35 });
+  p.face(ring(0, 0, 0.2, 14, 0.15).map(([u, w]) => at(u, w)), c, { line: 0.4 });
 }
 
 function eyes(p: Prop, v: View, t: Theme, x: number, y: number, z: number, gap: number, wide = false, whites = false) {
