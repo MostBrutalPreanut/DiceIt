@@ -46,6 +46,7 @@ describe('Piñata', () => {
     expect(describePart(PARTS.pinata, pin).map((l) => l.text).join(' ')).toContain(`It has ${P.health + P.grow} health`);
     g.continueAfterRound();
     expect(g.shop.prize).toHaveLength(P.pick);
+    expect(g.shop.prizeFrom).toBe('pinata');
     const prize = [...g.shop.prize!];
     g.money = 50;
     g.reroll();
@@ -56,6 +57,7 @@ describe('Piñata', () => {
     expect(g.inventory.some((p) => p.uid === got.uid)).toBe(true);
     expect(g.money).toBe(money); // free
     expect(g.shop.prize).toBeNull(); // the other two go
+    expect(g.shop.prizeFrom).toBeUndefined();
     g.continueAfterRound();
     expect(g.shop.prize ?? null).toBeNull(); // no burst, no prize
   });

@@ -44,6 +44,8 @@ export class DecalPicker {
   private revealedKey = '';
   /** The card that is lifted (hovered, or picked with the arrows; on touch, the first tap). */
   private sel = -1;
+  /** Picks are ignored until this time (performance.now ms): the reveal has to settle first, then a moment more. */
+  private readyAt = 0;
   /** Folded away so the apron can be clicked (the apron is full and a decal has to be peeled first). */
   private docked = false;
   private pointerType = 'mouse';
@@ -154,7 +156,7 @@ export class DecalPicker {
       b.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') { this.untilt(b); if (this.sel === i) this.select(-1, false); } });
       b.addEventListener('focus', () => this.select(i, false));
       b.onclick = () => {
-        if (this.phase === 'intro') this.settle();
+        if (this.phase === 'intro') { this.settle(); return; } // a click on a card still flipping in only finishes the reveal
         // on touch the first tap lifts the card so it can be read; the second sticks it
         if (this.pointerType === 'touch' && this.sel !== i) { this.select(i, false); return; }
         this.pick(i);
@@ -165,7 +167,7 @@ export class DecalPicker {
     if (peel) peel.onclick = () => this.dock(true);
     ($('dpBack', root) as HTMLButtonElement).onclick = () => this.dock(false);
 
-    if (!animate) { this.phase = 'open'; root.classList.add('dp-settled'); return; }
+    if (!animate) { this.phase = 'open'; this.readyAt = performance.now() + 300; root.classList.add('dp-settled'); return; }
     this.phase = 'intro';
     const a = this.host.audio;
     this.later(T.title, () => a.stamp());
@@ -183,6 +185,7 @@ export class DecalPicker {
     if (this.phase !== 'intro') return;
     this.clearTimers();
     this.phase = 'open';
+    this.readyAt = performance.now() + 300; // a double-click or a held key does not pick the moment the cards land
     this.root.classList.add('dp-settled');
   }
 
@@ -230,7 +233,7 @@ export class DecalPicker {
     const digit = /^(Digit|Numpad)([1-9])$/.exec(e.code);
     if (digit) {
       const i = Number(digit[2]) - 1;
-      if (i < n) { eat(); if (!e.repeat) { this.settle(); this.pick(i); } }
+      if (i < n) { eat(); if (e.repeat) return; if (this.phase === 'intro') this.settle(); else this.pick(i); }
       return;
     }
     switch (e.code) {
@@ -271,7 +274,7 @@ export class DecalPicker {
   private pick(i: number) {
     const g = this.host.game, a = this.host.audio;
     a.unlock();
-    if (this.phase !== 'open') return;
+    if (this.phase !== 'open' || performance.now() < this.readyAt) return;
     const offer = g.pending?.[i];
     if (!offer) return;
     if (!g.canTake(i)) { if (!g.apronFree) { this.host.say('NO ROOM ON THE APRON. PEEL ONE FIRST'); this.nudge(i); } return; }
@@ -337,8 +340,8 @@ export class DecalPicker {
   private skip() {
     const g = this.host.game, a = this.host.audio;
     a.unlock();
-    if (this.phase === 'intro') this.settle();
-    if (this.phase !== 'open') return;
+    if (this.phase === 'intro') { this.settle(); return; } // the cash is not taken by a click meant to skip the reveal
+    if (this.phase !== 'open' || performance.now() < this.readyAt) return;
     if (!g.skipPick()) return;
     if (!this.hook('decalSkip')) a.buy();
     this.host.say(callout('skipped'));

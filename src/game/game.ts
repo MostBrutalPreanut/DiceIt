@@ -71,8 +71,10 @@ export interface ShopState {
   locked?: number[];
   /** Bargain Bin: the slot that is half price. */
   bargain?: number | null;
-  /** A Piñata burst last round: pick one of these, free (the others go). It waits until you pick. */
+  /** A Piñata burst last round, or a Time Capsule was dug up: pick one of these, free (the others go). It waits until you pick. */
   prize?: PartId[] | null;
+  /** Where the prize came from (old saves: a Piñata). */
+  prizeFrom?: 'pinata' | 'capsule';
 }
 
 /** Everything that survives a page reload. */
@@ -463,6 +465,7 @@ export class Game {
     if (this.prizeDue) {
       // a Piñata burst: one of three parts, free; rarer than the shop's own (it rolls as if it were three rounds later)
       this.shop.prize = rollOffers(new Rng(this.runSeed * 4241 + this.round), PARTS.pinata.recipe.pinata!.pick, this.round + 3, this.ownedDecor());
+      this.shop.prizeFrom = 'pinata';
       this.prizeDue = false;
     }
     this.resolved = null;
@@ -482,7 +485,7 @@ export class Game {
     const offers: (PartId | null)[] = [];
     for (let i = 0; i < n; i++) offers.push(keep.includes(i) ? prev!.offers[i] : fresh.shift() ?? null);
     const bargain = this.mods.bargain ? Math.floor(rng.next() * n) : null;
-    return { offers, rerolls: 0, locked: keep, bargain, prize: prev?.prize ?? null };
+    return { offers, rerolls: 0, locked: keep, bargain, prize: prev?.prize ?? null, ...(prev?.prizeFrom ? { prizeFrom: prev.prizeFrom } : {}) };
   }
 
   get lockSlots() {
@@ -879,12 +882,13 @@ export class Game {
     return w ? w.perRound - (p.wished?.round === this.round ? p.wished.n : 0) : 0;
   }
 
-  /** Take the Piñata's prize: the part (or pack) goes into the toolbox for free, and the other two go. */
+  /** Take the prize (a Piñata's, or a dug-up Time Capsule's): the part (or pack) goes into the toolbox for free, and the others go. */
   takePrize(i: number): PartInstance | null {
     const id = this.shop.prize?.[i];
     if (!this.editable || !id || !this.hasRoomFor(id)) return null;
     this.checkpoint();
     this.shop.prize = null;
+    delete this.shop.prizeFrom;
     const pack = this.makePack(id, 0);
     for (const inst of pack) { inst.fresh = true; this.layout.parts.push(inst); }
     return pack[0];
@@ -1095,6 +1099,7 @@ export class Game {
       const pick: PartId[] = [];
       while (pick.length < PARTS.capsule.recipe.capsule!.pick && legend.length) pick.push(legend.splice(Math.floor(rng.next() * legend.length), 1)[0]);
       this.shop.prize = pick;
+      this.shop.prizeFrom = 'capsule';
     }
     return value;
   }

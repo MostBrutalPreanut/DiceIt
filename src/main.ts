@@ -21,6 +21,7 @@ import type { Input, SimEvent } from './sim/sim';
 import { bossCard, decalCard, fmt, HUD_TIPS, partCard, rarityChip, roleVar, statsLine } from './ui/html';
 import { applyBackdrop, chase, makeBulbs, MultDial, Odometer } from './ui/hud';
 import { DecalPicker } from './ui/decalPick';
+import { PrizePicker } from './ui/prizePick';
 import './ui/decalPick.css';
 import { Flyers, setFlyEffects } from './ui/flyers';
 import { Menu, type SavedRunInfo } from './ui/menu';
@@ -207,7 +208,7 @@ async function main() {
       const a = game.scorer.altarOf(inst), now = game.scorer.ritualNow();
       return now ? `${RITUAL_NAMES[now.kind]} under way: ${Math.ceil(now.left)} s left.` : `${a.sets} of ${r.altar.sets} sets towards the next ritual: a ${RITUAL_NAMES[a.next]} (strength ${a.strength + 1}).`;
     }
-    return 'Working: it stands on the cabinet.';
+    return 'Working: it is in the decor screen.';
   };
   const tipPart = (def: PartDef, inst: PartInstance | undefined, cx: number, cy: number, live: boolean) => {
     const tip = $('tip');
@@ -216,7 +217,7 @@ async function main() {
     const row = inst ? game.scorer.ledger.get(inst.uid) : undefined;
     tip.innerHTML = partCard(def, inst, { ...ctxFor(def, inst), scorer: live ? game.scorer : undefined, mult: game.scorer.mult }, {
       stats: live && inst ? liveLine(inst) : live ? statsLine(row) : undefined,
-      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? `click it to move, store or sell it${inst && game.moveFee(inst) ? ` · moving costs $${game.moveFee(inst)}` : ''}` : 'in the workshop: click it to move, store or sell it') : inst ? 'click it, then the table · R turns it' : 'drag it onto the table (R turns it), or Buy to put it in the toolbox',
+      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? `click it to move, store or sell it${inst && game.moveFee(inst) ? ` · moving costs $${game.moveFee(inst)}` : ''}` : 'in the workshop: click it to move, store or sell it') : inst ? 'click it, then the table · R turns it' : isDecor(def.id) ? 'drag it into the decor screen at the top of the table, or Buy to put it in the toolbox' : 'drag it onto the table (R turns it), or Buy to put it in the toolbox',
     });
     tip.hidden = false;
     placeTip(cx, cy);
@@ -233,35 +234,18 @@ async function main() {
       <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}</div></div>`;
   }
 
-  /** A Piñata burst: one of three parts for free, above the shop, until you take one. */
+  /**
+   * A burst Piñata or a dug-up Time Capsule: three parts to take one of, free, as a pop-up (src/ui/prizePick.ts).
+   * Put away with Later, the prize waits behind a button at the top of the shop.
+   */
   function renderPrize() {
-    const box = $('prize'), prize = game.shop.prize;
-    box.hidden = !prize?.length || game.sandbox;
+    prizePicker.update();
+    const box = $('prize');
+    box.hidden = !prizePicker.waiting;
     if (box.hidden) return;
-    box.innerHTML = `<div class="lbl">Piñata prize: take one, free</div>` + prize!.map((id, i) => {
-      const def = PARTS[id];
-      return `<div class="offer r-${def.rarity}" data-pid="${id}"><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}</div>
-        <div class="name">${def.name}</div><div class="buyrow"><button class="buy" data-take="${i}" ${game.editable && game.hasRoomFor(id) ? '' : 'disabled'} title="${game.hasRoomFor(id) ? 'Into your toolbox, free' : 'Make room in your toolbox first'}">Take</button></div><div class="blurb">${def.blurb}</div></div>`;
-    }).join('');
-    for (const el of box.querySelectorAll<HTMLElement>('.offer[data-pid]')) {
-      const def = PARTS[el.dataset.pid as PartId];
-      el.onmouseenter = (e) => tipPart(def, undefined, e.clientX, e.clientY, false);
-      el.onmousemove = (e) => placeTip(e.clientX, e.clientY);
-      el.onmouseleave = () => { $('tip').hidden = true; };
-    }
-    for (const b of box.querySelectorAll<HTMLButtonElement>('button[data-take]')) {
-      b.onclick = () => {
-        audio.unlock();
-        const part = game.takePrize(Number(b.dataset.take));
-        if (!part) { say('TOOLBOX FULL'); return; }
-        armed = part.uid;
-        selected = part.uid;
-        audio.buy();
-        say('PRIZE TAKEN!');
-        persist();
-        refreshWorkshop();
-      };
-    }
+    const capsule = game.shop.prizeFrom === 'capsule';
+    box.innerHTML = `<button class="prizeChip" id="btnPrize"><img alt="" src="${iconURL(capsule ? 'capsule' : 'pinata', 48, 48)}"><span><b class="disp">${capsule ? 'Capsule prize' : 'Piñata prize'}</b><small>Take one part, free</small></span><span class="go disp">Open</span></button>`;
+    ($('btnPrize') as HTMLButtonElement).onclick = () => { audio.unlock(); prizePicker.reopen(); renderPrize(); };
   }
 
   /** Test Lab: every part in the game, free, instead of 4 rotating offers. */
@@ -545,6 +529,12 @@ async function main() {
   function renderUpgrades() {
     picker.update();
   }
+  const prizeRoot = Object.assign(document.createElement('div'), { id: 'prizeBox' });
+  const prizePicker = new PrizePicker(prizeRoot, {
+    game, audio, say, icon: (id, size) => iconURL(id, size, size),
+    taken: (part) => { armed = part.uid; selected = part.uid; afterHistory(); },
+    changed: () => renderPrize(),
+  });
 
   let bossKey = '';
   /** The next boss, named on the scoreboard: you see it coming and can build for it. */

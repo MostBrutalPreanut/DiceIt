@@ -210,7 +210,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
 
   // buying by dragging: an offer dropped on the table lands on the board without going through the toolbox
   await page.evaluate(() => { const g = window.__pinball.game; g.money = 20; g.shop.offers = ['coin', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
-  await page.waitForTimeout(800); // the new shelf rolls down first
+  await page.waitForFunction(() => !document.querySelector('.offer.roll'), null, { timeout: 4000 }).catch(() => {}); // the new shelf rolls down first
   const offer = await (await page.$('.offer[data-slot="0"] .plinth')).boundingBox();
   const spot = await at(12, 22);
   const placedBefore = (await state()).placed;
@@ -232,7 +232,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   // a shelf that is still rolling in cannot be grabbed or bought
   await page.evaluate(() => { const g = window.__pinball.game; g.money = 20; g.shop.offers = ['coin', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
   check(await page.evaluate(() => getComputedStyle(document.querySelector('.offer[data-slot="0"]')).pointerEvents) === 'none', 'offers ignore the pointer while they roll in');
-  await page.waitForTimeout(800);
+  await page.waitForFunction(() => !document.querySelector('.offer.roll'), null, { timeout: 4000 }).catch(() => {});
   check(await page.evaluate(() => getComputedStyle(document.querySelector('.offer[data-slot="0"]')).pointerEvents) !== 'none', 'and take it once they have landed');
 
   // click and drop: click an offer to pick it up, click the table to buy it onto the board; a right-click puts it back unpaid
@@ -325,6 +325,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(await page.isDisabled('#btnStart'), 'Start round is locked while the pick is owed');
   await page.screenshot({ path: `${out}/smoke-2c-upgrade.png` });
   await page.waitForSelector('#upgradeBox.dp-settled', { timeout: 5000 });
+  await page.waitForTimeout(350); // and a moment more, before a pick counts
   await page.screenshot({ path: `${out}/smoke-2c-upgrade-settled.png` });
   // the keyboard: the arrows lift a card, Enter sticks it
   await page.keyboard.press('ArrowRight');
@@ -334,17 +335,45 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(!(await page.isDisabled('#btnStart')), 'taking a decal unlocks Start round');
   await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
   check(!(await page.isVisible('#upgradeBox')) && (await page.evaluate(() => window.__pinball.game.decals.length)) === 1, 'the offer closes and the decal is on the apron');
-  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  // a burst Piñata's prize: a pop-up of three parts; Later puts it behind a button in the shop, a key takes one
+  await page.evaluate(() => { const g = window.__pinball.game; g.shop.prize = ['pop', 'coin', 'sling']; g.shop.prizeFrom = 'pinata'; window.__pinball.refresh(); });
+  await page.waitForSelector('#prizeBox .dp-card', { timeout: 5000 }).catch(() => {});
+  check(await page.locator('#prizeBox .dp-card').count() === 3 && /pi.ata/i.test(await page.innerText('#prizeBox .dp-title')), 'a Piñata prize opens as a pop-up of three parts');
+  await page.keyboard.press('Digit1');
+  check(await page.evaluate(() => window.__pinball.game.shop.prize?.length === 3), 'a key pressed while its cards flip in takes nothing');
+  await page.waitForSelector('#prizeBox.dp-settled', { timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(350);
+  await page.keyboard.press('KeyL');
+  await page.waitForSelector('#btnPrize', { timeout: 3000 }).catch(() => {});
+  await page.waitForSelector('#prizeBox', { state: 'hidden', timeout: 3000 }).catch(() => {}); // it fades out
+  check(await page.isVisible('#btnPrize') && !(await page.isVisible('#prizeBox .dp-card')), 'Later puts the prize behind a button in the shop');
+  await page.click('#btnPrize');
+  await page.waitForSelector('#prizeBox.dp-settled', { timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(350);
+  const invBefore = await page.evaluate(() => window.__pinball.game.inventory.length);
+  await page.keyboard.press('Digit2');
+  await page.waitForFunction(() => !window.__pinball.game.shop.prize, null, { timeout: 4000 }).catch(() => {});
+  check(await page.evaluate((n) => window.__pinball.game.inventory.length === n + 1 && window.__pinball.game.inventory.some((p) => p.def === 'coin'), invBefore), 'a key takes the prize into the toolbox');
+  const owe = () => page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  // nothing in the reveal can be picked while the cards flip in: a key or a click there only finishes the reveal
+  const landed = async () => { await page.waitForSelector('#upgradeBox.dp-settled', { timeout: 5000 }).catch(() => {}); await page.waitForTimeout(350); };
+  await owe();
   const cash = await page.evaluate(() => window.__pinball.game.money);
+  await page.keyboard.press('Digit1');
+  await page.keyboard.press('KeyS');
+  check((await page.evaluate(() => window.__pinball.game.money)) === cash && (await page.evaluate(() => window.__pinball.game.decals.length)) === 0, 'keys pressed while the cards flip in take nothing');
+  await landed();
   await page.click('#btnSkip');
   check((await page.evaluate(() => window.__pinball.game.money)) === cash + 4, 'skipping pays $4');
   await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
-  // the number keys pick straight away, S skips
-  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  // once the cards have landed, the number keys pick, S skips
+  await owe();
+  await landed();
   await page.keyboard.press('KeyS');
   check((await page.evaluate(() => window.__pinball.game.money)) === cash + 4 && !(await page.evaluate(() => window.__pinball.game.pending)), 'S skips for the cash');
   await page.waitForSelector('#upgradeBox', { state: 'hidden', timeout: 5000 }).catch(() => {});
-  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.round = 3; g.continueAfterRound(); window.__pinball.refresh(); });
+  await owe();
+  await landed();
   await page.keyboard.press('Digit3');
   await page.waitForFunction(() => window.__pinball.game.decals.length === 1, null, { timeout: 5000 }).catch(() => {});
   check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'a number key sticks that card');

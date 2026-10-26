@@ -22,7 +22,7 @@ health; each of the ball's hits takes 1–4 by speed (a zap or a spark 1); at ze
 and the next shop offers a free pick of one of three parts (rolled as if three rounds later). Broken for the rest
 of the round, it comes back with 20 more health; its damage carries over. The cheap scalers (step 8): Grape Bunch,
 Echo Cave, Spotlight, Bonsai Bumper, Time Capsule, Ice Sculpture and Wishing Well, as approved (the Wishing Well's
-+Mult is capped at +3 a ball; the Ice Sculpture melts 3 a press, not 1, after measuring; a Time Capsule's prize uses the Piñata's free-pick box, legendaries only). See [balance-plan.md](balance-plan.md) §2 for their numbers. Step 9, the physics parts: the
++Mult is capped at +3 a ball; the Ice Sculpture melts 3 a press, not 1, after measuring; a Time Capsule's prize uses the Piñata's free-pick pop-up, legendaries only, with its own title). See [balance-plan.md](balance-plan.md) §2 for their numbers. Step 9, the physics parts: the
 Wrecking Ball (once a ball the ball grows 1.5× for 6 s, only where it has room, and its hits pay ×2), the
 Broomstick (the ball rides straight the way it points with no gravity for 1 s or until it touches anything,
 zapping what it flies past at ×2), the Free Ball Bucket (a sensor bucket on a rail you place; a ball dropping in

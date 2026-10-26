@@ -24,7 +24,8 @@ export function dot(def: PartDef) {
   return `<i class="dot" style="background:${roleVar(def.id)}"></i>`;
 }
 
-const KIND: Record<PartKind, string> = {
+/** The kind of a part, as a word for its card. */
+export const KIND: Record<PartKind, string> = {
   bumper: 'Bumper', kicker: 'Kicker', deflector: 'Rail', spinner: 'Spinner', rollover: 'Rollover', saucer: 'Saucer', flipper: 'Flipper',
   lamp: 'Lamp', bank: 'Targets', kickback: 'Kickback', saver: 'Saver', target: 'Target', mover: 'Mover', goal: 'Goal', strip: 'Floor light', inlay: 'Gem', decor: 'Decor',
 };
