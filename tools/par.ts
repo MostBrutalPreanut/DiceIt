@@ -21,6 +21,7 @@ export const PART_VALUE: Record<PartId, number> = {
   // gems: the auto-builder does not set inlays yet, so par never buys them
   ruby: 0, garnet: 0, opal: 0, goldleaf: 0, redseal: 0, emerald: 0, topaz: 0, sparkler: 4.5, firecracker: 10, rocks: 5,
   clock: 0, altar: 0, bulb: 0, feet: 0, tray: 0, mirror: 0, wizard: 12, pinata: 9,
+  grape: 4, echo: 3, spot: 3, bonsai: 4, capsule: 0, ice: 4, well: 2,
 };
 /** How many of each it will own. (Level Lights need aiming in sets of two or more, which par does not do.) */
 export const PART_CAP: Record<PartId, number> = {
@@ -30,6 +31,7 @@ export const PART_CAP: Record<PartId, number> = {
   flipperR: 1, duck: 1, goal: 1, strip: 1, roller: 2, rank: 3, bell: 1, tesla: 2, keg: 2, laser: 1, gong: 1,
   ruby: 0, garnet: 0, opal: 0, goldleaf: 0, redseal: 0, emerald: 0, topaz: 0, sparkler: 2, firecracker: 1, rocks: 2,
   clock: 0, altar: 0, bulb: 0, feet: 0, tray: 0, mirror: 0, wizard: 1, pinata: 1,
+  grape: 6, echo: 2, spot: 1, bonsai: 2, capsule: 0, ice: 1, well: 1,
 };
 /** The first decal of the three it is offered (or the shop's) that appears in this list is the one it takes. */
 export const DECAL_PRIORITY: DecalId[] = [

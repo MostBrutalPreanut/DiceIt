@@ -405,6 +405,88 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       }
       break;
     }
+    case 'grape': {
+      // a bunch of grapes on a vine-leaf base; a big enough bunch turns gold
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r, 0, 0.14, mat(t, t.role.bonsai));
+      const berry = mat(t, st.lit ? t.role.goldleaf : st.hit ? mix(t.role.grape, WHITE, 0.4) : t.role.grape);
+      const dome = (cx: number, cy: number, rr: number, z0: number) => {
+        p.face(hull([0, 0.5, 1].flatMap((u) => ring(cx, cy, rr * Math.cos((u * Math.PI) / 2.2), 12).map(([a, b]) => P(v, a, b, z0 + u * rr * 1.6)))), berry.base);
+        p.face(ring(cx - rr * 0.3, cy + rr * 0.2, rr * 0.25, 8).map(([a, b]) => P(v, a, b, z0 + rr * 1.3)), berry.light, { sil: false, line: 0 });
+      };
+      for (const [dx, dy, z] of [[-0.35, 0.25, 0.15], [0.35, 0.25, 0.15], [0, -0.3, 0.15], [-0.18, 0, 0.75], [0.2, 0.05, 0.75], [0, 0, 1.3]] as const) dome(x + dx * r, y + dy * r, r * 0.4, z);
+      p.cyl(x, y, 0.06, 1.9, 0.35, mat(t, t.rim), { n: 8 });
+      break;
+    }
+    case 'echo': {
+      // a stone arch over a dark hole in the floor: the ball rolls through and the cave answers
+      const stone = mat(t, st.hit ? mix(t.role.echo, WHITE, 0.35) : t.role.echo);
+      p.face(ring(x, y, r * 0.85, 24, r * 0.6).map(([a, b]) => P(v, a, b, 0.02)), mix(t.ink, t.role.echo, 0.25), { line: 0.4 });
+      for (const sx of [-1, 1]) p.prism(box(x + sx * r * 0.8, y, 0.22, 0.3, 0), 0, 1.3, stone);
+      const arch = Array.from({ length: 13 }, (_, i): Pt => { const a = Math.PI - (i / 12) * Math.PI; return P(v, x + Math.cos(a) * r * 0.8, y - 0.3, 1.3 + Math.sin(a) * 0.8); });
+      const inner = Array.from({ length: 13 }, (_, i): Pt => { const a = (i / 12) * Math.PI; return P(v, x + Math.cos(a) * r * 0.55, y - 0.3, 1.3 + Math.sin(a) * 0.5); });
+      p.face([...arch, ...inner], stone.base, { line: 0.45 });
+      break;
+    }
+    case 'spot': {
+      // a stage spotlight on a little stand, its lens towards the table; dark while knocked out
+      shadow(under, v, t, x, y, r * 1.0, r * 1.0);
+      p.cyl(x, y, r * 0.75, 0, 0.16, metal);
+      p.cyl(x, y, 0.1, 0.16, 0.55, metal, { n: 10 });
+      const head = mat(t, st.hit ? mix(t.ink, WHITE, 0.3) : mix(t.ink, t.metal, 0.35));
+      p.cyl(x, y, r * 0.55, 0.71, 0.75, head);
+      const lit = st.lit !== false;
+      p.face(ring(x, y - r * 0.05, r * 0.42, 20).map(([a, b]) => P(v, a, b, 1.47)), lit ? mix(t.role.spot, WHITE, 0.45) : mix(t.role.spot, t.ink, 0.6), { sil: false, line: 0.4 });
+      if (lit) p.face(ring(x - r * 0.12, y + r * 0.05, r * 0.14, 10).map(([a, b]) => P(v, a, b, 1.48)), WHITE, { sil: false, line: 0 });
+      break;
+    }
+    case 'bonsai': {
+      // a bonsai in a shallow pot: its crown grows a little with every round it stays put
+      shadow(under, v, t, x, y, r * 1.05, r * 0.9);
+      const grow = Math.min(5, st.seg ?? 0) / 5;
+      p.cyl(x, y, r * 0.95, 0, 0.12, mat(t, t.paper));
+      p.prism(box(x, y, r * 0.75, r * 0.5, 0, 0.15), 0.12, 0.35, mat(t, mix(t.rim, t.ink, 0.15)));
+      p.cyl(x + 0.05, y, 0.12, 0.47, 0.6 + grow * 0.4, mat(t, mix(t.rim, t.ink, 0.35)), { n: 8 });
+      const leaf = mat(t, st.hit ? mix(t.role.bonsai, WHITE, 0.35) : t.role.bonsai), k = 0.55 + grow * 0.45;
+      for (const [dx, dy, z, rr] of [[-0.35, 0, 1.05, 0.42], [0.4, 0.05, 1.2, 0.38], [0, 0.1, 1.5, 0.48]] as const) {
+        const cx = x + dx * r * k, cy = y + dy * r, R = rr * r * k;
+        p.face(hull([0, 0.6, 1].flatMap((u) => ring(cx, cy, R * Math.cos((u * Math.PI) / 2.3), 12, R * 0.8).map(([a, b]) => P(v, a, b, z + grow * 0.4 + u * R * 0.9)))), leaf.base);
+      }
+      break;
+    }
+    case 'capsule': {
+      // a time capsule: a banded steel canister half sunk in the floor; once it is ripe, it twinkles
+      shadow(under, v, t, x, y, r * 1.0, r * 1.0);
+      const steel = mat(t, t.role.capsule);
+      p.cyl(x, y, r * 0.8, 0, 0.9, steel);
+      for (const z of [0.25, 0.65]) p.cyl(x, y, r * 0.82, z, 0.08, mat(t, mix(t.role.capsule, t.ink, 0.35)));
+      p.face(ring(x, y, r * 0.5, 18).map(([a, b]) => P(v, a, b, 0.92)), mix(t.role.capsule, WHITE, 0.3), { sil: false, line: 0.4 });
+      if (st.lit) { const [sx, sy] = P(v, x + r * 0.5, y, 1.6); p.op((g) => g.star(sx, sy, 4, S * 0.45, S * 0.15).fill(WHITE).stroke({ width: v.lw * 0.5, color: t.ink, join: 'round' })); }
+      break;
+    }
+    case 'ice': {
+      // an ice sculpture: a faceted crystal on a plinth that gets smaller as it melts, with a puddle round it
+      const left = 1 - Math.min(4, st.seg ?? 0) / 5;
+      p.face(ring(x, y, r * (1.1 - left * 0.3), 20).map(([a, b]) => P(v, a, b, 0.01)), mix(t.role.ice, t.floor, 0.4), { line: 0.3 });
+      p.cyl(x, y, r * 0.6, 0, 0.2, metal);
+      const ice = st.hit ? WHITE : t.role.ice, h = 0.6 + 1.6 * left, R = r * (0.35 + 0.35 * left);
+      const pts = [...ring(x, y, R, 6).map(([a, b]) => P(v, a, b, 0.2)), ...ring(x, y, R * 0.7, 6).map(([a, b]) => P(v, a, b, 0.2 + h * 0.75)), P(v, x, y, 0.2 + h)];
+      p.face(hull(pts), ice, { line: 0.45 });
+      p.face([P(v, x - R * 0.5, y, 0.4), P(v, x - R * 0.3, y, 0.2 + h * 0.8), P(v, x - R * 0.1, y, 0.5)], WHITE, { sil: false, line: 0 });
+      break;
+    }
+    case 'well': {
+      // a little stone wishing well: a ring of stones round dark water, the coins in it glinting
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      const stone = mat(t, st.hit ? mix(t.role.well, WHITE, 0.35) : t.role.well);
+      p.cyl(x, y, r * 0.95, 0, 0.75, stone);
+      p.face(ring(x, y, r * 0.72, 24).map(([a, b]) => P(v, a, b, 0.76)), mix(t.role.echo, t.ink, 0.45), { sil: false, line: 0.4 });
+      const coins = Math.min(5, st.seg ?? 0);
+      for (let i = 0; i < coins; i++) { const a = i * 2.1, [cx, cy] = P(v, x + Math.cos(a) * r * 0.35, y + Math.sin(a) * r * 0.3, 0.77); p.op((g) => g.ellipse(cx, cy, S * 0.13, S * 0.08).fill(t.role.coin).stroke({ width: v.lw * 0.3, color: t.ink })); }
+      for (const sx of [-1, 1]) p.cyl(x + sx * r * 0.85, y, 0.08, 0.75, 1.1, mat(t, t.rim), { n: 8 });
+      p.op((g) => { const [ax, ay] = P(v, x - r * 1.05, y, 1.85), [bx, by] = P(v, x, y, 2.35), [cx, cy] = P(v, x + r * 1.05, y, 1.85); g.poly([ax, ay, bx, by, cx, cy]).fill(t.role.firecracker).stroke({ width: v.lw * 0.8, color: t.ink, join: 'round' }); });
+      break;
+    }
     case 'pinata': {
       // a piñata on a post: a fat paper drum in frilly bands of colour with a pointy hat; cracks show its damage,
       // and once it has burst only the post and a few paper shreds are left

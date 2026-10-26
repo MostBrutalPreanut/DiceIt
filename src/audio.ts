@@ -498,6 +498,9 @@ export class AudioFx {
       case 'firecracker': if (opts.label === 'WHOOSH!') this.rocket(); else this.bop(mult, 0.85); break;
       case 'rocks': this.clack(); break;
       case 'pinata': this.thwack(); break;
+      case 'echo': this.laneRoll(); this.bop(mult, 0.6); break;
+      case 'ice': this.chaChing(this.ladder(mult, 2093, 5)); break;
+      case 'spot': this.thwack(); break;
       case 'bell': if (notes.some((n) => n.endsWith(' toll'))) this.toll(false); else this.bop(mult, 0.95); break;
       case 'uplight': this.levelLight(this.ladder(mult, 1047, 12)); break;
       case 'lamp': this.lampGlow(opts.label); break;
