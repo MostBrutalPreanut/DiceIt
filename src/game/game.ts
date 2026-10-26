@@ -942,6 +942,7 @@ export class Game {
 
   /** Could this go at (x, y)? A part on a free spot; a gem into a part it fits. */
   canDropAt(id: PartId, x: number, y: number, ignoreUid?: number): boolean {
+    if (isDecor(id)) ({ x, y } = decorSpot(x, y));
     return isInlay(id) ? !!this.inlayTarget(id, x, y) : canPlace(this.layout, id, x, y, ignoreUid);
   }
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { describe as describePart, infernoReach, isDecor, makePart, PARTS, SHOP_IDS, swarmSparks, tempestRate, type PartId, type PartInstance } from '../src/data/parts';
 import { Game, rollOffers } from '../src/game/game';
 import { Scorer } from '../src/game/scoring';
-import { DECOR_SLOT, onDecorSlot } from '../src/sim/cabinet';
+import { DECOR_SLOT, decorSpot, nearDecorSlot, onDecorSlot } from '../src/sim/cabinet';
 import { canPlace, placedParts, settleDecor } from '../src/sim/layout';
 import { Rng } from '../src/sim/rng';
 import type { SimEvent } from '../src/sim/sim';
@@ -28,11 +28,22 @@ describe('decor: where it stands', () => {
     expect(DECOR_SLOT.y - 1.2).toBeGreaterThanOrEqual(48); // clear of the build area
   });
 
+  it('in hand it snaps into the screen once it is near it (the cabinet above included), and goes nowhere else', () => {
+    expect(decorSpot(DECOR_SLOT.x + 7, DECOR_SLOT.y - 3)).toEqual({ x: DECOR_SLOT.x, y: DECOR_SLOT.y });
+    expect(decorSpot(DECOR_SLOT.x, DECOR_SLOT.y + 5)).toEqual({ x: DECOR_SLOT.x, y: DECOR_SLOT.y });
+    expect(nearDecorSlot(12, 30)).toBe(false);
+    expect(decorSpot(12, 30)).toEqual({ x: 12, y: 30 });
+    const layout = { parts: [], gravity: 50, nextUid: 10 };
+    expect(canPlace(layout, 'clock', DECOR_SLOT.x, DECOR_SLOT.y)).toBe(true);
+    expect(canPlace(layout, 'clock', DECOR_SLOT.x + 1, DECOR_SLOT.y)).toBe(false); // only the snapped spot itself
+    expect(canPlace(layout, 'clock', 12, 30)).toBe(false);
+  });
+
   it('one piece at a time, and decor and table parts never get in each other\'s way', () => {
     const layout = { parts: [at('clock', 1, CORNER.x, CORNER.y)], gravity: 50, nextUid: 10 };
-    expect(canPlace(layout, 'bulb', CORNER.x + 3, CORNER.y)).toBe(false); // the screen is taken
-    expect(canPlace(layout, 'clock', CORNER.x + 3, CORNER.y, 1)).toBe(true); // the clock itself can move within it
-    expect(canPlace({ ...layout, parts: [] }, 'bulb', CORNER.x + 3, CORNER.y)).toBe(true);
+    expect(canPlace(layout, 'bulb', CORNER.x, CORNER.y)).toBe(false); // the screen is taken
+    expect(canPlace(layout, 'clock', CORNER.x, CORNER.y, 1)).toBe(true); // the clock itself is in it
+    expect(canPlace({ ...layout, parts: [] }, 'bulb', CORNER.x, CORNER.y)).toBe(true);
     expect(canPlace(layout, 'clock', 12, 30, 1)).toBe(false);
     expect(canPlace(layout, 'pop', CORNER.x, CORNER.y)).toBe(false);
     expect(canPlace(layout, 'pop', 12, 30)).toBe(true);
@@ -48,11 +59,14 @@ describe('decor: where it stands', () => {
     expect(settleDecor(layout)).toBe(false);
   });
 
-  it('dropped over the screen it snaps into the middle; a second piece is refused', () => {
+  it('dropped near the screen it snaps into the middle; dropped anywhere else it is refused; a second piece is refused', () => {
     const g = new Game();
     g.round = 9; g.money = 50;
     g.toWorkshop();
     g.shop.offers = ['clock', 'bulb', null, null];
+    expect(g.buyAndPlace(0, 12, 30)).toBeNull();
+    expect(g.canDropAt('clock', 12, 30)).toBe(false);
+    expect(g.canDropAt('clock', DECOR_SLOT.x - 5, DECOR_SLOT.y + 3)).toBe(true);
     const c = g.buyAndPlace(0, DECOR_SLOT.x + 4, DECOR_SLOT.y + 0.6)!;
     expect(c).toMatchObject({ placed: true, x: DECOR_SLOT.x, y: DECOR_SLOT.y });
     expect(g.canDropAt('bulb', DECOR_SLOT.x, DECOR_SLOT.y)).toBe(false);

@@ -1,5 +1,5 @@
 import { footprint, isDecor, makePart, PARTS, underFloor, type PartId, type PartInstance } from '../data/parts';
-import { DECOR_SLOT, onDecorSlot } from './cabinet';
+import { DECOR_SLOT } from './cabinet';
 import { BUILD_AREA, DEFAULT_GRAVITY } from './constants';
 import { clampLedge, LEDGE, ledgeSeg, tableSegments } from './table';
 
@@ -86,8 +86,9 @@ function distToSegment(px: number, py: number, s: { x1: number; y1: number; x2: 
 export function canPlace(layout: Layout, id: PartId, x: number, y: number, ignoreUid?: number): boolean {
   if (PARTS[id].kind === 'inlay') return false; // a gem goes into a part, never on the table itself
   if (isDecor(id)) {
-    // decor goes in the decor screen at the head of the table (never among the parts), one piece at a time
-    return onDecorSlot(x, y) && !layout.parts.some((p) => p.placed && p.uid !== ignoreUid && isDecor(p.def));
+    // decor goes in the decor screen at the head of the table (never among the parts), one piece at a time: the spot
+    // is the screen's middle exactly (decorSpot snaps a drop near it there)
+    return x === DECOR_SLOT.x && y === DECOR_SLOT.y && !layout.parts.some((p) => p.placed && p.uid !== ignoreUid && isDecor(p.def));
   }
   const r = footprint(PARTS[id]);
   if (x - r < BUILD_AREA.x0 || x + r > BUILD_AREA.x1 || y - r < BUILD_AREA.y0 || y + r > BUILD_AREA.y1) return false;

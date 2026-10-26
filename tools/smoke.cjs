@@ -3,7 +3,8 @@
 // Uses the Playwright that is pre-installed in the cloud environment (require resolves globally).
 const { chromium } = require('playwright');
 const out = process.argv[2] || '.';
-const url = process.argv[3] || 'http://127.0.0.1:4173/';
+// ?dev: the smoke test drives the Test Lab and the layout slots in the developer's drawer
+const url = process.argv[3] || 'http://127.0.0.1:4173/?dev';
 let failed = false;
 const fail = (m) => { console.error('FAIL: ' + m); failed = true; process.exitCode = 1; };
 const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); };

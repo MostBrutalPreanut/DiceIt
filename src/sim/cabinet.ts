@@ -35,9 +35,16 @@ export function decorPanel(x: number = DECOR_SLOT.x, y: number = DECOR_SLOT.y, i
   const bottom: Pt[] = Array.from({ length: 13 }, (_, i) => { const u = (i + 1) / 14, k = 1 - u; return [lx + (rx0 - lx) * u, k * k * ly + 2 * k * u * (ly - sag * 2) + u * u * ry0]; });
   return [...top, ...bottom];
 }
-/** Is (x, y) over the decor screen? (A little generous, so a drop near its edge still lands in it.) */
+/** Is (x, y) on the decor screen itself (a click there picks the decor in it)? */
 export function onDecorSlot(x: number, y: number): boolean {
   return Math.abs(x - DECOR_SLOT.x) < 8.6 && y > DECOR_SLOT.y - 2.2 && y < DECOR_SLOT.y + 2.6;
 }
-/** Where a piece of decor dropped at (x, y) goes: into the screen if it was dropped over it, else where it was dropped. */
-export const decorSpot = (x: number, y: number) => (onDecorSlot(x, y) ? { x: DECOR_SLOT.x, y: DECOR_SLOT.y } : { x, y });
+/**
+ * Is (x, y) close enough to the decor screen for a piece of decor in hand to snap into it? A wide zone round the
+ * head of the table, the cabinet above it included, so hovering near it is enough.
+ */
+export function nearDecorSlot(x: number, y: number): boolean {
+  return Math.abs(x - DECOR_SLOT.x) < 10.5 && y > DECOR_SLOT.y - 5.5 && y < DECOR_SLOT.y + 7;
+}
+/** Where a piece of decor in hand at (x, y) goes: snapped into the screen when it is near it, else where it is (not a place it can stay). */
+export const decorSpot = (x: number, y: number) => (nearDecorSlot(x, y) ? { x: DECOR_SLOT.x, y: DECOR_SLOT.y } : { x, y });

@@ -4,7 +4,7 @@ import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
 import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, FLIPPER_REST, SPARK_R, TABLE_W } from '../sim/constants';
 import { FLIPPER_PIVOTS, ledgeSeg } from '../sim/table';
-import { decorPanel, decorSpot } from '../sim/cabinet';
+import { DECOR_SLOT, decorPanel, decorSpot } from '../sim/cabinet';
 import { flat, label, P, Prop, ribbon, star, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
 import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawGremlin, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
@@ -679,7 +679,9 @@ export class Renderer {
 
     if (st.ghost) {
       const def = PARTS[st.ghost.def];
-      const b = this.baked(st.ghost.def, st.ghost.angle, st.ghost.def === 'lane' ? { letter: t.laneWord[0] } : {});
+      // decor in hand is its little screen until it is near the decor screen, then it snaps in, drawn just as it will sit
+      const decorLoose = isDecor(st.ghost.def) && !(st.ghost.x === DECOR_SLOT.x && st.ghost.y === DECOR_SLOT.y);
+      const b = this.baked(st.ghost.def, st.ghost.angle, st.ghost.def === 'lane' ? { letter: t.laneWord[0] } : decorLoose ? { badge: true } : {});
       let pv = this.parts.get(-1);
       if (!pv) { pv = { sprite: new Sprite() }; this.partLayer.addChild(pv.sprite); this.parts.set(-1, pv); }
       pv.sprite.texture = b.tex;
@@ -687,15 +689,17 @@ export class Renderer {
       const [X, Y] = P(v, st.ghost.x, st.ghost.y);
       pv.sprite.position.set(X, Y);
       pv.sprite.zIndex = 100000;
-      pv.sprite.alpha = 0.6;
+      pv.sprite.alpha = isDecor(st.ghost.def) && !decorLoose && st.ghost.valid ? 0.92 : decorLoose ? 0.85 : 0.6;
       pv.sprite.scale.set(1);
-      pv.sprite.tint = st.ghost.valid ? 0xffffff : num(mix(t.accent, '#ffffff', 0.25));
+      pv.sprite.tint = st.ghost.valid || decorLoose ? 0xffffff : num(mix(t.accent, '#ffffff', 0.25)); // loose decor is not wrong yet, just on its way
       if (isInlay(st.ghost.def)) {
         // a gem in hand: every part it fits is ringed in the gem's colour (it goes into the one it is dropped on)
         for (const q of game.placed) if (!q.fixed && gemFits(st.ghost.def, q.def)) dashedRing(fx, v, q.x, q.y, footprint(PARTS[q.def]) + 0.35, t.role[st.ghost.def], v.lw * 1.4, t.ink);
       } else if (isDecor(st.ghost.def)) {
         // decor in hand: the decor screen at the head of the table is ringed (in the accent while there is no room in it)
-        outlinePoly(fx, v, decorPanel(undefined, undefined, -0.35), st.ghost.valid ? t.paper : t.accent, v.lw * 1.4, t.ink);
+        // (while it is loose, the screen's outline breathes, so it is plain where it goes)
+        const breathe = decorLoose && !this.calm ? 0.75 + 0.25 * Math.sin(this.time * 6) : 1;
+        outlinePoly(fx, v, decorPanel(undefined, undefined, -0.35 - (1 - breathe) * 0.6), decorLoose ? t.paper : st.ghost.valid ? t.paper : t.accent, v.lw * 1.4 * breathe, t.ink);
       } else dashedRing(fx, v, st.ghost.x, st.ghost.y, footprint(def), st.ghost.valid ? t.ink : t.accent, v.lw);
     } else {
       const pv = this.parts.get(-1);

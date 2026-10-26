@@ -1025,7 +1025,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     if (c?.nudge) lines.push({ tag: 'note', text: `Your nudges shove the ball ${Math.round((c.nudge - 1) * 100)}% harder, for no more tilt.` });
     if (c?.pay) lines.push({ tag: 'money', text: `Every round you clear pays $${c.pay} more.` });
     if (c?.mirror) lines.push({ tag: 'money', text: 'Every second round, the shop shows one more part.' });
-    lines.push({ tag: 'note', text: 'Decor: it goes in the decor screen at the top of the table, flat in the floor where the ball rolls in, and only one piece of decor fits there at a time. The ball rolls over it, it takes no room from your parts, and it works only while it is in the screen. One of each.' });
+    lines.push({ tag: 'note', text: 'Decor: it works in the decor screen at the top of the table, which holds one piece at a time. It takes no room from your parts.' });
     return lines;
   }
   const factor = (inst ? dialFactor(inst) : 1) * modFactor(def.id, mods);

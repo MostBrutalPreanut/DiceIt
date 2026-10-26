@@ -31,6 +31,9 @@ import { Attract } from './attract';
 import { around, Tutorial, TUTORIAL_KEY, type Box, type Step } from './ui/tutorial';
 import './ui/tutorial.css';
 
+/** The developer's tools (the Machine & options drawer, the Test Lab) show only with ?dev in the address. */
+const DEV = new URLSearchParams(location.search).has('dev');
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORE = 'pinball-roguelite.run.v2';
 const SLOTS = 'pinball-roguelite.slots.v1';
@@ -192,6 +195,9 @@ async function main() {
     tip.hidden = false;
     placeTip(cx, cy);
   };
+  /** The fee line under a picked part's buttons. */
+  const moveHint = (fee: number, broke: boolean, what: string) =>
+    broke ? `${what} costs $${fee} and you have $${game.money}.` : fee ? `${what} costs $${fee}, once a visit: after that it is free until the next round.` : `${what} is free right now.`;
   /** A part's live line: what it did this round; decor says how it stands instead (it is never hit). */
   const liveLine = (inst: PartInstance) => {
     if (PARTS[inst.def].recipe.wizard && inst.placed) {
@@ -201,7 +207,7 @@ async function main() {
     }
     if (PARTS[inst.def].recipe.capsule) { const c = PARTS[inst.def].recipe.capsule!; return game.capsuleRipe(inst) ? 'Ripe: remove it for a free legendary pick!' : `${inst.age ?? 0} of ${c.rounds} rounds on the table.`; }
     if (!isDecor(inst.def)) return statsLine(game.scorer.ledger.get(inst.uid));
-    if (!inst.placed) return 'In the toolbox: decor works only in the decor screen at the top of the table.';
+    if (!inst.placed) return 'In the toolbox: put it in the decor screen to use it.';
     const r = PARTS[inst.def].recipe;
     if (r.clock) { const t = game.scorer.label(inst); return t === 'MIDNIGHT' ? 'Midnight Madness: every hit pays double!' : `The clock says ${t}. Midnight comes at ${r.clock.hits} hits.`; }
     if (r.altar) {
@@ -217,7 +223,7 @@ async function main() {
     const row = inst ? game.scorer.ledger.get(inst.uid) : undefined;
     tip.innerHTML = partCard(def, inst, { ...ctxFor(def, inst), scorer: live ? game.scorer : undefined, mult: game.scorer.mult }, {
       stats: live && inst ? liveLine(inst) : live ? statsLine(row) : undefined,
-      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? `click it to move, store or sell it${inst && game.moveFee(inst) ? ` · moving costs $${game.moveFee(inst)}` : ''}` : 'in the workshop: click it to move, store or sell it') : inst ? 'click it, then the table · R turns it' : isDecor(def.id) ? 'drag it into the decor screen at the top of the table, or Buy to put it in the toolbox' : 'drag it onto the table (R turns it), or Buy to put it in the toolbox',
+      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? `click it to move, store or sell it${inst && game.moveFee(inst) ? ` · moving costs $${game.moveFee(inst)}` : ''}` : 'in the workshop: click it to move, store or sell it') : isDecor(def.id) ? (inst ? 'click it, then the decor screen' : 'drag it into the decor screen, or Buy to put it in the toolbox') : inst ? 'click it, then the table · R turns it' : 'drag it onto the table (R turns it), or Buy to put it in the toolbox',
     });
     tip.hidden = false;
     placeTip(cx, cy);
@@ -398,11 +404,11 @@ async function main() {
         <div class="stats" id="selLive">${liveLine(part)}</div>
         ${def.recipe.well ? `<div class="btnrow"><button id="btnWish" ${game.wishesLeft(part) > 0 && game.money >= 1 ? '' : 'disabled'} title="Every $1 in it: +${def.recipe.well.points} to its hits and +${def.recipe.well.mult} Mult a hit, for the rest of the run">Throw in $1 (${game.wishesLeft(part)} left this visit)</button></div>` : ''}
         ${part.fixed ? '<div class="hint">Part of every machine: it stays where it is.</div>' : `<div class="btnrow acts">
-          <button id="btnMove" ${broke ? 'disabled' : ''} title="Pick it up and click the table to set it down${def.rotatable ? ' (R or the wheel turns it)' : ''}">Move ${price}</button>
+          ${isDecor(def.id) ? '' : `<button id="btnMove" ${broke ? 'disabled' : ''} title="Pick it up and click the table to set it down${def.rotatable ? ' (R or the wheel turns it)' : ''}">Move ${price}</button>`}
           <button id="btnStore" ${broke ? 'disabled' : ''}>To toolbox ${price}</button>
           <button id="btnSell" class="sell" ${scrap ? 'disabled' : ''}>${removeLabel(part)}</button>
         </div>
-        <div class="hint feehint">${broke ? `Moving it costs $${fee} and you have $${game.money}.` : fee ? `Moving it costs $${fee}, once a visit: after that it moves free until the next round.` : 'Moving it is free right now.'}</div>`}`;
+        <div class="hint feehint">${moveHint(fee, broke, isDecor(def.id) ? 'Taking it out' : 'Moving it')}</div>`}`;
       for (const input of card.querySelectorAll<HTMLInputElement>('input[data-dial]')) {
         for (const ev of ['pointerdown', 'keydown'] as const) input.addEventListener(ev, () => game.checkpoint());
         input.oninput = () => {
@@ -421,7 +427,9 @@ async function main() {
       const wishBtn = card.querySelector<HTMLButtonElement>('#btnWish');
       if (wishBtn) wishBtn.onclick = () => { if (game.wish(part.uid)) { audio.coinLand(); say('MAKE A WISH'); persist(); refreshWorkshop(); } };
       if (!part.fixed) {
-        $('btnMove').onclick = () => startMove(part.uid);
+        // decor has one place to be (the decor screen), so it has no Move: only out to the toolbox, or away
+        const move = card.querySelector<HTMLButtonElement>('#btnMove');
+        if (move) move.onclick = () => startMove(part.uid);
         $('btnStore').onclick = () => storeSelected();
         $('btnSell').onclick = () => removePart(part);
       }
@@ -877,6 +885,9 @@ async function main() {
   $('btnPause').onclick = () => openPause();
   $('btnSettings').onclick = () => { openPause(); menu.showSettings(); };
   $('btnReroll').onclick = () => { if (game.reroll()) { sayKey('reroll'); persist(); } else sayKey('broke'); refreshWorkshop(); };
+  // Machine & options (undo, the Test Lab, layout slots, the heatmap, the table's tilt) is a developer's drawer: it
+  // shows only with ?dev in the address, and without it nothing can leave the Test Lab switched on
+  $('machineBox').hidden = !DEV;
   const sandbox = $('sandbox') as HTMLInputElement;
   sandbox.checked = game.sandbox;
   sandbox.onchange = () => {
@@ -1218,6 +1229,7 @@ async function main() {
     cash.disabled = !(game.mode === 'round' && sc.goalReached);
     ($('btnUndo') as HTMLButtonElement).disabled = !game.canUndo;
     ($('btnRedo') as HTMLButtonElement).disabled = !game.canRedo;
+    if (game.sandbox && !DEV) { game.sandbox = false; game.enforceToolbox(); } // an old save from the Test Lab
     $('labTools').hidden = !game.sandbox;
     document.body.classList.toggle('still', calm || game.sim.tilted);
 
