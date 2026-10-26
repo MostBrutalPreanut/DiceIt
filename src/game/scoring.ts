@@ -328,7 +328,8 @@ export class Scorer {
     const scoring = this.placed().filter((p) => this.recipe(p.def).points);
     if (this.opts.jam === 'topPart') {
       // the Jammer: the one part that scored most last round (failing that, the dearest part that scores)
-      const top = scoring.find((p) => p.uid === this.opts.jamUid) ?? scoring.filter((p) => !p.fixed).sort((a, b) => PARTS[b.def].cost - PARTS[a.def].cost || a.uid - b.uid)[0];
+      // (never Big Boi: he is the machine, not a part you chose; the Game passes the best of the rest)
+      const top = scoring.find((p) => p.uid === this.opts.jamUid && !p.fixed) ?? scoring.filter((p) => !p.fixed).sort((a, b) => PARTS[b.def].cost - PARTS[a.def].cost || a.uid - b.uid)[0];
       if (top) this.jammedUid = top.uid;
     }
     if (this.opts.jam === 'randomEachRound') {

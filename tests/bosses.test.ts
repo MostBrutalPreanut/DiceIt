@@ -134,6 +134,7 @@ describe('what each boss does', () => {
     const g = new Game();
     g.startRound();
     for (let i = 0; i < 5; i++) g.scorer.consume(hit(2));
+    for (let i = 0; i < 20; i++) g.scorer.consume(hit(4)); // Big Boi scores more, but he is never the one jammed
     g.scorer.score = g.scorer.goal;
     g.scorer.goalReached = true;
     g.cashOut();

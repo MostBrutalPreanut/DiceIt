@@ -50,7 +50,7 @@ export const BOSSES: Record<BossId, BossDef> = {
   shortFuse: { id: 'shortFuse', name: 'Short Fuse', final: false, shout: 'SHORT FUSE. HURRY UP',
     text: "Every ball's clock is 40 seconds.", mods: (m) => { m.ballClock = Math.min(m.ballClock, 40); } },
   jammer: { id: 'jammer', name: 'The Jammer', final: false, shout: 'THE JAMMER GOT IN',
-    text: 'Your best part from last round is jammed: it scores nothing.', jam: 'topPart' },
+    text: 'Your best part from last round (Big Boi aside) is jammed: it scores nothing.', jam: 'topPart' },
   flatRate: { id: 'flatRate', name: 'Flat Rate', final: false, shout: 'FLAT RATE. NO BIG MULTS',
     text: 'Every Mult gain is 30% smaller (and ×Mults move 30% less far).', mods: (m) => { m.multGain *= 0.7; } },
   magnet: { id: 'magnet', name: 'The Magnet', final: false, shout: 'THE MAGNET IS ON',

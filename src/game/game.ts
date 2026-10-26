@@ -1314,7 +1314,7 @@ export class Game {
     this.wizardBalls = null;
     if (this.scorer.goalReached || this.ballsLeft <= 0) {
       this.runScore = Math.min(SCORE_CEIL, this.runScore + this.scorer.score);
-      this.lastTop = this.scorer.ledgerRows().find((r) => r.points > 0)?.uid ?? null; // The Jammer's next target
+      this.lastTop = this.scorer.ledgerRows().find((r) => r.points > 0 && !this.part(r.uid)?.fixed)?.uid ?? null; // The Jammer's next target (never Big Boi)
     }
     if (this.scorer.goalReached) {
       this.payout = this.computePayout();

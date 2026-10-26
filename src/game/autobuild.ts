@@ -6,6 +6,7 @@ import { DECOR_SLOT } from '../sim/cabinet';
 import { BUILD_AREA } from '../sim/constants';
 import { canPlace, cloneLayout, type Layout } from '../sim/layout';
 import { Rng } from '../sim/rng';
+import type { Input, Sim } from '../sim/sim';
 import { Game, migrateParts } from './game';
 
 /**
@@ -42,11 +43,16 @@ export interface RoundSample {
   points: Partial<Record<PartId, number>>;
 }
 
+/** Makes the hands that play a round (default: the Bot at `skill`); the balance tools pass the research players. */
+export type PlayerFactory = (seed: number) => { decide(sim: Sim): Input };
+
 export interface PlayOptions {
   rounds: number;
   seed: number;
   /** The bot's flipper skill (0 to 1). About 0.6 is human-ish. */
   skill: number;
+  /** Other hands instead of the Bot (tools/research/lib.ts's pro, average and poor players). */
+  player?: PlayerFactory;
 }
 
 /** Play `rounds` full rounds with the real Game loop, every ball out, and record the scores. */
@@ -62,7 +68,7 @@ export function playRounds(m: Machine, o: PlayOptions): RoundSample[] {
     g.goalOverride = Infinity;
     g.seed = o.seed * 1000 + i * 7 + 1;
     g.startRound();
-    const bot = new Bot(o.seed * 1000 + i + 1, o.skill);
+    const bot = o.player ? o.player(o.seed * 1000 + i + 1) : new Bot(o.seed * 1000 + i + 1, o.skill);
     const cumulative: number[] = [], coins: number[] = [];
     let searches = 0;
     for (let guard = 0; g.mode === 'round' && guard < 240 * 60 * 30; guard++) {
@@ -97,6 +103,7 @@ export function objective(samples: RoundSample[]): number {
 export interface BuildOptions {
   seed: number;
   skill: number;
+  player?: PlayerFactory;
   /** Rounds simulated to score one candidate layout (each is several balls). */
   evalRounds: number;
   /** Hill-climbing moves after the new parts are placed. */
@@ -141,7 +148,7 @@ export function autoBuild(m: Machine, o: BuildOptions): BuildResult {
   let evaluations = 0;
   const score = () => {
     evaluations++;
-    return objective(playRounds({ ...m, layout }, { rounds: o.evalRounds, seed: evalSeed, skill: o.skill }));
+    return objective(playRounds({ ...m, layout }, { rounds: o.evalRounds, seed: evalSeed, skill: o.skill, player: o.player }));
   };
 
   const before = score();
