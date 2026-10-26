@@ -138,11 +138,11 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.move(pop.x + 2, pop.y + 2);
   check(await page.isVisible('#tip'), 'hovering a part shows its tooltip');
   const tip = await page.innerText('#tip');
-  check(tip.includes('Pop Bumper') && tip.includes('100') && tip.includes('+5'), 'the Pop Bumper tooltip says "100" and "+5"');
+  check(tip.includes('Pop Bumper') && tip.includes('20') && tip.includes('+1'), 'the Pop Bumper tooltip says "20" and "+1"');
   check(/Next hit pays \d+/i.test(tip) && /your Mult/i.test(tip), 'the tooltip leads with the next-hit number and its math chips');
   await page.mouse.move(5, 5);
 
-  // the toolbox holds four: buying stops, and storing into a full toolbox sells the part for half
+  // the toolbox holds four: buying stops, and storing into a full toolbox sells the part for half (after the $1 to move it)
   await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); g.money = 50; window.__pinball.refresh(); });
   for (let i = 0; i < 4; i++) {
     await page.evaluate(() => { const g = window.__pinball.game; g.shop.offers = ['pop', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
@@ -155,14 +155,14 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.click(pop2.x, pop2.y);
   await page.keyboard.press('Delete');
   const after = await state();
-  check(after.money === before + 1 && after.placed === 3 && after.inv === 4, `storing into a full toolbox sells the part for half ($${before} -> $${after.money})`);
-  check(await page.isHidden('#toolSell'), 'the toolbox shows no Sell button until a part in it is picked');
+  check(after.money === before && after.placed === 3 && after.inv === 4, `storing into a full toolbox costs $1 to move and sells for $1 ($${before} -> $${after.money})`);
+  check(await page.isHidden('#toolSell'), 'the toolbox shows no Return button until a part in it is picked');
   await page.click('#inventory .item[data-uid]');
-  check((await page.innerText('#toolSell')) === 'SELL $1', 'picking a toolbox part puts a Sell button with its price on the latch');
+  check((await page.innerText('#toolSell')) === 'RETURN +$3', 'picking a part bought this visit puts a Return button with its price on the latch');
   await page.screenshot({ path: `${out}/smoke-2d-toolbox-sell.png`, clip: await (await page.$('#inventoryBox')).boundingBox() });
   await page.click('#toolSell');
   const sold = await state();
-  check(sold.inv === 3 && sold.money === after.money + 1, 'Sell sells it for half and frees the slot');
+  check(sold.inv === 3 && sold.money === after.money + 3, 'Return gives back what it cost and frees the slot');
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
   // buying by dragging: an offer dropped on the table lands on the board without going through the toolbox
