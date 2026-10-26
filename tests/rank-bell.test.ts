@@ -74,7 +74,9 @@ describe('Rank Lights', () => {
     const text = describePart(PARTS.rank).map((l) => l.text).join(' ');
     expect(text).toContain('Silver (×1.2), then Gold (×1.4), then Diamond (×1.6)');
     expect(describePart(PARTS.rank, undefined, { mods: { ...neutralMods(), multGain: 0.7 } }).map((l) => l.text).join(' ')).toContain('Silver (×1.14)');
-    expect(describePart(PARTS.bell).map((l) => l.text).join(' ')).toContain('At 3 notches it rings');
+    const bellText = describePart(PARTS.bell).map((l) => l.text).join(' ');
+    expect(bellText).toContain('Its first hit each round pays 150 instead');
+    expect(bellText).toContain('At 3 notches it rings');
   });
 });
 
@@ -84,17 +86,24 @@ describe('Old Bell', () => {
     return { bell, parts: [bell, makePart('mega', 6, 12, 36, true)] };
   };
 
-  it('only its first hit each round scores: 150 points', () => {
-    const { parts } = bellTable();
+  it('its first hit each round pays the toll (150) and a notch; every other hit pays 20', () => {
+    const { bell, parts } = bellTable();
     const s = new Scorer(1e9, () => parts);
     s.resetRound();
+    expect(s.label(bell)).toBe('150');
     const first = s.consume(hit(5));
     expect(first[0].base).toBe(150);
-    expect(s.consume(hit(5))).toEqual([]);
+    expect(first[0].notes).toContain('notch 1/3');
+    expect(s.label(bell)).toBe('20');
+    const second = s.consume(hit(5))[0];
+    expect(second.base).toBe(20);
+    expect(second.notes.some((n) => n.startsWith('notch'))).toBe(false);
     s.startBall();
-    expect(s.consume(hit(5))).toEqual([]); // a new ball, the same round
+    expect(s.consume(hit(5))[0].base).toBe(20); // a new ball, the same round
+    expect(s.notchesOf(bell)).toBe(1);
     s.resetRound();
     expect(s.consume(hit(5))[0].base).toBe(150);
+    expect(s.notchesOf(bell)).toBe(2);
   });
 
   it("a test ball's notches never reach the machine", () => {
@@ -117,6 +126,7 @@ describe('Old Bell', () => {
       if (round < 3) {
         expect(bell.notches).toBe(round);
         expect(out).toHaveLength(1);
+        expect(g.scorer.consume(hit(50))[0].base).toBe(20); // the toll is paid: an ordinary hit now
       } else {
         expect(bell.notches).toBe(0);
         expect(out.at(-1)!.label).toBe('THE BELL RINGS! x1.2');

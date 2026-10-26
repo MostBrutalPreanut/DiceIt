@@ -475,7 +475,7 @@ export class AudioFx {
       case 'sling': this.twang(this.ladder(mult, 165, 12)); break;
       case 'spinner': this.spin(opts.spins ?? 3); break;
       case 'lane': case 'rank': this.laneRoll(); break;
-      case 'bell': this.toll(false); break;
+      case 'bell': if (notes.some((n) => n.endsWith(' toll'))) this.toll(false); else this.bop(mult, 0.95); break;
       case 'uplight': this.levelLight(this.ladder(mult, 1047, 12)); break;
       case 'lamp': this.lampGlow(opts.label); break;
       case 'vari': this.knock(opts.tier ?? 0); break;

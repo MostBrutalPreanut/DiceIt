@@ -62,7 +62,7 @@ Cards say what a part does; they carry no strategy tips.
 | Power Plate | a floor plate: bumpers on or near it pay ×1.5, and plates multiply |
 | Hall of Fame | 150 · once a ball, Mult ×1.1 for every different part type on the table |
 | Rank Lights | **sold as a pack of 3** ($8) · 10 · light all 3 and the ball that lit the last one ranks up: Silver (every hit it makes ×1.2), Gold (×1.4), Diamond (×1.6), for 40 s; a drain loses it. Ranks count as Mult gains for Flat Rate and the Overlord |
-| Old Bell | 150, only on its first hit each round, which adds a notch · at 3 notches it rings: every ball's Mult ×1.2 for the rest of the run (rings stack, and stay if the bell is sold) |
+| Old Bell | 20 a hit · its first hit each round pays a 150 toll instead and adds a notch · at 3 notches it rings: every ball's Mult ×1.2 for the rest of the run (rings stack, and stay if the bell is sold) |
 
 Multiplicative Mult (X Lane, Golden Bumper, Disco Ball, the Old Bell, the Dragon, Glass Cannon-style decals) is what lets a late
 machine reach millions; each is capped per ball, like everything else that compounds.

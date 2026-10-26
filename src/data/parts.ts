@@ -145,10 +145,8 @@ export interface Recipe {
    * top); a drain loses it.
    */
   rank?: { steps: number[]; seconds: number };
-  /** Fires at most this many times a round (the Old Bell). */
-  perRound?: number;
-  /** Old Bell: its first hit each round adds a notch; at `notches` it rings, and every ball's Mult is ×`x` for the rest of the run. */
-  bell?: { notches: number; x: number };
+  /** Old Bell: its first hit each round pays `first` instead of its points and adds a notch; at `notches` it rings, and every ball's Mult is ×`x` for the rest of the run. */
+  bell?: { first: number; notches: number; x: number };
 }
 
 /** The names of the ranks, lowest first (Rank Lights). */
@@ -396,7 +394,7 @@ export const PARTS: Record<PartId, PartDef> = {
   bell: {
     id: 'bell', name: 'Old Bell', blurb: 'Ring it once a round. Three rounds on, it remembers.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 10,
-    recipe: { points: 150, per: 'round', perRound: 1, bell: { notches: 3, x: 1.2 }, perLevel: 30 }, dials: [kickDial(1.5)],
+    recipe: { points: 20, per: 'hit', bell: { first: 150, notches: 3, x: 1.2 }, perLevel: 5 }, dials: [kickDial(1.5)],
   },
   duck: {
     id: 'duck', name: 'Duck Gallery', blurb: 'A tin duck paddles back and forth. Knock it over. It gets cross.', kind: 'mover', rarity: 'rare', tags: ['target'], cost: 8, weight: 2,
@@ -630,7 +628,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     const steps = r.rank.steps.map((x, i) => `${RANK_NAMES[i]} (×${xg(x)})`);
     lines.push({ tag: 'mult', text: `Light all ${r.setSize} lights of a pack and the ball that lit the last one ranks up: every hit it makes pays more. ${steps.join(', then ')}. A rank lasts ${r.rank.seconds} s; lighting the set again moves it up and starts the time again, and a drain loses it.` });
   }
-  if (r.bell) lines.push({ tag: 'mult', text: `Only its first hit each round scores, and that hit adds a notch${inst?.notches ? ` (${inst.notches} of ${r.bell.notches} now)` : ''}. At ${r.bell.notches} notches it rings: your Mult ×${xg(r.bell.x)} on every ball for the rest of the run (rings stack), and the notches start again. Sell it and its notches go; the rings stay.` });
+  if (r.bell) lines.push({ tag: 'mult', text: `Its first hit each round pays ${f(r.bell.first)} instead, and adds a notch${inst?.notches ? ` (${inst.notches} of ${r.bell.notches} now)` : ''}. At ${r.bell.notches} notches it rings: your Mult ×${xg(r.bell.x)} on every ball for the rest of the run (rings stack), and the notches start again. Sell it and its notches go; the rings stay.` });
   if (r.tiers && def.id === 'vari') {
     const stiff = (inst ? dialValue(inst, 'stiff') : 1) * mods.tierEase;
     const [, firm, hard, smash] = r.tiers;

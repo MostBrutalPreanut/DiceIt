@@ -385,14 +385,14 @@ export class Scorer {
   }
 
   /** What this part would score per event right now, before Mult. Null for parts that do not score. */
-  baseNow(inst: PartInstance, spins = 1, tierX = 1): number | null {
+  baseNow(inst: PartInstance, spins = 1, tierX = 1, points?: number): number | null {
     const r = this.recipe(inst.def);
     if (!r.points) return null;
     const grown = grownPoints(r, this.hitsOf(inst.def));
     const lvl = (r.perLevel ?? 0) * this.effLevel(inst);
     const variety = r.variety ? r.variety * this.variety : 0;
     const order = this.order === inst.uid ? ORDER.x : 1;
-    return Math.round((r.points + lvl + grown + variety + this.potOf(inst)) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * (1 + this.stripBonusAt(inst)) * this.plateXAt(inst) * order);
+    return Math.round(((points ?? r.points) + lvl + grown + variety + this.potOf(inst)) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * (1 + this.stripBonusAt(inst)) * this.plateXAt(inst) * order);
   }
 
   /** The short number drawn on the part itself ("100", "10/spin", "+25%", "x1.25"). */
@@ -403,7 +403,7 @@ export class Scorer {
     if (def.recipe.plate) return `x${def.recipe.plate.x}`;
     if (def.kind === 'strip') return this.mods.lightsOut ? 'OFF' : `+${Math.round((def.recipe.strip?.bonus ?? 0) * 100)}%`;
     const r = this.recipe(inst.def);
-    if (r.bell && this.firedThisRoundOf(inst.uid)) return `${this.notchesOf(inst)}/${r.bell.notches}`; // rung this round: its notches
+    if (r.bell && !this.firedThisRoundOf(inst.uid) && !this.jammed.has(inst.def)) return String(this.baseNow(inst, 1, 1, r.bell.first)); // its toll is waiting
     if (r.typeX) return this.mods.lightsOut ? 'OFF' : `x${this.typeXNow(r.typeX).toFixed(2)}`;
     if (r.xmult && !r.points) return this.mods.lightsOut ? 'OFF' : `x${(1 + (r.xmult - 1) * this.mods.multGain).toFixed(2)}`;
     const n = this.baseNow(inst);
@@ -541,7 +541,9 @@ export class Scorer {
 
     if (r.points) {
       if (r.perBall && (this.firedThisBall.get(inst.uid) ?? 0) >= r.perBall) return out;
-      if (r.perRound && (this.firedThisRound.get(inst.uid) ?? 0) >= r.perRound) return out;
+      // an Old Bell's first hit of the round pays its toll instead of its points (and earns the round's notch)
+      const toll = r.bell && !this.firedThisRoundOf(inst.uid) ? r.bell.first : 0;
+      const pts = toll || r.points;
       const spins = ev.spins ?? 1;
       const grown = grownPoints(r, this.hitsOf(inst.def));
       const level = (r.perLevel ?? 0) * this.effLevel(inst);
@@ -551,7 +553,7 @@ export class Scorer {
       const lamp = this.lampBonusAt(inst);
       const tier = tierOf(inst, ev.speed, m.tierEase);
       const tierX = inst.def === 'vari' ? tier?.x ?? 1 : 1;
-      const notes = [`${r.points}${spins > 1 ? ` x${spins} spins` : ''} base`];
+      const notes = [`${pts}${spins > 1 ? ` x${spins} spins` : ''} ${toll ? 'toll' : 'base'}`];
       if (level) notes.push(`+${level} level`);
       if (grown) notes.push(`+${grown} grown`);
       if (variety) notes.push(`+${variety} variety`);
@@ -606,7 +608,7 @@ export class Scorer {
       if (r.mult && multGain < this.gain(r.mult) - 1e-9) notes.push('Mult maxed for this ball');
       if (r.spinMult) multGain += this.gain(this.take(this.multPaid, 'spin', r.spinMult * m.spinMult * spins, (r.spinMultCap ?? 0) * m.spinMult));
       const xmult = r.typeX ? this.typeXNow(r.typeX) : r.xmult ? this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
-      const base = Math.round((r.points + level + grown + variety + pot) * spins * tierX * factor * mf * (1 + lamp.sum) * (1 + strip) * plate * edge * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
+      const base = Math.round((pts + level + grown + variety + pot) * spins * tierX * factor * mf * (1 + lamp.sum) * (1 + strip) * plate * edge * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
       if (r.feeds) this.hitsByType.set(r.feeds.id, this.hitsOf(r.feeds.id) + r.feeds.n);
       this.typesHit.add(inst.def);
@@ -617,9 +619,9 @@ export class Scorer {
         notes.push(now > before ? `+${Math.round((now - before) * 100) / 100} kept Mult` : 'fully polished');
       }
       if (r.perBall) this.firedThisBall.set(inst.uid, (this.firedThisBall.get(inst.uid) ?? 0) + 1);
-      if (r.perRound) this.firedThisRound.set(inst.uid, (this.firedThisRound.get(inst.uid) ?? 0) + 1);
-      const rang = r.bell ? this.notch(inst, r.bell.notches) : false;
-      if (r.bell) notes.push(rang ? 'the bell rings' : `notch ${this.notchesOf(inst)}/${r.bell.notches}`);
+      if (r.bell) this.firedThisRound.set(inst.uid, (this.firedThisRound.get(inst.uid) ?? 0) + 1);
+      const rang = toll && r.bell ? this.notch(inst, r.bell.notches) : false;
+      if (toll && r.bell) notes.push(rang ? 'the bell rings' : `notch ${this.notchesOf(inst)}/${r.bell.notches}`);
       if (r.lightsLamps) this.flashLamps(ev.t, r.lightsLamps);
       const label = r.perBall && xmult > 1 ? `MULT x${xmult.toFixed(2)}` : r.jackpot && pot ? 'JACKPOT!' : edge > 1 ? 'EDGE SHOT!' : undefined;
       const scored = this.award(inst, ev.t, ev.x, ev.y, r.perBall || (r.jackpot && pot) ? 'bonus' : 'hit', base, multGain, money, notes, label, ev.spins, xmult);
