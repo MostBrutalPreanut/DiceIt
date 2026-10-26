@@ -1,0 +1,1049 @@
+<title>Big Boi Balance Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Luckiest+Guy&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a scorecard. A sticky rail of sections on the left (a ball path down the table), the decisions as cards with a
+   severity stripe on the right; each card opens into card text, findings, causes, and the fixes to pick from. */
+:root {
+  --bg: #f3f4f9;
+  --surface: #ffffff;
+  --sunk: #eceef6;
+  --ink: #1b1a2a;
+  --muted: #595770;
+  --line: #d8d9e6;
+  --accent: #c8410b;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbe6dc;
+  --link: #2459a8;
+  --crit: #c22b2b;
+  --high: #c76a00;
+  --med: #1f67b3;
+  --low: #7a8090;
+  --good: #23803a;
+  --warn: #a85a00;
+  --rec: #23803a;
+  --rec-soft: #e3f3e6;
+  --display: "Luckiest Guy", "Arial Black", Impact, system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #13121b; --surface: #1d1b29; --sunk: #181723; --ink: #ecebf6; --muted: #a7a4bd; --line: #343149;
+    --accent: #ff8a4f; --accent-ink: #1b1209; --accent-soft: #3a2418; --link: #8bb8ff;
+    --crit: #ff6b6b; --high: #ffaa4d; --med: #7cc0ff; --low: #a3a9b8; --good: #6bd884; --warn: #ffb35c;
+    --rec: #6bd884; --rec-soft: #1c3324; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #13121b; --surface: #1d1b29; --sunk: #181723; --ink: #ecebf6; --muted: #a7a4bd; --line: #343149;
+  --accent: #ff8a4f; --accent-ink: #1b1209; --accent-soft: #3a2418; --link: #8bb8ff;
+  --crit: #ff6b6b; --high: #ffaa4d; --med: #7cc0ff; --low: #a3a9b8; --good: #6bd884; --warn: #ffb35c;
+  --rec: #6bd884; --rec-soft: #1c3324; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 64px;
+}
+a { color: var(--link); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+header.top { display: grid; gap: 14px; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(2rem, 5vw, 3rem); line-height: 1; margin: 0; letter-spacing: 0.01em; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.lede { margin: 0; color: var(--muted); max-width: 68ch; }
+.goalbox { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 8px; max-width: 900px; }
+.goalbox h2 { font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; margin: 0; color: var(--accent); }
+.goalbox ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 0.9rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.toolbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.progress { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 260px; }
+.bar { flex: 1; height: 10px; background: var(--sunk); border: 1px solid var(--line); border-radius: 99px; overflow: hidden; min-width: 80px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.3s; }
+.progress b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.chipbtn { font: inherit; font-size: 0.9rem; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 99px; padding: 5px 12px; cursor: pointer; }
+.chipbtn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn { font: inherit; font-size: 0.9rem; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.savestate { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+
+.layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 28px; align-items: start; }
+nav.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 72px); display: grid; gap: 2px; max-height: calc(100vh - 100px); overflow: auto; padding-right: 4px; }
+nav.rail a { display: grid; grid-template-columns: 1fr auto; gap: 8px; text-decoration: none; color: var(--ink); padding: 7px 10px; border-radius: 8px; font-size: 0.95rem; }
+nav.rail a:hover { background: var(--sunk); }
+nav.rail a small { color: var(--muted); font-variant-numeric: tabular-nums; }
+nav.rail a.done small { color: var(--good); font-weight: 700; }
+main { display: grid; gap: 40px; min-width: 0; }
+section.sec { display: grid; gap: 12px; scroll-margin-top: 90px; }
+section.sec > h2 { font-family: var(--display); font-weight: 400; font-size: 1.7rem; margin: 0; letter-spacing: 0.01em; }
+section.sec > p { margin: 0 0 4px; color: var(--muted); max-width: 70ch; }
+
+article.item { background: var(--surface); border: 1px solid var(--line); border-left: 6px solid var(--low); border-radius: var(--radius); scroll-margin-top: 90px; }
+article.item.sev-critical { border-left-color: var(--crit); }
+article.item.sev-high { border-left-color: var(--high); }
+article.item.sev-medium { border-left-color: var(--med); }
+article.item[hidden] { display: none; }
+details > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: start; }
+details > summary::-webkit-details-marker { display: none; }
+.sumtext { display: grid; gap: 4px; min-width: 0; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tag { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; padding: 2px 8px; border-radius: 99px; border: 1px solid currentColor; }
+.tag.critical { color: var(--crit); } .tag.high { color: var(--high); } .tag.medium { color: var(--med); } .tag.low { color: var(--low); }
+.tag.kind { color: var(--muted); }
+.tag.area { color: var(--ink); border-color: var(--line); background: var(--sunk); }
+.glabel { font-size: 0.85rem; color: var(--muted); align-self: center; margin-right: 2px; }
+.gcount { font-family: var(--body); font-size: 1rem; color: var(--muted); font-weight: 400; vertical-align: middle; }
+section.group-critical > h2 { color: var(--crit); }
+section.group-high > h2 { color: var(--high); }
+section.group-medium > h2 { color: var(--med); }
+.sumtext h3 { margin: 0; font-size: 1.12rem; line-height: 1.3; text-wrap: balance; }
+.sumtext p { margin: 0; color: var(--muted); }
+.chosen { font-size: 0.9rem; color: var(--ink); }
+.chosen b { color: var(--good); }
+.statuspill { font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--sunk); color: var(--muted); white-space: nowrap; border: 1px solid var(--line); }
+.statuspill.decided { background: var(--rec-soft); color: var(--good); border-color: transparent; }
+.statuspill.later { background: var(--accent-soft); color: var(--warn); border-color: transparent; }
+.statuspill.skip { text-decoration: line-through; }
+.chev { display: inline-block; transition: transform 0.2s; color: var(--muted); }
+details[open] .chev { transform: rotate(90deg); }
+
+.body { padding: 0 16px 18px; display: grid; gap: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.block { display: grid; gap: 6px; }
+.block h4 { margin: 0; font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.block ul { margin: 0; padding-left: 1.2em; display: grid; gap: 5px; }
+.block p { margin: 0; max-width: 75ch; }
+.cards { display: grid; gap: 8px; }
+.card { background: var(--sunk); border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 4px; }
+.card .cname { font-weight: 700; }
+.card .cmeta { color: var(--muted); font-size: 0.85rem; }
+.card q { quotes: none; font-style: italic; color: var(--ink); }
+.goalline { background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; }
+.goalline b { color: var(--accent); }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table.goals { border-collapse: collapse; font-family: var(--mono); font-size: 0.86rem; font-variant-numeric: tabular-nums; min-width: 760px; width: 100%; }
+table.goals th, table.goals td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.goals th:first-child, table.goals td:first-child { text-align: left; font-family: var(--body); font-weight: 700; }
+table.goals thead th { color: var(--muted); font-weight: 500; }
+table.goals td.boss { background: var(--sunk); }
+
+.opts { display: grid; gap: 10px; }
+.opt { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; background: var(--surface); }
+.opt:hover { border-color: var(--muted); }
+.opt.rec { border-color: var(--rec); }
+.opt.picked { background: var(--rec-soft); border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+.opt input { margin-top: 5px; width: 18px; height: 18px; accent-color: var(--good); }
+.opt .otitle { font-weight: 700; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.recbadge { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; background: var(--rec); color: var(--surface); padding: 2px 8px; border-radius: 99px; }
+.opt .owhat { margin: 0; grid-column: 2; }
+.pc { grid-column: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; font-size: 0.95rem; }
+.pc ul { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
+.pc .p b { color: var(--good); } .pc .c b { color: var(--warn); }
+.pc div { min-width: 0; }
+.recwhy { font-size: 0.95rem; color: var(--muted); }
+.recwhy b { color: var(--rec); }
+.mine { display: grid; gap: 10px; background: var(--sunk); border-radius: 10px; padding: 12px; }
+.statusrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.statusrow span { font-size: 0.9rem; color: var(--muted); margin-right: 4px; }
+.seg { font: inherit; font-size: 0.9rem; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 5px 12px; cursor: pointer; }
+.seg[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+textarea { font: inherit; font-size: 1rem; width: 100%; min-height: 84px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); color: var(--ink); resize: vertical; }
+label.notes { display: grid; gap: 4px; font-size: 0.9rem; color: var(--muted); }
+
+.copyout { display: grid; gap: 8px; }
+.copyout textarea { min-height: 220px; font-family: var(--mono); font-size: 0.85rem; }
+footer { color: var(--muted); font-size: 0.9rem; max-width: 80ch; }
+.empty { color: var(--muted); font-style: italic; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  nav.rail { position: static; max-height: none; display: flex; overflow-x: auto; gap: 6px; padding-bottom: 4px; }
+  nav.rail a { display: inline-flex; white-space: nowrap; border: 1px solid var(--line); background: var(--surface); }
+  .pc { grid-template-columns: 1fr; }
+  .toolbar { position: static; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Big Boi <span>Balance Board</span></h1>
+    <p class="lede">Everything the balance research found, one decision at a time. Open an item, read what we saw and why, pick a fix (one is marked as recommended), set its status and leave a note. Your choices are saved as you go, and Claude can read them back to make the changes.</p>
+    <div class="goalbox">
+      <h2>The goal every fix is judged against</h2>
+      <ul>
+        <li>Round goals are round numbers that are easy to remember: about 1,000 in round 1, about 2.5–3 million in round 15.</li>
+        <li>Great builds are possible, with luck and skill. A great build can win big, and then be tested in endless mode.</li>
+        <li>Losing runs and clutch runs happen too. Most good runs should pass narrowly; sometimes wildly; sometimes not.</li>
+        <li><b>A medium or low skill player who finishes the game clutch with a good build is a good result.</b> A bad build should lose, even with great hands.</li>
+      </ul>
+    </div>
+    <div class="legend" aria-label="How urgent an item is">
+      <span><span class="tag critical">Must fix</span> breaks the game</span>
+      <span><span class="tag high">Should fix</span> big effect on who wins</span>
+      <span><span class="tag medium">Worth doing</span> noticeable</span>
+      <span><span class="tag low">Minor</span> small, or wording</span>
+    </div>
+  </header>
+
+  <div class="toolbar" role="region" aria-label="Progress and filters">
+    <div class="progress"><div class="bar" aria-hidden="true"><i id="barfill"></i></div><b id="progtext">0 of 0 decided</b></div>
+    <div class="filters" role="group" aria-label="Show">
+      <button class="chipbtn" data-f="all" aria-pressed="true">All</button>
+      <button class="chipbtn" data-f="open" aria-pressed="false">Not decided</button>
+      <button class="chipbtn" data-f="decided" aria-pressed="false">Decided</button>
+      <button class="chipbtn" data-f="later" aria-pressed="false">Later</button>
+      <button class="chipbtn" data-f="skip" aria-pressed="false">Skipped</button>
+      <button class="chipbtn" data-f="critical" aria-pressed="false">Must fix only</button>
+    </div>
+    <div class="groupby filters" role="group" aria-label="Group by"><span class="glabel">Group by</span>
+      <button class="chipbtn" data-g="priority" aria-pressed="true">Priority</button>
+      <button class="chipbtn" data-g="area" aria-pressed="false">Area</button>
+    </div>
+    <button class="btn" id="expandAll">Open all</button>
+    <button class="btn" id="collapseAll">Close all</button>
+    <button class="btn primary" id="copyBtn">Copy my decisions</button>
+    <span class="savestate" id="savestate" aria-live="polite">Loading your saved choices…</span>
+  </div>
+
+  <div class="copyout" id="copyout" hidden>
+    <label for="copytext" class="notes">Your decisions as text (selected, ready to copy):</label>
+    <textarea id="copytext" readonly></textarea>
+    <div><button class="btn" id="closeCopy">Close</button></div>
+  </div>
+
+  <div class="layout">
+    <nav class="rail" id="rail" aria-label="Sections"></nav>
+    <main id="main"></main>
+  </div>
+
+  <footer>
+    Numbers come from the research run in the repo (<code>docs/balance-research.md</code>): 120 full runs by three kinds of
+    player (pro, average, poor), 21 builds designed by build-finder agents and played into endless, every part tested twice,
+    every decal and boss on six tables, and a clock-off study. Test players do not nudge or aim, so aim-heavy parts are
+    marked where that matters. Nothing in the game has been changed yet.
+  </footer>
+</div>
+
+<script>
+const SECTIONS = [
+  { id: "curve", name: "Round goals", blurb: "The numbers each round asks for." },
+  { id: "ceiling", name: "No ceiling", blurb: "Things that grow without limit. Fix these first: every other number depends on them." },
+  { id: "bigboi", name: "Big Boi", blurb: "Big Boi ended up being most of the score in most strong builds." },
+  { id: "strong", name: "Too strong", blurb: "Parts and decals that win far more than the others." },
+  { id: "clock", name: "The clock", blurb: "The ball clock, your new drain-out idea, and items that add or take time." },
+  { id: "late", name: "Late game", blurb: "Rounds 10–15: money, table room, and which builds can win." },
+  { id: "early", name: "Early game", blurb: "Rounds 1–3, and the weak player's first steps." },
+  { id: "bosses", name: "Bosses", blurb: "Each boss should break one kind of build, not every build." },
+  { id: "bugs", name: "Bugs and wrong cards", blurb: "Things that do not do what they say." },
+  { id: "weak", name: "Weak parts", blurb: "Parts that lose points or do nothing in both test passes. Noise in these tests is about ±20%, so these are clear misses." },
+  { id: "gems", name: "Gems", blurb: "Gems compared with the same part without the gem." },
+  { id: "decals", name: "Weak decals", blurb: "Decals that barely change a round." },
+  { id: "tools", name: "Testing tools", blurb: "What to fix in the tools before the next balance pass." },
+];
+
+const T = { // in-game card text, copied from the game's own card generator
+  wheel: ["Spider Wheel", "Rare · $8", "Sink the ball to spin a prize wheel. Flip to stop it. Mostly prizes. Scores 20 per spin. A scoop: it catches the ball and spins a wheel of 8 awards. Press a flipper to stop it (or it stops by itself after 3 s): ×2 for 20 s, $3, extra ball, lamps lit, +1 mult, free reroll, 300 points, zilch. Collect all 8 in a run and the next spin is Wheel Mania: a 4-ball multiball, every hit ×2 for 20 s. Holds the ball 70 s, then fires it out in a random direction."],
+  printer: ["Ball Printer", "Rare · $9", "Catches a ball and spits out two. Multiball! Allegedly legal. Scores 40 per ball caught. Prints a second ball when it catches one (at most 3 printed in one ball, and 4 on the table). Holds the ball 0.6 s, then fires it out in a random direction."],
+  twin: ["Twin Ball", "Decal · Legendary", "Every ball arrives with a twin: two balls in the plunger lane."],
+  multiball: ["Multiball Madness", "Decal · Rare", "While two or more balls are on the table, every hit pays 2×."],
+  magnet: ["Mag-Grab", "Uncommon · $6", "Grabs the ball, adds Mult, throws it where it points. Rude. Scores 24 per grab. Raises your Mult by +0.25 per grab, up to +2 a ball from all Mag-Grabs. Grabs a ball that comes close, holds it 0.5 s, then throws it the way it faces."],
+  xlane: ["X Lane", "Uncommon · $7", "Roll through it and your Mult multiplies. Multiplies your Mult by ×1.25 per hit, up to ×3 a ball from all X Lanes. It also lights a Lane Rollover. Goes dark for 3 s after it fires."],
+  gumball: ["Gumball Machine", "Rare · $9", "Locks three balls one by one, then lets them all go: multiball! Scores 30 per lock. The third lock lets all 3 loose at once: a real multiball. Once a round."],
+  fame: ["Hall of Fame", "Legendary · $13", "Once a ball, roll over: ×Mult per kind of part on your table. Scores 150 per pass. The first time a ball rolls over it each ball: your Mult ×1.1 for every different part type on your table (Big Boi too)."],
+  disco: ["Disco Ball", "Legendary · $11", "Roll over once a ball: huge ×Mult, and every Lamp lights. Boogie. Scores 200 per pass. Multiplies your Mult by ×2.5 the first time a ball rolls over it each ball. It also lights every Lamp at full glow for 8 s."],
+  emerald: ["Emerald", "Gem · Rare · $8", "Set it in a once-a-ball part: now it fires twice a ball. It fits a part that fires once a ball (the Disco Ball, Hall of Fame, the Firecracker)."],
+  afterglow: ["Afterglow", "Decal · Rare", "At the end of every round, this decal keeps 15% of the highest Mult you reached: every ball after starts that much higher."],
+  fanClub: ["Big Boi Fan Club", "Decal · Uncommon", "Big Boi pays 3× (his jackpots too)."],
+  overclock: ["Overclock", "Decal · Common", "[a part type] score 50% more points."],
+  levelUp: ["Level Up", "Decal · Common", "[a part type] count as two levels higher: more points per hit."],
+  plate: ["Power Plate", "Uncommon · $6", "A plate in the floor. Bumpers on or near it pay more. It hums. Lies in the floor: other parts can stand on it. Every bumper within 3 of it (Big Boi too) pays ×1.5, and plates multiply."],
+  spot: ["Spotlight", "Uncommon · $6", "Parts near it pay more. Keep the ball off it or it goes dark. While it is lit, every part within 5 units pays ×1.5 (Spotlights multiply). A hit of the ball knocks it dark for 10 s. It scores nothing itself. Zaps and sparks never knock it dark: only the ball itself does."],
+  tesla: ["Tesla Coil", "Rare · $9", "Every hit zaps the nearest parts, and they score too. Bzzt. Scores 30 per hit. Every hit arcs lightning to the 2 nearest parts that score when the ball touches them (one more at level 3 and 6): each one scores as if the ball had hit it."],
+  uplight: ["Level Light", "Uncommon · $5 (pack of 2)", "Roll over both: the bumpers near them level up, for good. Roll over to switch it on or off. When it and every Level Light within 5.5 are on, the bumpers within 5.5 of those lights level up."],
+  mega: ["Big Boi", "Fixed in the middle of every table", "Every hit pays points and pumps up your Mult. Heavy and rude. Scores 50 per hit. Raises your Mult by +0.15 per hit, up to +5 a ball. (The Foreman, Cook and Dragon each add their own ability.)"],
+  longFuse: ["Long Fuse", "Decal · Common", "Every ball's countdown runs 20 s longer before the ball times out."],
+  deflector: ["Deflector", "Common · $1", "A bouncy bar to aim with. A ball off it pays extra next hit. Hot Shot: its next scoring hit within 1.2 s pays +25%. Scores nothing itself."],
+  whale: ["The Whale", "Legendary · $12", "Swallows sparks for points, then spouts a spray of new ones. Scores 20 per hit. It swallows every spark that touches it (8 points each). Every 6th it spouts: 6 sparks out of its blowhole and 300 points (3 spouts a ball at most)."],
+  nest: ["Spider Nest", "Rare · $8", "Hits may lay an egg: a spark that hatches into three more. Ew. Scores 15 per hit. Every hit of the ball has a 25% chance of laying an egg."],
+  jar: ["Marble Jar", "Rare · $8", "Hits fill it with marbles. Each new ball brings a spark per marble. Scores 10 per hit. Every 25 hits of the ball on it add a marble, for the rest of the run (up to 5)."],
+  goal: ["Goal!", "Legendary · $12", "Shoot past the goalie for points and ×Mult. Score past the goalie: 300 points and your Mult ×1.5 (up to ×4 a ball). The goalie slides across the mouth of the goal and blocks the ball."],
+  duck: ["Duck Gallery", "Rare · $8", "A tin duck on a rail. Each hit pays more and speeds it up. Quack. Scores 60 per duck."],
+  roller: ["Roller Pop", "Uncommon · $6", "A bumper on a rail. Hit it near the ends for triple points. Scores 30 per hit."],
+  bucket: ["Free Ball Bucket", "Legendary · $11", "Drop the ball in the sliding bucket to get it back. Free ball! Scores 200 per catch. A ball that drops into it from above goes back to the plunger: it is not lost."],
+  flipper: ["Left / Right Flipper", "Uncommon · $6", "An extra little flipper, on the left (or right) key. Put it anywhere. Scores nothing itself."],
+  hand: ["Helping Hand", "Uncommon · $7", "A little flipper that flips itself when the ball comes near. About half the time it means the shot: the ball goes straight at the nearest part that scores. It needs no button, and it never flips on TILT. A small flipper worked by the Left (←) key. Scores nothing itself."],
+  well: ["Wishing Well", "Uncommon · $4", "Throw $1 in between rounds: its hits pay more, for good. In the workshop, throw $1 in (up to $5 a round): every $1 in it adds +3 to its hits and +0.02 Mult a hit, for the rest of the run (up to +3 Mult a ball)."],
+  bonsai: ["Bonsai Bumper", "Uncommon · $5", "Pays more every round you leave it where it is. Scores 10 per hit. +4 for every round it has stayed on the table without being moved."],
+  clock: ["Midnight Clock", "Decor · Uncommon · $6", "Every scoring hit on the table (zaps and sparks too) moves its hands on a minute, from 9 PM. At midnight (180 hits) it strikes twelve: for 20 s every hit pays ×2, and every Lamp is at full glow. Once a ball."],
+  altar: ["Ritual Altar", "Decor · Legendary · $12", "Every 8 sets you complete start a 15 s ritual, in turn: Tempest (lightning strikes 2 random parts a second), Inferno (every hit also zaps the nearest part), Swarm (8 sparks rain down). Every ritual makes the next one stronger."],
+  hutch: ["Gremlin Hutch", "Decor · Legendary · $12", "2 gremlins wander your table. A ball that knocks one out: 100 points and $1 (up to $5 a round); it is back 10 s later."],
+  capsule: ["Time Capsule", "Rare · $8", "Leave it on the table six rounds, then dig it up: a free legendary. Scores nothing."],
+  garnet: ["Garnet", "Gem · Uncommon · $4", "Its part's dark or recharge time is halved (X Lane, Goal!, the Laser Turret's recharge, the Powder Keg's re-arm, the Sparkler, the Rock Pile)."],
+  opal: ["Opal", "Gem · Uncommon · $5", "Every hit on its part counts twice for its growth (the Pops' growth, the Duck's points, the Trophy's polish)."],
+  goldleaf: ["Gold Leaf", "Gem · Rare · $6", "Every time its part scores, it is worth +1 more, for the rest of the run (up to +5× its points)."],
+  topaz: ["Topaz", "Gem · Uncommon · $5", "Every time the ball hits its part, there is a 15% chance it drops a spark."],
+  glassCannon: ["Glass Cannon", "Decal · Rare", "Every hit pays 1.5×, but every round has one ball less."],
+  comboKing: ["Combo King", "Decal · Uncommon", "After a Slingshot, Deflector, Kickback or smashed Vari-Target, the ball's next hit pays 2× the usual extra."],
+  spinDoctor: ["Spin Doctor", "Decal · Uncommon", "Spinners spin 50% more and give 2× the Mult per spin."],
+  shortFuse: ["Short Fuse", "Boss", "Every ball's clock is 30 seconds."],
+  overlord: ["The Overlord", "Final boss", "Every ball, a random part type on your table is switched off, and every Mult gain is 30% smaller."],
+  jammer: ["The Jammer", "Boss", "Your most numerous part type is jammed: it scores nothing this round."],
+  nightShift: ["Night Shift", "Boss", "Lights out: Lamps, lanes, Level Lights, X Lanes and Disco Balls do nothing."],
+  taxMan: ["The Tax Man", "Boss", "Parts pay no money this round, and the round pays $3 less."],
+  crossedWires: ["Crossed Wires", "Boss", "The flipper buttons are swapped: ← works the right flippers, → the left."],
+  whirlpool: ["The Whirlpool", "Final boss", "A whirlpool drags every ball towards the drain, the table is steeper, and every ball's clock is 40 seconds."],
+  saver: ["Ball Saver", "Uncommon · $5", "For 8 s after you launch a ball, a drain sends it back to the plunger instead, and the ball is not spent."],
+  safetyNet: ["Safety Net", "Decal · Uncommon", "Every ball gets one save, as if a Ball Saver were on the table."],
+};
+
+const ROUNDS = ["1","2","3 boss","4","5","6 boss","7","8","9 boss","10","11","12 boss","13","14","15 final"];
+const CURVES = [
+  ["Today", [1000,2000,2500,5000,8000,12000,20000,35000,55000,90000,150000,200000,450000,750000,1500000]],
+  ["Smooth now (option B)", [1000,1500,2500,4000,6000,10000,15000,25000,40000,70000,120000,200000,350000,600000,1000000]],
+  ["Target later (option C, step 2)", [1000,1500,2500,4000,6000,10000,15000,25000,40000,75000,150000,250000,500000,1000000,2500000]],
+];
+
+const ITEMS = [
+  // ---------- curve ----------
+  { id: "goal-curve", sec: "curve", sev: "critical", kind: "Rule", title: "The round goals", sum: "The final is 1.5M today, not 2.5–3M, and three steps are lumpy.", table: true,
+    found: [
+      "In 120 real runs: pros won 15%, average players 2.5%, poor players never.",
+      "Round 2 asks for 2× round 1, and 61% of poor players lose it.",
+      "Round 9 (55,000, a boss round right after a big jump) is a wall: 57% of average players lose it.",
+      "Rounds 11–13 are easy: pros clear them at 1.75–3.8× the goal.",
+      "A pro scores about 1.6M in round 15 today. A 2.5M final would need about twice that from a normal (not broken) build.",
+    ],
+    why: "The goals were tuned with the old test bot, and that bot almost never misses a flipper: it is a perfect player. So the curve fits a perfect player, not people. On top of that, round 3 (×1.25) and round 12 (×1.33) are small steps and round 9 (×1.57 into a boss) is a big one.",
+    goal: "Round, easy numbers, and most good runs pass narrowly. To reach 2.5M at the end, late builds must score more first (see Late game), or the final just becomes a wall.",
+    opts: [
+      { id: "A", label: "Keep today's goals", what: "Change nothing.", pros: ["No work"], cons: ["Round 9 wall stays", "The final stays at 1.5M, below your target", "Lumpy steps stay"] },
+      { id: "B", label: "Smooth curve now, 1M final", what: "1,000 · 1,500 · 2,500 · 4,000 · 6,000 · 10,000 · 15,000 · 25,000 · 40,000 · 70,000 · 120,000 · 200,000 · 350,000 · 600,000 · 1,000,000", pros: ["Fits what builds score today", "Poor players get past round 2", "No round-9 wall", "A pro passes the final about 2 times in 3, an average player about half the time"], cons: ["The final is below your 2.5–3M", "Strong builds win more easily until the other fixes land"] },
+      { id: "C", label: "Two steps: smooth now, 2.5M later", what: "Use B now. After the no-ceiling fixes and the late-money fix, switch to: 1,000 · 1,500 · 2,500 · 4,000 · 6,000 · 10,000 · 15,000 · 25,000 · 40,000 · 75,000 · 150,000 · 250,000 · 500,000 · 1,000,000 · 2,500,000", pros: ["Reaches your 2.5M target", "Every number is easy to remember", "Nothing gets harder before builds can keep up"], cons: ["Two changes and a re-test"] },
+      { id: "D", label: "The 2.5M curve right away", what: "Switch straight to the second list in C.", pros: ["Your target, now"], cons: ["With today's parts almost nobody wins: the game gets harder, not more exciting"] },
+    ], rec: "C", recWhy: "It gets you round numbers and the 2.5M final without making the game a wall in the meantime." },
+  { id: "endless-goals", sec: "curve", sev: "low", kind: "Rule", title: "Endless goals after round 15", sum: "Endless grows ×1.6 a round and rounds to odd numbers like 2.4M, 3.8M, 6.1M, 9.8M.",
+    found: ["Endless goals today (from the runs): 2,400,000 · 3,800,000 · 6,100,000 · 9,800,000 · 16,000,000.", "Good builds reached rounds 17–20 in endless; broken builds never lost."],
+    why: "Past the table, the goal is the round-15 goal × 1.6 for every round, rounded to two digits.",
+    goal: "Easy-to-remember numbers here too, and endless should be where great builds are tested.",
+    opts: [
+      { id: "A", label: "Keep ×1.6 with two-digit rounding", what: "Change nothing.", pros: ["No work"], cons: ["Numbers like 3.8M and 6.1M are hard to remember"] },
+      { id: "B", label: "A fixed list of round numbers", what: "For example 4M · 6M · 10M · 15M · 25M · 40M · 60M · 100M … (about ×1.6), then keep the same pattern.", pros: ["Easy to remember", "Same difficulty as today"], cons: ["A small list to maintain"] },
+    ], rec: "B", recWhy: "Same difficulty, easier numbers." },
+
+  // ---------- ceilings ----------
+  { id: "afterglow", sec: "ceiling", sev: "critical", kind: "Decal", title: "Afterglow grows forever", sum: "Its kept Mult went from 10.7 to 9.7 billion in one real run.", cards: ["afterglow"],
+    found: ["In a real run (rounds 10 to 20) the Mult every ball starts with went 10.7 → 37 → 319 → 7,481 → 8.8 million → 9.7 billion.", "In the decal test it added +481% to +1,264% within only 3 rounds on Mult builds, and +24% on a plain table.", "Every run that took Afterglow won."],
+    why: "It keeps 15% of the highest Mult of the round. That highest Mult already includes what Afterglow kept before, so it keeps a share of itself again every round, like compound interest. With any ×Mult part it explodes.",
+    goal: "Great builds should feel great, but a number that grows forever makes the rest of the run, and endless, pointless.",
+    opts: [
+      { id: "A", label: "Keep 15% of the Mult gained this round", what: "Count only what the round added (the peak minus where balls started), not the whole peak.", pros: ["Still grows every round", "No compounding", "Same idea on the card"], cons: ["Slower than today"] },
+      { id: "B", label: "Cap what it keeps at +5", what: "It grows as now, but never past +5.", pros: ["Very simple to show on the card"], cons: ["Feels flat once it hits the cap", "Still compounds up to the cap"] },
+      { id: "C", label: "Keep 15%, but at most +1 a round", what: "A steady climb.", pros: ["Predictable"], cons: ["Then it is almost the same as Momentum"] },
+    ], rec: "A", recWhy: "Fixes the cause, keeps the decal's identity." },
+  { id: "stacking", sec: "ceiling", sev: "critical", kind: "Parts", title: "Hall of Fame and Disco Ball stack without limit", sum: "Each extra copy multiplies again. One build reached 10^36 times the goal.", cards: ["fame", "disco"],
+    found: ["Two Disco Balls give ×6.25 a ball, three give ×15.6.", "Hall of Fame gives ×1.1 for each part type: with 15 types that is ×4.2 per copy, every copy.", "A dream build with 3 Disco Balls and 2 Halls of Fame (with Emeralds) scored about 10^36 times the goal.", "One copy alone is fine: +66% to +115% on every table, right for a legendary."],
+    why: "Most ×Mult parts share a cap per ball (X Lane ×3, Golden Bumper ×3, Goal! ×4). The Disco Ball has no cap, and the Hall of Fame skips the cap code completely, so every copy multiplies again.",
+    goal: "Two legendaries should be a great run, not an infinite one.",
+    opts: [
+      { id: "A", label: "One shared cap per type", what: "All Disco Balls together: at most ×2.5 a ball. All Halls of Fame together: at most ×3 a ball.", pros: ["One copy works exactly as today", "No infinite stacking"], cons: ["A second copy becomes nearly useless (the shop could stop offering a second one)"] },
+      { id: "B", label: "Only one of each per run", what: "Like decor: the shop never offers a second.", pros: ["Very clear"], cons: ["Fewer exciting late offers"] },
+      { id: "C", label: "Each extra copy pays half", what: "Second Disco ×1.75, third ×1.4…", pros: ["Still worth buying"], cons: ["Harder to explain on the card"] },
+    ], rec: "A", recWhy: "Keeps the single copy exciting and stops the explosion; pair it with B if you want the shop to be clear about it." },
+  { id: "emerald", sec: "ceiling", sev: "high", kind: "Gem", title: "Emerald doubles the uncapped ×Mult", sum: "Emerald in a Disco Ball or Hall of Fame doubles it again (+60% to +144%).", cards: ["emerald"],
+    found: ["Emerald in a Disco Ball: +90% to +115% over the Disco Ball alone.", "Emerald in a Hall of Fame: +60% to +144% over the Hall of Fame alone.", "Emerald in a Firecracker: +6% to +39% (fine)."],
+    why: "It makes a once-a-ball part fire twice. On a ×2.5 part that is ×6.25 a ball, and nothing caps it.",
+    goal: "A strong gem is fine; one that squares an uncapped multiplier is not.",
+    opts: [
+      { id: "A", label: "The second fire pays half the ×Mult", what: "Disco ×2.5 then ×1.75; Hall of Fame second fire at half.", pros: ["Still the best gem for those parts", "No explosion"], cons: ["One more rule to explain"] },
+      { id: "B", label: "Emerald fits only non-×Mult parts", what: "Firecracker, Wizard Lamp and similar.", pros: ["Clear"], cons: ["Emerald becomes a fairly weak gem"] },
+      { id: "C", label: "Leave it; the shared cap (previous item) is enough", what: "If you pick a shared cap per type, Emerald can only reach the cap faster.", pros: ["No change"], cons: ["Only works together with the cap fix"] },
+    ], rec: "A", recWhy: "Keeps Emerald exciting without squaring the multiplier." },
+  { id: "score-guard", sec: "ceiling", sev: "medium", kind: "System", title: "A safety cap on the score", sum: "Dream builds reach numbers where the score can turn into Infinity.",
+    found: ["Dream builds reached about 10^36. Past about 10^308 the score becomes Infinity, then breaks (NaN) the scoreboard and the save."],
+    why: "Nothing stops a number from growing; the fixes above make it unlikely, not impossible.",
+    goal: "Players should never see a broken score, even in a silly endless run.",
+    opts: [
+      { id: "A", label: "Clamp score and Mult at a huge number", what: "For example 10^15, shown as MAXED.", pros: ["A safety net for everything"], cons: ["A tiny bit of code"] },
+      { id: "B", label: "Do nothing", what: "Rely on the other fixes.", pros: ["No work"], cons: ["A future part could break it again"] },
+    ], rec: "A", recWhy: "Cheap insurance." },
+
+  // ---------- Big Boi ----------
+  { id: "bigboi-zaps", sec: "bigboi", sev: "critical", kind: "System", title: "Teslas next to Big Boi", sum: "In 13 of 21 builds Big Boi made 72–98% of the points, mostly from zaps.", cards: ["mega", "tesla"],
+    found: ["In the top builds 93–96% of all points came from Tesla zaps, most of them on Big Boi.", "A $53 build of 9 parts reached round 18–20; a $76 build reached round 21. Pro and average players got the same result.", "The balance plan says no part should make more than about 40% late.", "All three build-finder agents found this within minutes. In normal shops it is hard to collect (0 of 30 tries got two Plates and a Tesla), so it breaks lucky runs, not every run."],
+    why: "Big Boi counts as a bumper, so a Tesla next to him zaps him on every Tesla hit, and he pays his full points and Mult each time. He sits in the middle where the ball passes most and can never be moved, so the same placement works in every run.",
+    goal: "A medium player finishing clutch with a good build is good. This engine wins far beyond clutch, needs no skill, and makes other builds pointless.",
+    opts: [
+      { id: "A", label: "Zaps on Big Boi pay a quarter", what: "A Tesla still zaps him, for ¼ of his points.", pros: ["Teslas stay good near him", "Big Boi stops being 95% of the score"], cons: ["A favourite trick gets weaker"] },
+      { id: "B", label: "Big Boi cannot be zapped", what: "Teslas skip him and zap the next part.", pros: ["Simplest rule"], cons: ["The Dragon's and Foreman's zap combos disappear"] },
+      { id: "C", label: "Zaps on him pay points but give no Mult", what: "His Mult only grows from real ball hits.", pros: ["Points stay fun"], cons: ["Harder to explain"] },
+    ], rec: "A", recWhy: "Keeps the combo as a good build, not a game-ender." },
+  { id: "plates", sec: "bigboi", sev: "high", kind: "Parts", title: "Power Plates and Spotlights multiply each other", sum: "Four Plates around Big Boi give ×5.06, four Spotlights another ×5.06.", cards: ["plate", "spot"],
+    found: ["4 Plates = 1.5 × 1.5 × 1.5 × 1.5 = ×5.06 on everything they touch; 4 Spotlights the same again.", "On a normal table a Plate measures about nothing (inside the test noise). The value only shows when stacked on one part."],
+    why: "Each Plate and each Spotlight multiplies the others, so stacking on the one part the ball hits most (Big Boi) explodes.",
+    goal: "Stacking should be a reward, not a multiplier tower.",
+    opts: [
+      { id: "A", label: "Add instead of multiply", what: "n Plates = ×(1 + 0.5 × n): 4 Plates = ×3 instead of ×5.06. Same for Spotlights.", pros: ["Still worth stacking", "No explosion"], cons: ["Card text changes"] },
+      { id: "B", label: "A part counts at most 2 Plates (and 2 Spotlights)", what: "", pros: ["Very clear"], cons: ["A hard limit feels arbitrary"] },
+      { id: "C", label: "Keep, fix only the zaps", what: "If zaps on Big Boi are cut, the stack matters less.", pros: ["No change here"], cons: ["The stack still breaks other high-traffic parts"] },
+    ], rec: "A", recWhy: "Simple, still rewarding." },
+  { id: "fanclub", sec: "bigboi", sev: "high", kind: "Decals", title: "Fan Club, Overclock and Level Up on Big Boi", sum: "Fan Club alone was +192% on the Big Boi build (+14% elsewhere).", cards: ["fanClub", "overclock", "levelUp"],
+    found: ["Fan Club: +192% on the Big Boi engine, +103% on a Tesla table, +14% on a normal table.", "Overclock and Level Up can target Big Boi, the part that already scores most in almost every run."],
+    why: "Every Big Boi decal multiplies the one part the ball hits most.",
+    goal: "A Big Boi build should be one good option among several.",
+    opts: [
+      { id: "A", label: "Fan Club ×2, and Overclock/Level Up cannot pick Big Boi", what: "", pros: ["Fan Club stays a fun build decal", "No triple stack on one part"], cons: ["Two small rule changes"] },
+      { id: "B", label: "Fan Club ×2 only", what: "", pros: ["One change"], cons: ["Overclock on Big Boi still stacks"] },
+      { id: "C", label: "Keep", what: "", pros: ["No change"], cons: ["The engine stays dominant"] },
+    ], rec: "A", recWhy: "Removes the stack, keeps the build." },
+  { id: "tesla-levels", sec: "bigboi", sev: "medium", kind: "Parts", title: "A Tesla switches Level Lights on by itself", sum: "Found by a build finder from the code: about 4 free level-ups a round, no aiming.", cards: ["uplight", "tesla"],
+    found: ["A Tesla whose nearest parts are a Level Light pair turns them on with every zap, so the bumpers around them level up again and again without aiming."],
+    why: "Level Lights can be zapped like any rollover.",
+    goal: "Level Lights are meant to reward aiming.",
+    opts: [
+      { id: "A", label: "Level Lights cannot be zapped", what: "", pros: ["Aiming matters again"], cons: ["A combo some players will like is gone"] },
+      { id: "B", label: "Zaps can switch a light on, but never trigger the level-up", what: "", pros: ["Keeps a little synergy"], cons: ["Harder to explain"] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: ["Free levels with no skill"] },
+    ], rec: "A", recWhy: "Clear, and keeps lights a skill shot." },
+
+  // ---------- strong ----------
+  { id: "wheel", sec: "strong", sev: "critical", kind: "Part", title: "Spider Wheel", sum: "The strongest part in the game once a player presses during the spin: +536% to +1,099%.", cards: ["wheel"],
+    found: ["Average player: +536% to +1,099% over the same table (both test passes). Pro: about +930%. Poor (never presses): +274%.", "The ball lands in it about 47 times a round.", "Collecting all 8 prizes gives Wheel Mania (3 extra balls, ×2), about twice a round.", "If nobody presses, the 3 s timeout always stops on Zilch.", "Each prize is a 200 ms window, so a skilled player can pick prizes on purpose."],
+    why: "It catches very often, every catch is a spin, and Wheel Mania can repeat many times a round.",
+    goal: "A rare can be exciting, but this one turns any table into a winner.",
+    opts: [
+      { id: "A", label: "One spin a ball, Mania once a round, random stop on timeout", what: "", pros: ["Keeps the fun moment", "Removes the loop", "Fair to players who don't press"], cons: ["Much weaker than today"] },
+      { id: "B", label: "Slower wheel and a 10 s rest", what: "3 prizes a second (readable), and it ignores balls for 10 s after a spin.", pros: ["Still strong", "Pressing is a readable choice, not a 200 ms trick"], cons: ["May still be too strong"] },
+      { id: "C", label: "Only raise its price or rarity", what: "Legendary, $12.", pros: ["Simple"], cons: ["Still breaks every run that finds it"] },
+    ], rec: "A", recWhy: "The wheel stays a highlight, not the whole run." },
+  { id: "printer", sec: "strong", sev: "critical", kind: "Part", title: "Ball Printer", sum: "+417% to +741%, even +523% for poor players.", cards: ["printer"],
+    found: ["About 50 catches and 7 extra balls a round.", "The most reliable winner in the tests, for every kind of player."],
+    why: "Multiball multiplies everything else on the table, and it prints up to 3 balls every ball.",
+    goal: "A poor player with a good build should be able to win clutch: the Printer does more than that, for everyone.",
+    opts: [
+      { id: "A", label: "2 balls a ball, and a 3 s rest after printing", what: "", pros: ["Still a strong rare", "Still helps weak players"], cons: ["Multiball builds get weaker"] },
+      { id: "B", label: "Make it legendary ($12)", what: "", pros: ["Rarer, same feel"], cons: ["Still breaks the runs that find it"] },
+      { id: "C", label: "Both", what: "", pros: ["Safest"], cons: ["May overshoot into weak"] },
+    ], rec: "A", recWhy: "Cuts the loop, keeps the joy." },
+  { id: "twin", sec: "strong", sev: "high", kind: "Decal", title: "Twin Ball, and Twin Ball + Multiball Madness", sum: "+73% to +565%; together with Multiball Madness it is ×2 from the first second.", cards: ["twin", "multiball"],
+    found: ["Twin Ball alone: +73% to +565%, and +280% for poor players: the strongest regular decal.", "With Multiball Madness, the ×2 is on from the moment a ball spawns."],
+    why: "The twin waiting in the plunger lane already counts as a ball in play, so Multiball Madness turns on before the second ball is even launched.",
+    goal: "Twin is a great decal for weak players; the free ×2 is a loophole.",
+    opts: [
+      { id: "A", label: "Count only launched balls for Multiball Madness", what: "", pros: ["Fixes the loophole", "Twin stays great"], cons: ["None really"] },
+      { id: "B", label: "A, and the twin comes only with the first ball of each round", what: "", pros: ["Twin becomes balanced"], cons: ["Weak players lose a lot of help"] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: ["Free ×2"] },
+    ], rec: "A", recWhy: "Keeps Twin as the weak player's friend, closes the loophole." },
+  { id: "maggrab", sec: "strong", sev: "high", kind: "Part", title: "The Mag-Grab loop", sum: "A Mag-Grab under Big Boi keeps a ball alive past 10 minutes with no flipper.", cards: ["magnet"],
+    found: ["With the clock off, its balls were still alive after 10 minutes.", "In your new run-out, a Mag-Grab under a Tesla played ping-pong with the ball for the whole 15 s, every time, until the cut took it.", "A normal Mag-Grab is good and fine: +6% to +86%."],
+    why: "It throws the ball straight into Big Boi and a Tesla, and the ball falls back onto it, so it never reaches the flippers.",
+    goal: "A table should not play itself.",
+    opts: [
+      { id: "A", label: "It cannot grab the same ball again for 3 s", what: "", pros: ["Ends the loop", "Normal use unchanged"], cons: ["A tiny rule"] },
+      { id: "B", label: "It throws a little to the side at random", what: "", pros: ["Loops break by chance"], cons: ["Aiming it gets fuzzy"] },
+      { id: "C", label: "Keep, and rely on the clock fix", what: "", pros: [], cons: ["Your drain-out timer change makes this worse"] },
+    ], rec: "A", recWhy: "Targets the loop, nothing else." },
+  { id: "xlane", sec: "strong", sev: "medium", kind: "Part", title: "X Lane is far ahead of every other uncommon", sum: "+57% to +108% on every table, for every player.", cards: ["xlane"],
+    found: ["The best uncommon part by far, on both tables and for every player."],
+    why: "×1.25 a pass up to ×3 a ball is the strongest Mult an uncommon gives, and it also lights a lane.",
+    goal: "Uncommons should be good, rares and legendaries special.",
+    opts: [
+      { id: "A", label: "Make it rare ($8)", what: "", pros: ["Same feel, rarer"], cons: ["Fewer early ×Mult options"] },
+      { id: "B", label: "Cap it at ×2 a ball (from ×3)", what: "", pros: ["Stays uncommon"], cons: ["Late Mult builds lose some reach"] },
+      { id: "C", label: "Keep", what: "", pros: ["Late builds need Mult"], cons: ["It is the default buy"] },
+    ], rec: "A", recWhy: "Keeps it exciting; the late game needs Mult." },
+  { id: "gumball", sec: "strong", sev: "low", kind: "Part", title: "Gumball Machine", sum: "+54% to +185%: one sure 3-ball multiball every round.", cards: ["gumball"],
+    found: ["Exactly one multiball a round, as tuned. Strong, but it does what it says."],
+    why: "Multiball is strong, and this one is guaranteed every round.",
+    goal: "Fine as a rare once the Printer is cut.",
+    opts: [
+      { id: "A", label: "Keep, re-test after the Printer change", what: "", pros: ["No change"], cons: [] },
+      { id: "B", label: "2-ball lock", what: "", pros: ["Weaker"], cons: ["Less exciting"] },
+    ], rec: "A", recWhy: "It is fine on its own." },
+
+  // ---------- clock ----------
+  { id: "runout", sec: "clock", sev: "critical", kind: "Rule", title: "When time runs out: end the ball without balls vanishing", sum: "Your merged run-out works on normal tables. Self-playing tables still lose balls to the 15 s cut. Tested five ways to fix it: one ends every loop.",
+    found: [
+      "Your merged change on normal tables: every run-out ended with the balls rolling out on their own in 1–5 s. Nothing vanished, and no stuck ball was ever removed.",
+      "Balls still vanished at the 15 s cut in 19% of all run-outs (108 balls in 511 run-outs), and in 32% on the self-playing builds. The Diner autopilot build: every run-out was cut.",
+      "What kept them up: a Mag-Grab under a Tesla playing ping-pong at full speed (grab, throw up, bounce off the Tesla, grab again), and the Free Ball Bucket sending balls back to the plunger.",
+      "Tested from the test tools (the game was not changed): power-down of bumpers, Kickbacks and Bucket: cut 10%. A pull towards the drain alone: cut 18% (bumpers still bounce the ball). Power-down plus pull: cut 11%.",
+      "'Closing time' (bumpers and slings stop kicking, catchers stop catching so a ball rolls over them for its points, Kickbacks, Bucket and savers off): cut 0% of 485 run-outs, 0 balls taken, run-outs 2–4 s, the free run-out points fall from 5% to 1% of the score.",
+    ],
+    why: "When the flippers go dead, anything that can still catch, throw or kick a ball keeps it in the air. Only the 15 s cut ends that, and the cut is what feels bad.",
+    goal: "A ball should end by rolling home, never by disappearing, and a table should never play on by itself.",
+    opts: [
+      { id: "A", label: "Keep it as merged", what: "Hands off, balls roll out, 15 s cut for the rest.", pros: ["Already in the game", "Fine on normal tables"], cons: ["Balls still vanish on strong tables (19% of run-outs)", "The Bucket loophole stays (see Bugs)"] },
+      { id: "B", label: "Power down bumpers, Kickbacks and the Bucket", what: "", pros: ["Halves the vanishing", "Closes the Bucket loophole"], cons: ["Catchers still throw: 10% still cut"] },
+      { id: "C", label: "A drain pull that grows", what: "", pros: ["Looks like the table is closing"], cons: ["Barely helps (18% cut)"] },
+      { id: "D", label: "Closing time", what: "At time up: bumpers and slings stop kicking, Mag-Grab, scoops, the Wheel and locks stop catching (the ball rolls over them and still scores), Kickbacks, the Bucket and savers switch off. Show it: the table's lights dim part by part. Keep the 15 s cut only as an invisible safety net.", pros: ["No ball vanished in 485 tests", "Run-outs last 2–4 s", "Ends every loop the tests found", "Removes most free run-out points from the strongest builds"], cons: ["A list of parts to switch off", "Needs a 'lights dimming' effect so it reads well"] },
+      { id: "E", label: "Closing time, plus a cash-in instead of the cut", what: "D, and if a ball is somehow still up at 15 s, Big Boi swallows it with a small bonus and a gulp, instead of it vanishing.", pros: ["A ball never just disappears", "Turns the rare fallback into a joke"], cons: ["A small extra animation"] },
+    ], rec: "E", recWhy: "D does the real work (0 balls taken); E makes sure the leftover case, if a future part creates one, still feels like a reward." },
+  { id: "loop-breakers", sec: "clock", sev: "high", kind: "New rules", title: "Creative ways to stop loops during play", sum: "Loops also happen before time runs out. Pick the breakers you like.", multi: true,
+    found: [
+      "With the clock off, self-playing tables kept balls alive past 10 minutes, and the pro and the average player scored the same on them.",
+      "The loops are always the same shape: a catcher (Mag-Grab, scoop, Bucket) or a kicker (Tesla, bumpers) sending the ball straight back to the same place.",
+    ],
+    why: "Nothing limits how often one part can catch or throw the same ball.",
+    goal: "Skill should keep a ball alive, not a machine. Each breaker targets loops, and leaves normal play alone.",
+    opts: [
+      { id: "overheat", label: "Overheat", what: "A catcher or a Tesla that fires 4 times in 6 s overheats: it glows red, steams, and rests for 5 s.", pros: ["Visible and funny", "Breaks every fast loop"], cons: ["A new state to draw"] },
+      { id: "sameball", label: "Same ball, short rest", what: "A catcher ignores the ball it just threw for 3 s (the ball rolls over it).", pros: ["Invisible in normal play", "Kills the Mag-Grab ping-pong"], cons: ["Hard to notice, so hard to learn"] },
+      { id: "uses", label: "Uses per ball", what: "Catchers have a few uses a ball (say 6), shown as pips on the part, refilled every new ball.", pros: ["Clear to read", "Adds a little planning"], cons: ["Weakens normal use too"] },
+      { id: "fade", label: "Repeat hits fade", what: "The same ball hitting the same part again within 2 s pays half each time (shows 'again?').", pros: ["Loops stop paying even if they keep going"], cons: ["Also hits a lucky bumper rattle"] },
+      { id: "tired", label: "Tired ball", what: "A ball that has not touched a flipper for 20 s gets heavier and less bouncy until it does.", pros: ["Pushes the ball back to the player"], cons: ["Strange physics feel"] },
+      { id: "autopilot", label: "Autopilot tax", what: "The ball clock runs twice as fast while the ball has not touched a flipper for 15 s (see its own item).", pros: ["One rule for every loop, present and future"], cons: ["Needs a hint on screen"] },
+    ], rec: ["overheat", "sameball"], recWhy: "Overheat is the fun, visible one for players; same-ball rest quietly kills the worst loop. Both leave normal play alone." },
+  { id: "runout-points", sec: "clock", sev: "medium", kind: "Rule", title: "Do run-out points count?", sum: "The run-out paid 5% of all points today, up to 24% on the strongest builds; 1% with closing time.",
+    found: ["Points scored after the hands come off: 0–5% of the score on normal tables, 8–24% on the Big Boi and runway builds.", "With closing time they fall to about 1% everywhere."],
+    why: "The run-out happens at the ball's highest Mult, so every hit is a bonus.",
+    goal: "A last little roll is fun; it should not be a hidden buff for the strongest builds.",
+    opts: [
+      { id: "A", label: "Count in full", what: "With closing time they are tiny anyway.", pros: ["Simple", "Feels generous"], cons: ["Without closing time, a free buff for strong builds"] },
+      { id: "B", label: "Pay half", what: "", pros: ["Takes the edge off"], cons: ["One more rule"] },
+      { id: "C", label: "Last call jar", what: "Run-out points go in a jar and pay only if every ball rolls home by itself (no cut).", pros: ["Rewards a clean finish", "Fun to watch fill"], cons: ["More UI"] },
+    ], rec: "A", recWhy: "With closing time they are about 1% of the score: no rule needed." },
+  { id: "autopilot", sec: "clock", sev: "high", kind: "Rule", title: "Tables that play themselves", sum: "With the clock off, normal builds gained ×0.5–2; self-playing tables ×4–15, balls alive past 10 minutes.",
+    found: ["A skilled player with a normal table does not run away without the clock (×0.5 to ×2, a little more for a pro).", "Self-playing tables (Mag-Grab loop, multiball castle, Diner autopilot) kept balls alive past the 10-minute cut and scored ×4 to ×15 more.", "On those tables a pro and an average player score the same: the clock is capping the machine, not the hands."],
+    why: "Nothing but the clock ends a ball that never reaches the flippers.",
+    goal: "Skill should matter; a table that plays itself should not win by itself.",
+    opts: [
+      { id: "A", label: "Autopilot tax: the clock runs ×2 while the ball has not touched a flipper for 15 s", what: "", pros: ["Ends self-playing loops without touching any part", "Flipper play is never taxed"], cons: ["Needs a small on-screen hint"] },
+      { id: "B", label: "Fix only the loop parts (Mag-Grab, Printer, Wheel)", what: "", pros: ["No new rule"], cons: ["The next new part may make a new loop"] },
+      { id: "C", label: "The clock pauses while the player is flipping", what: "Reward skill directly.", pros: ["Skill matters more"], cons: ["Good players get much longer balls: rounds get long"] },
+    ], rec: "A", recWhy: "One rule covers every loop, present and future." },
+  { id: "time-items", sec: "clock", sev: "medium", kind: "New content", title: "Items that give or take time", sum: "You asked for parts and decals that add or remove time. Pick any you like.", multi: true,
+    found: ["The clock mostly limits machines, not players, so time items should be earned by skill or traded for points."],
+    why: "Today the only time item is Long Fuse, and it does nothing (see Bugs).",
+    goal: "Gives skilled players a way to stretch a great ball, and risk-takers a way to trade time for points.",
+    opts: [
+      { id: "hourglass", label: "Hourglass (part, uncommon)", what: "Every hit on it from a flipper shot adds +1 s, up to +20 s a ball.", pros: ["Time earned by aim"], cons: ["Needs 'flipper shot' tracking"] },
+      { id: "overtime", label: "Overtime (decal)", what: "+20 s every ball, but every goal is 10% higher.", pros: ["A real trade"], cons: [] },
+      { id: "sudden", label: "Sudden Death (decal)", what: "Every ball has 20 s less, every hit pays ×1.5.", pros: ["Takes time away for points: good with fast scorers"], cons: ["Hard for weak players (they won't pick it)"] },
+      { id: "stopwatch", label: "Stopwatch (rollover, rare)", what: "Once a ball, freezes the clock for 8 s.", pros: ["A skill-shot target"], cons: [] },
+      { id: "timebomb", label: "Time Bomb (part)", what: "Pays ×2 in the last 10 s of a ball.", pros: ["Rewards keeping a ball alive to the end"], cons: ["Weak with the drain-out change unless drain-out points count"] },
+    ], rec: ["hourglass", "sudden"], recWhy: "One earns time with skill, one trades time for points. Add more later." },
+
+  // ---------- late ----------
+  { id: "money-sink", sec: "late", sev: "high", kind: "Economy", title: "Late money has nothing to buy", sum: "Cash at the shop: $47 in round 10, $138 in round 15, while spending falls to about $9 a round.", cards: ["well"],
+    found: ["The table holds 36–37 pieces by round 12 and the toolbox is full, so new parts have nowhere to go.", "Rerolls stay rare (0.1–0.4 a round) for the same reason.", "Every cash decal taken after round 6 is close to worthless."],
+    why: "Money is the main late reward, but nothing turns it into points once the table is full.",
+    goal: "Late money is the easiest way to let good runs reach the 2.5M final.",
+    opts: [
+      { id: "A", label: "Tune-up: pay $5 to level up a part", what: "Once per part per visit.", pros: ["Money becomes points", "Uses the existing level system"], cons: ["A new button in the workshop"] },
+      { id: "B", label: "Wishing Well becomes the sink", what: "No $5 limit, +0.05 Mult per $ thrown in.", pros: ["No new system"], cons: ["Only if you own a Well"] },
+      { id: "C", label: "Pay $15 once to widen the table", what: "", pros: ["Room for new parts"], cons: ["Bigger tables are slower to draw"] },
+      { id: "D", label: "Scrapping is free from round 10", what: "", pros: ["Encourages rebuilding"], cons: ["Does not use the money"] },
+    ], rec: "A", recWhy: "The cleanest way to turn late cash into points. B is a nice extra." },
+  { id: "honest-builds", sec: "late", sev: "high", kind: "Builds", title: "Normal builds stall at rounds 13–14", sum: "Lights, targets, sets, sparks, additive Mult and ×Mult ladders all lose by round 14, even for a pro.",
+    found: ["Only two families of builds won without a dream budget: the Big Boi engine and multiball.", "Partial builds (only some pieces found) mostly die before round 13: that part is fine."],
+    why: "The final curve rises faster than these builds can scale, and late money can't help them grow.",
+    goal: "Many kinds of good build should be able to win clutch.",
+    opts: [
+      { id: "A", label: "Fix the no-ceiling items and late money first, then re-test", what: "", pros: ["Fixes the cause before tuning parts"], cons: ["Waits a round of work"] },
+      { id: "B", label: "Buff the archetypes now", what: "For example uncapped lane sets, Bank sets ×2 Mult, Light Show ×2.", pros: ["Faster"], cons: ["May have to undo after the other fixes"] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: ["Only two kinds of build win"] },
+    ], rec: "A", recWhy: "Most of these builds should recover with the curve and the money fix." },
+  { id: "big-parts", sec: "late", sev: "medium", kind: "Parts", title: "Big rail parts can't fit a late table", sum: "Duck Gallery, Goal!, Roller Pop and Free Ball Bucket could not be placed on a 16-part table.", cards: ["goal", "duck", "roller", "bucket"],
+    found: ["On the 16-part test table none of them could be placed at all. Real late tables hold 36 pieces.", "Goal! also shortens ball life by about 8 s."],
+    why: "Their footprints are 3.5–4 units, much bigger than other parts.",
+    goal: "A legendary that shows up late should be usable.",
+    opts: [
+      { id: "A", label: "Sell them only in rounds 1–9", what: "", pros: ["No physics change"], cons: ["Late shops get duller"] },
+      { id: "B", label: "Smaller footprints (about 2.5)", what: "", pros: ["They fit everywhere"], cons: ["Art and physics work"] },
+      { id: "C", label: "Rails may overlap floor parts", what: "", pros: ["Small change"], cons: ["Only helps a little"] },
+    ], rec: "B", recWhy: "Fixes it in every run." },
+
+  // ---------- early ----------
+  { id: "round3-boss", sec: "early", sev: "high", kind: "Bosses", title: "The round-3 boss", sum: "14 of 113 lost runs ended at the round-3 boss.", cards: ["jammer", "shortFuse"],
+    found: ["6 to Short Fuse, 6 to The Jammer, 2 to Slippery Slope.", "At round 3 The Jammer jams your Pop Bumpers, the starter's main scorer."],
+    why: "Round 3 draws from the same boss pool as round 12, but a round-3 table has 2–4 parts.",
+    goal: "Early rounds should be easy; the first boss should be a lesson, not a run-ender.",
+    opts: [
+      { id: "A", label: "Round 3 draws from a gentle list", what: "Tax Man, Slippery Slope, The Magnet, Cheap Rubber.", pros: ["New players learn bosses without losing the run"], cons: ["Less variety at round 3"] },
+      { id: "B", label: "Keep the draw; The Jammer never jams starter parts", what: "", pros: ["Small change"], cons: ["Short Fuse still ends runs at round 3"] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: ["Many early losses"] },
+    ], rec: "A", recWhy: "Exactly what an early boss should be." },
+  { id: "weak-players", sec: "early", sev: "medium", kind: "Players", title: "Help for weak players", sum: "Poor players lose 23% of round 1 and 61% of round 2. Guard parts don't help them.", cards: ["hand", "saver", "safetyNet"],
+    found: ["Helping Hand made poor players worse (−23% late); extra flippers too.", "What does help them: Ball Saver (+26%), Safety Net (+72%), Glass Ball (+145%), Rubber Ball (+101%), Twin Ball (+280%)."],
+    why: "The guard parts take table room and block shots without saving balls.",
+    goal: "A low-skill player with a good build should be able to win clutch.",
+    opts: [
+      { id: "A", label: "Make the Helping Hand a real helper, and soften round 2", what: "See Weak parts (Helping Hand) and the goal curve.", pros: ["Weak players get a real build path"], cons: [] },
+      { id: "B", label: "Add an easy mode", what: "", pros: ["Clear"], cons: ["Splits the scoreboard"] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: ["Weak players rarely see round 4"] },
+    ], rec: "A", recWhy: "Gives weak players a real build, no special mode." },
+
+  // ---------- bosses ----------
+  { id: "shortfuse", sec: "bosses", sev: "high", kind: "Boss", title: "Short Fuse", sum: "The hardest regular boss on every kind of build.", cards: ["shortFuse"],
+    found: ["Average player on the late test table: pass rate 89% without it, 11% with it; 0–22% on every build.", "It ended 29% of the real runs that met it."],
+    why: "A 30 s ball is half a normal ball, and most points come late in a ball when the Mult is high.",
+    goal: "A boss should break one kind of build, not all of them.",
+    opts: [
+      { id: "A", label: "40 s instead of 30", what: "", pros: ["Still scary, beatable"], cons: [] },
+      { id: "B", label: "30 s, but the clock starts 5 s after the launch", what: "", pros: ["Same feel"], cons: ["Harder to explain"] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: ["Ends many runs"] },
+    ], rec: "A", recWhy: "Simplest." },
+  { id: "overlord", sec: "bosses", sev: "high", kind: "Final boss", title: "The Overlord", sum: "Beat all 6 real runs that reached it.", cards: ["overlord"],
+    found: ["0 of 6 real runs survived it; 0–11% pass rate on four of six build tables.", "The other finals: The Auditor was beaten 78% of the time by the builds, The Whirlpool 63–85%."],
+    why: "Switching off a random part type every ball, plus −30% Mult, breaks every engine at once.",
+    goal: "The final should be hard and clutch, not a wall.",
+    opts: [
+      { id: "A", label: "Switch off a random type once a round, not every ball", what: "", pros: ["Still a real threat", "Players can adapt after ball 1"], cons: [] },
+      { id: "B", label: "Keep the switch-off, drop the −30% Mult", what: "", pros: [], cons: ["Still very random"] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: ["Runs that draw it almost always lose"] },
+    ], rec: "A", recWhy: "Keeps it the hardest final, but beatable." },
+  { id: "jammer", sec: "bosses", sev: "medium", kind: "Boss", title: "The Jammer", sum: "0% pass for builds that rely on one part type.", cards: ["jammer"],
+    found: ["Big Boi engine, light and target builds: 0% pass rate. At round 3 it jams the starter Pops."],
+    why: "Your most numerous type is often the whole build.",
+    goal: "A counter, not a guaranteed loss.",
+    opts: [
+      { id: "A", label: "Jams the most numerous bought type, never more than about 40% of your points", what: "", pros: ["Still punishes one-trick tables"], cons: ["Needs a points estimate"] },
+      { id: "B", label: "The jammed type scores half instead of nothing", what: "", pros: ["Simple"], cons: ["Weaker"] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: [] },
+    ], rec: "B", recWhy: "Simplest fix that keeps the idea." },
+  { id: "nightshift", sec: "bosses", sev: "medium", kind: "Boss", title: "Night Shift", sum: "Lights, target and ×Mult builds scored almost nothing (×0.00–0.21). Spotlights ignore it.", cards: ["nightShift"],
+    found: ["0% pass for the light, target and ×Mult builds.", "Spotlights keep working under Night Shift: probably an oversight."],
+    why: "It turns off X Lanes and Disco Balls, which most late builds need for Mult.",
+    goal: "Hard for light builds, not impossible.",
+    opts: [
+      { id: "A", label: "Leave X Lanes and Disco Balls on; Spotlights also go dark", what: "", pros: ["Still kills lanes and lamps"], cons: [] },
+      { id: "B", label: "Lights pay half instead of nothing", what: "", pros: ["Softer for everyone"], cons: [] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: [] },
+    ], rec: "A", recWhy: "Keeps its theme, removes the wipe-out." },
+  { id: "taxman", sec: "bosses", sev: "low", kind: "Boss", title: "The Tax Man", sum: "Has no effect on score at all.", cards: ["taxMan"],
+    found: ["Same pass rate with and without it, on every table. Late money is useless anyway, so it never threatens."],
+    why: "It only takes money.",
+    goal: "Every boss should be felt.",
+    opts: [
+      { id: "A", label: "Make it a gentle round-3 boss", what: "", pros: ["Fits the gentle list"], cons: [] },
+      { id: "B", label: "Also −25% points", what: "", pros: ["Real threat later"], cons: [] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: [] },
+    ], rec: "A", recWhy: "Perfect first boss." },
+  { id: "crossedwires", sec: "bosses", sev: "medium", kind: "Boss", title: "Crossed Wires", sum: "Costs bots nothing; a confused player falls to 0–11% pass.", cards: ["crossedWires"],
+    found: ["The test bots swap hands perfectly, so it had no effect on them.", "A test player who presses the old hand 30% of the time dropped from 33–89% pass to 0–11%."],
+    why: "Its real cost depends on how fast humans adapt, which bots can't show.",
+    goal: "A fair surprise, not an instant loss.",
+    opts: [
+      { id: "A", label: "Playtest with people before changing", what: "", pros: ["Real data"], cons: ["Needs a session"] },
+      { id: "B", label: "Swap only for the first 20 s of each ball", what: "", pros: ["Softer"], cons: ["Less of a twist"] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: [] },
+    ], rec: "A", recWhy: "The bot can't tell you this one." },
+
+  // ---------- bugs ----------
+  { id: "longfuse", sec: "bugs", sev: "low", kind: "Fixed", title: "Long Fuse now works (fixed by your timer change)", sum: "It did nothing before; your change made its 20 s count.", cards: ["longFuse"],
+    found: ["Before: zero effect on every table, for every player.", "Your merged change: each ball's backstop is now the clock plus 15 s, so the extra 20 s counts (not re-measured yet)."],
+    why: "The old hard 60 s limit on every ball ended balls before the longer clock ran out.",
+    goal: "A decal must do what its card says.",
+    opts: [
+      { id: "A", label: "Mark as done", what: "", pros: [], cons: [] },
+      { id: "B", label: "Re-test it in the next balance pass", what: "", pros: ["Confirms the fix"], cons: [] },
+    ], rec: "A", recWhy: "The code is right now; it will show in the next pass anyway." },
+  { id: "bucket-clock", sec: "bugs", sev: "critical", kind: "Bug", title: "The Free Ball Bucket gives a fresh clock", sum: "Caught during the run-out, the ball goes back to the plunger and gets a whole new minute, free.", cards: ["bucket"],
+    found: ["Measured with your merged timer: 39 fresh clocks in 511 run-outs; on the multiball castle 10–15 fresh clocks per 18 balls (the clock ran out 1.7 times per ball).", "Smaller version: a Twin Ball twin left in the plunger lane when time runs out also starts on a new clock."],
+    why: "A run-out ends when every ball is in the plunger lane, and the next launch starts a new clock. The Bucket puts the ball there without spending it.",
+    goal: "The clock should mean something.",
+    opts: [
+      { id: "A", label: "The Bucket stops returning balls when time is up", what: "Part of 'closing time': it is just a target then.", pros: ["Closes it completely (5 left in the tests came from the twin)"], cons: [] },
+      { id: "B", label: "A returned ball keeps its old clock", what: "The run-out carries on until it rolls out.", pros: ["Also covers the twin"], cons: ["A ball in the lane with no plunger: it must auto-fire"] },
+      { id: "C", label: "Both", what: "", pros: ["Covers every case"], cons: [] },
+    ], rec: "C", recWhy: "A for the Bucket, B for the Twin case." },
+  { id: "wheel-zilch", sec: "bugs", sev: "medium", kind: "Bug", title: "Spider Wheel: the timeout always gives Zilch", sum: "3 s × 5 segments a second always stops on segment 8, Zilch.", cards: ["wheel"],
+    found: ["A player who never presses gets Zilch every time."],
+    why: "The wheel's stop is computed from time: 3 s × 5 = 15, and 15 mod 8 = 7, which is Zilch.",
+    goal: "Fair to players who don't know to press.",
+    opts: [
+      { id: "A", label: "Random prize on timeout", what: "", pros: ["Fair"], cons: [] },
+      { id: "B", label: "Keep Zilch, say so on the card", what: "", pros: ["Teaches pressing"], cons: [] },
+    ], rec: "A", recWhy: "Fair and simple." },
+  { id: "wheel-card", sec: "bugs", sev: "low", kind: "Wrong card", title: "Spider Wheel card says it holds the ball 70 s", sum: "It really spins up to 3 s.", cards: ["wheel"],
+    found: ["The card reads the first dial (Power, 70) as the hold time."],
+    why: "The hold sentence takes the first dial of any scoop; the wheel's first dial is Power.",
+    goal: "Cards must be right.",
+    opts: [{ id: "A", label: "Fix the sentence", what: "Say: spins until you flip, or 3 s.", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "hand-card", sec: "bugs", sev: "low", kind: "Wrong card", title: "Helping Hand card says it uses the Left key", sum: "The card says both 'needs no button' and 'worked by the Left key'.", cards: ["hand"],
+    found: ["The generic flipper line is added to every flipper-type part."],
+    why: "The Helping Hand is a flipper part, so it gets the extra line.",
+    goal: "Cards must be right.",
+    opts: [{ id: "A", label: "Remove the Left-key line for the Helping Hand", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "levels-cap", sec: "bugs", sev: "low", kind: "Oddity", title: "Levels can go past 10", sum: "Level Up and Golden Age add on top of the max level (up to 13).",
+    found: ["Decal levels are added after the cap of 10."],
+    why: "The cap is applied to the part's own level, then decal levels are added.",
+    goal: "Clear rules.",
+    opts: [
+      { id: "A", label: "Cap the total at 10", what: "", pros: ["Consistent"], cons: ["Decals do nothing on maxed parts"] },
+      { id: "B", label: "Keep (counts as higher, as the card says)", what: "", pros: ["Card already says 'counts as'"], cons: [] },
+    ], rec: "B", recWhy: "The card wording already allows it." },
+  { id: "cook-goal", sec: "bugs", sev: "low", kind: "Bug", title: "A Cook order on Goal! is never used", sum: "Found in the code by a build finder.",
+    found: ["The goal's scoring path skips the Cook's order check, so an order on Goal! stays lit and never pays ×4."],
+    why: "Goal! scores through its own code path.",
+    goal: "Machines should work with every part.",
+    opts: [{ id: "A", label: "Apply orders to Goal! too", what: "", pros: [], cons: [] }, { id: "B", label: "Never call an order on Goal!", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "gremlins", sec: "bugs", sev: "low", kind: "Oddity", title: "Gremlin knocks don't count as hits", sum: "They don't move the Midnight Clock, Lucky Seven or the Jackpot pot.", cards: ["hutch"],
+    found: ["Found in the code by a build finder."],
+    why: "Gremlins score through a separate event.",
+    goal: "If intended, fine; the Hutch is weak for $12 either way (see Weak parts).",
+    opts: [{ id: "A", label: "Count gremlin knocks as hits", what: "", pros: ["Hutch gets better"], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "A cheap buff for a weak legendary." },
+
+  // ---------- weak parts ----------
+  { id: "deflector", sec: "weak", sev: "medium", kind: "Part", title: "Deflector", sum: "−37% to −2%: it takes room and scores nothing.", cards: ["deflector"],
+    found: ["Negative or zero on every table in both passes."],
+    why: "Its only reward is a +25% Hot Shot that rarely lands; meanwhile it blocks space.",
+    goal: "Every part should be worth its spot somewhere.",
+    opts: [
+      { id: "A", label: "Give it points (5 a hit)", what: "", pros: ["Simple"], cons: [] },
+      { id: "B", label: "Hot Shot +50%", what: "", pros: ["Keeps its role as a combo starter"], cons: [] },
+      { id: "C", label: "Both", what: "", pros: [], cons: [] },
+    ], rec: "C", recWhy: "It is $1 and weak; both are safe." },
+  { id: "whale", sec: "weak", sev: "medium", kind: "Part", title: "The Whale", sum: "A legendary that loses points: −29% to +28%, poor players −31%.", cards: ["whale"],
+    found: ["Negative on the late table in both passes."],
+    why: "It eats sparks that would have scored, and spouts at most 3 times a ball.",
+    goal: "A legendary should feel legendary in its build (sparks).",
+    opts: [
+      { id: "A", label: "No spout limit", what: "", pros: ["Big spark builds love it"], cons: ["Watch for loops"] },
+      { id: "B", label: "Swallowed sparks keep scoring", what: "", pros: ["Never a loss"], cons: [] },
+      { id: "C", label: "Make it uncommon ($7)", what: "", pros: [], cons: [] },
+    ], rec: "B", recWhy: "Removes the downside, keeps the fantasy." },
+  { id: "spotlight", sec: "weak", sev: "medium", kind: "Part", title: "Spotlight goes dark too much", sum: "−16% to +15% on normal tables; poor players −18%.", cards: ["spot"],
+    found: ["The ball knocks it dark about 5 times a round, 10 s each.", "Only great when stacked around Big Boi (see Big Boi)."],
+    why: "It is dark half the time.",
+    goal: "Good on its own, not only in a stack.",
+    opts: [
+      { id: "A", label: "Dark for 4 s, not 10", what: "", pros: ["Works on normal tables"], cons: ["Fix the stacking first"] },
+      { id: "B", label: "Only a direct flipper shot knocks it dark", what: "", pros: ["Skill-based"], cons: [] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: [] },
+    ], rec: "A", recWhy: "Together with the additive stacking fix." },
+  { id: "nest", sec: "weak", sev: "low", kind: "Part", title: "Spider Nest", sum: "−24% to +1%: under 2 sparks a round.", cards: ["nest"],
+    found: ["About 1.8 sparks a round."], why: "25% egg chance on a part that is hit about 7 times a round.", goal: "Spark builds need it to matter.",
+    opts: [{ id: "A", label: "50% eggs", what: "", pros: [], cons: [] }, { id: "B", label: "Eggs hatch into 5", what: "", pros: [], cons: [] }, { id: "C", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "Doubles it simply." },
+  { id: "jar", sec: "weak", sev: "low", kind: "Part", title: "Marble Jar", sum: "−23% to +17%: about 0.3 marbles a round.", cards: ["jar"],
+    found: ["A marble every 25 ball hits: takes many rounds to matter."], why: "It is hit about 9 times a round.", goal: "A run-long grower should show something within 3–4 rounds.",
+    opts: [{ id: "A", label: "A marble every 10 hits", what: "", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "hand", sec: "weak", sev: "high", kind: "Part", title: "Helping Hand doesn't help", sum: "−23% for poor players, the people it is for.", cards: ["hand"],
+    found: ["It flips, but balls don't live longer (ball life −3 s for poor players late)."],
+    why: "It flips late and in random directions, and blocks shots.",
+    goal: "This should be the weak player's build piece.",
+    opts: [
+      { id: "A", label: "Flip earlier and harder, always upward", what: "", pros: ["Saves balls"], cons: ["Could become an autopilot part: pair with the autopilot tax"] },
+      { id: "B", label: "Each Helping Hand saves one drain a ball", what: "", pros: ["Clear help"], cons: ["Overlaps with Ball Saver"] },
+      { id: "C", label: "Keep", what: "", pros: [], cons: [] },
+    ], rec: "A", recWhy: "Makes it what it says." },
+  { id: "flippers", sec: "weak", sev: "medium", kind: "Part", title: "Extra flippers", sum: "−21% to +9%, even for poor players.", cards: ["flipper"],
+    found: ["They don't save balls and they block shots."], why: "A small bat in the middle of the table rarely meets the ball at the right time.", goal: "A guard part should guard.",
+    opts: [{ id: "A", label: "$4, and one save a ball when the ball crosses it", what: "", pros: [], cons: [] }, { id: "B", label: "Just $4", what: "", pros: [], cons: ["Still weak"] }, { id: "C", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "bonsai", sec: "weak", sev: "low", kind: "Part", title: "Bonsai Bumper", sum: "−16% to +8%: needs 8+ rounds to pay.", cards: ["bonsai"],
+    found: ["Inside the noise over 4 rounds."], why: "+4 a round is slow.", goal: "A grower should be felt within a few rounds.",
+    opts: [{ id: "A", label: "+6 a round", what: "", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: ["Fine for long runs"], cons: [] }], rec: "A", recWhy: "" },
+  { id: "clockdecor", sec: "weak", sev: "low", kind: "Decor", title: "Midnight Clock", sum: "−6% to +15%: midnight about once every two rounds.", cards: ["clock"],
+    found: ["About 0.5 midnights a round."], why: "180 hits is a lot without sparks or zaps.", goal: "",
+    opts: [{ id: "A", label: "120 hits", what: "", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "legend-decor", sec: "weak", sev: "low", kind: "Decor", title: "Ritual Altar and Gremlin Hutch", sum: "Legendary decor at $12 that adds only −9% to +38%.", cards: ["altar", "hutch"],
+    found: ["Both small next to any legendary part."], why: "Rituals come rarely; gremlin knocks are 100 points.", goal: "",
+    opts: [{ id: "A", label: "Price them as rares ($8)", what: "", pros: [], cons: [] }, { id: "B", label: "Stronger rituals / gremlins", what: "", pros: [], cons: [] }, { id: "C", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "capsule", sec: "weak", sev: "low", kind: "Part", title: "Time Capsule", sum: "Scores nothing for 6 rounds, then a free legendary (works as described).", cards: ["capsule"],
+    found: ["Works: ripe after exactly 6 rounds, offers 3 legendaries."], why: "6 rounds is half the run.", goal: "",
+    opts: [{ id: "A", label: "4 rounds", what: "", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+
+  // ---------- gems ----------
+  { id: "garnet", sec: "gems", sev: "low", kind: "Gem", title: "Garnet", sum: "0% to +8%: does nothing measurable.", cards: ["garnet"],
+    found: ["Tested in X Lane and Laser Turret."], why: "Their recharge is rarely what limits them.", goal: "Every gem should have a host where it shines.",
+    opts: [{ id: "A", label: "Halve the cooldown of any part that has one", what: "Sparkler, Rock Pile, Splitter, Kickback, Tesla's zap cooldown.", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "opal", sec: "gems", sev: "low", kind: "Gem", title: "Opal", sum: "0% to +13%: does nothing measurable.", cards: ["opal"],
+    found: ["Tested in a Pop Bumper and the Duck Gallery."], why: "Growth caps are reached anyway.", goal: "",
+    opts: [{ id: "A", label: "Also doubles Trophy polish and Bonsai age", what: "", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "goldleaf", sec: "gems", sev: "low", kind: "Gem", title: "Gold Leaf", sum: "+3% to +11%: too slow to show.", cards: ["goldleaf"],
+    found: ["Tested in a Pop Bumper."], why: "+1 a score takes many rounds.", goal: "",
+    opts: [{ id: "A", label: "+2 a score", what: "", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "topaz", sec: "gems", sev: "low", kind: "Gem", title: "Topaz", sum: "Inside the noise: about nothing.", cards: ["topaz"],
+    found: ["Tested in a Pop Bumper."], why: "15% of hits is few sparks.", goal: "",
+    opts: [{ id: "A", label: "25% chance", what: "", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+
+  // ---------- decals ----------
+  { id: "glasscannon", sec: "decals", sev: "low", kind: "Decal", title: "Glass Cannon", sum: "About nothing: −8% to +12%.", cards: ["glassCannon"],
+    found: ["One ball fewer for ×1.5 points is a wash."], why: "Losing a third of the balls cancels the ×1.5.", goal: "A risk decal should pay off for the brave.",
+    opts: [{ id: "A", label: "×2 instead of ×1.5", what: "", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "comboking", sec: "decals", sev: "low", kind: "Decal", title: "Combo King", sum: "+0% to +8%.", cards: ["comboKing"],
+    found: ["Hot Shots are a small part of the score."], why: "", goal: "",
+    opts: [{ id: "A", label: "Hot Shots ×3 the usual extra", what: "", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "spindoctor", sec: "decals", sev: "low", kind: "Decal", title: "Spin Doctor", sum: "+0% to +10% (only works with Spinners).", cards: ["spinDoctor"],
+    found: ["Zero on tables without Spinners."], why: "", goal: "",
+    opts: [{ id: "A", label: "Offer it only when you own a Spinner", what: "", pros: [], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "cashdecals", sec: "decals", sev: "medium", kind: "Decals", title: "Cash decals late in the run", sum: "Close to worthless after round 6, because late money has nothing to buy.",
+    found: ["Sponsor, Interest, Coupon Book, Ball Hog, Golden Ticket and the rest: no score effect (as designed), and money piles up late."], why: "See Late game: money sink.", goal: "",
+    opts: [{ id: "A", label: "Fix the money sink; they become useful", what: "", pros: [], cons: [] }, { id: "B", label: "Offer cash decals only after rounds 3 and 6", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+
+  // ---------- tools ----------
+  { id: "parbot", sec: "tools", sev: "high", kind: "Tool", title: "The balance tool's test player never misses", sum: "Its 60% skill is re-rolled 240 times a second.",
+    found: ["It flips almost every time: it plays like our 'pro'. Every curve number so far is a perfect player's number."],
+    why: "The skill roll repeats every frame while the ball is near the flipper.",
+    goal: "The next balance pass should measure people.",
+    opts: [{ id: "A", label: "Use the research players (pro, average, poor)", what: "One decision per approach: miss or react late.", pros: ["Matches people"], cons: [] }, { id: "B", label: "Keep", what: "", pros: [], cons: [] }], rec: "A", recWhy: "" },
+  { id: "playtest", sec: "tools", sev: "medium", kind: "Playtest", title: "What only people can test", sum: "Nudging, aiming and Crossed Wires.",
+    found: ["No test player nudges (Rubber Feet, Heavy Ball's cost, tilt are untested) or aims (Goal!, Duck Gallery, Drop-Target Banks may be stronger for people)."],
+    why: "Bots can't learn a table.", goal: "",
+    opts: [{ id: "A", label: "A short human playtest list", what: "Crossed Wires, Goal!, Duck Gallery, Rubber Feet, the drain-out timer.", pros: [], cons: [] }, { id: "B", label: "Add a nudging and an aiming bot", what: "", pros: [], cons: ["Work"] }], rec: "A", recWhy: "" },
+];
+
+// ---------------- state ----------------
+const KEY = "bigboi-balance-board-v1";
+let state = {}; // id -> {choice, status, note, at}
+let db = null, mode = "local";
+const pending = new Map(); // id -> timer
+const writing = new Map(); // id -> promise chain
+const focusNote = { id: null };
+
+function loadLocal() { try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch { return {}; } }
+function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
+function entry(id) { return state[id] || (state[id] = { choice: null, status: "open", note: "" }); }
+
+function setSave(text) { document.getElementById("savestate").textContent = text; }
+
+function persist(id, delay = 0) {
+  saveLocal();
+  if (!db) { setSave(mode === "local" ? "Saved in this browser only" : "Saved"); return; }
+  clearTimeout(pending.get(id));
+  setSave("Saving…");
+  pending.set(id, setTimeout(() => {
+    pending.delete(id);
+    const body = { ...entry(id), at: Date.now() };
+    const prev = writing.get(id) || Promise.resolve();
+    const next = prev.then(() => db.collection("decisions").doc(id).set(body)).then(
+      () => { if (!pending.size) setSave("Saved to the board"); },
+      (e) => { setSave(e && e.code === "invalid_argument" ? "You can read this board but not save to it" : "Could not save; kept in this browser"); }
+    );
+    writing.set(id, next);
+  }, delay));
+}
+
+// ---------------- render ----------------
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const STATUS = { open: "Not decided", decided: "Decided", later: "Later", skip: "Skip" };
+
+function optLabel(it, id) { const o = it.opts.find((x) => x.id === id); return o ? `${o.id.length <= 2 ? o.id + ": " : ""}${o.label}` : id; }
+function chosenText(it, e) {
+  if (!e.choice || (Array.isArray(e.choice) && !e.choice.length)) return "";
+  const ids = Array.isArray(e.choice) ? e.choice : [e.choice];
+  return ids.map((id) => optLabel(it, id)).join(" + ");
+}
+
+function buildItem(it) {
+  const art = document.createElement("article");
+  art.className = `item sev-${it.sev}`;
+  art.id = it.id;
+  const cards = (it.cards || []).map((k) => T[k]).filter(Boolean).map(([n, m, t]) => `<div class="card"><div><span class="cname">${esc(n)}</span> <span class="cmeta">· ${esc(m)}</span></div><q>${esc(t)}</q></div>`).join("");
+  const table = it.table ? `<div class="tablewrap"><table class="goals"><thead><tr><th>Round</th>${ROUNDS.map((r) => `<th>${r}</th>`).join("")}</tr></thead><tbody>${CURVES.map(([n, v]) => `<tr><td>${esc(n)}</td>${v.map((x, i) => `<td class="${/boss|final/.test(ROUNDS[i]) ? "boss" : ""}">${x.toLocaleString("en-US")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : "";
+  const recs = Array.isArray(it.rec) ? it.rec : [it.rec];
+  const opts = it.opts.map((o) => {
+    const type = it.multi ? "checkbox" : "radio";
+    const pros = o.pros && o.pros.length ? `<div class="p"><b>Good</b><ul>${o.pros.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+    const cons = o.cons && o.cons.length ? `<div class="c"><b>Watch out</b><ul>${o.cons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+    return `<label class="opt${recs.includes(o.id) ? " rec" : ""}" data-opt="${o.id}">
+      <input type="${type}" name="opt-${it.id}" id="opt-${it.id}-${o.id}" value="${o.id}">
+      <span class="otitle">${o.id.length <= 2 ? esc(o.id) + ". " : ""}${esc(o.label)}${recs.includes(o.id) ? '<span class="recbadge">Recommended</span>' : ""}</span>
+      ${o.what ? `<p class="owhat">${esc(o.what)}</p>` : ""}
+      ${pros || cons ? `<div class="pc">${pros}${cons}</div>` : ""}
+    </label>`;
+  }).join("");
+  art.innerHTML = `<details>
+    <summary>
+      <div class="sumtext">
+        <div class="tags"><span class="tag ${it.sev}">${{ critical: "Must fix", high: "Should fix", medium: "Worth doing", low: "Minor" }[it.sev]}</span><span class="tag area">${esc(areaName(it.sec))}</span><span class="tag kind">${esc(it.kind)}</span></div>
+        <h3><span class="chev" aria-hidden="true">▸</span> ${esc(it.title)}</h3>
+        <p>${esc(it.sum)}</p>
+        <div class="chosen" data-chosen></div>
+      </div>
+      <span class="statuspill" data-pill>Not decided</span>
+    </summary>
+    <div class="body">
+      ${cards ? `<div class="block"><h4>In the game, the card says</h4><div class="cards">${cards}</div></div>` : ""}
+      ${table}
+      <div class="block"><h4>What we found</h4><ul>${it.found.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
+      ${it.why ? `<div class="block"><h4>Why it happens</h4><p>${esc(it.why)}</p></div>` : ""}
+      ${it.goal ? `<p class="goalline"><b>For your goal:</b> ${esc(it.goal)}</p>` : ""}
+      <div class="block"><h4>${it.multi ? "Pick the ones you want" : "Pick a fix"}</h4><div class="opts">${opts}</div>
+        ${it.recWhy ? `<p class="recwhy"><b>Why the recommendation:</b> ${esc(it.recWhy)}</p>` : ""}</div>
+      <div class="mine">
+        <div class="statusrow" role="group" aria-label="Status"><span>Status:</span>${Object.entries(STATUS).map(([k, v]) => `<button class="seg" data-status="${k}" aria-pressed="false">${v}</button>`).join("")}</div>
+        <label class="notes" for="note-${it.id}">Your notes<textarea id="note-${it.id}" placeholder="Anything you want to change, ask or remember about this one"></textarea></label>
+      </div>
+    </div>
+  </details>`;
+  // events
+  art.querySelectorAll("input").forEach((inp) => inp.addEventListener("change", () => {
+    const e = entry(it.id);
+    if (it.multi) e.choice = [...art.querySelectorAll("input:checked")].map((x) => x.value);
+    else e.choice = inp.value;
+    if (e.status === "open") e.status = "decided";
+    paintItem(it); paintProgress(); persist(it.id);
+  }));
+  art.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", () => {
+    entry(it.id).status = b.dataset.status;
+    paintItem(it); paintProgress(); applyFilter(); persist(it.id);
+  }));
+  const ta = art.querySelector("textarea");
+  ta.addEventListener("focus", () => { focusNote.id = it.id; });
+  ta.addEventListener("blur", () => { focusNote.id = null; });
+  ta.addEventListener("input", () => { entry(it.id).note = ta.value; persist(it.id, 900); });
+  return art;
+}
+
+function paintItem(it) {
+  const art = document.getElementById(it.id);
+  if (!art) return;
+  const e = entry(it.id);
+  const picked = Array.isArray(e.choice) ? e.choice : e.choice ? [e.choice] : [];
+  art.querySelectorAll(".opt").forEach((l) => {
+    const on = picked.includes(l.dataset.opt);
+    l.classList.toggle("picked", on);
+    l.querySelector("input").checked = on;
+  });
+  art.querySelectorAll("[data-status]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.status === e.status)));
+  const pill = art.querySelector("[data-pill]");
+  pill.textContent = STATUS[e.status] || "Not decided";
+  pill.className = `statuspill ${e.status}`;
+  const ct = chosenText(it, e);
+  art.querySelector("[data-chosen]").innerHTML = ct ? `Your pick: <b>${esc(ct)}</b>${e.note ? " · has a note" : ""}` : e.note ? "Has a note" : "";
+  const ta = art.querySelector("textarea");
+  if (focusNote.id !== it.id && ta.value !== (e.note || "")) ta.value = e.note || "";
+}
+
+const PRIORITY = [
+  { id: "critical", name: "Must fix", blurb: "These break the game or make every other number meaningless. Do them first, in this order." },
+  { id: "high", name: "Should fix", blurb: "Big effects on who wins and how runs feel." },
+  { id: "medium", name: "Worth doing", blurb: "Noticeable, but the game works without them." },
+  { id: "low", name: "Minor", blurb: "Small tweaks, wrong card wording and nice-to-haves." },
+];
+/** In priority view, items keep this order of areas: the ceilings first, because every other number depends on them. */
+const FIX_ORDER = ["ceiling", "bigboi", "strong", "clock", "bugs", "late", "curve", "early", "bosses", "weak", "gems", "decals", "tools"];
+const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+const areaName = (id) => (SECTIONS.find((s) => s.id === id) || {}).name || id;
+let grouping = (() => { try { return localStorage.getItem(KEY + ":group") || "priority"; } catch { return "priority"; } })();
+function groups() {
+  if (grouping === "area") return SECTIONS.map((s) => ({ id: s.id, name: s.name, blurb: s.blurb, items: ITEMS.filter((i) => i.sec === s.id).sort((a, b) => SEV_RANK[a.sev] - SEV_RANK[b.sev]) }));
+  const rank = (it) => FIX_ORDER.indexOf(it.sec);
+  return PRIORITY.map((p) => ({ id: p.id, name: p.name, blurb: p.blurb, items: ITEMS.filter((i) => i.sev === p.id).sort((a, b) => rank(a) - rank(b)) }));
+}
+
+function paintProgress() {
+  const n = ITEMS.length;
+  const d = ITEMS.filter((it) => ["decided", "skip"].includes(entry(it.id).status)).length;
+  document.getElementById("progtext").textContent = `${d} of ${n} decided`;
+  document.getElementById("barfill").style.width = `${Math.round((100 * d) / n)}%`;
+  for (const g of groups()) {
+    const done = g.items.filter((i) => ["decided", "skip"].includes(entry(i.id).status)).length;
+    const a = document.querySelector(`nav.rail a[href="#sec-${g.id}"]`);
+    if (a) { a.querySelector("small").textContent = `${done}/${g.items.length}`; a.classList.toggle("done", done === g.items.length); }
+  }
+}
+
+let filter = "all";
+function applyFilter() {
+  for (const it of ITEMS) {
+    const st = entry(it.id).status;
+    const show = filter === "all" || (filter === "critical" ? it.sev === "critical" : st === filter);
+    const el = document.getElementById(it.id);
+    if (el) el.hidden = !show;
+  }
+  for (const sec of document.querySelectorAll("section.sec")) sec.hidden = ![...sec.querySelectorAll("article.item")].some((a) => !a.hidden);
+}
+
+function layoutItems() {
+  const main = document.getElementById("main"), rail = document.getElementById("rail");
+  const open = new Set([...document.querySelectorAll("details[open]")].map((d) => d.closest("article").id));
+  main.innerHTML = ""; rail.innerHTML = "";
+  for (const g of groups()) {
+    const sec = document.createElement("section");
+    sec.className = `sec group-${g.id}`; sec.id = `sec-${g.id}`;
+    sec.innerHTML = `<h2>${esc(g.name)} <small class="gcount">${g.items.length}</small></h2><p>${esc(g.blurb)}</p>`;
+    for (const it of g.items) { const art = buildItem(it); if (open.has(it.id)) art.querySelector("details").open = true; sec.appendChild(art); }
+    main.appendChild(sec);
+    const a = document.createElement("a");
+    a.href = `#sec-${g.id}`; a.innerHTML = `<span>${esc(g.name)}</span><small>0/${g.items.length}</small>`;
+    rail.appendChild(a);
+  }
+  ITEMS.forEach(paintItem);
+  paintProgress();
+  applyFilter();
+  document.querySelectorAll(".groupby .chipbtn").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.g === grouping)));
+}
+
+function build() {
+  layoutItems();
+  document.querySelectorAll(".filters:not(.groupby) .chipbtn").forEach((b) => b.addEventListener("click", () => {
+    filter = b.dataset.f;
+    document.querySelectorAll(".filters:not(.groupby) .chipbtn").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    applyFilter();
+  }));
+  document.querySelectorAll(".groupby .chipbtn").forEach((b) => b.addEventListener("click", () => {
+    grouping = b.dataset.g;
+    try { localStorage.setItem(KEY + ":group", grouping); } catch {}
+    layoutItems();
+  }));
+  document.getElementById("expandAll").addEventListener("click", () => document.querySelectorAll("article.item:not([hidden]) details").forEach((d) => (d.open = true)));
+  document.getElementById("collapseAll").addEventListener("click", () => document.querySelectorAll("details").forEach((d) => (d.open = false)));
+  document.getElementById("copyBtn").addEventListener("click", copyDecisions);
+  document.getElementById("closeCopy").addEventListener("click", () => (document.getElementById("copyout").hidden = true));
+  const h = location.hash.slice(1);
+  if (h) { const el = document.getElementById(h); if (el) { const d = el.querySelector("details"); if (d) d.open = true; el.scrollIntoView(); } }
+}
+
+function decisionsText() {
+  const lines = ["BIG BOI BALANCE DECISIONS", ""];
+  for (const g of groups()) {
+    lines.push(`== ${g.name}`);
+    for (const it of g.items) {
+      const e = entry(it.id);
+      lines.push(`- [${STATUS[e.status]}] (${areaName(it.sec)}) ${it.title}${chosenText(it, e) ? ` -> ${chosenText(it, e)}` : ""}`);
+      if (e.note) lines.push(`    note: ${e.note.replace(/\n/g, " / ")}`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+function copyDecisions() {
+  const text = decisionsText();
+  const show = () => { const box = document.getElementById("copyout"), ta = document.getElementById("copytext"); ta.value = text; box.hidden = false; ta.focus(); ta.select(); };
+  try {
+    navigator.clipboard.writeText(text).then(() => { setSave("Copied to the clipboard"); }, show);
+  } catch { show(); }
+}
+
+// ---------------- boot ----------------
+state = loadLocal();
+build();
+setSave("Saved in this browser only");
+(async () => {
+  try {
+    db = window.claude && window.claude.use ? await window.claude.use("db") : null;
+  } catch { db = null; }
+  if (!db) { mode = "local"; setSave("Saved in this browser only (the shared board is not available here)"); return; }
+  mode = "db";
+  setSave("Connected to the board");
+  db.collection("decisions").onSnapshot((snap) => {
+    let migrate = [];
+    const seen = new Set();
+    for (const d of snap.docs) {
+      const v = d.data() || {};
+      seen.add(d.id);
+      if (pending.has(d.id)) continue;
+      const cur = entry(d.id);
+      cur.choice = v.choice ?? null;
+      cur.status = v.status || "open";
+      if (focusNote.id !== d.id) cur.note = v.note || "";
+    }
+    // anything decided in this browser before the board was reachable goes up once
+    if (!snap.metadata.fromCache) for (const [id, e] of Object.entries(state)) if (!seen.has(id) && (e.choice || e.note || e.status !== "open")) migrate.push(id);
+    ITEMS.forEach(paintItem); paintProgress(); applyFilter(); saveLocal();
+    migrate.forEach((id) => persist(id));
+    if (!pending.size) setSave("Saved to the board");
+  }, () => { setSave("The board stopped syncing; choices are kept in this browser"); });
+})();
+</script>

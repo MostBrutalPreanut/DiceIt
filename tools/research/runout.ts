@@ -28,12 +28,15 @@ function setupOf(table: string, dir: string): Setup {
  *   v1  power down: bumpers and slings stop kicking, a caught ball is let go at once, Kickbacks and the Bucket switch off
  *   v2  drain pull: a pull towards the drain that grows over 5 s
  *   v3  both
+ *   v4  power down, and catchers (Mag-Grab, scoops, the Wheel, locks) stop catching: a ball rolls over them for its points
  */
-type Variant = 'v0' | 'v1' | 'v2' | 'v3';
+type Variant = 'v0' | 'v1' | 'v2' | 'v3' | 'v4';
 interface SimHack { mods: { kickFactor: number; magnet: { x: number; y: number; strength: number; radius: number } | null }; balls: { held: { until: number } | null }[]; parts: Map<number, { inst: { def: string }; armed?: boolean; readyAt?: number }>; tick: number }
 function runoutStart(sim: SimHack, v: Variant) {
-  const saved = { kick: sim.mods.kickFactor, magnet: sim.mods.magnet, bucket: PARTS.bucket.recipe.bucket };
-  if (v === 'v1' || v === 'v3') {
+  const saucers = (Object.keys(PARTS) as (keyof typeof PARTS)[]).filter((id) => PARTS[id].kind === 'saucer');
+  const saved = { kick: sim.mods.kickFactor, magnet: sim.mods.magnet, bucket: PARTS.bucket.recipe.bucket, saucers: v === 'v4' ? saucers : [] };
+  if (v === 'v4') for (const id of saucers) (PARTS[id] as { kind: string }).kind = 'rollover';
+  if (v === 'v1' || v === 'v3' || v === 'v4') {
     sim.mods.kickFactor = 0;
     for (const p of sim.parts.values()) if (p.inst.def === 'kickback') { p.armed = false; p.readyAt = Infinity; }
     (PARTS.bucket.recipe as { bucket?: boolean }).bucket = undefined;
@@ -41,10 +44,11 @@ function runoutStart(sim: SimHack, v: Variant) {
   return saved;
 }
 function runoutStep(sim: SimHack, v: Variant, since: number) {
-  if (v === 'v1' || v === 'v3') for (const b of sim.balls) if (b.held) b.held.until = sim.tick;
+  if (v === 'v1' || v === 'v3' || v === 'v4') for (const b of sim.balls) if (b.held) b.held.until = sim.tick;
   if (v === 'v2' || v === 'v3') sim.mods.magnet = { x: 12, y: 6, strength: Math.min(50, 10 * since), radius: 45 };
 }
 function runoutEnd(sim: SimHack, saved: ReturnType<typeof runoutStart>) {
+  for (const id of saved.saucers) (PARTS[id] as { kind: string }).kind = 'saucer';
   sim.mods.kickFactor = saved.kick;
   sim.mods.magnet = saved.magnet;
   (PARTS.bucket.recipe as { bucket?: boolean }).bucket = saved.bucket;
