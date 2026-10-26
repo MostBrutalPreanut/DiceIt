@@ -6,7 +6,7 @@ A rogue-lite where you **build, tune and rebuild a pinball machine** to hit a sc
 - Genre research and sources: [docs/genre-research.md](docs/genre-research.md)
 - What the physics spike measured: [docs/m0-physics-findings.md](docs/m0-physics-findings.md)
 - Creative parts from real machines (with sources): [docs/parts-catalog.md](docs/parts-catalog.md)
-- Parts borrowed from Ballionaire, Peglin, Peggle and video pinball (mayhem, scaling, late game): [docs/borrowed-parts.md](docs/borrowed-parts.md)
+- Parts borrowed from Ballionaire, Peglin, Peggle, other pinball and arcade roguelites, video pinball and real machines (mayhem, scaling, late game): [docs/borrowed-parts.md](docs/borrowed-parts.md)
 - Run flow, major upgrades, rebalancing, board variety: [docs/run-flow-and-balance.md](docs/run-flow-and-balance.md)
 - Art direction, themed machines, particles, with concept sheets: [docs/art-direction.md](docs/art-direction.md)
 - How to build that look, phase by phase: [docs/art-implementation-plan.md](docs/art-implementation-plan.md)
