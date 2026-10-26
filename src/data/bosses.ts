@@ -48,7 +48,7 @@ export const BOSSES: Record<BossId, BossDef> = {
   crossedWires: { id: 'crossedWires', name: 'Crossed Wires', final: false, shout: 'WHO WIRED THIS THING',
     text: 'The flipper buttons are swapped: ← works the right flippers, → the left.', mods: (m) => { m.swapFlippers = true; } },
   shortFuse: { id: 'shortFuse', name: 'Short Fuse', final: false, shout: 'SHORT FUSE. HURRY UP',
-    text: "Every ball's clock is 25 seconds.", mods: (m) => { m.ballClock = Math.min(m.ballClock, 25); } },
+    text: "Every ball's clock is 30 seconds.", mods: (m) => { m.ballClock = Math.min(m.ballClock, 30); } },
   jammer: { id: 'jammer', name: 'The Jammer', final: false, shout: 'THE JAMMER GOT IN',
     text: 'Your most numerous part type is jammed: it scores nothing this round.', jam: 'mostNumerous' },
   flatRate: { id: 'flatRate', name: 'Flat Rate', final: false, shout: 'FLAT RATE. NO BIG MULTS',

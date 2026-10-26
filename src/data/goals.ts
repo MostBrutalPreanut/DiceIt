@@ -4,5 +4,5 @@
  * decals and bosses are tuned towards it instead (docs/balance-plan.md). `npm run balance -- --verify` shows how
  * often par machines clear each round against it. Past the table the goal grows by GOAL_GROWTH a round.
  */
-export const GOALS: number[] = [1000, 2000, 3000, 5000, 8000, 12000, 20000, 35000, 55000, 90000, 150000, 250000, 450000, 900000, 2000000];
+export const GOALS: number[] = [1000, 2000, 2500, 5000, 8000, 12000, 20000, 35000, 55000, 90000, 150000, 200000, 450000, 750000, 1500000];
 export const GOAL_GROWTH = 1.6;

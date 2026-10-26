@@ -112,8 +112,8 @@ describe('what each boss does', () => {
     expect(f.find((q) => q.side === 'L')!.angle).toBeLessThan(0); // left stays down
   });
 
-  it('Short Fuse: every ball has a 25 s clock', () => {
-    expect(bossRound('shortFuse').sim.clockTotal).toBe(25);
+  it('Short Fuse: every ball has a 30 s clock', () => {
+    expect(bossRound('shortFuse').sim.clockTotal).toBe(30);
   });
 
   it('The Jammer: your most numerous part type scores nothing', () => {

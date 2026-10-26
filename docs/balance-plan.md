@@ -122,7 +122,7 @@ Beating the final boss wins the run; you can keep going (endless, every boss bac
 | Slippery Slope | the ball falls 40% faster | Ball Savers, kickbacks, a Glass Ball |
 | Night Shift | lamps, lanes, Level Lights, X Lanes and Disco Balls do nothing | bumpers and targets |
 | Crossed Wires | the flipper buttons are swapped | your hands (and a table that plays itself) |
-| Short Fuse | every ball's clock is 25 s | fast scorers, multiball |
+| Short Fuse | every ball's clock is 30 s | fast scorers, multiball |
 | The Jammer | your most numerous part type scores nothing | a mixed table |
 | Flat Rate | every Mult gain is 30% smaller | flat points: levels, Overclock, Bumper Car |
 | The Magnet | a magnet under the drain pulls the balls in | savers, kickbacks, extra flippers |
@@ -150,9 +150,9 @@ the curve instead of the curve following the content.
 
 | Round | 1 | 2 | 3 (boss) | 4 | 5 | 6 (boss) | 7 | 8 | 9 (boss) | 10 | 11 | 12 (boss) | 13 | 14 | 15 (final) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Goal | 1,000 | 2,000 | 3,000 | 5,000 | 8,000 | 12,000 | 20,000 | 35,000 | 55,000 | 90,000 | 150,000 | 250,000 | 450,000 | 900,000 | 2M |
+| Goal | 1,000 | 2,000 | 2,500 | 5,000 | 8,000 | 12,000 | 20,000 | 35,000 | 55,000 | 90,000 | 150,000 | 200,000 | 450,000 | 750,000 | 1.5M |
 
-About ×1.6–1.8 a round, and the final round more than doubles. The Auditor adds 10% (2.2M). Endless rounds after 15 grow ×1.6 a round.
+About ×1.6–1.8 a round, and the final round more than doubles. The Auditor adds 10% (1.65M). Every final boss costs a table about 40% of its round-14 score, which is why the last step is only ×2. Endless rounds after 15 grow ×1.6 a round.
 
 Base points were cut to a fifth in the overnight pass (a Pop pays 20, growing +1 a hit), so a starter table fits round 1's 1,000. Each level adds about a quarter of a part's base points, up to level 10.
 
