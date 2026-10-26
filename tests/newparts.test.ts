@@ -57,6 +57,26 @@ describe('rarities', () => {
     expect(late.legendary / 7996).toBeCloseTo(rarityChance('legendary', 15), 1);
   });
 
+  it('the shop favours parts you already own a little within their rarity, and still shows the rest', () => {
+    const count = (owned: PartId[]) => {
+      const c = new Map<string, number>();
+      for (let s = 1; s < 3000; s++) for (const id of rollOffers(new Rng(s), 4, 10, [], owned)) c.set(id, (c.get(id) ?? 0) + 1);
+      return c;
+    };
+    const plain = count([]);
+    const fond = count(['strip', 'coin']);
+    for (const id of ['strip', 'coin']) expect(fond.get(id)! / plain.get(id)!, id).toBeGreaterThan(1.25);
+    for (const id of ['plate', 'sling']) expect(fond.get(id)! / plain.get(id)!, id).toBeGreaterThan(0.85); // the rest barely notice
+    const rarity = (c: Map<string, number>, r: string) => [...c].filter(([id]) => PARTS[id as PartId].rarity === r).reduce((a, [, n]) => a + n, 0);
+    expect(rarity(fond, 'common') / rarity(plain, 'common')).toBeCloseTo(1, 1); // the rarity roll itself is untouched
+  });
+
+  it('a run favours what is on its table, in its toolbox and set in as a gem', () => {
+    const g = new Game();
+    g.layout.parts.push(makePart('strip', 90), { ...makePart('pop', 91), inlay: 'ruby' });
+    expect((g as unknown as { ownedKinds(): PartId[] }).ownedKinds()).toEqual(expect.arrayContaining(['strip', 'pop', 'ruby']));
+  });
+
   it('Big Boi is never for sale: the shop never offers him and the lab cannot grant one', () => {
     expect(SHOP_IDS).not.toContain('mega');
     for (let s = 1; s < 300; s++) for (const round of [1, 5, 12]) expect(rollOffers(new Rng(s), 6, round)).not.toContain('mega');

@@ -112,22 +112,27 @@ export function parseRun(json: string): RunSave | null {
   }
 }
 
+/** Within the rarity an offer rolled, a part you already own (on the table, in the toolbox or set in as a gem) is this much likelier. */
+export const OWNED_BOOST = 1.5;
+
 /**
  * `n` distinct parts for sale. Each offer rolls its rarity down the cascade (a legendary first, then a rare, then an
- * uncommon, else a common: the round's RARITY_ODDS), then picks a part of that rarity by its shop weight. A rarity
- * with nothing left to sell passes the offer down to the next one. Big Boi is never sold.
+ * uncommon, else a common: the round's RARITY_ODDS), then picks a part of that rarity by its shop weight, the
+ * parts in `owned` weighing OWNED_BOOST times more. A rarity with nothing left to sell passes the offer down to the
+ * next one. Big Boi is never sold.
  */
-export function rollOffers(rng: Rng, n = SHOP_SLOTS, round = 1, exclude: PartId[] = []): PartId[] {
+export function rollOffers(rng: Rng, n = SHOP_SLOTS, round = 1, exclude: PartId[] = [], owned: PartId[] = []): PartId[] {
   const pool = SHOP_IDS.filter((id) => !exclude.includes(id) && round >= (PARTS[id].from ?? 0));
   const odds = rarityOdds(round);
+  const w = (id: PartId) => PARTS[id].weight * (owned.includes(id) ? OWNED_BOOST : 1);
   const out: PartId[] = [];
   while (out.length < n && pool.length) {
     let ids: PartId[] = [];
     for (let i = CASCADE.findIndex((r) => r === 'common' || rng.next() < odds[r]); i < CASCADE.length && !ids.length; i++) ids = pool.filter((id) => PARTS[id].rarity === CASCADE[i]);
     if (!ids.length) ids = pool; // only rarer parts are left
-    const total = ids.reduce((a, id) => a + PARTS[id].weight, 0);
+    const total = ids.reduce((a, id) => a + w(id), 0);
     let r = rng.next() * total;
-    const pick = ids.find((id) => (r -= PARTS[id].weight) < 0) ?? ids[ids.length - 1];
+    const pick = ids.find((id) => (r -= w(id)) < 0) ?? ids[ids.length - 1];
     out.push(pool.splice(pool.indexOf(pick), 1)[0]);
   }
   return out;
@@ -384,6 +389,11 @@ export class Game {
     return this.layout.parts.filter((p) => isDecor(p.def)).map((p) => p.def);
   }
 
+  /** Every kind of part the run owns, on the table, in the toolbox or set in a part as a gem: the shop favours these a little. */
+  private ownedKinds(): PartId[] {
+    return [...new Set(this.layout.parts.flatMap((p) => (p.inlay ? [p.def, p.inlay] : [p.def])))];
+  }
+
   /** The mods the current round will be played with (the decals, and the boss on top), for tools that measure a machine. */
   get modsForRound(): Mods {
     return this.roundMods(!this.boss?.decalsOffUntilHalf);
@@ -465,7 +475,7 @@ export class Game {
     this.shop = this.freshShop(new Rng(this.runSeed * 1000 + this.round), this.shop);
     if (this.prizeDue) {
       // a Piñata burst: one of three parts, free; rarer than the shop's own (it rolls as if it were three rounds later)
-      this.shop.prize = rollOffers(new Rng(this.runSeed * 4241 + this.round), PARTS.pinata.recipe.pinata!.pick, this.round + 3, this.ownedDecor());
+      this.shop.prize = rollOffers(new Rng(this.runSeed * 4241 + this.round), PARTS.pinata.recipe.pinata!.pick, this.round + 3, this.ownedDecor(), this.ownedKinds());
       this.prizeDue = false;
     }
     this.resolved = null;
@@ -481,7 +491,7 @@ export class Game {
     const n = this.mods.shopSlots;
     const keep = (prev?.locked ?? []).filter((i) => i < n && prev!.offers[i]);
     const kept = keep.map((i) => prev!.offers[i]!) as PartId[];
-    const fresh = rollOffers(rng, n - keep.length, this.round, [...kept, ...this.ownedDecor()]);
+    const fresh = rollOffers(rng, n - keep.length, this.round, [...kept, ...this.ownedDecor()], this.ownedKinds());
     const offers: (PartId | null)[] = [];
     for (let i = 0; i < n; i++) offers.push(keep.includes(i) ? prev!.offers[i] : fresh.shift() ?? null);
     const bargain = this.mods.bargain ? Math.floor(rng.next() * n) : null;
@@ -548,7 +558,7 @@ export class Game {
   private fitShop() {
     const rng = new Rng(this.runSeed * 31 + this.round * 7 + this.decals.length);
     const extra = this.mods.shopSlots - this.shop.offers.length;
-    if (extra > 0) this.shop.offers.push(...rollOffers(rng, extra, this.round, [...this.shop.offers.filter((x): x is PartId => !!x), ...this.ownedDecor()]));
+    if (extra > 0) this.shop.offers.push(...rollOffers(rng, extra, this.round, [...this.shop.offers.filter((x): x is PartId => !!x), ...this.ownedDecor()], this.ownedKinds()));
     if (!this.mods.bargain) this.shop.bargain = null;
     else if (this.shop.bargain == null || !this.shop.offers[this.shop.bargain]) {
       const open = this.shop.offers.map((id, i) => (id ? i : -1)).filter((i) => i >= 0);

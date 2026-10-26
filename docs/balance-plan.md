@@ -29,7 +29,9 @@ each machine's Big Boi pulls the run towards a different build:
 
 Every shop offer rolls its rarity as a cascade (`RARITY_ODDS` in `src/data/parts.ts`): the legendary chance first, then
 the rare, then the uncommon; the first that lands is the offer's rarity, and if none does it is a common. Then a part of
-that rarity is picked by its own shop weight (a rarity with nothing left to sell passes the offer down). The odds climb
+that rarity is picked by its own shop weight, a part the run already owns (table, toolbox or set in as a gem) weighing
+×1.5 (`OWNED_BOOST`), so builds find their pieces again without crowding out the rest (a rarity with nothing left to
+sell passes the offer down). The odds climb
 every round, a step more after each boss; no legendary shows before the first boss is beaten, and commons stay over a
 third of the shop even in round 15. The gems (round 7) and four decor pieces (round 4) still wait for their round, and a
 Piñata's prize rolls as if it were three rounds later.
