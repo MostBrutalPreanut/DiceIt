@@ -170,22 +170,6 @@ export function parShop(g: Game): { bought: { id: PartId; price: number }[]; rer
   return { bought, rerolls };
 }
 
-/** Money the par player keeps for the next shop instead of tuning. */
-const TUNE_RESERVE = 10;
-
-/** After the shop, the par player spends what is left on Tune-ups: the best part for the money first (Big Boi counts as a big one). */
-export function parTune(g: Game): number {
-  let tuned = 0;
-  for (let guard = 0; guard < 60; guard++) {
-    const best = g.layout.parts
-      .filter((p) => PARTS[p.def].recipe.perLevel && g.money - g.tuneCost(p) >= TUNE_RESERVE && g.canTune(p))
-      .sort((a, b) => (PART_VALUE[b.def] || 12) / g.tuneCost(b) - (PART_VALUE[a.def] || 12) / g.tuneCost(a))[0];
-    if (!best || !g.tuneUp(best.uid)) break;
-    tuned++;
-  }
-  return tuned;
-}
-
 /** The index of the offered card the par player takes. */
 export function parPick(g: Game): number {
   const offers = g.pending ?? [];
@@ -218,7 +202,6 @@ export function runPar(o: ParOptions): ParRun {
       if (!g.chooseDecal(index)) g.skipPick();
     }
     const { bought, rerolls } = parShop(g);
-    parTune(g);
 
     // the machine is built and measured for the round it is about to play: a boss round with the boss's rules
     const mods = g.modsForRound;

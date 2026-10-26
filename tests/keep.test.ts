@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { makePart, MAX_LEVEL, PARTS, type PartInstance } from '../src/data/parts';
-import { Game, TUNE, UPKEEP } from '../src/game/game';
+import { makePart, PARTS, type PartInstance } from '../src/data/parts';
+import { Game, UPKEEP } from '../src/game/game';
 import type { SimEvent } from '../src/sim/sim';
 
 const hit = (uid: number, extra: Partial<Extract<SimEvent, { type: 'partHit' }>> = {}): SimEvent =>
@@ -69,31 +69,6 @@ describe('Mult that is kept from round to round', () => {
     const copy = new Game();
     copy.load(JSON.parse(JSON.stringify(g.save())));
     expect(copy.keptMult).toBeCloseTo(1.5);
-  });
-});
-
-describe('the Tune-up', () => {
-  it('levels a part up for money, dearer every level, up to the top level', () => {
-    const g = new Game();
-    g.money = 1000;
-    const pop = g.part(1)!;
-    expect(g.tuneCost(pop)).toBe(TUNE.base);
-    expect(g.tuneUp(1)).toBe(true);
-    expect(pop.level).toBe(1);
-    expect(g.money).toBe(1000 - TUNE.base);
-    expect(g.tuneCost(pop)).toBe(TUNE.base + TUNE.step);
-    while (g.tuneUp(1));
-    expect(pop.level).toBe(MAX_LEVEL);
-    expect(g.canTune(pop)).toBe(false);
-  });
-
-  it('needs the money, and only parts with levels can be tuned', () => {
-    const g = new Game();
-    g.money = 0;
-    expect(g.tuneUp(1)).toBe(false);
-    g.money = 50;
-    g.layout.parts.push(makePart('saver', 60, 12, 20, true));
-    expect(g.tuneUp(60)).toBe(false);
   });
 });
 

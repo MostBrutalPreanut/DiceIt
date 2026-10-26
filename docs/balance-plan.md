@@ -65,12 +65,10 @@ Cards say what a part does; they carry no strategy tips.
 Multiplicative Mult (X Lane, Golden Bumper, Disco Ball, the Dragon, Glass Cannon-style decals) is what lets a late
 machine reach millions; each is capped per ball, like everything else that compounds.
 
-## 2b. Kept Mult, the Tune-up, and moving costs
+## 2b. Kept Mult and moving costs
 
 - **Kept Mult** is Mult every ball starts with, kept from round to round: the Trophy Cup's polish, and two decals,
   Momentum (+0.5 for every round you clear) and Afterglow (keeps 15% of each round's best Mult).
-- **The Tune-up**: between rounds, pay to level a part up by one: $2 for the first level, $2 more each level
-  after, up to level 10. It is the late-game money sink.
 - **Moving and removing cost money** instead of selling for money: a part that has played a round costs $1 to
   move (once a visit) and $1 to scrap; one bought this visit moves freely and goes back for what it cost. Free
   Hands (the decal that was Full Refund) makes it free.
