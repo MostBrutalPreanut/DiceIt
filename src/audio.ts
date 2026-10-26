@@ -474,7 +474,8 @@ export class AudioFx {
       case 'ding': this.dingDong(this.ladder(mult, 784, 7)); break;
       case 'sling': this.twang(this.ladder(mult, 165, 12)); break;
       case 'spinner': this.spin(opts.spins ?? 3); break;
-      case 'lane': this.laneRoll(); break;
+      case 'lane': case 'rank': this.laneRoll(); break;
+      case 'bell': this.toll(false); break;
       case 'uplight': this.levelLight(this.ladder(mult, 1047, 12)); break;
       case 'lamp': this.lampGlow(opts.label); break;
       case 'vari': this.knock(opts.tier ?? 0); break;
@@ -844,6 +845,8 @@ export class AudioFx {
     else if (label === 'GOAL!' || id === 'goal') this.goalCheer();
     else if (label === 'JACKPOT!' || id === 'jackpot') this.jackpotFanfare();
     else if (label === 'ARMOUR BROKEN!') this.dragonRoar();
+    else if (label?.startsWith('THE BELL RINGS')) this.toll(true);
+    else if (id === 'rank') this.rankUp(label?.startsWith('DIAMOND') ? 3 : label?.startsWith('GOLD') ? 2 : 1);
     else if (id === 'disco') this.disco();
     else if (id === 'xlane') this.swoosh(!label?.includes('MAXED'));
     else if (id === 'uplight') this.levelUp(!!label && /LEVEL/.test(label));
@@ -887,6 +890,28 @@ export class AudioFx {
     this.duck(0.6, 0.4);
     const n = levelled ? 6 : 2;
     for (let i = 0; i < n; i++) this.bell(v.o, v.t + i * 0.06, midi(76 + pent(i * 2)), 0.6, 0.14, 3.5, 0.7);
+  }
+
+  /** Old Bell: one deep bronze toll; when it rings for the run, three, over a low hum. */
+  private toll(rings: boolean) {
+    const v = this.voice(rings ? 'tollRings' : 'toll', 0.8, rings ? 3.4 : 2, 0.4, 1, rings);
+    if (!v) return;
+    if (rings) this.duck(0.5, 1.4);
+    const n = rings ? 3 : 1;
+    for (let i = 0; i < n; i++) {
+      this.bell(v.o, v.t + i * 0.75, 196, 2.2, 0.26, 2.76, 1.1);
+      this.osc(v.o, v.t + i * 0.75, 98, 1.8, 0.08, { attack: 0.02 });
+    }
+  }
+
+  /** Rank Lights: a bugle-ish rising call, one note higher for every rank. */
+  private rankUp(step: number) {
+    const v = this.voice('rank', 0.7, 1.2, 0.2, 2, true);
+    if (!v) return;
+    this.duck(0.6, 0.4);
+    const notes = [0, 5, 9, 12, 16].slice(0, 2 + step);
+    notes.forEach((s, i) => this.mallet(v.o, v.t + i * 0.08, midi(67 + s), 0.5, 0.2));
+    this.bell(v.o, v.t + notes.length * 0.08, midi(79 + notes[notes.length - 1]), 0.8, 0.08, 3.5, 0.6);
   }
 
   /** Jackpot Scoop cashing in: a mellow brass fanfare and a shower of coins. */

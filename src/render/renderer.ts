@@ -30,6 +30,8 @@ export interface DrawState {
 export const TIP_K = 0.9;
 /** At this Mult Big Boi puts his sunglasses on. */
 export const COOL_MULT = 3;
+/** A ranked ball's ring and ribbon (Rank Lights): Silver, Gold, Diamond, the same on every machine. */
+const RANK_COLOURS = ['#dfe6ee', '#ffd23f', '#8ff0ff'] as const;
 /** k is quantised so the baked textures can be shared between frames of the tip animation. */
 const K_STEP = 0.02;
 const quantK = (k: number) => Math.round(k / K_STEP) * K_STEP;
@@ -414,6 +416,8 @@ export class Renderer {
       case 'disco': return { lit: !tilted && !game.mods.lightsOut && game.scorer.label(p) !== null && !this.discoFired(game, p.uid) };
       case 'magnet': case 'jackpot': return { busy: heldNear(p.x, p.y) };
       case 'lane': return { lit, letter: lanes.get(p.uid) };
+      case 'rank': return { lit };
+      case 'bell': return { hit: pulse > 0.35, lit: !game.scorer.firedThisRoundOf(p.uid), seg: game.scorer.notchesOf(p) };
       case 'uplight': return { lit, target: 'pop' };
       case 'lamp': return { lit, bright: tilted ? 0 : game.scorer.lampLevel(p.uid) };
       case 'strip': return { lit };
@@ -475,6 +479,7 @@ export class Renderer {
         if (p.def === 'strip' && ps.lit) this.glow(p.x, p.y, 4.6, t.role.strip, 0.5 + 0.2 * Math.sin(this.time * 10));
         if (p.def === 'lane' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.lane, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.7, p.y + 0.5, 0.3, 0.7, false, true); }
         if (p.def === 'uplight' && ps.lit) this.glow(p.x, p.y, r * 2.3, t.role.pop, 0.7);
+        if (p.def === 'rank' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.rank, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.5, p.y + 0.6, 0.3, 0.6, false, true); }
         if (p.def === 'kickback' && ps.armed) this.glow(p.x, p.y, r * 1.7, t.role.kickback, 0.45);
         if (p.def === 'saver' && ps.armed) this.glow(p.x, p.y, r * 2, t.role.saver, 0.55);
         if ((p.def === 'xlane' || p.def === 'disco') && ps.lit) this.glow(p.x, p.y, r * 2, t.role[p.def], 0.6);
@@ -707,7 +712,8 @@ export class Renderer {
     g.clear();
     const live = new Set<number>();
     const wear = this.ballWear(game);
-    for (const b of game.sim.ballStates()) {
+    const balls = game.sim.ballStates();
+    for (const b of balls) {
       live.add(b.id);
       const tr = this.trails.get(b.id) ?? [];
       tr.push({ x: b.x, y: b.y });
@@ -715,10 +721,22 @@ export class Renderer {
       this.trails.set(b.id, tr);
       ballShadow(this.floorFx, v, t, b.x, b.y);
       const speed = Math.hypot(b.vx, b.vy);
-      // a fast ball leaves a tapered paper ribbon (air: soft, no outline)
-      if (!b.held && speed > 18 && tr.length > 3) ribbon(g, tr.map((q) => P(v, q.x, q.y, BALL_R)), v.S * 0.08, v.S * BALL_R * 1.7, t.paper, Math.min(0.75, (speed - 18) / 60));
+      const rank = game.scorer.rankOf(b.id, game.sim.time);
+      // a fast ball leaves a tapered paper ribbon (air: soft, no outline); a ranked ball's ribbon wears its rank
+      if (!b.held && speed > 18 && tr.length > 3) ribbon(g, tr.map((q) => P(v, q.x, q.y, BALL_R)), v.S * 0.08, v.S * BALL_R * 1.7, rank ? RANK_COLOURS[rank.step - 1] : t.paper, Math.min(0.75, (speed - 18) / 60));
+      // and it sheds glitter
+      if (rank && Math.random() < 0.08 + 0.06 * rank.step) this.particles.sparkle(b.x + (Math.random() - 0.5) * 0.6, b.y + (Math.random() - 0.5) * 0.6, BALL_R, 0.35 + 0.1 * rank.step, rank.step >= 2, true);
     }
-    for (const b of game.sim.ballStates()) drawBall(g, v, t, b.x, b.y, wear);
+    for (const b of balls) {
+      drawBall(g, v, t, b.x, b.y, wear);
+      // a ranked ball wears a ring of its rank's colour; it blinks in its last 5 s
+      const rank = game.scorer.rankOf(b.id, game.sim.time);
+      if (rank && (rank.left > 5 || Math.floor(rank.left * 4) % 2 === 0)) {
+        const [X, Y] = P(v, b.x, b.y, BALL_R), R = BALL_R * v.S;
+        g.circle(X, Y, R * 1.38).stroke({ width: v.lw * 1.6 + R * 0.32, color: t.ink, alpha: 0.85 });
+        g.circle(X, Y, R * 1.38).stroke({ width: R * 0.32, color: RANK_COLOURS[rank.step - 1] });
+      }
+    }
     for (const id of [...this.trails.keys()]) if (!live.has(id)) this.trails.delete(id);
   }
 

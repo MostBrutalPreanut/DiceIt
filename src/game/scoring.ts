@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, grownPoints, hasTag, HOT_WINDOW, lampStats, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, tierOf, type PartId, type PartInstance, type Recipe } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, grownPoints, hasTag, HOT_WINDOW, lampStats, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, RANK_NAMES, tierOf, type PartId, type PartInstance, type Recipe } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { Rng } from '../sim/rng';
@@ -53,6 +53,10 @@ export interface ScorerOpts {
   onLevelUp?: (inst: PartInstance, levels: number) => void;
   /** Called when a Trophy Cup is polished, for real (like onLevelUp). Returns its polish now. */
   onPolish?: (inst: PartInstance, by: number, cap: number) => number;
+  /** Called when an Old Bell gets its notch for the round, for real (like onLevelUp). Returns true if that notch rang it. */
+  onNotch?: (inst: PartInstance, notches: number) => boolean;
+  /** Old Bell rings so far this run: every ball's Mult is ×1.2 for each (default none). */
+  rings?: number;
   /** The run's decals and the boss (neutral if absent). */
   mods?: Mods;
   /** Overrides the Mult every ball starts with (default: the mods' `startMult`). */
@@ -122,6 +126,14 @@ export class Scorer {
   private firedThisBall = new Map<number, number>();
   /** The jackpot pot: ball hits when each scoop last cashed. */
   private potFrom = new Map<number, number>();
+  /** Per part: how often it fired this round (the Old Bell). */
+  private firedThisRound = new Map<number, number>();
+  /** Rank Lights: each ranked ball's rank (1 = Silver) and until when it lasts. */
+  private ranks = new Map<number, { step: number; until: number }>();
+  /** Old Bells: rings so far, what they multiply every ball's Mult by, and the notches a test ball's bells have earned. */
+  private rings: number;
+  ringX = 1;
+  private notched = new Map<number, number>();
   /** Piggy Banks: the $ inside each one (per round). */
   readonly piggies = new Map<number, number>();
   baseMult: number;
@@ -141,7 +153,9 @@ export class Scorer {
     this.opts = opts;
     this.mods = { ...neutralMods(), ...opts.mods }; // a saved machine from before a mod existed still scores
     this.baseMult = opts.baseMult ?? this.mods.startMult;
-    this.mult = this.peakMult = this.baseMult;
+    this.rings = opts.rings ?? 0;
+    this.refreshRingX();
+    this.mult = this.peakMult = this.ballStartMult();
     this.onLevelUp = opts.onLevelUp;
     this.onPolish = opts.onPolish;
     this.machine = opts.machine ?? 'factory';
@@ -176,6 +190,7 @@ export class Scorer {
     this.roundTypeHits.clear();
     this.moneyPaid.clear();
     this.piggies.clear();
+    this.firedThisRound.clear();
     this.jammed.clear();
     if (this.opts.jam === 'mostNumerous') {
       const n = new Map<PartId, number>();
@@ -204,8 +219,20 @@ export class Scorer {
     return got;
   }
 
+  /** The Old Bells' rings, after the boss's Flat Rate: ×1.2 each, on every ball's Mult. */
+  private refreshRingX() {
+    const x = PARTS.bell.recipe.bell!.x;
+    this.ringX = Math.round(this.gainX(x) ** this.rings * 1000) / 1000;
+  }
+
+  /** The Mult a ball starts at: the base, times the Old Bells' rings. */
+  private ballStartMult() {
+    return Math.round(this.baseMult * this.ringX * 1000) / 1000;
+  }
+
   startBall() {
-    this.mult = this.baseMult;
+    this.mult = this.ballStartMult();
+    this.ranks.clear();
     this.ballHits = 0;
     this.multPaid.clear();
     this.xPaid.clear();
@@ -285,6 +312,11 @@ export class Scorer {
     return this.firedThisBall.get(uid) ?? 0;
   }
 
+  /** Has this part fired this round already (the Old Bell)? */
+  firedThisRoundOf(uid: number) {
+    return (this.firedThisRound.get(uid) ?? 0) > 0;
+  }
+
   /** X Lane: is it dark right now (it just fired)? */
   coolingDown(uid: number, t: number) {
     return (this.coolUntil.get(uid) ?? -1) > t;
@@ -323,10 +355,20 @@ export class Scorer {
     return { sum: Math.round(sum * 100) / 100, count };
   }
 
-  /** Multipliers that depend on the moment, not the part: Thrifty, Multiball Madness, Last Call, Purist. */
-  private situational(): { x: number; notes: string[] } {
+  /** A ball's rank right now (Rank Lights), after the boss's Flat Rate, or null. */
+  rankOf(ballId: number, t = this.now): { step: number; x: number; name: string; left: number } | null {
+    const rk = this.ranks.get(ballId);
+    if (!rk || rk.until <= t) return null;
+    const steps = PARTS.rank.recipe.rank!.steps;
+    return { step: rk.step, x: Math.round(this.gainX(steps[rk.step - 1]) * 1000) / 1000, name: RANK_NAMES[rk.step - 1], left: rk.until - t };
+  }
+
+  /** Multipliers that depend on the moment, not the part: the ball's rank, Thrifty, Multiball Madness, Last Call, Purist. */
+  private situational(ev?: { ballId?: number; t: number }): { x: number; notes: string[] } {
     const m = this.mods, notes: string[] = [];
     let x = 1;
+    const rank = ev?.ballId === undefined ? null : this.rankOf(ev.ballId, ev.t);
+    if (rank) { x *= rank.x; notes.push(`x${rank.x} ${rank.name.toLowerCase()} rank`); }
     if (m.cashPer > 0 && this.opts.cash) {
       const c = Math.min(m.cashCap, m.cashPer * Math.max(0, this.opts.cash()));
       if (c > 0) { x *= 1 + c; notes.push(`+${Math.round(c * 100)}% thrifty`); }
@@ -361,6 +403,7 @@ export class Scorer {
     if (def.recipe.plate) return `x${def.recipe.plate.x}`;
     if (def.kind === 'strip') return this.mods.lightsOut ? 'OFF' : `+${Math.round((def.recipe.strip?.bonus ?? 0) * 100)}%`;
     const r = this.recipe(inst.def);
+    if (r.bell && this.firedThisRoundOf(inst.uid)) return `${this.notchesOf(inst)}/${r.bell.notches}`; // rung this round: its notches
     if (r.typeX) return this.mods.lightsOut ? 'OFF' : `x${this.typeXNow(r.typeX).toFixed(2)}`;
     if (r.xmult && !r.points) return this.mods.lightsOut ? 'OFF' : `x${(1 + (r.xmult - 1) * this.mods.multGain).toFixed(2)}`;
     const n = this.baseNow(inst);
@@ -383,7 +426,8 @@ export class Scorer {
   private award(inst: PartInstance, t: number, x: number, y: number, kind: ScoreEvent['kind'], base: number, multGain: number, money: number, notes: string[], label?: string, spins?: number, xmult = 1): ScoreEvent {
     const multBefore = this.mult;
     const points = Math.round(base * multBefore);
-    this.mult = Math.round((this.mult + multGain) * xmult * 1000) / 1000;
+    // the Old Bells' rings multiply the whole Mult, so every +Mult a ball gains counts ×ringX too
+    this.mult = Math.round((this.mult + multGain * this.ringX) * xmult * 1000) / 1000;
     this.peakMult = Math.max(this.peakMult, this.mult);
     this.score += points;
     this.money += money;
@@ -410,6 +454,7 @@ export class Scorer {
     this.laterDone = true;
     this.mods = l.mods;
     this.baseMult = l.baseMult;
+    this.refreshRingX();
     this.pending.push('DECALS BACK ON!');
   }
   /** Shouts the scorer owes the next event (the Auditor letting go). */
@@ -421,6 +466,10 @@ export class Scorer {
 
   /** Turn one physical event into zero or more attributed score events. */
   consume(ev: SimEvent): ScoreEvent[] {
+    if (ev.type === 'drain') {
+      this.ranks.delete(ev.ballId); // a drain loses the rank
+      return [];
+    }
     if (ev.type === 'ballSaved') {
       this.saversUsed.add(ev.uid);
       return [];
@@ -454,7 +503,7 @@ export class Scorer {
 
     // a drop-target bank with every target down pays its set bonus (the individual hits scored already)
     if (def.kind === 'bank' && ev.bankComplete) {
-      const situ = this.situational();
+      const situ = this.situational(ev);
       const pts = Math.round(r.setBonus!.points * m.setFactor * modFactor(inst.def, m) * situ.x);
       if (r.lightsLamps) this.flashLamps(ev.t, r.lightsLamps);
       out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, this.gain(r.setBonus!.mult * m.setFactor), 0, [`${pts} bank bonus`, ...situ.notes], 'BANK COMPLETE'));
@@ -465,7 +514,7 @@ export class Scorer {
     if (def.kind === 'goal') {
       if (!ev.goal || this.coolingDown(inst.uid, ev.t)) return out;
       this.coolUntil.set(inst.uid, ev.t + (r.cooldown ?? 1.5));
-      const situ = this.situational();
+      const situ = this.situational(ev);
       const pts = Math.round(((r.points ?? 0) + (r.perLevel ?? 0) * this.effLevel(inst)) * modFactor(inst.def, m) * (1 + this.lampBonusAt(inst).sum) * situ.x);
       const x = this.takeX(inst.def, this.gainX(r.goal!.xmult), this.gainX(r.goal!.xmultCap));
       out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, 0, 0, [`${pts} goal`, ...situ.notes], 'GOAL!', undefined, x));
@@ -492,6 +541,7 @@ export class Scorer {
 
     if (r.points) {
       if (r.perBall && (this.firedThisBall.get(inst.uid) ?? 0) >= r.perBall) return out;
+      if (r.perRound && (this.firedThisRound.get(inst.uid) ?? 0) >= r.perRound) return out;
       const spins = ev.spins ?? 1;
       const grown = grownPoints(r, this.hitsOf(inst.def));
       const level = (r.perLevel ?? 0) * this.effLevel(inst);
@@ -528,7 +578,7 @@ export class Scorer {
       if (hotBonus) notes.push(`+${Math.round(hotBonus * 100)}% hot shot`);
       const order = this.order === inst.uid ? ORDER.x : 1;
       if (order > 1) { notes.push(`x${order} order`); this.order = null; }
-      const situ = this.situational();
+      const situ = this.situational(ev);
       notes.push(...situ.notes);
       // money
       let money = 0;
@@ -567,12 +617,17 @@ export class Scorer {
         notes.push(now > before ? `+${Math.round((now - before) * 100) / 100} kept Mult` : 'fully polished');
       }
       if (r.perBall) this.firedThisBall.set(inst.uid, (this.firedThisBall.get(inst.uid) ?? 0) + 1);
+      if (r.perRound) this.firedThisRound.set(inst.uid, (this.firedThisRound.get(inst.uid) ?? 0) + 1);
+      const rang = r.bell ? this.notch(inst, r.bell.notches) : false;
+      if (r.bell) notes.push(rang ? 'the bell rings' : `notch ${this.notchesOf(inst)}/${r.bell.notches}`);
       if (r.lightsLamps) this.flashLamps(ev.t, r.lightsLamps);
       const label = r.perBall && xmult > 1 ? `MULT x${xmult.toFixed(2)}` : r.jackpot && pot ? 'JACKPOT!' : edge > 1 ? 'EDGE SHOT!' : undefined;
       const scored = this.award(inst, ev.t, ev.x, ev.y, r.perBall || (r.jackpot && pot) ? 'bonus' : 'hit', base, multGain, money, notes, label, ev.spins, xmult);
       if (tier && inst.def === 'vari') scored.tier = r.tiers!.indexOf(tier);
       if (hotBonus) scored.hot = true;
       out.push(scored);
+      // the third notch rings the bell: ×1.2 on the Mult of this ball and every ball after it, for the rest of the run
+      if (rang) out.push(this.ring(inst, ev));
       // this hit makes the ball hot for its next one
       if (r.hot && (r.hotTier === undefined || (tier && r.tiers!.indexOf(tier) >= r.hotTier))) this.hot.set(ev.ballId, { until: ev.t + HOT_WINDOW, bonus: r.hot * m.hotFactor });
       // the Cook calls a new order; the Dragon loses a plate
@@ -605,8 +660,12 @@ export class Scorer {
       }
     }
 
-    // lane rollovers: light up, and a complete set pays a bonus and resets
-    if (r.lights && def.kind === 'rollover') {
+    // Rank Lights: light up, and a complete pack ranks the ball up
+    if (r.rank) {
+      this.lit.add(inst.uid);
+      out.push(...this.checkRankSet(inst, ev));
+    } else if (r.lights && def.kind === 'rollover') {
+      // lane rollovers: light up, and a complete set pays a bonus and resets
       this.lit.add(inst.uid);
       out.push(...this.checkLaneSet(inst, ev));
     }
@@ -617,15 +676,54 @@ export class Scorer {
    * The three Lane Rollovers of a pack make a set: when all three are lit it pays its bonus, and they go dark.
    * (Lanes from no pack, from an old save or the Test Lab, make sets of any three.)
    */
-  private checkLaneSet(lane: PartInstance, ev: { t: number; x: number; y: number }, inst = lane): ScoreEvent[] {
+  private checkLaneSet(lane: PartInstance, ev: { t: number; x: number; y: number; ballId?: number }, inst = lane): ScoreEvent[] {
     const r = PARTS.lane.recipe, m = this.mods, size = r.setSize ?? 3;
     const lit = this.placed().filter((p) => p.def === 'lane' && p.group === lane.group && this.lit.has(p.uid));
     if (!r.setBonus || lit.length < size) return [];
     for (const l of lit) this.lit.delete(l.uid);
     if (this.take(this.setsPaid, 'lane', 1, r.setCap) === 0) return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`${r.setCap} sets this ball`], 'LANE SETS MAXED')];
-    const situ = this.situational();
+    const situ = this.situational(ev);
     const pts = Math.round(r.setBonus.points * m.setFactor * modFactor('lane', m) * situ.x);
     return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, this.gain(r.setBonus.mult * m.setFactor), 0, [`${pts} set bonus`, ...situ.notes], 'LANES COMPLETE')];
+  }
+
+  /**
+   * The lights of a Rank Lights pack: when every one is lit, the ball that lit the last one ranks up a step (Silver,
+   * Gold, Diamond), and they go dark. At Diamond the set starts its time again.
+   */
+  private checkRankSet(light: PartInstance, ev: { t: number; x: number; y: number; ballId: number }): ScoreEvent[] {
+    const r = this.recipe(light.def), rk = r.rank!, size = r.setSize ?? 3;
+    const lit = this.placed().filter((p) => p.def === light.def && p.group === light.group && this.lit.has(p.uid));
+    if (lit.length < size) return [];
+    for (const l of lit) this.lit.delete(l.uid);
+    const was = this.rankOf(ev.ballId, ev.t)?.step ?? 0;
+    const step = Math.min(rk.steps.length, was + 1);
+    this.ranks.set(ev.ballId, { step, until: ev.t + rk.seconds });
+    const now = this.rankOf(ev.ballId, ev.t)!;
+    const name = now.name.toUpperCase();
+    return [this.award(light, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`every hit x${now.x} for ${rk.seconds} s`], step > was ? `${name} RANK!` : `${name} AGAIN!`)];
+  }
+
+  /** An Old Bell's notch for the round: the run keeps it (onNotch), a test ball only this scorer. True if it rang. */
+  private notch(inst: PartInstance, notches: number): boolean {
+    if (this.opts.onNotch) return this.opts.onNotch(inst, notches);
+    const n = this.notchesOf(inst) + 1;
+    this.notched.set(inst.uid, n >= notches ? 0 : n);
+    return n >= notches;
+  }
+
+  /** An Old Bell's notches towards its next ring. */
+  notchesOf(inst: PartInstance): number {
+    return this.notched.get(inst.uid) ?? inst.notches ?? 0;
+  }
+
+  /** An Old Bell rings: one more ring for the run, and this ball's Mult takes it at once. */
+  private ring(inst: PartInstance, ev: { t: number; x: number; y: number }): ScoreEvent {
+    this.rings++;
+    const before = this.ringX;
+    this.refreshRingX();
+    const x = Math.round((this.ringX / before) * 1000) / 1000;
+    return this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`Mult x${x} on every ball for the rest of the run`], `THE BELL RINGS! x${x}`, undefined, x);
   }
 
   /** Every Lamp at full glow for a while (a drop-target set, the Disco Ball). */
@@ -648,7 +746,7 @@ export class Scorer {
   }
 
   /** Big Boi's own ability on a hit: the Cook calls an order, the Dragon loses a plate. */
-  private bigBoiHit(inst: PartInstance, ev: { t: number; x: number; y: number }): ScoreEvent[] {
+  private bigBoiHit(inst: PartInstance, ev: { t: number; x: number; y: number; ballId?: number }): ScoreEvent[] {
     if (this.bigBoi === 'cook') {
       this.order = this.pickOrder(this.order);
       return [];
@@ -659,7 +757,7 @@ export class Scorer {
     this.slays++;
     this.armour = DRAGON.armour + DRAGON.regrow * this.slays;
     const r = this.recipe('mega'), m = this.mods;
-    const situ = this.situational();
+    const situ = this.situational(ev);
     const pts = Math.round((r.points! + (r.perLevel ?? 0) * this.effLevel(inst)) * DRAGON.jackpotX * modFactor('mega', m) * situ.x);
     return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, 0, 0, [`${pts} armour broken`, ...situ.notes], 'ARMOUR BROKEN!')];
   }

@@ -23,6 +23,8 @@ export interface Machine {
   levels?: Levels;
   /** The machine (what its Big Boi does); the Factory if absent. */
   machine?: MachineId;
+  /** Old Bell rings the run has so far (every ball's Mult ×1.2 each). */
+  rings?: number;
 }
 
 /** One simulated round with every ball played out (no goal), as the bot plays it. */
@@ -54,6 +56,7 @@ export function playRounds(m: Machine, o: PlayOptions): RoundSample[] {
     g.layout = cloneLayout(m.layout);
     g.fixedMods = { ...neutralMods(), ...m.mods };
     if (m.machine) g.machine = m.machine;
+    g.rings = m.rings ?? 0;
     migrateParts(g.layout, m.levels);
     g.goalOverride = Infinity;
     g.seed = o.seed * 1000 + i * 7 + 1;

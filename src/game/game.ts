@@ -90,6 +90,8 @@ export interface RunSave {
   /** The run's bosses, in order. */
   bosses?: BossId[];
   won?: boolean;
+  /** Old Bell rings so far this run (absent in older saves). */
+  rings?: number;
 }
 
 /** Validate a saved run from storage. Returns null for anything that is not a v2 save. */
@@ -181,6 +183,8 @@ export class Game {
   goalOverride: number | null = null;
   /** Every point the run has scored in its rounds (the lose screen's total). */
   runScore = 0;
+  /** Old Bell rings this run: every ball's Mult is ×1.2 for each, for the rest of the run (selling the bell keeps them). */
+  rings = 0;
   /** Parts the toolbox had no room for and that were sold instead; the UI reports these and clears the list. */
   soldOverflow: { def: PartId; refund: number }[] = [];
 
@@ -196,13 +200,13 @@ export class Game {
    */
   private newScorer(goal: number, persistent = false) {
     const base = {
-      mods: this.mods, machine: this.machine, seed: this.seed * 31 + this.round, baseMult: this.startMult(this.mods),
+      mods: this.mods, machine: this.machine, seed: this.seed * 31 + this.round, baseMult: this.startMult(this.mods), rings: this.rings,
       balls: () => this.sim.ballCount, lastBall: () => this.mode === 'round' && this.ballsLeft <= 1, cash: () => this.money,
     };
     if (persistent) {
       const boss = this.boss;
       const later = boss?.decalsOffUntilHalf && !this.fixedMods ? (() => { const m = this.roundMods(true); return { mods: m, at: goal / 2, baseMult: this.startMult(m) }; })() : undefined;
-      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), onPolish: (inst, by, cap) => this.polish(inst, by, cap), jam: boss?.jam, later });
+      return new Scorer(goal, () => this.layout.parts, { ...base, onLevelUp: (inst, n) => this.levelUp(inst, n), onPolish: (inst, by, cap) => this.polish(inst, by, cap), onNotch: (inst, n) => this.notch(inst, n), jam: boss?.jam, later });
     }
     return new Scorer(goal, () => this.layout.parts, base); // a test ball's level-ups stay in its own scorer
   }
@@ -228,6 +232,15 @@ export class Game {
   polish(inst: PartInstance, by: number, cap: number): number {
     inst.polish = Math.round(Math.min(cap, (inst.polish ?? 0) + by) * 1000) / 1000;
     return inst.polish;
+  }
+
+  /** An Old Bell's notch for the round: at `notches` it rings (one more ring for the run) and starts again. True if it rang. */
+  notch(inst: PartInstance, notches: number): boolean {
+    const n = (inst.notches ?? 0) + 1;
+    const rang = n >= notches;
+    inst.notches = rang ? 0 : n;
+    if (rang) this.rings++;
+    return rang;
   }
 
   /** Level a part up for the rest of the run (at most MAX_LEVEL). Returns its new level. */
@@ -506,6 +519,7 @@ export class Game {
 
   newRun(machine: MachineId = this.machine) {
     this.runScore = 0;
+    this.rings = 0;
     this.machine = machine;
     this.layout = starterLayout();
     this.round = 1;
@@ -675,7 +689,7 @@ export class Game {
   save(): RunSave {
     return {
       v: 2, layout: this.layout, money: this.money, round: this.round, shop: this.shop, sandbox: this.sandbox, runSeed: this.runSeed,
-      picks: this.decals, pending: this.pending, runScore: this.runScore, machine: this.machine, bosses: this.bossPlan, won: this.won,
+      picks: this.decals, pending: this.pending, runScore: this.runScore, machine: this.machine, bosses: this.bossPlan, won: this.won, rings: this.rings,
     };
   }
 
@@ -694,6 +708,7 @@ export class Game {
     this.won = !!s.won;
     this.resolved = null;
     this.runScore = s.runScore ?? 0;
+    this.rings = s.rings ?? 0;
     this.history = [];
     this.future = [];
     this.layout.parts = this.layout.parts.filter((p) => p.def in PARTS);

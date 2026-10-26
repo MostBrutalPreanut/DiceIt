@@ -113,6 +113,19 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       drawPost(back ? ends[0] : ends[1]);
       break;
     }
+    case 'rank': {
+      // a gem-shaped insert with a chevron (a promotion) on a wire switch; lit, it shines
+      const lit = !!st.lit, c = t.role.rank;
+      const gem = (k: number): Pt[] => [[x, y + r * k], [x + r * 0.8 * k, y], [x, y - r * k], [x - r * 0.8 * k, y]];
+      p.face(gem(1).map(([a, b]) => P(v, a, b, 0.01)), metal.mid, { line: 0.4 });
+      p.face(gem(0.8).map(([a, b]) => P(v, a, b, 0.02)), lit ? mix(c, WHITE, 0.35) : mix(c, t.shadeTint, 0.6), { line: 0.4, sil: false });
+      for (const dy of [-0.3, 0.05]) {
+        const ch: Pt[] = [[x - r * 0.4, y + dy * r], [x, y + (dy + 0.3) * r], [x + r * 0.4, y + dy * r], [x + r * 0.4, y + (dy - 0.16) * r], [x, y + (dy + 0.14) * r], [x - r * 0.4, y + (dy - 0.16) * r]];
+        p.face(ch.map(([a, b]) => P(v, a, b, 0.03)), lit ? t.paper : mix(c, t.shadeTint, 0.85), { line: 0.3, sil: false });
+      }
+      for (const sx of [-1, 1]) p.cyl(x + sx * r * 0.98, y, 0.15, 0, 0.5, metal);
+      break;
+    }
     case 'lane': {
       // a real lane: two guide posts, a wire switch and a lit letter; the lanes spell a word per theme
       const lit = !!st.lit, c = t.role.lane;
@@ -264,6 +277,35 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.face(ring(x, y, r * 0.92, 26).map(([a, b]) => P(v, a, b, 0.46)), bell.shade, { sil: false, line: 0.4 });
       p.face(ring(x - r * 0.2, y + r * 0.1, r * 0.18, 14).map(([a, b]) => P(v, a, b, 1.2)), bell.light, { sil: false, line: 0 });
       p.cyl(x, y, 0.14, 1.46, 0.22, metal);
+      break;
+    }
+    case 'bell': {
+      // an old bronze bell hung in a wooden yoke; three pips on its skirt count the notches. Rung this round, it goes dull
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      const quiet = st.lit === false;
+      const bronze = st.hit ? mat(t, mix(t.role.bell, WHITE, 0.4)) : quiet ? mat(t, mix(t.role.bell, t.shadeTint, 0.45)) : role;
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      const wood = mat(t, t.rim);
+      p.cyl(x - r * 0.9, y + r * 0.2, 0.14, 0.16, 2.2, wood);
+      // a real bell's profile: a flared lip, a waist, a round shoulder
+      const H = 1.7, prof = [[0, 0.92], [0.06, 0.8], [0.2, 0.62], [0.5, 0.52], [0.78, 0.5], [0.92, 0.4], [1, 0.22]] as const;
+      const pts = prof.flatMap(([u, k]) => ring(x, y, r * k, 26).map(([a, b]) => P(v, a, b, 0.28 + u * H)));
+      p.cyl(x, y, r * 0.94, 0.16, 0.14, mat(t, bronze.shade)); // the lip, under the body
+      p.face(hull(pts), bronze.base);
+      p.face(ring(x - r * 0.22, y + r * 0.1, r * 0.12, 12).map(([a, b]) => P(v, a, b, 0.28 + 0.8 * H)), WHITE, { sil: false, line: 0 });
+      p.cyl(x, y, 0.15, 0.28 + H, 0.3, metal);
+      p.cyl(x + r * 0.9, y + r * 0.2, 0.14, 0.16, 2.2, wood);
+      const notches = PARTS.bell.recipe.bell!.notches;
+      p.op((g) => {
+        const [ax, ay] = P(v, x - r * 0.9, y + r * 0.2, 2.3), [bx, by] = P(v, x + r * 0.9, y + r * 0.2, 2.3);
+        g.moveTo(ax, ay).lineTo(bx, by).stroke({ width: v.S * 0.2 + v.lw, color: t.ink, cap: 'round' });
+        g.moveTo(ax, ay).lineTo(bx, by).stroke({ width: v.S * 0.2, color: t.rim, cap: 'round' });
+        for (let i = 0; i < notches; i++) {
+          const a = -Math.PI / 2 + (i - (notches - 1) / 2) * 0.55;
+          const [X, Y] = P(v, x + Math.cos(a) * r * 0.94, y + Math.sin(a) * r * 0.94, 0.17);
+          g.circle(X, Y, v.S * 0.15).fill(i < (st.seg ?? 0) ? t.role.golden : mix(t.paper, t.shadeTint, 0.5)).stroke({ width: v.lw * 0.45, color: t.ink });
+        }
+      });
       break;
     }
     case 'trophy': {

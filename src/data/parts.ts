@@ -11,7 +11,7 @@ import { bigBoiOf, DRAGON, ORDER, type MachineId } from './bigboi';
 export type PartId =
   | 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver' | 'vari'
   | 'ding' | 'piggy' | 'magnet' | 'thunder' | 'jackpot' | 'xlane' | 'golden' | 'disco' | 'trophy' | 'plate' | 'fame'
-  | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller';
+  | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip';
 
@@ -139,7 +139,20 @@ export interface Recipe {
   plate?: { x: number; reach: number };
   /** Hall of Fame: once a ball, the Mult is multiplied by (1 + typeX) for every different part type on the table. */
   typeX?: number;
+  /**
+   * Rank Lights: light every light of a pack and the ball that lit the last one ranks up a step: every hit it makes
+   * pays `steps[rank - 1]` times, for `seconds`. Lighting the set again moves it up (or starts the time again at the
+   * top); a drain loses it.
+   */
+  rank?: { steps: number[]; seconds: number };
+  /** Fires at most this many times a round (the Old Bell). */
+  perRound?: number;
+  /** Old Bell: its first hit each round adds a notch; at `notches` it rings, and every ball's Mult is ×`x` for the rest of the run. */
+  bell?: { notches: number; x: number };
 }
+
+/** The names of the ranks, lowest first (Rank Lights). */
+export const RANK_NAMES = ['Silver', 'Gold', 'Diamond'] as const;
 
 /** One step of a vari-target: balls at least `from` fast (scaled by the part's Stiffness) pay `x` times. */
 export interface HitTier {
@@ -375,6 +388,16 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
     recipe: { xmult: 1.25, xmultCap: 3, cooldown: 3, lightsLane: true }, dials: [],
   },
+  rank: {
+    id: 'rank', name: 'Rank Lights', blurb: 'Light all three and the ball gets a promotion.', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, pack: 3, weight: 2,
+    shape: { type: 'circle', r: 0.95 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 10, per: 'roll-over', lights: true, setSize: 3, rank: { steps: [1.2, 1.4, 1.6], seconds: 40 }, perLevel: 3 }, dials: [],
+  },
+  bell: {
+    id: 'bell', name: 'Old Bell', blurb: 'Ring it once a round. Three rounds on, it remembers.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
+    shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 10,
+    recipe: { points: 150, per: 'round', perRound: 1, bell: { notches: 3, x: 1.2 }, perLevel: 30 }, dials: [kickDial(1.5)],
+  },
   duck: {
     id: 'duck', name: 'Duck Gallery', blurb: 'A tin duck paddles back and forth. Knock it over. It gets cross.', kind: 'mover', rarity: 'rare', tags: ['target'], cost: 8, weight: 2,
     shape: { type: 'box', hw: 3.9, hh: 0.75 }, rotatable: false, kickUnit: 0,
@@ -455,6 +478,8 @@ export interface PartInstance {
   group?: number;
   /** Trophy Cup: the Mult it has kept so far this run. */
   polish?: number;
+  /** Old Bell: notches towards its next ring (rounds in which it was hit). */
+  notches?: number;
   /**
    * Free to move until the next round: bought in this visit to the workshop, or its move already paid. `paid`
    * is what it cost, refunded if it goes back before a round is played with it.
@@ -600,7 +625,12 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     lines.push({ tag: 'lamp', text: `Every hit brightens it a step (up to ${b.steps}) and pays ${f(b.points)}. Each step gives every scoring part within ${num(lamp.radius)} units +${Math.round(lamp.bonus * 100)}%, up to +${Math.round(lamp.full * 100)}%. It goes dark at the end of the ball.` });
   }
   if (def.pack && def.pack > 1) lines.push({ tag: 'note', text: `Comes as a pack of ${def.pack}.` });
-  if (r.lights && def.kind === 'rollover') lines.push({ tag: 'note', text: 'Lights up when the ball rolls over it. The lanes of a pack spell the machine\'s word.' });
+  if (r.lights && def.kind === 'rollover') lines.push({ tag: 'note', text: r.rank ? 'Lights up when the ball rolls over it. It goes dark at the end of the ball.' : 'Lights up when the ball rolls over it. The lanes of a pack spell the machine\'s word.' });
+  if (r.rank) {
+    const steps = r.rank.steps.map((x, i) => `${RANK_NAMES[i]} (×${xg(x)})`);
+    lines.push({ tag: 'mult', text: `Light all ${r.setSize} lights of a pack and the ball that lit the last one ranks up: every hit it makes pays more. ${steps.join(', then ')}. A rank lasts ${r.rank.seconds} s; lighting the set again moves it up and starts the time again, and a drain loses it.` });
+  }
+  if (r.bell) lines.push({ tag: 'mult', text: `Only its first hit each round scores, and that hit adds a notch${inst?.notches ? ` (${inst.notches} of ${r.bell.notches} now)` : ''}. At ${r.bell.notches} notches it rings: your Mult ×${xg(r.bell.x)} on every ball for the rest of the run (rings stack), and the notches start again. Sell it and its notches go; the rings stay.` });
   if (r.tiers && def.id === 'vari') {
     const stiff = (inst ? dialValue(inst, 'stiff') : 1) * mods.tierEase;
     const [, firm, hard, smash] = r.tiers;

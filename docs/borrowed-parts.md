@@ -11,6 +11,9 @@ Effort is for *our* engine, as in [parts-catalog.md](parts-catalog.md): **S** = 
 Every card is on a review page with Approve / Change / Skip and a notes box per part:
 https://claude.ai/artifact/UMabyQfo79xB2nmhH6c1fv (private to its owner; the decisions are saved there).
 
+**Built so far:** Rank Lights and the Old Bell (step 1 of §4), as revised in §6.3; see
+[balance-plan.md](balance-plan.md) §2 for their numbers.
+
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show
 each idea as first proposed; their names carry the verdict: ✅ approved, ✏️ changed (§6.3), ❌ skipped.
@@ -136,7 +139,7 @@ a first guess for the balance tool to tune.
 
 | Part | Borrowed from | What it does here | M | S | L | Rarity, effort |
 |---|---|---|---|---|---|---|
-| ✏️ **Rank Lights** | Pokémon Pinball Ruby & Sapphire (light three lights and the ball steps up to Great, Ultra and Master Ball, ×2, ×3 and ×4, for a while) | A set of 3 rollovers. Light all three and the ball **ranks up**: Silver (every hit pays ×1.5), Gold (×2), Diamond (×3). The ball changes colour and trails glitter. A rank lasts 40 s, and a drain loses it. | ✔ | ✔✔ | ✔✔ | Rare $8 (pack of 3), **S** |
+| ✏️ **Rank Lights** (built, as revised in §6.3) | Pokémon Pinball Ruby & Sapphire (light three lights and the ball steps up to Great, Ultra and Master Ball, ×2, ×3 and ×4, for a while) | A set of 3 rollovers. Light all three and the ball **ranks up**: Silver (every hit pays ×1.5), Gold (×2), Diamond (×3). The ball changes colour and trails glitter. A rank lasts 40 s, and a drain loses it. | ✔ | ✔✔ | ✔✔ | Rare $8 (pack of 3), **S** |
 | ✏️ **Wrecking Ball** | Peggle 2's Bowlder (Jeffrey: the ball becomes a boulder that smashes through pegs); Peggle's Fireball (burns through pegs) | Once a ball, a hit makes the ball **twice as big and heavy for 6 s**: it knocks drop targets down without bouncing, every bumper hit counts twice, and the table shakes on every hit. | ✔✔ | ✔ | | Legendary $11, **M** (needs a physics check, see §5) |
 | ✅ **Broomstick** | Ballionaire's Broom (bonk to ride it: the ball earns 2× and flies to the furthest screen edge) | The ball rides it: it flies in a straight line, ignoring gravity, for 1 s or until it reaches a wall, and every part it passes is zapped at ×2. | ✔✔ | ✔ | | Rare $9, **M** |
 | ❌ **Party Hats** (ball hats) | Ballionaire's Hats: Disguise (the ball counts as every ball type), Happy Drama Mask (3×), Captain's Hat (passes to another ball) | A rollover that puts a hat on the ball for the rest of that ball. Three kinds: **Disguise** (every hit counts as every part type, so the Ding-Dong Bell and Hall of Fame see the whole table), **Crown** (points ×2, but the ball's Mult stops growing), **Captain's Hat** (jumps to the next ball that touches this one in multiball). | | ✔ | ✔ | Uncommon $6, **S** |
@@ -157,7 +160,7 @@ a first guess for the balance tool to tune.
 | ❌ **Siege Tower** | Godzilla's building (drops floor by floor as it is damaged, changing the shots); Medieval Madness's castle | 5 floors; every 6 hits knock one down (100, 200, 300...), and each floor gone opens shots behind it. Flattened: 3-ball multiball and a 1,000 super jackpot at the rubble. It rebuilds next round one floor taller. Close to the Castle Dragon's Siege: maybe the Factory's or Diner's version instead. | ✔✔ | ✔ | ✔✔ | Legendary $12, **M** |
 | ✏️ **Magic Trunk** | Theatre of Magic's rotating trunk (four faces: a scoop, a magnet that grabs the ball...) | Turns to a new face every 8 hits: a bumper (30), a scoop (pays 5 for every hit since it opened), a magnet (grabs and throws, +0.25 Mult), a plain wall. | ✔ | ✔ | ✔ | Rare $9, **M** |
 | ❌ **Haunted Gallery** | Pokémon Pinball's Gengar stage (10 Gastly bring Haunter, 10 Haunter bring Gengar); Devil's Crush's wandering skeletons; Peggle Blast's gnomes | Ghosts drift across the table, 3 at a time, 20 a pop. 10 popped bring a big ghost (3 hits, 150); 3 big ghosts bring the Boss Ghost (10 hits, 1,000 and ×1.5 Mult). Ghosts are moving sensors, not solid bodies. | ✔✔ | ✔ | ✔ | Rare $9, **M** |
-| ✏️ **Old Bell** | CloverPit's Ring Bell (1 charge a round; a full 3-segment bar gives Symbols Multiplier +1 for good); Cult of PiN's Level Up glyph (×1.25 Mult for good after each Act) | Gains a notch every round you clear. At 3 notches the next hit rings it: every ball starts at ×1.2 Mult for the rest of the run (it stacks). Then it starts again. A slow ×Mult every run can find (problem 1). | | ✔✔ | ✔✔ | Rare $8, **S** |
+| ✏️ **Old Bell** (built, as revised in §6.3) | CloverPit's Ring Bell (1 charge a round; a full 3-segment bar gives Symbols Multiplier +1 for good); Cult of PiN's Level Up glyph (×1.25 Mult for good after each Act) | Gains a notch every round you clear. At 3 notches the next hit rings it: every ball starts at ×1.2 Mult for the rest of the run (it stacks). Then it starts again. A slow ×Mult every run can find (problem 1). | | ✔✔ | ✔✔ | Rare $8, **S** |
 | ✅ **Wishing Well** | Yoku's Island Express (bumpers that work only once you deposit enough fruit); Cult of PiN's Financier and Investor glyphs (+Mult and +Base per Mana spent) | 10 a hit. In the workshop throw $1 in (up to $5 a round); every $1 in it adds +3 to its hits and +0.02 Mult a hit, for the rest of the run. A money sink on the board (problem 2). | | ✔ | ✔✔ | Uncommon $4, **S** |
 | ✅ **Ice Sculpture** | Cult of PiN's melting glyph (+300 damage, −1 every time a flipper is used, removed at 0) | 250 a hit, and it melts 1 point every time you press a flipper. At 0 it is a puddle and leaves the table. | | | ✔ | Uncommon $5, **S** |
 | ❌ **Dish Rack** | Roundguard's pots (every pot broken in a launch smashes in turn at the end, building a break multiplier); real pinball's end-of-ball bonus count-up **(memory)** | Four plates, sold as a set. A hit breaks a plate (20). When the ball drains, every broken plate on the table smashes one by one, each paying 25% more than the last; they come back for the next ball. | ✔ | ✔ | | Uncommon $5 (pack of 4), **S** |
@@ -368,7 +371,8 @@ The game already caps particles (150), flying chips (160) and sound voices (24, 
 sound). Sparks and zaps plug into those caps, at a lower priority than real balls:
 1. **Priority:** a real ball's hit always gets its effects; zaps next; spark hits last.
 2. **Merge the flying points.** Points from sparks and zaps on the same part within 0.2 s fly as one chip carrying
-   the sum. Same total, far fewer chips.
+   the sum. Same total, far fewer chips. If that is still too many, the review allows going further: merge them into
+   one bigger chip per burst, or let spark and zap points skip the flight to the score dock and count in at once.
 3. **A spark hit is a flash, not a burst:** the part lights up for a moment; no debris.
 4. **Sound:** spark hits share one soft tick with a 60 ms gap; zaps play one crackle a frame however many fired.
 

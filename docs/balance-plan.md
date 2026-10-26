@@ -24,7 +24,7 @@ each machine's Big Boi pulls the run towards a different build:
 |---|---|---|---|---|
 | Common | round 1 | 1 | $1–4 | Pop Bumper, Cha-Ching Bumper, Slingshot, Spinner, Lane Rollover (pack of 3), Lamp, Vari-Target, Deflector, Kickback |
 | Uncommon | round 2 | 0.4, +0.12 a round, up to 1 | $5–7 | Drop-Target Bank, Level Light (pack of 2), Ball Saver, Left / Right Flipper, Ding-Dong Bell, Piggy Bank, Mag-Grab, Glow Strip, Roller Pop, **Power Plate**, X Lane |
-| Rare | round 4 | 0.25, +0.1 a round, up to 1 | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup** |
+| Rare | round 4 | 0.25, +0.1 a round, up to 1 | $8–9 | Ball Printer, Thunder Bumper, Jackpot Scoop, Duck Gallery, **Trophy Cup**, **Rank Lights** (pack of 3), **Old Bell** |
 | Legendary | round 7 | 0.15, +0.07 a round, up to 0.6 | $11–13 | Golden Bumper, Disco Ball, Goal!, **Hall of Fame** |
 
 Rarer parts are physically bigger and do more. Every part does at least two things, and many feed or starve each other.
@@ -61,8 +61,10 @@ Cards say what a part does; they carry no strategy tips.
 | Trophy Cup | 20 · every hit keeps +0.04 Mult for the rest of the run (up to +5): every ball starts higher |
 | Power Plate | a floor plate: bumpers on or near it pay ×1.5, and plates multiply |
 | Hall of Fame | 150 · once a ball, Mult ×1.1 for every different part type on the table |
+| Rank Lights | **sold as a pack of 3** ($8) · 10 · light all 3 and the ball that lit the last one ranks up: Silver (every hit it makes ×1.2), Gold (×1.4), Diamond (×1.6), for 40 s; a drain loses it. Ranks count as Mult gains for Flat Rate and the Overlord |
+| Old Bell | 150, only on its first hit each round, which adds a notch · at 3 notches it rings: every ball's Mult ×1.2 for the rest of the run (rings stack, and stay if the bell is sold) |
 
-Multiplicative Mult (X Lane, Golden Bumper, Disco Ball, the Dragon, Glass Cannon-style decals) is what lets a late
+Multiplicative Mult (X Lane, Golden Bumper, Disco Ball, the Old Bell, the Dragon, Glass Cannon-style decals) is what lets a late
 machine reach millions; each is capped per ball, like everything else that compounds.
 
 ## 2b. Kept Mult and moving costs

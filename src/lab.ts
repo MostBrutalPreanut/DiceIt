@@ -22,6 +22,8 @@ const STATES: Partial<Record<PartId, [string, PartState][]>> = {
   kickback: [['armed', {}], ['fired', { armed: false }]],
   saver: [['ready', {}], ['spent', { armed: false }]],
   vari: [['idle', {}], ['tier 2', { seg: 2 }], ['smash', { seg: 4 }]],
+  rank: [['dark', {}], ['lit', { lit: true }]],
+  bell: [['idle', {}], ['hit', { hit: true }], ['2 notches', { seg: 2 }], ['rung', { lit: false, seg: 1 }]],
 };
 const ANGLE: Partial<Record<PartId, number>> = { sling: -0.55, spinner: 0.3, deflector: 0.4, bank: 0.15, vari: 0.2, kickback: -0.5, printer: 0.3 };
 
