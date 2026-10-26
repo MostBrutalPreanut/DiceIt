@@ -40,8 +40,6 @@ export const TOOLBOX_SLOTS = 4;
  * what it cost.
  */
 export const UPKEEP = { move: 1, scrap: 1 } as const;
-/** The Tune-up: the first level costs `base`, every level after `step` more. */
-export const TUNE = { base: 2, step: 2 } as const;
 
 /** Two significant figures: goals read as 4,300 or 12,000, not 4,312. */
 export function niceGoal(n: number): number {
@@ -230,26 +228,6 @@ export class Game {
   polish(inst: PartInstance, by: number, cap: number): number {
     inst.polish = Math.round(Math.min(cap, (inst.polish ?? 0) + by) * 1000) / 1000;
     return inst.polish;
-  }
-
-  /** What tuning a part up one more level costs: it gets dearer every level. */
-  tuneCost(inst: PartInstance): number {
-    return TUNE.base + TUNE.step * (inst.level ?? 0);
-  }
-
-  /** Can this part be tuned up now (a part with levels, below the top level, and you can pay)? */
-  canTune(inst: PartInstance): boolean {
-    return this.editable && !!PARTS[inst.def].recipe.perLevel && (inst.level ?? 0) < MAX_LEVEL && this.canAfford(this.tuneCost(inst));
-  }
-
-  /** The Tune-up, between rounds: pay to level a part up by one, for the rest of the run. */
-  tuneUp(uid: number): boolean {
-    const inst = this.part(uid);
-    if (!inst || !this.canTune(inst)) return false;
-    this.checkpoint();
-    if (!this.sandbox) this.money -= this.tuneCost(inst);
-    this.levelUp(inst, 1);
-    return true;
   }
 
   /** Level a part up for the rest of the run (at most MAX_LEVEL). Returns its new level. */

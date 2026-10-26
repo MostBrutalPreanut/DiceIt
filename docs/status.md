@@ -42,7 +42,6 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   and $1 to scrap; one bought this visit moves freely and goes back for what it cost. Free Hands (was Full
   Refund) makes it free.
 - **Kept Mult** (Mult that sticks between rounds): the Trophy Cup, and the Momentum and Afterglow decals.
-- **Tune-up**: pay to level a part up between rounds, dearer every level, up to level 10.
 - **Packs**: Lane Rollovers come as three (they spell the machine's word, and a set is one pack), Level Lights
   as two.
 - **New parts** this pass: Trophy Cup (rare, kept Mult), Power Plate (uncommon, bumpers on it pay ×1.5), Hall of
@@ -90,8 +89,7 @@ Latest run: 12 par runs, 10 measured rounds a step (`npm run balance -- --verify
 **What works**
 - No part carries a run: the biggest share of points late is Big Boi at about 25%, then the Ding-Dong Bell and
   the Golden Bumper at 15–20%.
-- Money is spent: two or three parts a round early, and the Tune-up soaks up what is left late (cash held stays
-  under about $40).
+- Money is spent: two or three parts a round early. With no Tune-up, late cash piles up again: a late-game money sink is still open.
 - Rounds last 0.7 to 2.3 minutes, about 35–55 seconds a ball. Balls never needed a search in the last runs.
 
 **What does not work yet**
