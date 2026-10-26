@@ -30,16 +30,25 @@
 #scoreDock.side.show { display: block; animation: dockIn .38s cubic-bezier(.3, 1.5, .55, 1) both; }
 @keyframes dockIn { from { transform: translateX(46px) scale(.8); opacity: 0; } to { transform: none; opacity: 1; } }
 
-/* on top of the machine, all the time: one row (drums, Mult, money) over the goal tube */
-#scoreDock.top { flex: none; align-self: center; width: max-content; max-width: 100%; margin: 0 0 8px; padding: 4px; border-radius: 14px; }
-#scoreDock.top .dinner { display: grid; grid-template-columns: auto auto auto; grid-template-areas: "odo mult money" "goal goal goal"; align-items: center; justify-content: center; column-gap: 16px; padding: 5px 10px 6px; }
+/* small screens: in the top corner over the machine, all the time, so the table keeps all the room it can get:
+   the drums and the Mult, then the goal tube (and money where the shop is off screen) */
+#scoreDock.top { position: absolute; top: 4px; right: 4px; width: max-content; max-width: 48%; margin: 0; padding: 3px; border-radius: 12px; box-shadow: 3px 4px 0 var(--drop); }
+#scoreDock.top .dinner { display: grid; grid-template-columns: auto auto; grid-template-areas: "odo mult" "goal goal"; align-items: center; justify-content: center; column-gap: 10px; padding: 4px 8px 5px; border-radius: 8px; }
 #scoreDock.top .dhead { display: contents; }
 #scoreDock.top .dhead .lbl { display: none; }
-#scoreDock.top .dmult { grid-area: mult; font-size: 22px; }
+#scoreDock.top .dmult { grid-area: mult; font-size: 18px; }
+#scoreDock.top .ddrum { height: 28px; }
+#scoreDock.top .dstrip span { height: calc(28px - 2 * var(--lw-detail)); line-height: 30px; font-size: min(19px, calc(var(--ddw, 30px) * .92)); }
+#scoreDock.top .dodo { padding: 3px; gap: 2px; border-radius: 7px; }
 #scoreDock.top .dodo { grid-area: odo; margin: 0; justify-self: start; }
-#scoreDock.top .dgoal { grid-area: goal; height: 7px; margin: 5px 0 0; }
+#scoreDock.top .dgoal { grid-area: goal; height: 6px; margin: 4px 0 0; }
 #scoreDock.top .dmoney { grid-area: money; }
-@media (max-width: 1000px) { #scoreDock.top .dmoney { display: flex; } }
+@media (max-width: 1000px) {
+  #scoreDock.top .dinner { grid-template-areas: "odo mult" "goal money"; }
+  #scoreDock.top .dmoney { display: flex; gap: 4px; }
+  #scoreDock.top .dmoney b { font-size: 16px; }
+  #scoreDock.top .dmoney .coins { transform: scale(.7); transform-origin: right center; width: 28px; }
+}
 
 /* the scoreboard's own score makes way for the dock */
 body.dock-on #score, body.dock-on .scoreLbl { display: none; }

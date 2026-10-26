@@ -8,6 +8,8 @@
  * gets quieter, and a crowd of sounds is thinned out), a little room reverb, a warm low-pass, a compressor and a
  * soft clipper that keeps the peak under 0.9. Under it all a relaxed toybox tune loops, different on each
  * machine: a clockwork music box in the factory, a swung doo-wop combo in the diner, a lute in the castle.
+ * While a round is played the same tune gets going: faster, brighter, with a kick, a backbeat and a pumping bass,
+ * more so as the goal gets close (setIntensity).
  */
 import type { PartId } from './data/parts';
 
@@ -135,6 +137,11 @@ export class AudioFx {
   private nextBeat = 0;
   private beat = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** How hard the music drives (0 relaxed, 1 flat out): it follows the target a little every step. */
+  private energy = 0;
+  private energyTarget = 0;
+  private energyHeard = 0;
+  private mtone: BiquadFilterNode | null = null;
   /** The voice limiter: when each kind of sound last started, and when the live ones end. */
   private recent = new Map<string, number[]>();
   private live: number[] = [];
@@ -204,6 +211,7 @@ export class AudioFx {
     this.music.gain.value = this.musicGain();
     this.musicDuck = ctx.createGain();
     const mtone = ctx.createBiquadFilter();
+    this.mtone = mtone;
     mtone.type = 'lowpass';
     mtone.frequency.value = 3600;
     mtone.Q.value = 0.4;
@@ -268,12 +276,19 @@ export class AudioFx {
     this.setEcho();
   }
 
-  private musicGain() { return this.musicOn ? MUSIC_LEVEL * this.musicVolume * this.musicVolume : 0; }
+  private musicGain() { return this.musicOn ? MUSIC_LEVEL * this.musicVolume * this.musicVolume * (1 + 0.45 * this.energy) : 0; }
+  /** The tempo right now: the song's, pushed up to a third faster as the music gets going. */
+  private get bpm() { return this.song.bpm * (1 + 0.32 * this.energy); }
+  /** How hard the music should drive, 0..1: 0 in the workshop and the menus, more while a round is played. */
+  setIntensity(v: number) { this.energyTarget = clamp01(v); }
   private applyMusicGain() {
     if (this.music && this.ctx) this.music.gain.setTargetAtTime(this.musicGain(), this.ctx.currentTime, 0.2);
   }
   private setEcho() {
-    if (this.echo) this.echo.delayTime.value = (60 / this.song.bpm / 2) * 3;
+    if (!this.echo || !this.ctx) return;
+    const d = (60 / this.bpm / 2) * 3;
+    if (this.energy === 0) this.echo.delayTime.value = d; // a tempo change glides, so the echo does not jump
+    else this.echo.delayTime.setTargetAtTime(d, this.ctx.currentTime, 0.3);
   }
   /** Big moments push the music down for a breath. */
   private duck(depth = 0.5, hold = 0.5) {
@@ -1092,6 +1107,46 @@ export class AudioFx {
     for (let i = 0; i < n; i++) this.noise(v.o, v.t + i * 0.028, 0.012, 0.1, { f: 2600 + (i % 2) * 400, q: 3 });
     this.noise(v.o, v.t, n * 0.028, 0.04, { f: 500, type: 'lowpass', attack: 0.01 });
   }
+  /** A round cleared: a snare roll, a brass fanfare up to a big major chord, a kick and a cymbal, bells raining down. */
+  roundWon(big = false) {
+    const v = this.voice('roundWon', 0.85, 3.2, 1, 1, true);
+    if (!v) return;
+    this.duck(0.15, 2.6);
+    const { o, t } = v;
+    for (let i = 0; i < 12; i++) this.noise(o, t + i * 0.03, 0.028, 0.05 + i * 0.01, { f: 2300, q: 0.8 });
+    const brass = (at: number, n: number, dur: number, vol: number) => {
+      for (const d of [-8, 8]) this.osc(o, at, midi(n), dur, vol, { type: 'sawtooth', lp: 1900, attack: 0.02, hold: dur * 0.55, detune: d });
+      this.osc(o, at, midi(n - 12), dur, vol * 0.6, { type: 'triangle', lp: 900, attack: 0.02, hold: dur * 0.55 });
+    };
+    const s = t + 0.38;
+    // ta-ta-ta TAAA, da-da DAAAAH
+    brass(s, 67, 0.11, 0.075); brass(s + 0.13, 67, 0.11, 0.075); brass(s + 0.26, 67, 0.11, 0.075);
+    brass(s + 0.4, 72, 0.32, 0.085);
+    brass(s + 0.76, 74, 0.13, 0.075); brass(s + 0.9, 76, 0.13, 0.075);
+    const hit = s + 1.05;
+    for (const n of big ? [72, 76, 79, 84, 88] : [72, 76, 79, 84]) brass(hit, n, 1.3, 0.055);
+    this.osc(o, hit, 130, 0.3, 0.45, { to: 42, glide: 0.2 });
+    this.noise(o, hit, 1.6, 0.16, { f: 5200, type: 'highpass', attack: 0.004 });
+    this.noise(o, hit, 0.3, 0.12, { f: 400, type: 'lowpass' });
+    for (let i = 0; i < (big ? 16 : 10); i++) this.bell(o, hit + 0.08 + i * 0.07 + rand(0, 0.03), midi(84 + pent(Math.floor(rand(0, 10)))), 0.5, 0.06, 3.5, 0.5);
+  }
+
+  /** A line of the round's payout counted in: a coin, climbing. */
+  tally(i: number) {
+    const v = this.voice('tally', 0.65, 0.4, 0.05, 6);
+    if (!v) return;
+    this.noise(v.o, v.t, 0.015, 0.12, { f: 3000, q: 3 });
+    this.bell(v.o, v.t + 0.02, midi(79 + pent(i * 2)), 0.35, 0.13, 3.01, 0.7);
+  }
+
+  /** Big Boi poked on the main menu: a rubbery boing. */
+  poke() {
+    const v = this.voice('poke', 0.7, 0.6, 0.12, 3);
+    if (!v) return;
+    this.osc(v.o, v.t, 170, 0.5, 0.3, { type: 'triangle', to: 340, glide: 0.1, lp: 1800, vib: [13, 45], vibDecay: true });
+    this.osc(v.o, v.t, 95, 0.12, 0.3, { to: 60 });
+  }
+
   /** The run is over: a slow music box, running down. */
   gameOver() {
     const v = this.voice('gameOver', 0.7, 2.6, 1, 1, true);
@@ -1135,7 +1190,8 @@ export class AudioFx {
   scheduleMusic(until: number) {
     const ctx = this.ctx;
     if (!ctx || !this.music) return;
-    const s = this.song, step = 60 / s.bpm / 2, loop = s.bars * s.steps;
+    const s = this.song, loop = s.bars * s.steps;
+    let step = 60 / this.bpm / 2;
     if (this.nextBeat < ctx.currentTime) {
       // fell behind (a hidden tab): skip the missed steps instead of playing them all at once
       const missed = Math.ceil((ctx.currentTime - this.nextBeat) / step);
@@ -1149,9 +1205,20 @@ export class AudioFx {
         if (this.theme === 'diner') this.dinerStep(t, bar, st, step);
         else if (this.theme === 'castle') this.castleStep(t, bar, st, step);
         else this.factoryStep(t, bar, st, step);
+        this.driveStep(t, bar, st, step);
       }
       this.nextBeat += step;
       this.beat++;
+      // the energy ramps (up quickly when a round starts, down more gently after it), and the mix follows it
+      const d = this.energyTarget - this.energy;
+      this.energy = Math.abs(d) < 0.01 ? this.energyTarget : this.energy + d * (d > 0 ? 0.09 : 0.05);
+      step = 60 / this.bpm / 2;
+      if (Math.abs(this.energy - this.energyHeard) > 0.03 || (this.energy !== this.energyHeard && this.energy === this.energyTarget)) {
+        this.energyHeard = this.energy;
+        this.applyMusicGain();
+        this.setEcho();
+        this.mtone?.frequency.setTargetAtTime(3600 + 3400 * this.energy, ctx.currentTime, 0.3);
+      }
     }
   }
 
@@ -1206,6 +1273,23 @@ export class AudioFx {
       while (len < 4 && CASTLE_MELODY[(i + len) % CASTLE_MELODY.length] === null) len++;
       this.recorder(m, t, midi(n), step * len, 0.05);
     }
+  }
+
+  /** The round's drive under any machine's tune: a kick on the beat, a backbeat, hats and a pumping bass on the chord's root. */
+  private driveStep(t: number, bar: number, st: number, step: number) {
+    const e = this.energy;
+    if (e < 0.05) return;
+    const m = this.music!, six = this.song.steps === 6;
+    const onBeat = six ? st % 3 === 0 : st % 2 === 0;
+    const back = six ? st === 3 : st === 2 || st === 6;
+    if (onBeat) this.osc(m, t, 125, 0.18, 0.34 * e, { to: 46, glide: 0.11, attack: 0.002 });
+    if (back) {
+      this.noise(m, t, 0.11, 0.1 * e, { f: 1900, q: 0.8 });
+      this.osc(m, t, 210, 0.07, 0.1 * e, { type: 'triangle', to: 150 });
+    }
+    this.noise(m, t, st % 2 ? 0.035 : 0.02, (st % 2 ? 0.045 : 0.025) * e, { f: 8500, type: 'highpass' });
+    const root = this.theme === 'diner' ? DINER_BASS[bar][0] : this.theme === 'castle' ? CASTLE_CHORDS[bar][0] - 12 : 36 + ((FACTORY_CHORDS[bar][0] % 12) + 12) % 12;
+    this.softBass(m, t, midi(root + (st % 2 ? 12 : 0)), step * 0.85, 0.13 * e);
   }
 
   /** A music box tine: a mellow FM bell with a faint high ping. */

@@ -5,7 +5,7 @@
 // the page-wide FX overlay, so multiball with many hits stays cheap.
 //
 // The score dock sits next to the backbox while you play when there is room for it (wide screens), and
-// otherwise on top of the machine like a topper, all the time (so the table keeps one size).
+// otherwise in the top corner over the machine, all the time: it never takes room from the table.
 import { Container, Graphics, Particle, ParticleContainer, Rectangle, Texture } from 'pixi.js';
 import type { PartId } from '../data/parts';
 import type { ScoreEvent } from '../game/scoring';
@@ -153,7 +153,7 @@ export class Flyers {
     this.stackEl = d.querySelector('.dmoney .coins')!;
     this.tickEl = d.querySelector('.dmoney .tick')!;
     this.goalEl = d.querySelector('.dgoal i')!;
-    this.drums = new Drums(this.odoEl, () => (this.mode === 'side' ? this.dockW - 36 : Math.min(230, innerWidth - 200)));
+    this.drums = new Drums(this.odoEl, () => (this.mode === 'side' ? this.dockW - 36 : Math.min(150, innerWidth * 0.3)));
     // the scoreboard's own score label goes when the dock takes over
     document.getElementById('score')?.previousElementSibling?.classList.add('scoreLbl');
     for (let i = 0; i < MAX_CHIPS; i++) {
@@ -363,12 +363,8 @@ export class Flyers {
     this.sizeKey = key;
     let next: 'side' | 'top' = 'top';
     if (innerWidth > 1000) {
-      // the machine is fitted to the stage: work out its size with the stage at full height (no topper)
-      const S = this.renderer.view.S, wLimit = (sr.width - 12) / (RIM.hw * 2 + 1.6);
-      const topH = this.mode === 'top' ? this.dock.offsetHeight + parseFloat(getComputedStyle(this.dock).marginBottom || '0') : 0;
-      const heightLimited = S < wLimit - 1e-3;
-      const Sfull = heightLimited ? Math.min(wLimit, ((sr.height + topH - 12) * S) / Math.max(1, sr.height - 12)) : S;
-      const bbLeft = sr.left + sr.width / 2 - (RIM.hw - 0.8) * Sfull;
+      // the machine is fitted to the stage (the dock takes no room from it either way)
+      const bbLeft = sr.left + sr.width / 2 - (RIM.hw - 0.8) * this.renderer.view.S;
       if (bbLeft - 14 - (cr.left - 4) >= DOCK_MIN) next = 'side';
     }
     // a resize lays the machine out a frame later: a new mode has to hold for a few frames first

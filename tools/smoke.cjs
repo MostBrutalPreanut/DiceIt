@@ -73,8 +73,9 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.click(p.x, p.y);
   s = await state();
   check(s.placed === 5 && s.inv === 0, 'clicking the table places it');
-  check(await page.isVisible('#selected'), 'the part card is shown for the new part');
-  const card = await page.innerText('#selected');
+  check(await page.isVisible('#inspect'), 'the part card opens beside the new part');
+  const card = await page.innerText('#inspect');
+  check(!/your Mult/i.test(card) && /base \d+/i.test(card), 'the picked part\'s card shows the base as a small number, without the Mult chip');
   check(/pays|flipper|Roll a ball|Scores nothing|Each target/i.test(card), 'the part card says what it pays');
   await page.click('#btnUndo');
   s = await state();
@@ -87,7 +88,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   s = await state();
   check(s.placed === 5, 'redo puts it all back');
 
-  // drag it onto the inventory panel to take it off the board
+  // dragging a part on the table does not move it: a click opens its card, and To toolbox takes it off the board
   const inv = await (await page.$('#inventoryBox')).boundingBox();
   await page.mouse.move(p.x, p.y);
   await page.mouse.down();
@@ -95,7 +96,15 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.move(inv.x + inv.width / 2, inv.y + inv.height / 2, { steps: 8 });
   await page.mouse.up();
   s = await state();
-  check(s.placed === 4 && s.inv === 1, 'dragging a part onto the inventory stores it');
+  check(s.placed === 5 && s.inv === 0, 'a part on the table cannot be dragged off it');
+  check(await page.isVisible('#inspect') && /Move/.test(await page.innerText('#inspect')) && /To toolbox/.test(await page.innerText('#inspect')), 'clicking a part opens its card with Move and To toolbox');
+  check(await page.locator('#inspect button', { hasText: '15°' }).count() === 0, 'the card has no rotate buttons');
+  await page.keyboard.press('Escape');
+  check(await page.isHidden('#inspect') && await page.isHidden('#menu'), 'Esc closes the card (and does not pause)');
+  await page.mouse.click(p.x, p.y);
+  await page.click('#btnStore');
+  s = await state();
+  check(s.placed === 4 && s.inv === 1, 'To toolbox stores it');
 
   // arm it from the inventory and place it again
   await page.click('#inventory .item');
@@ -178,10 +187,12 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.up();
   const dropped = await state();
   check(dropped.placed === placedBefore + 1 && dropped.money === 20 - 4 && dropped.inv === 0, 'dragging an offer onto the table buys it straight onto the board');
-  check(await page.isVisible('#selected') && (await page.innerText('#selected')).includes('To toolbox'), 'its card offers To toolbox');
+  check(await page.isVisible('#inspect') && (await page.innerText('#inspect')).includes('To toolbox'), 'its card offers To toolbox');
+  await page.keyboard.press('Escape');
   const boi = await at(12, 36);
   await page.mouse.click(boi.x, boi.y);
-  check(!(await page.innerText('#selected')).includes('Sell'), 'the fixed Big Boi cannot be sold or moved');
+  check(!/Return|Scrap|Move/.test(await page.innerText('#inspect')), 'the fixed Big Boi cannot be sold or moved');
+  await page.keyboard.press('Escape');
   await page.evaluate(() => { window.__pinball.game.newRun(); window.__pinball.refresh(); });
 
   // a shelf that is still rolling in cannot be grabbed or bought
@@ -203,13 +214,32 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.click(spot2.x, spot2.y);
   const clicked = await state();
   check(clicked.money === 16 && clicked.placed === 5, 'click an offer, then click the table: bought and placed in one go');
-  // click a part on the table to pick it up, click again to set it down somewhere else
+  // Move on a part's card picks it up: it follows the pointer and the next click sets it down somewhere else
   const from = await at(12, 22), to = await at(8, 26);
+  await page.keyboard.press('Escape');
   await page.mouse.click(from.x, from.y);
+  await page.click('#btnMove');
   await page.mouse.move(to.x, to.y, { steps: 6 });
   await page.mouse.click(to.x, to.y);
   const moved = await page.evaluate(() => window.__pinball.game.placed.find((p) => p.def === 'coin'));
-  check(Math.hypot(moved.x - 8, moved.y - 26) < 0.6, `a clicked part follows the pointer and the next click sets it down (${moved.x.toFixed(1)}, ${moved.y.toFixed(1)})`);
+  check(Math.hypot(moved.x - 8, moved.y - 26) < 0.6, `Move: the part follows the pointer and the next click sets it down (${moved.x.toFixed(1)}, ${moved.y.toFixed(1)})`);
+  // moving a part you did not buy this visit costs $1 once, and the card says so; with no money it cannot move
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { const g = window.__pinball.game; for (const q of g.placed) delete q.loose; g.money = 0; window.__pinball.refresh(); });
+  await page.mouse.click(to.x, to.y);
+  check(/\$1/.test(await page.innerText('#btnMove')) && await page.isDisabled('#btnMove'), 'Move shows its $1 fee, and is off with no money');
+  await page.keyboard.press('Escape');
+  // an offer picked up from the shop turns with R before it is dropped
+  await page.evaluate(() => { const g = window.__pinball.game; g.money = 20; g.shop.offers = ['sling', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
+  await page.waitForTimeout(800);
+  await page.click('.offer[data-slot="0"] .plinth');
+  const spot3 = await at(14, 30);
+  await page.mouse.move(spot3.x, spot3.y, { steps: 4 });
+  await page.keyboard.press('KeyR');
+  await page.keyboard.press('KeyR');
+  await page.mouse.click(spot3.x, spot3.y);
+  const sling = await page.evaluate(() => window.__pinball.game.placed.find((p) => p.def === 'sling'));
+  check(sling && Math.abs(sling.angle - Math.PI / 6) < 0.01, `R turns a shop offer while it is carried (${sling?.angle})`);
   // the machine stays for the run: number keys no longer switch it
   await page.keyboard.press('Digit2');
   check(await page.evaluate(() => window.__pinball.game.machine) === 'factory', 'the machine cannot be switched mid-run');
@@ -319,6 +349,19 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(new Set(shots).size === 3, 'the three themes render differently');
   await page.evaluate(() => { const d = window.__pinball; d.theme('factory'); d.game.newRun(); d.refresh(); });
 
+  // a round cleared: the card counts in, a click skips to the end, then the button takes you on
+  await page.evaluate(() => { const d = window.__pinball; d.game.newRun(); d.refresh(); });
+  await page.click('#btnStart');
+  await page.evaluate(() => { const d = window.__pinball; d.game.scorer.goal = 1; d.advance(6, 2); });
+  await page.click('#btnCash');
+  await page.evaluate(() => window.__pinball.advance(0.1, 2));
+  check(await page.isVisible('#overlay .clear'), 'clearing a round shows the round-cleared card');
+  await page.mouse.click(720, 200);
+  check(await page.isVisible('#overlay .cl-btns.on #btnNext'), 'a click skips the count and shows the button');
+  await page.screenshot({ path: `${out}/smoke-3b-cleared.png` });
+  await page.click('#btnNext');
+  check(await page.evaluate(() => window.__pinball.game.mode) === 'workshop', 'the button goes on to the workshop');
+
   // losing: the whole page greys out under a summary with the map and the run's points
   await page.evaluate(() => { const d = window.__pinball; d.game.newRun(); d.refresh(); });
   await page.click('#btnStart');
@@ -340,7 +383,11 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(true, 'the picked run shows its final build as a picture');
   check((await lsGet('pinball-roguelite.scoreboard.v1'))[0].parts.length >= 4, 'the record keeps the final build, part by part');
   await page.screenshot({ path: `${out}/smoke-5-scoreboard.png` });
-  await page.keyboard.press('Escape');
+  await page.mouse.click(10, 880);
+  check(await page.isVisible('#menu .mpanel'), 'a click outside the scoreboard goes back to the main menu');
+  await page.waitForFunction(() => !document.querySelector('#menu .in'));
+  await page.click('#menu .mboi', { force: true }); // he breathes, so he is never "stable"
+  check(await page.evaluate(() => document.querySelector('#menu .mboi').classList.contains('poked')), 'poking Big Boi on the menu makes him jump');
 
   // settings: a flipper rebound, a reserved key refused, graphics and volume saved and used at once
   await page.click('#menu [data-act="settings"]');
@@ -355,7 +402,8 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.$eval('#menu input[data-vol="music"]', (el) => { el.value = '35'; el.dispatchEvent(new Event('input')); });
   check((await lsGet('pinball-roguelite.settings.v1')).music === 0.35, 'the music volume is saved');
   await page.screenshot({ path: `${out}/smoke-6-settings.png` });
-  await page.keyboard.press('Escape');
+  await page.mouse.click(10, 880);
+  check(await page.isVisible('#menu .mpanel'), 'a click outside the settings card goes back to the main menu');
 
   // a new run: Esc pauses it, and the sim holds still under the pause menu (the sim runs in real time from here)
   await page.evaluate(() => window.__pinball.freeze(false));
