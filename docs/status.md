@@ -9,7 +9,7 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 399 pass, 0 fail (27 files) |
+| Unit tests | 404 pass, 0 fail (28 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
 | Browser smoke test | 105 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.6 ms a frame; 3.5 ms with 4 balls, 24 sparks and zaps |
@@ -76,6 +76,12 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   round on the power tool's table, mid / late (decor costs no table room, so against the bare table): Clock +603 /
   +1,391, Altar +2,631 / +5,980. The Clock is the weak one on that small table (it rarely reaches midnight without
   zaps and sparks); watch it in playtests. The par player does not buy decor yet.
+- **Wizard Lamp (step 6)**: legendary, $13. A floor insert with one segment for every scoring part type on the table
+  when the round starts (up to 8; its card says how many). Each type the ball itself hits lights one; all lit starts
+  WIZARD MODE for 30 s: 2 more balls (they leave again when it ends), no ×Mult limits, every Lamp ablaze. Once a
+  round. Gain per round on the power tool's table, mid / late: +11,197 / +23,129 (+14,812 / +32,656 over a plain Pop
+  Bumper, about Rank Lights per dollar). That table has only six types, so the lamp lights early; on a full board it
+  needs eight.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

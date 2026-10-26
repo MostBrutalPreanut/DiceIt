@@ -405,6 +405,27 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       }
       break;
     }
+    case 'wizard': {
+      // the Wizard Lamp: a round floor insert, a ring of segments (one per part type to hit) round a wizard's hat;
+      // a segment lights for each type the ball has hit, and in WIZARD MODE they all blaze in rainbow colours
+      const need = Math.max(1, st.bright ?? 6), lit = st.seg ?? 0, c = t.role.wizard, rainbow = ['#ff5d8f', '#ff9f1c', '#ffd23f', '#55d08f', '#3cc3b1', '#62b8ff', '#8a63f2', '#ff7fb0'];
+      p.face(ring(x, y, r, 36).map(([a, b]) => P(v, a, b, 0.01)), metal.mid, { line: 0.4 });
+      p.face(ring(x, y, r * 0.9, 36).map(([a, b]) => P(v, a, b, 0.02)), mix(c, t.shadeTint, 0.55), { line: 0.35, sil: false });
+      for (let i = 0; i < need; i++) {
+        const a0 = Math.PI / 2 - (i / need) * Math.PI * 2 - 0.05, a1 = a0 - (Math.PI * 2) / need + 0.1;
+        const arc = (rr: number, from: number, to: number) => Array.from({ length: 6 }, (_, k) => { const a = from + ((to - from) * k) / 5; return [x + Math.cos(a) * rr, y + Math.sin(a) * rr] as Pt; });
+        const wedge = [...arc(r * 0.84, a0, a1), ...arc(r * 0.5, a1, a0)].map(([a, b]) => P(v, a, b, 0.03));
+        const on = st.lit || i < lit;
+        p.face(wedge, on ? (st.lit ? rainbow[i % rainbow.length] : mix(c, WHITE, 0.35)) : mix(c, t.ink, 0.35), { line: 0.3, sil: false });
+      }
+      // the hat: a cone with a star on it
+      const hat = mat(t, st.hit ? mix(c, WHITE, 0.35) : c);
+      p.face(ring(x, y, r * 0.42, 20, r * 0.36).map(([a, b]) => P(v, a, b, 0.05)), hat.shade, { line: 0.4 });
+      p.face(hull([...ring(x, y, r * 0.3, 16).map(([a, b]) => P(v, a, b, 0.08)), P(v, x + r * 0.08, y + r * 0.05, 1.5)]), hat.base);
+      const [sx, sy] = P(v, x - r * 0.05, y - r * 0.05, 0.6);
+      p.op((g) => g.star(sx, sy, 5, S * 0.18, S * 0.08).fill(t.role.goldleaf).stroke({ width: v.lw * 0.4, color: t.ink, join: 'round' }));
+      break;
+    }
     case 'clock': {
       // a mantel clock: a wooden case on a plinth, a round face on its front; the hands creep from 9 to midnight
       shadow(under, v, t, x, y, r * 1.0, r * 0.75);

@@ -36,6 +36,8 @@ const RANK_COLOURS = ['#dfe6ee', '#ffd23f', '#8ff0ff'] as const;
 /** Zaps: how long an arc of lightning stays on screen, and how many are drawn in one frame (the score counts them all). */
 const ARC_LIFE = 0.22;
 const ARCS_DRAWN = 12;
+/** WIZARD MODE's light show cycles through these. */
+const WIZARD_SHOW = ['#ff5d8f', '#ff9f1c', '#ffd23f', '#55d08f', '#3cc3b1', '#62b8ff', '#8a63f2'];
 /** A Firecracker's rocket flies to the top of the table, where its sparks burst as it lands. */
 const ROCKET_FLIGHT = PARTS.firecracker.recipe.rocket!.delay;
 const ROCKET_TOP = { x: 12, y: 45 };
@@ -528,6 +530,7 @@ export class Renderer {
       case 'clock': { const c = game.scorer.clockState(), hits = PARTS.clock.recipe.clock!.hits; return { lit: game.scorer.madnessLeft(game.sim.time) > 0, seg: c.struck ? 12 : Math.floor((c.minutes / hits) * 12) }; }
       case 'altar': { const now = game.scorer.ritualNow(game.sim.time), a = game.scorer.altarOf(p); return { lit: !!now, seg: Math.min(8, Math.round((a.sets / PARTS.altar.recipe.altar!.sets) * 8)) }; }
       case 'bulb': return { lit: true };
+      case 'wizard': { const w = game.scorer.wizardState(game.sim.time); return { hit: pulse > 0.35, lit: !tilted && w.left > 0, seg: w.lit, bright: w.need }; }
       default: return {};
     }
   }
@@ -552,6 +555,7 @@ export class Renderer {
     for (const p of game.placed) if (p.def === 'lane') packs.set(p.group, [...(packs.get(p.group) ?? []), p]);
     for (const ls of packs.values()) ls.sort((a, b) => a.x - b.x || a.y - b.y).forEach((p, i) => lanes.set(p.uid, t.laneWord[i % t.laneWord.length]));
     const tilted = game.sim.tilted;
+    const wizard = !this.calm && game.scorer.wizardState(game.sim.time).left > 0;
     const seenEyes = new Set<number>();
     this.twinkleClock -= dt;
     const twinkle = this.twinkleClock <= 0;
@@ -588,6 +592,8 @@ export class Renderer {
         if (p.def === 'golden') this.glow(p.x, p.y, r * 1.8, t.role.golden, 0.35);
         if (p.def === 'keg' && ps.lit) this.glow(p.x, p.y, r * 2.2, t.role.coin, 0.4 + 0.25 * Math.sin(this.time * 30));
         if (p.def === 'laser' && ps.lit) this.glow(p.x, p.y, r * 1.6, t.role.laser, 0.3);
+        // WIZARD MODE: a light show, every part on the table glowing in a colour that cycles round the table
+        if (wizard) this.glow(p.x, p.y, r * 2, WIZARD_SHOW[Math.floor(this.time * 6 + p.x * 0.3 + p.y * 0.2) % WIZARD_SHOW.length], 0.45);
         // the Cook's order: the one part he lit glows until it is hit
         if (game.scorer.order === p.uid) {
           this.glow(p.x, p.y, r * 2.2, t.accent, 0.55 + 0.25 * Math.sin(this.time * 6));

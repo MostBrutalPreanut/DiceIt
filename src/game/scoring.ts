@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, grownPoints, hasTag, HOT_WINDOW, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, grownPoints, hasTag, HOT_WINDOW, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, wizardNeed, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { TABLE_H, TABLE_W } from '../sim/constants';
@@ -39,6 +39,8 @@ export interface ScoreEvent {
   blast?: number;
   /** Sparks to shoot out (the game hands them to the sim): a burst round the part, or rain from the top later. */
   sparks?: SparkBurst[];
+  /** More balls fly out from here (WIZARD MODE). */
+  balls?: { n: number; x: number; y: number; uid: number };
   /** A Firecracker's rocket left from here. */
   rocket?: { x: number; y: number };
   /** Scored by a spark, not by the ball itself. */
@@ -193,6 +195,11 @@ export class Scorer {
   /** Ritual Altar: what a test ball's altar has kept (a real round's goes on the part, through onKeep), and the ritual under way. */
   private kept = new Map<number, Partial<PartInstance>>();
   private ritual: { kind: Ritual; until: number; s: number; next: number; ballId: number; uid: number } | null = null;
+  /** Wizard Lamp: its segments this round, the types the ball itself has hit this ball, whether it fired this round, until when WIZARD MODE lasts. */
+  private wizNeed = 0;
+  private wizTypes = new Set<PartId>();
+  private wizFired = false;
+  private wizUntil = -1;
   /** Piggy Banks: the $ inside each one (per round). */
   readonly piggies = new Map<number, number>();
   baseMult: number;
@@ -258,6 +265,8 @@ export class Scorer {
     this.firedThisRound.clear();
     this.rockHits.clear();
     this.clockMin = 0;
+    this.wizNeed = wizardNeed(this.getParts());
+    this.wizFired = false;
     this.jammed.clear();
     if (this.opts.jam === 'mostNumerous') {
       const n = new Map<PartId, number>();
@@ -281,6 +290,7 @@ export class Scorer {
   private takeX(key: string, x: number, cap: number | undefined): number {
     if (x <= 1) return 1;
     const used = this.xPaid.get(key) ?? 1;
+    if (this.now < this.wizUntil) cap = undefined; // WIZARD MODE: no ×Mult limits
     const got = cap === undefined ? x : Math.max(1, Math.min(x, cap / used));
     this.xPaid.set(key, used * got);
     return got;
@@ -301,6 +311,8 @@ export class Scorer {
     this.mult = this.ballStartMult();
     this.clockStruck = false;
     this.madUntil = -1;
+    this.wizTypes.clear();
+    this.wizUntil = -1;
     this.ritual = null;
     this.ranks.clear();
     this.zapCool.clear();
@@ -755,6 +767,8 @@ export class Scorer {
       // the third notch rings the bell: ×1.2 on the Mult of this ball and every ball after it, for the rest of the run
       if (rang) out.push(this.ring(inst, ev));
       if (midnight) out.push(midnight);
+      // the Wizard Lamp: a segment for every type the ball itself hits; all lit, WIZARD MODE
+      if (!ev.zap && !ev.spark) { this.wizTypes.add(inst.def); const w = this.wizardCheck(ev); if (w) out.push(w); }
       // the Altar's Inferno: the ball's every hit also zaps the parts nearest it
       if (this.ritual?.kind === 'inferno' && !ev.zap && !ev.spark && ev.t < this.ritual.until) {
         const near = this.zapTargets(inst, ev.t)
@@ -911,6 +925,32 @@ export class Scorer {
     this.madUntil = ev.t + c.seconds;
     this.flashLamps(ev.t, c.seconds);
     return this.award(clock, ev.t, clock.x, clock.y, 'bonus', 0, 0, 0, [`every hit x${c.x} for ${c.seconds} s`], 'MIDNIGHT MADNESS!');
+  }
+
+  /** All the Wizard Lamp's segments lit (once a round): WIZARD MODE, more balls, no ×Mult limits, every Lamp ablaze. */
+  private wizardCheck(ev: { t: number }): ScoreEvent | null {
+    const need = this.wizardNeedNow();
+    if (this.wizFired || need === 0 || this.wizTypes.size < need) return null;
+    const lamp = this.placed().find((p) => this.recipe(p.def).wizard);
+    if (!lamp || this.jammed.has(lamp.def)) return null;
+    const w = this.recipe(lamp.def).wizard!;
+    this.wizFired = true;
+    this.wizUntil = ev.t + w.seconds;
+    this.flashLamps(ev.t, w.seconds);
+    const e = this.award(lamp, ev.t, lamp.x, lamp.y, 'bonus', 0, 0, 0, [`${w.balls} more balls, no ×Mult limits for ${w.seconds} s`], 'WIZARD MODE!');
+    e.balls = { n: w.balls, x: lamp.x, y: lamp.y, uid: lamp.uid };
+    return e;
+  }
+
+  /** The Wizard Lamp: its segments, how many are lit, whether it fired this round, and WIZARD MODE's time left. */
+  wizardState(t = this.now): { need: number; lit: number; fired: boolean; left: number } {
+    const need = this.wizardNeedNow();
+    return { need, lit: Math.min(need, this.wizTypes.size), fired: this.wizFired, left: Math.max(0, this.wizUntil - t) };
+  }
+
+  /** The segments, less any a boss has jammed (a jammed type cannot be hit). */
+  private wizardNeedNow(): number {
+    return this.jammed.size ? Math.min(this.wizNeed, wizardNeed(this.getParts().filter((p) => !this.jammed.has(p.def)))) : this.wizNeed;
   }
 
   /** The Midnight Clock's hands: minutes past 9 PM, and whether it has struck this ball. */

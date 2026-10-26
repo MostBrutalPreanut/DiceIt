@@ -27,6 +27,7 @@ export type SimEvent =
   | { type: 'partHit'; t: number; uid: number; ballId: number; x: number; y: number; speed: number; spins?: number; caught?: boolean; index?: number; bankComplete?: boolean; kicked?: boolean; mover?: boolean; edge?: boolean; goal?: boolean; zap?: boolean; depth?: number; spark?: boolean }
   | { type: 'partRelease'; t: number; uid: number; ballId: number }
   | { type: 'extraBall'; t: number; uid: number; ballId: number }
+  | { type: 'retired'; t: number; ballId: number; x: number; y: number }
   | { type: 'ballSaved'; t: number; uid: number; ballId: number }
   | { type: 'launch'; t: number; ballId: number; power: number }
   | { type: 'drain'; t: number; ballId: number; reason: 'drain' | 'timeout' }
@@ -535,6 +536,29 @@ export class Sim {
       if (p.armed !== undefined) { p.armed = true; p.readyAt = 0; }
       if (p.mover) p.mover.speedX = 1; // a new ball: the duck calms down
     }
+  }
+
+  /** WIZARD MODE: up to `n` more balls fly out of a part, up the table (never past the most balls the table holds). */
+  launchBalls(n: number, x: number, y: number, uid: number): number[] {
+    const ids: number[] = [];
+    for (let k = 0; k < n && this.balls.length < MAX_BALLS; k++) {
+      const a = this.rng.range(-0.9, 0.9), s = this.rng.range(22, 30);
+      const id = this.addBall(x, y, -Math.sin(a) * s, Math.cos(a) * s);
+      ids.push(id);
+      this.events.push({ type: 'extraBall', t: this.time, uid, ballId: id });
+    }
+    return ids;
+  }
+
+  /** WIZARD MODE is over: a ball it brought leaves the table in a puff (it is not a drain, and never the last ball). */
+  retireBall(id: number): boolean {
+    const b = this.balls.find((x) => x.id === id);
+    if (!b || this.balls.length <= 1) return false;
+    const p = B.b2Body_GetPosition(b.body);
+    B.b2DestroyBody(b.body);
+    this.balls = this.balls.filter((x) => x !== b);
+    this.events.push({ type: 'retired', t: this.time, ballId: id, x: p.x, y: p.y });
+    return true;
   }
 
   /** Test hook / multiball: drop a ball anywhere with a velocity. */
