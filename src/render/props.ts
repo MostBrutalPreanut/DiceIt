@@ -405,6 +405,94 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       }
       break;
     }
+    case 'clock': {
+      // a mantel clock: a wooden case on a plinth, a round face on its front; the hands creep from 9 to midnight
+      shadow(under, v, t, x, y, r * 1.0, r * 0.75);
+      const wood = mat(t, t.role.clock), hw = r * 0.62, d = r * 0.42;
+      p.prism(box(x, y, hw + 0.12, d + 0.1, 0), 0, 0.25, mat(t, mix(t.role.clock, t.ink, 0.25)));
+      p.prism(box(x, y, hw, d, 0), 0.25, 2.3, wood);
+      // a rounded top
+      p.face(hull([0, 0.35, 0.7, 1].flatMap((u) => [P(v, x - hw * Math.cos((u * Math.PI) / 2), y - d, 2.55 + Math.sin((u * Math.PI) / 2) * 0.55), P(v, x + hw * Math.cos((u * Math.PI) / 2), y - d, 2.55 + Math.sin((u * Math.PI) / 2) * 0.55)])), wood.base);
+      const R = hw * 0.78, zc = 1.75, tall = 1.9;
+      const disc = (k: number): Pt[] => Array.from({ length: 24 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return P(v, x + Math.cos(a) * R * k, y - d - 0.02, zc + Math.sin(a) * R * k * tall); });
+      p.face(disc(1), st.lit ? mix(t.accent, WHITE, 0.5) : t.paper, { line: 0.5 });
+      const seg = st.seg ?? 0, hour = Math.PI - (seg / 12) * (Math.PI / 2), minute = Math.PI / 2 - ((seg % 4) / 4) * Math.PI * 2;
+      const hand = (a: number, k: number, w: number) => {
+        const [cx, cy] = P(v, x, y - d - 0.03, zc), [hx, hy] = P(v, x + Math.cos(a) * R * k, y - d - 0.03, zc + Math.sin(a) * R * k * tall);
+        p.op((g) => g.moveTo(cx, cy).lineTo(hx, hy).stroke({ width: w, color: t.ink, cap: 'round' }));
+      };
+      hand(seg >= 12 ? Math.PI / 2 : hour, 0.55, v.lw * 1.2);
+      hand(minute, 0.85, v.lw * 0.8);
+      if (st.lit) { const [sx, sy] = P(v, x + hw * 0.9, y - d, 3.2); p.op((g) => g.star(sx, sy, 8, S * 0.55, S * 0.22).fill(t.accent).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' })); }
+      break;
+    }
+    case 'altar': {
+      // a stone altar: a carved block with eight runes (they light up as sets are completed) and two candles
+      shadow(under, v, t, x, y, r * 1.05, r * 0.8);
+      const stone = mat(t, t.role.altar), hw = r * 0.85, d = r * 0.5;
+      p.prism(box(x, y, hw + 0.1, d + 0.1, 0), 0, 0.3, mat(t, mix(t.role.altar, t.ink, 0.3)));
+      p.prism(box(x, y, hw, d, 0), 0.3, 1.25, stone);
+      p.prism(box(x, y, hw + 0.15, d + 0.12, 0), 1.55, 0.25, mat(t, mix(t.role.altar, WHITE, 0.15)));
+      const on = st.seg ?? 0;
+      for (let i = 0; i < 8; i++) {
+        const [rx, ry] = P(v, x - hw * 0.8 + (i * hw * 1.6) / 7, y - d - 0.02, 0.92 + (i % 2) * 0.22);
+        const lit = st.lit || i < on;
+        p.op((g) => g.circle(rx, ry, S * 0.1).fill(lit ? t.accent : mix(t.role.altar, t.ink, 0.45)).stroke({ width: v.lw * 0.4, color: t.ink }));
+      }
+      for (const dx of [-hw * 0.55, hw * 0.55]) {
+        p.cyl(x + dx, y, 0.16, 1.8, 0.75, mat(t, t.paper), { n: 12 });
+        const [fx, fy] = P(v, x + dx, y, 2.75);
+        const big = st.lit ? 1.6 : 1;
+        p.op((g) => {
+          g.ellipse(fx, fy - S * 0.12 * big, S * 0.13 * big, S * 0.24 * big).fill(st.lit ? t.accent : t.role.sparkler).stroke({ width: v.lw * 0.5, color: t.ink });
+          g.ellipse(fx, fy - S * 0.06 * big, S * 0.05 * big, S * 0.1 * big).fill(WHITE);
+        });
+      }
+      break;
+    }
+    case 'bulb': {
+      // a spare bulb on a little stand: a glass globe over a screw base
+      shadow(under, v, t, x, y, r * 0.9, r * 0.9);
+      p.cyl(x, y, r * 0.75, 0, 0.18, mat(t, t.paper));
+      p.cyl(x, y, r * 0.32, 0.18, 0.45, metal);
+      for (let i = 0; i < 3; i++) p.cyl(x, y, r * 0.34, 0.3 + i * 0.12, 0.05, mat(t, mix(t.metal, t.ink, 0.3)), { n: 16 });
+      const glass = mat(t, t.role.bulb);
+      const globe = [0, 0.3, 0.6, 0.85, 1].flatMap((u) => ring(x, y, r * 0.62 * Math.sin(Math.PI * (0.25 + u * 0.75)), 20).map(([a, b]) => P(v, a, b, 0.65 + u * 1.25)));
+      p.face(hull(globe), glass.base);
+      p.face(ring(x - r * 0.2, y + r * 0.1, r * 0.14, 10).map(([a, b]) => P(v, a, b, 1.45)), WHITE, { sil: false, line: 0 });
+      break;
+    }
+    case 'feet': {
+      // a rubber foot: a fat black stopper with a ribbed rim
+      shadow(under, v, t, x, y, r * 0.95, r * 0.95);
+      const rubber = mat(t, t.role.feet);
+      p.cyl(x, y, r * 0.85, 0, 0.35, rubber);
+      p.cyl(x, y, r * 0.7, 0.35, 0.3, mat(t, mix(t.role.feet, WHITE, 0.15)));
+      p.cyl(x, y, r * 0.3, 0.65, 0.12, metal);
+      break;
+    }
+    case 'tray': {
+      // a coin tray: a shallow brass dish with a little pile of coins in it
+      shadow(under, v, t, x, y, r * 1.0, r * 0.8);
+      const brass = mat(t, t.role.tray);
+      p.prism(box(x, y, r * 0.9, r * 0.6, 0, 0.25), 0, 0.3, brass);
+      p.face(box(x, y, r * 0.72, r * 0.45, 0, 0.2).map(([a, b]) => P(v, a, b, 0.3)), brass.shade, { sil: false, line: 0.35 });
+      for (const [dx, dy, n] of [[-0.25, 0.05, 3], [0.25, -0.05, 2]] as const) for (let i = 0; i < n; i++) p.cyl(x + dx * r, y + dy * r, r * 0.26, 0.22 + i * 0.1, 0.08, mat(t, t.role.coin), { n: 16 });
+      break;
+    }
+    case 'mirror': {
+      // a side mirror on a stalk: a round glass in a frame, catching the light
+      shadow(under, v, t, x, y, r * 0.8, r * 0.6);
+      p.cyl(x, y, r * 0.55, 0, 0.18, metal);
+      p.cyl(x, y, 0.1, 0.18, 1.1, metal, { n: 10 });
+      const R = r * 0.7, zc = 2.0, tall = 1.8;
+      const disc = (k: number): Pt[] => Array.from({ length: 24 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return P(v, x + Math.cos(a) * R * k, y - 0.05, zc + Math.sin(a) * R * k * tall); });
+      p.face(disc(1), t.role.mirror === undefined ? t.metal : mix(t.metal, t.ink, 0.2), { line: 0.5 });
+      p.face(disc(0.8), t.role.mirror, { sil: false, line: 0.3 });
+      const [gx, gy] = P(v, x - R * 0.3, y - 0.06, zc + R * 0.6);
+      p.op((g) => g.moveTo(gx, gy).lineTo(gx + S * 0.25, gy + S * 0.3).stroke({ width: v.lw * 0.9, color: WHITE, cap: 'round' }));
+      break;
+    }
     case 'tesla': {
       // a Tesla coil: a copper winding on a bumper skirt, under a round terminal that crackles when hit
       shadow(under, v, t, x, y, r * 1.05, r * 1.05);

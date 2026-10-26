@@ -354,10 +354,11 @@ export class Sim {
 
   // ---- parts: live edits (the workshop changes the machine while a test ball is rolling) ----
 
-  /** Add a part to the world. Parts in the inventory (placed: false) have no body. */
+  /** Add a part to the world. Parts in the inventory (placed: false) have no body, and neither has decor (it is off the table). */
   addPart(inst: PartInstance) {
     if (!inst.placed || this.parts.has(inst.uid)) return;
     const def = PARTS[inst.def];
+    if (def.kind === 'decor' || def.kind === 'inlay') return;
 
     if (def.kind === 'flipper') {
       const f = this.buildFlipper(inst.def === 'flipperR' ? 'R' : 'L', inst.x, inst.y, inst.uid, FLIPPER_LENGTH * SMALL_FLIPPER);

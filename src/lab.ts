@@ -28,6 +28,8 @@ const STATES: Partial<Record<PartId, [string, PartState][]>> = {
   gong: [['idle', {}], ['hit', { hit: true }]],
   sparkler: [['ready', {}], ['hit', { hit: true }], ['recharging', { lit: false }]],
   firecracker: [['ready', {}], ['hit', { hit: true }], ['spent', { armed: false }]],
+  clock: [['9 PM', {}], ['10:30', { seg: 6 }], ['midnight', { seg: 12, lit: true }]],
+  altar: [['idle', {}], ['5 sets', { seg: 5 }], ['ritual', { lit: true, seg: 8 }]],
   rocks: [['1 rock', {}], ['3 rocks', { seg: 3 }], ['5 rocks', { seg: 5 }], ['hit', { hit: true, seg: 2 }]],
   pop: [['idle', {}], ['hit', { hit: true }], ['lvl 2', { level: 2 }], ['max lvl', { level: 5 }], ['ruby', { gem: 'ruby' }], ['gold leaf', { gem: 'goldleaf' }], ['red seal', { gem: 'redseal' }], ['topaz', { gem: 'topaz' }]],
   bell: [['idle', {}], ['hit', { hit: true }], ['2 notches', { seg: 2 }], ['rung', { lit: false, seg: 1 }]],

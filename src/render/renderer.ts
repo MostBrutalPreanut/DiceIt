@@ -1,9 +1,10 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Texture, type Text } from 'pixi.js';
-import { dialValue, footprint, gemFits, isInlay, lampStats, LEVEL_RADIUS, PARTS, SMALL_FLIPPER, type PartId, type PartInstance } from '../data/parts';
+import { dialValue, footprint, gemFits, isDecor, isInlay, lampStats, LEVEL_RADIUS, PARTS, SMALL_FLIPPER, type PartId, type PartInstance } from '../data/parts';
 import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
 import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, FLIPPER_REST, SPARK_R, TABLE_W } from '../sim/constants';
 import { FLIPPER_PIVOTS, ledgeSeg } from '../sim/table';
+import { APRON_Z as APRON_TOP, decorFits, decorZ, WALL_TOP } from '../sim/cabinet';
 import { flat, label, P, Prop, ribbon, star, unP, type Pt, type View } from './draw';
 import { Particles } from './particles';
 import { ballShadow, bigBoiEyes, drawBall, drawFlipper, drawPart, EYE, groundRing, stateKey, type BallWear, type Mood, type PartState } from './props';
@@ -47,6 +48,8 @@ const STRAIN_UP = 22;
 const STRAIN_DOWN = 17.5;
 /** A cheap repeatable 0..1 noise for the lightning's zigzag. */
 const jit = (a: number, b: number, c: number) => { const s = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453; return s - Math.floor(s); };
+/** The height decor stands at: the apron's top or the cabinet walls' (a spot off the cabinet reads as the walls'). */
+const cabZ = (x: number, y: number) => decorZ(x, y) ?? WALL_TOP;
 /** k is quantised so the baked textures can be shared between frames of the tip animation. */
 const K_STEP = 0.02;
 const quantK = (k: number) => Math.round(k / K_STEP) * K_STEP;
@@ -72,10 +75,12 @@ export class Renderer {
   private tagLayer = new Container();
   private topG = new Graphics();
   /** Zaps: lightning from a Tesla Coil to each part it made score, for a moment. */
-  private arcs: { x1: number; y1: number; x2: number; y2: number; age: number; seed: number }[] = [];
+  private arcs: { x1: number; y1: number; x2: number; y2: number; age: number; seed: number; z1?: number }[] = [];
   /** Laser Turret beams and the shockwave rings of blasts and booms, for a moment each. */
   private beams: { x1: number; y1: number; x2: number; y2: number; age: number }[] = [];
   private rings: { x: number; y: number; r: number; age: number; color: string }[] = [];
+  /** Where each kind of decor could stand (a grid of spots on the cabinet), for the hint while one is in hand. */
+  private decorSpots = new Map<PartId, Pt[]>();
   /** Firecracker rockets on their way up. */
   private rockets: { x: number; y: number; age: number; smoke: number }[] = [];
   /** Sparks: pooled sprites (halo, white-hot core and two ghosts behind each) and each spark's last few spots. */
@@ -237,6 +242,20 @@ export class Renderer {
     return { x, y };
   }
 
+  /**
+   * Pointer position (client px) -> a spot on the cabinet, for decor: on the top of the walls if the pointer is over
+   * them, else on the apron (both stand higher than the floor, so the floor's point would be off).
+   */
+  toCabinet(clientX: number, clientY: number) {
+    const r = this.app.canvas.getBoundingClientRect();
+    const local = this.machine.toLocal({ x: clientX - r.left, y: clientY - r.top });
+    const on = (z: number) => { const [x, y] = unP({ ...this.view, oy: this.view.oy - z * this.view.kz * this.view.S }, local.x, local.y); return { x, y }; };
+    const top = on(WALL_TOP);
+    if (decorZ(top.x, top.y) === WALL_TOP) return top;
+    const apron = on(APRON_TOP);
+    return decorZ(apron.x, apron.y) === APRON_TOP ? apron : top;
+  }
+
   /** Sim point (with height) -> client px, for the HTML overlay effects and the smoke test. */
   toClient(x: number, y: number, z = 0) {
     const r = this.app.canvas.getBoundingClientRect();
@@ -286,10 +305,13 @@ export class Renderer {
     if (ev.zap) {
       // a zap: a crackle of sparks on the part (and an arc of lightning from a coil); no debris, no shake (there can be many)
       if (ev.zap.by === 'arc') this.arcs.push({ x1: ev.zap.x, y1: ev.zap.y, x2: ev.x, y2: ev.y, age: 0, seed: this.arcs.length + ev.uid * 7 + ev.t });
+      // the Altar's Tempest: a bolt straight down out of the sky; its Inferno: the part bursts into flame
+      if (ev.zap.by === 'storm') { this.arcs.push({ x1: ev.x + (Math.random() - 0.5) * 3, y1: ev.y + 2, z1: 14, x2: ev.x, y2: ev.y, age: 0, seed: ev.uid * 13 + ev.t }); if (!this.calm) this.trauma = Math.min(1, this.trauma + 0.12); }
+      if (ev.zap.by === 'fire') { this.particles.smokeAt(ev.x, ev.y + 0.2, 1.2, 0.6); this.particles.sparkle(ev.x, ev.y, 1.2, 0.8, true, true); }
       if (this.arcs.length > ARCS_DRAWN * 2) this.arcs.shift();
       this.particles.sparkle(ev.x + (Math.random() - 0.5), ev.y + (Math.random() - 0.5) * 0.6, 0.8, 0.7, false, true);
       if (ev.label) this.particles.sticker(ev.label, '', color, ev.x, ev.y, 2.2, 1, 0);
-      else this.particles.sticker(ev.points.toLocaleString('en-US'), '', roleFill(t, ev.zap.by === 'arc' ? 'tesla' : ev.zap.by === 'beam' ? 'laser' : ev.zap.by === 'blast' ? 'keg' : 'gong'), ev.x, ev.y, 1.4, 0.55, ev.points);
+      else this.particles.sticker(ev.points.toLocaleString('en-US'), '', roleFill(t, ({ arc: 'tesla', beam: 'laser', blast: 'keg', boom: 'gong', storm: 'altar', fire: 'firecracker' } as const)[ev.zap.by]), ev.x, ev.y, 1.4, 0.55, ev.points);
       return;
     }
     if (ev.tier !== undefined) this.lastTier.set(ev.uid, { tier: ev.tier, glow: 1 });
@@ -508,6 +530,9 @@ export class Renderer {
       case 'kickback': return { armed: !tilted && (kick.get(p.uid) ?? true) };
       case 'saver': { const s = savers.get(p.uid); return { armed: !tilted && (s ? s.armed && s.left > 0 : true) }; }
       case 'printer': return { busy: heldNear(p.x, p.y) };
+      case 'clock': { const c = game.scorer.clockState(), hits = PARTS.clock.recipe.clock!.hits; return { lit: game.scorer.madnessLeft(game.sim.time) > 0, seg: c.struck ? 12 : Math.floor((c.minutes / hits) * 12) }; }
+      case 'altar': { const now = game.scorer.ritualNow(game.sim.time), a = game.scorer.altarOf(p); return { lit: !!now, seg: Math.min(8, Math.round((a.sets / PARTS.altar.recipe.altar!.sets) * 8)) }; }
+      case 'bulb': return { lit: true };
       default: return {};
     }
   }
@@ -537,9 +562,10 @@ export class Renderer {
     const twinkle = this.twinkleClock <= 0;
     if (twinkle) this.twinkleClock = 0.45;
 
-    for (const p of game.placed) {
+    for (const p of [...game.placed, ...game.decor]) {
       seen.add(p.uid);
       const def = PARTS[p.def];
+      const z = isDecor(p.def) ? cabZ(p.x, p.y) : 0; // decor stands on the cabinet
       let pulse = this.pulses.get(p.uid) ?? 0;
       if (pulse > 0) { pulse = Math.max(0, pulse - dt * 4.5); this.pulses.set(p.uid, pulse); }
       const sp = this.spin.get(p.uid);
@@ -555,7 +581,7 @@ export class Renderer {
       if (p.inlay) ps.gem = p.inlay;
       // glows live on the floor, under every part: lamps, lit inserts, armed kickbacks, a ready saver
       const r = footprint(def);
-      if (!tilted) {
+      if (!tilted && !z) {
         if (p.def === 'lamp' && ps.bright) this.glow(p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, 0.12 + 0.09 * ps.bright);
         if (p.def === 'strip' && ps.lit) this.glow(p.x, p.y, 4.6, t.role.strip, 0.5 + 0.2 * Math.sin(this.time * 10));
         if (p.def === 'lane' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.lane, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.7, p.y + 0.5, 0.3, 0.7, false, true); }
@@ -594,7 +620,7 @@ export class Renderer {
         this.parts.set(p.uid, pv);
       }
       if (pv.sprite.texture !== b.tex) { pv.sprite.texture = b.tex; pv.sprite.anchor.set(b.ax, b.ay); }
-      const [X, Y] = P(v, p.x, p.y);
+      const [X, Y] = P(v, p.x, p.y, z);
       const sh = this.shakes.get(p.uid);
       let jx = 0, jy = 0;
       if (sh) {
@@ -612,8 +638,8 @@ export class Renderer {
       pv.sprite.scale.set(1 + sq, 1 - sq);
 
       // selection: a dashed paper ring; hover: a ring in the part's colour
-      if (st.selectedUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.6, t.paper, v.lw * 1.4, t.ink);
-      else if (st.hoverUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.5, roleFill(t, p.def), v.lw * 1.1);
+      if (st.selectedUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.6, t.paper, v.lw * 1.4, t.ink, z);
+      else if (st.hoverUid === p.uid) dashedRing(fx, v, p.x, p.y, r + 0.5, roleFill(t, p.def), v.lw * 1.1, undefined, z);
       if (def.kind === 'lamp' && (st.selectedUid === p.uid || st.hoverUid === p.uid)) {
         dashedRing(fx, v, p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, v.lw, t.ink);
       }
@@ -645,7 +671,8 @@ export class Renderer {
       if (!pv) { pv = { sprite: new Sprite() }; this.partLayer.addChild(pv.sprite); this.parts.set(-1, pv); }
       pv.sprite.texture = b.tex;
       pv.sprite.anchor.set(b.ax, b.ay);
-      const [X, Y] = P(v, st.ghost.x, st.ghost.y);
+      const gz = isDecor(st.ghost.def) ? cabZ(st.ghost.x, st.ghost.y) : 0;
+      const [X, Y] = P(v, st.ghost.x, st.ghost.y, gz);
       pv.sprite.position.set(X, Y);
       pv.sprite.zIndex = 100000;
       pv.sprite.alpha = 0.6;
@@ -654,7 +681,20 @@ export class Renderer {
       if (isInlay(st.ghost.def)) {
         // a gem in hand: every part it fits is ringed in the gem's colour (it goes into the one it is dropped on)
         for (const q of game.placed) if (!q.fixed && gemFits(st.ghost.def, q.def)) dashedRing(fx, v, q.x, q.y, footprint(PARTS[q.def]) + 0.35, t.role[st.ghost.def], v.lw * 1.4, t.ink);
-      } else dashedRing(fx, v, st.ghost.x, st.ghost.y, footprint(def), st.ghost.valid ? t.ink : t.accent, v.lw);
+      } else dashedRing(fx, v, st.ghost.x, st.ghost.y, footprint(def), st.ghost.valid ? t.ink : t.accent, v.lw, undefined, gz);
+      if (isDecor(st.ghost.def)) {
+        // decor in hand: the cabinet's free spots are dotted (the apron, the corners above the dome)
+        let spots = this.decorSpots.get(st.ghost.def);
+        if (!spots) {
+          spots = [];
+          for (let y = -1; y < 54; y += 0.75) for (let x = -1.5; x < 28; x += 0.75) if (decorFits(footprint(def), x, y)) spots.push([x, y]);
+          this.decorSpots.set(st.ghost.def, spots);
+        }
+        for (const [x, y] of spots) {
+          const [X, Y] = P(v, x, y, cabZ(x, y) + 0.03);
+          fx.circle(X, Y, Math.max(1, v.S * 0.08)).fill({ color: t.paper, alpha: 0.7 });
+        }
+      }
     } else {
       const pv = this.parts.get(-1);
       if (pv) { pv.sprite.destroy(); this.parts.delete(-1); }
@@ -770,7 +810,7 @@ export class Renderer {
     const straight = this.strain >= 2;
     for (const a of this.arcs.slice(straight ? -ARCS_DRAWN / 2 : -ARCS_DRAWN)) {
       const fade = Math.min(1, Math.max(0, 1 - a.age / ARC_LIFE)), n = straight ? 1 : 8;
-      const [x1, y1] = P(v, a.x1, a.y1, 1.9), [x2, y2] = P(v, a.x2, a.y2, 0.9);
+      const [x1, y1] = P(v, a.x1, a.y1, a.z1 ?? 1.9), [x2, y2] = P(v, a.x2, a.y2, 0.9);
       const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
       const amp = Math.min(v.S * 0.7, len * 0.12);
       const pts: number[] = [];
@@ -885,7 +925,7 @@ export class Renderer {
     tag.c.visible = true;
     const floorTag = def.kind === 'mover' || def.kind === 'goal' || def.kind === 'strip' || def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'target' || def.kind === 'bank' || p.def === 'magnet' || p.def === 'jackpot';
     const z = p.def === 'mega' ? 2.05 : p.def === 'printer' ? 1.75 : p.def === 'pop' && t.popMotif === 'cone' ? 1.6 : p.def === 'ding' || p.def === 'trophy' ? 1.7 : p.def === 'thunder' || p.def === 'golden' ? 1.2 : 0.95;
-    const [X, Y] = floorTag ? P(v, p.x, p.y - footprint(def) - 0.75, 0) : P(v, p.x, p.y, z);
+    const [X, Y] = isDecor(p.def) ? P(v, p.x, p.y - footprint(def) - 0.6, cabZ(p.x, p.y)) : floorTag ? P(v, p.x, p.y - footprint(def) - 0.75, 0) : P(v, p.x, p.y, z);
     tag.c.position.set(X, Y);
   }
 
@@ -1068,12 +1108,12 @@ function drawButton(v: View, t: Theme) {
 }
 
 /** A dashed ellipse on the floor round a part (selection, hover, lamp reach). */
-function dashedRing(g: Graphics, v: View, x: number, y: number, r: number, color: string, w: number, under?: string) {
+function dashedRing(g: Graphics, v: View, x: number, y: number, r: number, color: string, w: number, under?: string, z = 0) {
   const n = Math.max(12, Math.round(r * 5));
   for (const [width, col] of (under ? [[w + v.lw * 1.2, under], [w, color]] : [[w, color]]) as [number, string][]) {
     for (let i = 0; i < n; i++) {
       const a0 = (i / n) * Math.PI * 2, a1 = a0 + ((Math.PI * 2) / n) * 0.55;
-      const p0 = P(v, x + Math.cos(a0) * r, y + Math.sin(a0) * r, 0.03), p1 = P(v, x + Math.cos((a0 + a1) / 2) * r, y + Math.sin((a0 + a1) / 2) * r, 0.03), p2 = P(v, x + Math.cos(a1) * r, y + Math.sin(a1) * r, 0.03);
+      const p0 = P(v, x + Math.cos(a0) * r, y + Math.sin(a0) * r, z + 0.03), p1 = P(v, x + Math.cos((a0 + a1) / 2) * r, y + Math.sin((a0 + a1) / 2) * r, z + 0.03), p2 = P(v, x + Math.cos(a1) * r, y + Math.sin(a1) * r, z + 0.03);
       g.moveTo(p0[0], p0[1]).lineTo(p1[0], p1[1]).lineTo(p2[0], p2[1]);
     }
     g.stroke({ width, color: col, cap: 'round' });

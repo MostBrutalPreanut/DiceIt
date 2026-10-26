@@ -855,6 +855,8 @@ export class AudioFx {
     else if (label?.startsWith('THE BELL RINGS')) this.toll(true);
     else if (label === 'KABOOM!') this.kaboom();
     else if (label === 'BOOM!') this.gongHit(true);
+    else if (id === 'clock') this.midnight();
+    else if (id === 'altar') this.ritual(label === 'TEMPEST!' ? 0 : label === 'INFERNO!' ? 1 : 2);
     else if (id === 'rank') this.rankUp(label?.startsWith('DIAMOND') ? 3 : label?.startsWith('GOLD') ? 2 : 1);
     else if (id === 'disco') this.disco();
     else if (id === 'xlane') this.swoosh(!label?.includes('MAXED'));
@@ -940,6 +942,34 @@ export class AudioFx {
     if (!v) return;
     this.noise(v.o, v.t, 0.06, 0.3, { f: 1800, q: 4 });
     this.osc(v.o, v.t, 320, 0.07, 0.12, { to: 180, attack: 0.001 });
+  }
+
+  /** Midnight Clock: twelve quick chimes over a low gong, then the madness. */
+  private midnight() {
+    const v = this.voice('midnight', 0.8, 2.6, 0.5, 1, true);
+    if (!v) return;
+    this.duck(0.5, 1.4);
+    for (let i = 0; i < 12; i++) this.bell(v.o, v.t + i * 0.12, midi(i % 2 ? 79 : 84), 0.5, 0.09, 3.5, 0.8);
+    this.bell(v.o, v.t, 98, 2.4, 0.2, 1.41, 1.5);
+  }
+
+  /** Ritual Altar: a low choir-ish drone (a stack of detuned saws), then the ritual's own colour. */
+  private ritual(kind: number) {
+    const v = this.voice('ritual', 0.8, 2.2, 0.5, 1, true);
+    if (!v) return;
+    this.duck(0.5, 1.2);
+    for (const [n, d] of [[45, -6], [52, 5], [57, -3]] as const) this.osc(v.o, v.t, midi(n), 1.8, 0.05, { type: 'sawtooth', lp: 900, attack: 0.25, hold: 0.8, detune: d });
+    if (kind === 0) this.noise(v.o, v.t + 0.2, 1.2, 0.3, { f: 600, type: 'lowpass', attack: 0.01 });
+    if (kind === 1) this.noise(v.o, v.t + 0.1, 1.4, 0.2, { f: 1800, q: 0.7, attack: 0.3, trem: [12, 0.4] });
+    if (kind === 2) for (let i = 0; i < 8; i++) this.noise(v.o, v.t + 0.3 + i * 0.09, 0.05, 0.12, { f: rand(3000, 6000), q: 3 });
+  }
+
+  /** The Altar's Tempest striking: a crack of thunder (one voice, however many strike). */
+  strike() {
+    const v = this.voice('strike', 0.6, 0.8, 0.12, 2);
+    if (!v) return;
+    this.noise(v.o, v.t, 0.08, 0.35, { f: 4000, type: 'highpass' });
+    this.noise(v.o, v.t + 0.03, 0.7, 0.3, { f: 500, type: 'lowpass' });
   }
 
   /** Powder Keg: the fuse catches and hisses. */

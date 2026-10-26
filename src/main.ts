@@ -1,7 +1,7 @@
 import './style.css';
 import './ui/menu.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { dialValue, footprint, isInlay, PARTS, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
+import { dialValue, footprint, isDecor, isInlay, PARTS, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
 import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, KIND_NAMES, type DecalId, type DecalPick } from './data/decals';
 import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
 import { FINAL_ROUND } from './data/bosses';
@@ -96,6 +96,10 @@ async function main() {
   let ledgeDrag: { dy: number; y: number } | null = null;
   let hoverLedge = false;
   let pointer: { x: number; y: number } | null = null;
+  /** The same pointer on the cabinet (where decor stands: the apron, the tops of the walls). */
+  let pointerCab: { x: number; y: number } | null = null;
+  /** Where a part of this type would go under the pointer: on the table, or (decor) on the cabinet. */
+  const spotFor = (id: PartId, cx: number, cy: number) => (isDecor(id) ? renderer.toCabinet(cx, cy) : renderer.toSim(cx, cy));
   let ledgerTimer = 0;
   let lastMultBand = 1;
   let lastStamp = 0;
@@ -454,9 +458,9 @@ async function main() {
     const over = document.elementFromPoint(cx, cy);
     let part: PartInstance | null = null;
     if (over === canvas) {
-      const p = renderer.toSim(cx, cy);
+      const p = spotFor(d.id, cx, cy);
       part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y) : game.buyAndPlace(d.slot, p.x, p.y);
-      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : 'NO ROOM THERE'); return false; }
+      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? 'DECOR GOES ON THE CABINET' : 'NO ROOM THERE'); return false; }
     } else if (over?.closest('#inventoryBox')) {
       part = d.slot === null ? game.grant(d.id) : game.buy(d.slot);
       if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(d.slot !== null && !game.hasRoomFor(d.id) ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
@@ -483,6 +487,7 @@ async function main() {
     if (!shopDrag.moving && !shopDrag.carry) return;
     const over = document.elementFromPoint(e.clientX, e.clientY);
     pointer = over === canvas ? renderer.toSim(e.clientX, e.clientY) : null;
+    pointerCab = over === canvas ? renderer.toCabinet(e.clientX, e.clientY) : null;
     $('inventoryBox').classList.toggle('drop', !!over?.closest('#inventoryBox'));
   });
   addEventListener('pointerup', (e) => {
@@ -525,13 +530,18 @@ async function main() {
 
   // ---- pointer: place, select, drag, store -------------------------------------------------------
   const canvas = renderer.app.canvas;
-  const hitPart = (x: number, y: number) => {
+  const hitPart = (x: number, y: number, parts = game.placed) => {
     let best: PartInstance | undefined, bd = 1e9;
-    for (const p of game.placed) {
+    for (const p of parts) {
       const d = Math.hypot(p.x - x, p.y - y);
       if (d <= footprint(PARTS[p.def]) + 0.3 && d < bd) { best = p; bd = d; }
     }
     return best;
+  };
+  /** The part under the pointer: one on the table, else decor on the cabinet. */
+  const hitAt = (cx: number, cy: number) => {
+    const p = renderer.toSim(cx, cy), c = renderer.toCabinet(cx, cy);
+    return hitPart(p.x, p.y) ?? hitPart(c.x, c.y, game.decor);
   };
 
   /** Is a sim point on the wall ledge? (Its handle is a little fatter than the rail.) */
@@ -546,7 +556,8 @@ async function main() {
     if (!game.editable || e.button !== 0) return;
     const p = renderer.toSim(e.clientX, e.clientY);
     pointer = p;
-    if (!carry && armed === null && !hitPart(p.x, p.y) && onLedge(p.x, p.y)) {
+    pointerCab = renderer.toCabinet(e.clientX, e.clientY);
+    if (!carry && armed === null && !hitAt(e.clientX, e.clientY) && onLedge(p.x, p.y)) {
       const y = game.layout.ledge ?? LEDGE.default;
       ledgeDrag = { dy: y - p.y, y };
       canvas.setPointerCapture(e.pointerId);
@@ -561,7 +572,8 @@ async function main() {
       return;
     }
     if (armed !== null) {
-      if (game.place(armed, p.x, p.y, true)) {
+      const a = spotFor(game.part(armed)?.def ?? 'pop', e.clientX, e.clientY);
+      if (game.place(armed, a.x, a.y, true)) {
         selected = game.part(armed) ? armed : game.lastInlaid; // a gem went into a part: select the part
         armed = null;
         audio.place();
@@ -569,13 +581,14 @@ async function main() {
         persist();
       } else if (isInlay(game.part(armed)?.def ?? 'pop')) say('DROP IT ON A PART IT FITS');
     } else {
-      const hit = hitPart(p.x, p.y);
+      const hit = hitAt(e.clientX, e.clientY);
       const decal = renderer.decalAt(e.clientX, e.clientY);
       if (hit) {
         selected = hit.uid;
         selectedDecal = null;
         if (!hit.fixed) { // the Big Boi in the middle stays put
-          dragging = { uid: hit.uid, dx: hit.x - p.x, dy: hit.y - p.y, moved: false };
+          const q = isDecor(hit.def) ? pointerCab : p;
+          dragging = { uid: hit.uid, dx: hit.x - q.x, dy: hit.y - q.y, moved: false };
           canvas.setPointerCapture(e.pointerId);
         }
       } else if (decal !== null && game.decals[decal]) {
@@ -587,19 +600,22 @@ async function main() {
   });
   canvas.addEventListener('pointermove', (e) => {
     pointer = renderer.toSim(e.clientX, e.clientY);
-    hover = hitPart(pointer.x, pointer.y)?.uid ?? null;
+    pointerCab = renderer.toCabinet(e.clientX, e.clientY);
+    hover = hitAt(e.clientX, e.clientY)?.uid ?? null;
     hoverLedge = hover === null && game.editable && (ledgeDrag !== null || onLedge(pointer.x, pointer.y));
     if (ledgeDrag) ledgeDrag.y = clampLedge(pointer.y + ledgeDrag.dy);
     hoverDecal = hover === null ? renderer.decalAt(e.clientX, e.clientY) : null;
     if (carry && game.editable) {
-      if (game.place(carry.uid, pointer.x, pointer.y, !carry.moved)) carry.moved = true;
+      const q = isDecor(game.part(carry.uid)?.def ?? 'pop') ? pointerCab : pointer;
+      if (game.place(carry.uid, q.x, q.y, !carry.moved)) carry.moved = true;
       const box = $('inventoryBox').getBoundingClientRect();
       $('inventoryBox').classList.toggle('drop', e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom);
     }
     if (dragging && game.editable) {
       const dp = game.part(dragging.uid);
       if (!dragging.moved && dp && game.moveFee(dp) > game.money && !dragging.warned) { dragging.warned = true; say(`MOVING IT COSTS $${game.moveFee(dp)}`); }
-      if (game.place(dragging.uid, pointer.x + dragging.dx, pointer.y + dragging.dy, !dragging.moved)) {
+      const q = dp && isDecor(dp.def) ? pointerCab : pointer;
+      if (game.place(dragging.uid, q.x + dragging.dx, q.y + dragging.dy, !dragging.moved)) {
         dragging.moved = true;
         const box = $('inventoryBox');
         const r = box.getBoundingClientRect();
@@ -641,7 +657,7 @@ async function main() {
     storeSelected();
   }, true);
   canvas.addEventListener('pointerleave', () => {
-    pointer = null; hover = null; hoverDecal = null; hoverLedge = false; $('tip').hidden = true;
+    pointer = null; pointerCab = null; hover = null; hoverDecal = null; hoverLedge = false; $('tip').hidden = true;
     // a part in hand goes back to its spot when the pointer leaves the table (reaching for its card, say)
     if (carry) { if (carry.moved) { game.undo(); persist(); } carry = null; refreshWorkshop(); }
   });
@@ -657,7 +673,7 @@ async function main() {
     if (!dragFromInventory || armed === null) { dragFromInventory = false; return; }
     dragFromInventory = false;
     if (e.target === canvas) {
-      const p = renderer.toSim(e.clientX, e.clientY);
+      const p = spotFor(game.part(armed)?.def ?? 'pop', e.clientX, e.clientY);
       if (game.place(armed, p.x, p.y, true)) {
         selected = game.part(armed) ? armed : game.lastInlaid;
         armed = null;
@@ -895,6 +911,8 @@ async function main() {
     }
     // every part has its own voice; a set or a level-up gets a fanfare and a shocked Big Boi
     if (s.kind === 'bonus') { audio.bonus(s.def, s.label, game.placed.some((p) => p.def === 'strip')); say(s.label ?? 'BONUS!'); renderer.onBigMoment(); renderer.bigBoiMood('shocked', 1.6); }
+    else if (s.zap?.by === 'storm') audio.strike();
+    else if (s.zap?.by === 'fire') audio.hit('keg', s.multAfter, { label: 'FUSE LIT!' }); // a burst of flame: the fuse's hiss
     else if (s.zap) audio.zap(); // however many parts one coil zaps, one crackle
     else if (s.spark) audio.tick(); // a spark's touch: a tick, whatever it hit
     else audio.hit(s.def, s.multAfter, s);
@@ -1301,10 +1319,12 @@ async function main() {
       ? { y: ledgeDrag?.y ?? game.layout.ledge ?? LEDGE.default, valid: !ledgeDrag || canPlaceLedge(game.layout, ledgeDrag.y), moving: !!ledgeDrag }
       : null;
     const armedPart = armed != null ? game.part(armed) : undefined;
-    drawState.ghost = game.editable && (shopDrag?.moving || shopDrag?.carry) && pointer
-      ? { def: shopDrag.id, x: pointer.x, y: pointer.y, angle: 0, valid: game.canDropAt(shopDrag.id, pointer.x, pointer.y) }
-      : game.editable && armedPart && pointer
-        ? { def: armedPart.def, x: pointer.x, y: pointer.y, angle: armedPart.angle, valid: game.canDropAt(armedPart.def, pointer.x, pointer.y) }
+    const ptr = (id: PartId) => (isDecor(id) ? pointerCab : pointer);
+    const sp = shopDrag ? ptr(shopDrag.id) : null, ap = armedPart ? ptr(armedPart.def) : null;
+    drawState.ghost = game.editable && (shopDrag?.moving || shopDrag?.carry) && sp
+      ? { def: shopDrag.id, x: sp.x, y: sp.y, angle: 0, valid: game.canDropAt(shopDrag.id, sp.x, sp.y) }
+      : game.editable && armedPart && ap
+        ? { def: armedPart.def, x: ap.x, y: ap.y, angle: armedPart.angle, valid: game.canDropAt(armedPart.def, ap.x, ap.y) }
         : null;
     renderer.draw(game, dt, drawState);
     updateHud(dt);

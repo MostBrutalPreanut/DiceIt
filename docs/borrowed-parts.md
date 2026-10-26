@@ -14,7 +14,8 @@ https://claude.ai/artifact/UMabyQfo79xB2nmhH6c1fv (private to its owner; the dec
 **Built so far:** Rank Lights and the Old Bell (step 1 of §4), as revised in §6.3; zaps, the Tesla Coil, the Powder Keg, the
 Laser Turret (was Laser Cross: one beam is not a cross) and the Shockwave Gong (step 2); the inlays: Ruby, Garnet,
 Opal, Gold Leaf, Red Seal and Emerald (step 3); sparks with the Sparkler, the Rock Pile, the Firecracker, the
-Powder Keg's spark and the Topaz, plus the effects budget of §7 (step 4, see §7.3). See [balance-plan.md](balance-plan.md) §2 for their numbers.
+Powder Keg's spark and the Topaz, plus the effects budget of §7 (step 4, see §7.3). Decor (step 5, see §6.4): the Midnight Clock, the Ritual
+Altar and four cabinet upgrades (Spare Bulb, Rubber Feet, Coin Tray, Side Mirror). See [balance-plan.md](balance-plan.md) §2 for their numbers.
 
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show
@@ -280,6 +281,25 @@ takes a playfield spot, so it is the answer to the full late board, and the mone
 Decor in this doc: the **Ritual Altar**, the **Midnight Clock**, the **Cabinet Upgrades** (as small decor pieces)
 and the **Gremlin Hutch** (was Gremlins). Effort **M**: a decor strip in the layout, its own placement rules and
 drawing, and a shop slot type.
+
+### 6.2.1 Decor as built (step 5)
+- **Where it stands:** on the cabinet itself, never on the playfield: the wooden corners above the dome (the top of
+  the walls) and the apron below the flippers, clear of the drain's stripes and the four decal slots. Both are always
+  on screen, even on a phone, where the scenery beside the cabinet is cropped. Decor cannot overlap other decor; table
+  parts and decor never block each other. While a piece is in hand, every spot it fits is dotted.
+- **What it is:** a part of kind `decor`: bought in the shop (one of each, so the shop never offers decor you own),
+  kept in the toolbox, sold and moved like a part. It has no body in the sim, so the ball never touches it, and it
+  works only while it stands on the cabinet. Zaps, Hall of Fame's part types, Purist and Crowd Pleaser ignore it.
+- **Midnight Clock** (uncommon, $6): every scoring hit (zaps and sparks too) is a minute from 9 PM; at midnight (180)
+  it strikes: 20 s of every hit ×2 and every Lamp at full glow. Once a ball; the hands go back each round.
+- **Ritual Altar** (legendary, $12): every 8 completed sets (lane, bank, Level Light, Rank Light) start a 15 s
+  ritual, in turn: Tempest (lightning zaps 2 + s random parts a second), Inferno (each of the ball's hits zaps the
+  1 + s nearest parts within 5), Swarm (8 + 4s sparks from the top), where s is the rituals done so far (up to 4).
+  Its count and strength are kept on the altar for the run.
+- **Cabinet upgrades**, each about half a decal: **Spare Bulb** ($6: Lamps +1 radius, +2% a step), **Rubber Feet**
+  ($6: nudges 15% stronger, no more tilt), **Coin Tray** ($8: +$1 a cleared round), **Side Mirror** ($9: one more
+  shop offer every second round). They fold into the run's mods, like decals.
+- **Not built yet:** the Gremlin Hutch (step 9, with the other moving physics).
 
 ### 6.3 The changed parts, as revised
 

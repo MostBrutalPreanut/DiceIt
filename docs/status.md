@@ -9,7 +9,7 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 379 pass, 0 fail (26 files) |
+| Unit tests | 399 pass, 0 fail (27 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
 | Browser smoke test | 105 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.6 ms a frame; 3.5 ms with 4 balls, 24 sparks and zaps |
@@ -69,6 +69,13 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   Keg's blast and the **Topaz** gem. Balls no longer collide with each other. Gain per round over a plain Pop Bumper
   on the power tool's table, mid / late: Sparkler +4,200 / +8,619, Rock Pile +3,017 / +9,986, Firecracker +5,768 /
   +14,661. The drawing drops its extras when frames run long (see borrowed-parts §7.3).
+- **Decor (step 5)**: a new kind of part that stands on the cabinet (the corners above the dome, the apron), never on
+  the table: the ball never touches it and it takes no table room. One of each in a run. The **Midnight Clock**
+  (180 scoring hits, then 20 s of ×2), the **Ritual Altar** (every 8 sets a ritual: Tempest, Inferno, Swarm, each
+  stronger than the last) and four cabinet upgrades (Spare Bulb, Rubber Feet, Coin Tray, Side Mirror). Gain per
+  round on the power tool's table, mid / late (decor costs no table room, so against the bare table): Clock +603 /
+  +1,391, Altar +2,631 / +5,980. The Clock is the weak one on that small table (it rarely reaches midnight without
+  zaps and sparks); watch it in playtests. The par player does not buy decor yet.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

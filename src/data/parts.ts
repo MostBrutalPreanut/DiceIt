@@ -16,9 +16,10 @@ export type PartId =
   | 'ding' | 'piggy' | 'magnet' | 'thunder' | 'jackpot' | 'xlane' | 'golden' | 'disco' | 'trophy' | 'plate' | 'fame'
   | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell' | 'tesla' | 'keg' | 'laser' | 'gong'
   | 'ruby' | 'garnet' | 'emerald' | 'opal' | 'goldleaf' | 'redseal' | 'topaz'
-  | 'sparkler' | 'firecracker' | 'rocks';
+  | 'sparkler' | 'firecracker' | 'rocks'
+  | 'clock' | 'altar' | 'bulb' | 'feet' | 'tray' | 'mirror';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
-  | 'mover' | 'goal' | 'strip' | 'inlay';
+  | 'mover' | 'goal' | 'strip' | 'inlay' | 'decor';
 
 /**
  * Rarity decides when a part turns up in the shop and how much it does. Commons are there from round 1;
@@ -174,7 +175,35 @@ export interface Recipe {
   boom?: { every: number };
   /** An inlay (a gem set into a part on the table), and the parts it fits. What each gem does: see the INLAY constants. */
   gem?: GemFit;
+  /**
+   * Midnight Clock (decor): every scoring hit moves its hands on a minute; at `hits` minutes it strikes midnight and
+   * for `seconds` every hit pays `x` times and every Lamp is at full glow. Once a ball; the hands go back each round.
+   */
+  clock?: { hits: number; seconds: number; x: number };
+  /** Ritual Altar (decor): every `sets` sets completed start a `seconds` s ritual (see RITUALS). */
+  altar?: { sets: number; seconds: number };
+  /**
+   * Cabinet upgrades (decor): a little more for the whole machine. Lamps glow wider and give more, nudges shove
+   * harder (no more tilt), a cleared round pays more, the shop shows one more part every second round.
+   */
+  cab?: { lampRadius?: number; lampBonus?: number; nudge?: number; pay?: number; mirror?: boolean };
 }
+
+/**
+ * The Ritual Altar's rituals, in turn. Each one done makes the next stronger, by one `strength` step (up to
+ * MAX_STRENGTH): Tempest strikes `2 + s` random parts a second, Inferno zaps the `1 + s` parts nearest each of the
+ * ball's hits (within INFERNO_REACH), Swarm rains `8 + 4s` sparks from the top of the table.
+ */
+export const RITUALS = ['tempest', 'inferno', 'swarm'] as const;
+export type Ritual = (typeof RITUALS)[number];
+export const RITUAL_NAMES: Record<Ritual, string> = { tempest: 'Tempest', inferno: 'Inferno', swarm: 'Swarm' };
+export const MAX_STRENGTH = 4;
+export const INFERNO_REACH = 5;
+export const tempestRate = (s: number) => 2 + s;
+export const infernoReach = (s: number) => 1 + s;
+export const swarmSparks = (s: number) => 8 + 4 * s;
+/** Is this decor (it stands on the cabinet, never on the table)? */
+export const isDecor = (id: PartId) => PARTS[id].kind === 'decor';
 
 /** The parts a gem fits: any that scores when hit, one that fires once a ball, one that goes dark or recharges, one that grows. */
 export type GemFit = 'scoring' | 'onceABall' | 'cooldown' | 'growth';
@@ -578,6 +607,32 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'onceABall' }, dials: [],
   },
 
+  // ---- decor: it stands on the cabinet (the apron, the corners above the dome), never on the table; balls never touch it ----
+  clock: {
+    id: 'clock', name: 'Midnight Clock', blurb: 'Every hit moves it on a minute. At midnight: madness.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1,
+    shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 0, recipe: { clock: { hits: 180, seconds: 20, x: 2 } }, dials: [],
+  },
+  altar: {
+    id: 'altar', name: 'Ritual Altar', blurb: 'Complete your sets. Something answers.', kind: 'decor', rarity: 'legendary', tags: [], cost: 12, weight: 1,
+    shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0, recipe: { altar: { sets: 8, seconds: 15 } }, dials: [],
+  },
+  bulb: {
+    id: 'bulb', name: 'Spare Bulb', blurb: 'A brighter bulb for every Lamp.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 4,
+    shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0, recipe: { cab: { lampRadius: 1, lampBonus: 0.02 } }, dials: [],
+  },
+  feet: {
+    id: 'feet', name: 'Rubber Feet', blurb: 'The cabinet grips the floor. Shove away.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 4,
+    shape: { type: 'circle', r: 0.85 }, rotatable: false, kickUnit: 0, recipe: { cab: { nudge: 1.15 } }, dials: [],
+  },
+  tray: {
+    id: 'tray', name: 'Coin Tray', blurb: 'Somewhere to put the change.', kind: 'decor', rarity: 'rare', tags: ['money'], cost: 8, weight: 1, from: 4,
+    shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 0, recipe: { cab: { pay: 1 } }, dials: [],
+  },
+  mirror: {
+    id: 'mirror', name: 'Side Mirror', blurb: 'Every other shop, a peek at one more part.', kind: 'decor', rarity: 'rare', tags: [], cost: 9, weight: 1, from: 4,
+    shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 0, recipe: { cab: { mirror: true } }, dials: [],
+  },
+
   // ---- not for sale: every machine has one Big Boi in the middle, and what he does depends on the machine ----
   mega: {
     id: 'mega', name: 'Big Boi', blurb: 'Heavy, rude, hard to miss.', kind: 'bumper', rarity: 'legendary', tags: ['bigboi', 'bumper'], cost: 6, weight: 0,
@@ -634,6 +689,9 @@ export interface PartInstance {
   inlay?: PartId;
   /** Gold Leaf: what its gem has added to its points so far this run. */
   leaf?: number;
+  /** Ritual Altar: sets completed towards its next ritual, and rituals done this run (each makes the next stronger). */
+  sets?: number;
+  rituals?: number;
   /**
    * Free to move until the next round: bought in this visit to the workshop, or its move already paid. `paid`
    * is what it cost, refunded if it goes back before a round is played with it.
@@ -745,6 +803,21 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.gem) {
     lines.push({ tag: 'combo', text: GEM_TEXT[def.id] ?? '' });
     lines.push({ tag: 'note', text: `A gem: drop it on a part on your table to set it in. It fits ${FIT_TEXT[r.gem]}. One gem a part; a new one sends the old one back to your toolbox, and selling the part does too.` });
+    return lines;
+  }
+  if (def.kind === 'decor') {
+    if (r.clock) lines.push({ tag: 'mult', text: `Every scoring hit on the table (zaps and sparks too) moves its hands on a minute, from 9 PM. At midnight (${r.clock.hits} hits) it strikes twelve: for ${r.clock.seconds} s every hit pays ×${r.clock.x}, and every Lamp is at full glow. Once a ball; then the hands go back to 9 PM, and they go back each round too.` });
+    if (r.altar) {
+      const st = { sets: inst?.sets ?? 0, rituals: inst?.rituals ?? 0 }, s = Math.min(MAX_STRENGTH, st.rituals);
+      lines.push({ tag: 'combo', text: `Every ${r.altar.sets} sets you complete (Lane Rollovers, drop-target banks, Level Lights, Rank Lights) start a ${r.altar.seconds} s ritual, in turn: Tempest (lightning strikes ${tempestRate(s)} random parts a second), Inferno (every hit of the ball also zaps the ${infernoReach(s)} parts nearest it), Swarm (${swarmSparks(s)} sparks rain down from the top).` });
+      lines.push({ tag: 'grow', text: `Every ritual makes the next one stronger (up to ${MAX_STRENGTH} times). The count carries on from round to round${inst ? `: ${st.sets} of ${r.altar.sets} sets now, next a ${RITUAL_NAMES[RITUALS[st.rituals % RITUALS.length]]}` : ''}.` });
+    }
+    const c = r.cab;
+    if (c?.lampRadius || c?.lampBonus) lines.push({ tag: 'lamp', text: `Every Lamp glows ${num(c.lampRadius ?? 0)} unit${c.lampRadius === 1 ? '' : 's'} wider, and every step of its glow gives ${Math.round((c.lampBonus ?? 0) * 100)}% more.` });
+    if (c?.nudge) lines.push({ tag: 'note', text: `Your nudges shove the ball ${Math.round((c.nudge - 1) * 100)}% harder, for no more tilt.` });
+    if (c?.pay) lines.push({ tag: 'money', text: `Every round you clear pays $${c.pay} more.` });
+    if (c?.mirror) lines.push({ tag: 'money', text: 'Every second round, the shop shows one more part.' });
+    lines.push({ tag: 'note', text: 'Decor: it stands on the cabinet (on the apron, or on the corners above the dome), never on the table. It takes no room there, the ball never touches it, and it works only while it stands on the cabinet. One of each.' });
     return lines;
   }
   const factor = (inst ? dialFactor(inst) : 1) * modFactor(def.id, mods);

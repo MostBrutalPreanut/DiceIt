@@ -117,8 +117,9 @@ const ANGLE_STEP = Math.PI / 12;
 /** A random valid spot for a part, or null if the board has no room for it. */
 function randomSpot(layout: Layout, part: PartInstance, rng: Rng): { x: number; y: number } | null {
   const r = footprint(PARTS[part.def]);
-  for (let i = 0; i < 80; i++) {
-    const x = rng.range(BUILD_AREA.x0 + r, BUILD_AREA.x1 - r), y = rng.range(BUILD_AREA.y0 + r, BUILD_AREA.y1 - r);
+  const decor = PARTS[part.def].kind === 'decor'; // decor goes on the cabinet round the table
+  for (let i = 0; i < (decor ? 400 : 80); i++) {
+    const x = decor ? rng.range(-1.5, 27.5) : rng.range(BUILD_AREA.x0 + r, BUILD_AREA.x1 - r), y = decor ? rng.range(-1, 54) : rng.range(BUILD_AREA.y0 + r, BUILD_AREA.y1 - r);
     if (canPlace(layout, part.def, x, y, part.uid)) return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
   }
   return null;

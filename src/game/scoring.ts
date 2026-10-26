@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, grownPoints, hasTag, HOT_WINDOW, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, RANK_NAMES, RUBY_X, SEAL_DARK, tierOf, TOPAZ_CHANCE, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, grownPoints, hasTag, HOT_WINDOW, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { TABLE_H, TABLE_W } from '../sim/constants';
@@ -56,7 +56,8 @@ export interface SparkBurst {
   delay?: number;
 }
 
-export type ZapKind = 'arc' | 'blast' | 'beam' | 'boom';
+/** Where a zap came from: a coil's arc, a keg's blast, a laser's beam, a gong's boom, the Altar's Tempest or Inferno. */
+export type ZapKind = 'arc' | 'blast' | 'beam' | 'boom' | 'storm' | 'fire';
 
 /** What a zap needs to know about the moment: when, whose ball, how fast it was, how far down a chain of kegs. */
 interface ZapCause {
@@ -91,6 +92,8 @@ export interface ScorerOpts {
   onNotch?: (inst: PartInstance, notches: number) => boolean;
   /** Called when Gold Leaf adds +1 to its part, for real (like onPolish). Returns what it adds now. */
   onLeaf?: (inst: PartInstance, cap: number) => number;
+  /** Called when the scorer keeps something on a part for the run, for real (the Ritual Altar's count): the game writes it on the part. */
+  onKeep?: (inst: PartInstance, patch: Partial<PartInstance>) => void;
   /** Old Bell rings so far this run: every ball's Mult is ×1.2 for each (default none). */
   rings?: number;
   /** The run's decals and the boss (neutral if absent). */
@@ -183,6 +186,13 @@ export class Scorer {
   private rings: number;
   ringX = 1;
   private notched = new Map<number, number>();
+  /** Midnight Clock: minutes past 9 PM (scoring hits this round since it last struck), whether it struck this ball, and until when the madness lasts. */
+  private clockMin = 0;
+  private clockStruck = false;
+  private madUntil = -1;
+  /** Ritual Altar: what a test ball's altar has kept (a real round's goes on the part, through onKeep), and the ritual under way. */
+  private kept = new Map<number, Partial<PartInstance>>();
+  private ritual: { kind: Ritual; until: number; s: number; next: number; ballId: number; uid: number } | null = null;
   /** Piggy Banks: the $ inside each one (per round). */
   readonly piggies = new Map<number, number>();
   baseMult: number;
@@ -226,8 +236,14 @@ export class Scorer {
     return id === 'mega' ? bigBoiOf(this.machine).recipe : PARTS[id].recipe;
   }
 
+  /** The parts on the table (decor stands on the cabinet and is never hit). */
   private placed() {
-    return this.getParts().filter((p) => p.placed);
+    return this.getParts().filter((p) => p.placed && !isDecor(p.def));
+  }
+
+  /** The decor of this kind on the cabinet, if any (decor is one of a kind). */
+  private decor(test: (r: Recipe) => unknown): PartInstance | undefined {
+    return this.getParts().find((p) => p.placed && isDecor(p.def) && test(PARTS[p.def].recipe));
   }
 
   /** Called when a round (not a ball) starts: the Level Lights go dark, the piggies are empty, a jam is decided. */
@@ -241,6 +257,7 @@ export class Scorer {
     this.piggies.clear();
     this.firedThisRound.clear();
     this.rockHits.clear();
+    this.clockMin = 0;
     this.jammed.clear();
     if (this.opts.jam === 'mostNumerous') {
       const n = new Map<PartId, number>();
@@ -282,6 +299,9 @@ export class Scorer {
 
   startBall() {
     this.mult = this.ballStartMult();
+    this.clockStruck = false;
+    this.madUntil = -1;
+    this.ritual = null;
     this.ranks.clear();
     this.zapCool.clear();
     this.sealDark.clear();
@@ -430,6 +450,7 @@ export class Scorer {
     if (m.multiballX !== 1 && (this.opts.balls?.() ?? 1) >= 2) { x *= m.multiballX; notes.push(`x${m.multiballX} multiball`); }
     if (m.lastBallX !== 1 && this.opts.lastBall?.()) { x *= m.lastBallX; notes.push(`x${m.lastBallX} last call`); }
     if (m.puristX !== 1 && this.puristOk()) { x *= m.puristX; notes.push(`x${m.puristX} purist`); }
+    if (ev && ev.t < this.madUntil) { const c = this.decor((r) => r.clock)?.def; const cx = c ? PARTS[c].recipe.clock!.x : 1; x *= cx; notes.push(`x${cx} midnight`); }
     return { x, notes };
   }
 
@@ -458,6 +479,17 @@ export class Scorer {
     if (def.recipe.plate) return `x${def.recipe.plate.x}`;
     if (def.kind === 'strip') return this.mods.lightsOut ? 'OFF' : `+${Math.round((def.recipe.strip?.bonus ?? 0) * 100)}%`;
     const r = this.recipe(inst.def);
+    if (r.clock) {
+      // the clock's face: the time (9 PM to midnight), MIDNIGHT while it strikes
+      if (this.madnessLeft() > 0) return 'MIDNIGHT';
+      if (this.clockStruck) return '12:00';
+      const m = Math.floor((this.clockMin / r.clock.hits) * 180);
+      return `${9 + Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+    }
+    if (r.altar) {
+      const now = this.ritualNow();
+      return now ? RITUAL_NAMES[now.kind].toUpperCase() : `${this.altarOf(inst).sets}/${r.altar.sets}`;
+    }
     if (r.boom && !this.jammed.has(inst.def)) return `${(this.gongHits.get(inst.uid) ?? 0) % r.boom.every}/${r.boom.every}`; // hits towards the boom
     if (r.bell && !this.firedThisRoundOf(inst.uid) && !this.jammed.has(inst.def)) return String(this.baseNow(inst, 1, 1, r.bell.first)); // its toll is waiting
     if (r.typeX) return this.mods.lightsOut ? 'OFF' : `x${this.typeXNow(r.typeX).toFixed(2)}`;
@@ -564,6 +596,7 @@ export class Scorer {
       const pts = Math.round(r.setBonus!.points * m.setFactor * modFactor(inst.def, m) * situ.x);
       if (r.lightsLamps) this.flashLamps(ev.t, r.lightsLamps);
       out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, this.gain(r.setBonus!.mult * m.setFactor), 0, [`${pts} bank bonus`, ...situ.notes], 'BANK COMPLETE'));
+      out.push(...this.setDone(ev));
       return out;
     }
 
@@ -634,6 +667,7 @@ export class Scorer {
       if (edge > 1) notes.push(`x${edge} edge shot`);
       this.roundHits++;
       this.ballHits++;
+      const midnight = this.clockHit(ev);
       this.roundTypeHits.set(inst.def, (this.roundTypeHits.get(inst.def) ?? 0) + 1);
       const lucky = m.luckyEvery > 0 && this.ballHits % m.luckyEvery === 0;
       if (lucky) notes.push(`x${m.luckyX} lucky seven`);
@@ -720,6 +754,17 @@ export class Scorer {
       }
       // the third notch rings the bell: ×1.2 on the Mult of this ball and every ball after it, for the rest of the run
       if (rang) out.push(this.ring(inst, ev));
+      if (midnight) out.push(midnight);
+      // the Altar's Inferno: the ball's every hit also zaps the parts nearest it
+      if (this.ritual?.kind === 'inferno' && !ev.zap && !ev.spark && ev.t < this.ritual.until) {
+        const near = this.zapTargets(inst, ev.t)
+          .map((p) => ({ p, d: Math.hypot(p.x - inst.x, p.y - inst.y) }))
+          .filter((a) => a.d <= INFERNO_REACH)
+          .sort((a, b) => a.d - b.d || a.p.uid - b.p.uid)
+          .slice(0, infernoReach(this.ritual.s))
+          .map((a) => a.p);
+        out.push(...this.zap(inst, near, ev, 'fire'));
+      }
       // this hit makes the ball hot for its next one
       if (!ev.zap && !ev.spark && r.hot && (r.hotTier === undefined || (tier && r.tiers!.indexOf(tier) >= r.hotTier))) this.hot.set(ev.ballId, { until: ev.t + HOT_WINDOW, bonus: r.hot * m.hotFactor });
       // the Cook calls a new order; the Dragon loses a plate
@@ -765,6 +810,7 @@ export class Scorer {
             upped++;
           }
           out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [], upped ? `${upped} BUMPER${upped > 1 ? 'S' : ''} +${levels} LEVEL${levels > 1 ? 'S' : ''}!` : near.length ? 'BUMPERS MAXED OUT' : 'NO BUMPERS NEARBY'));
+          out.push(...this.setDone(ev));
         }
       }
     }
@@ -793,7 +839,7 @@ export class Scorer {
     if (this.take(this.setsPaid, 'lane', 1, r.setCap) === 0) return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`${r.setCap} sets this ball`], 'LANE SETS MAXED')];
     const situ = this.situational(ev);
     const pts = Math.round(r.setBonus.points * m.setFactor * modFactor('lane', m) * situ.x);
-    return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, this.gain(r.setBonus.mult * m.setFactor), 0, [`${pts} set bonus`, ...situ.notes], 'LANES COMPLETE')];
+    return [this.award(inst, ev.t, ev.x, ev.y, 'bonus', pts, this.gain(r.setBonus.mult * m.setFactor), 0, [`${pts} set bonus`, ...situ.notes], 'LANES COMPLETE'), ...this.setDone(ev)];
   }
 
   /**
@@ -810,7 +856,7 @@ export class Scorer {
     this.ranks.set(ev.ballId, { step, until: ev.t + rk.seconds });
     const now = this.rankOf(ev.ballId, ev.t)!;
     const name = now.name.toUpperCase();
-    return [this.award(light, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`every hit x${now.x} for ${rk.seconds} s`], step > was ? `${name} RANK!` : `${name} AGAIN!`)];
+    return [this.award(light, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`every hit x${now.x} for ${rk.seconds} s`], step > was ? `${name} RANK!` : `${name} AGAIN!`), ...this.setDone(ev)];
   }
 
   /** An Old Bell's notch for the round: the run keeps it (onNotch), a test ball only this scorer. True if it rang. */
@@ -849,6 +895,69 @@ export class Scorer {
   private addLeaf(inst: PartInstance, cap: number) {
     if (this.opts.onLeaf) this.opts.onLeaf(inst, cap);
     else this.leafed.set(inst.uid, Math.min(cap, this.leafOf(inst) + 1));
+  }
+
+  /**
+   * Midnight Clock: a scoring hit moves the hands on a minute. At midnight it strikes (once a ball): every hit pays
+   * its ×, and every Lamp is at full glow, for a while; the hands go back to 9 PM.
+   */
+  private clockHit(ev: { t: number; x: number; y: number }): ScoreEvent | null {
+    const clock = this.decor((r) => r.clock);
+    if (!clock || this.clockStruck) return null;
+    const c = PARTS[clock.def].recipe.clock!;
+    if (++this.clockMin < c.hits) return null;
+    this.clockMin = 0;
+    this.clockStruck = true;
+    this.madUntil = ev.t + c.seconds;
+    this.flashLamps(ev.t, c.seconds);
+    return this.award(clock, ev.t, clock.x, clock.y, 'bonus', 0, 0, 0, [`every hit x${c.x} for ${c.seconds} s`], 'MIDNIGHT MADNESS!');
+  }
+
+  /** The Midnight Clock's hands: minutes past 9 PM, and whether it has struck this ball. */
+  clockState(): { minutes: number; struck: boolean } {
+    return { minutes: this.clockMin, struck: this.clockStruck };
+  }
+
+  /** Seconds of Midnight Madness left (0 when there is none). */
+  madnessLeft(t = this.now): number {
+    return Math.max(0, this.madUntil - t);
+  }
+
+  /** What the scorer keeps on a part for the run: the game's copy (onKeep) or, for a test ball, its own. */
+  private keepOf<K extends 'sets' | 'rituals'>(inst: PartInstance, key: K): number {
+    return this.kept.get(inst.uid)?.[key] ?? inst[key] ?? 0;
+  }
+
+  private keep(inst: PartInstance, patch: Partial<PartInstance>) {
+    if (this.opts.onKeep) this.opts.onKeep(inst, patch);
+    else this.kept.set(inst.uid, { ...this.kept.get(inst.uid), ...patch });
+  }
+
+  /** The Ritual Altar's count: sets towards the next ritual, rituals done, and how strong the next one is. */
+  altarOf(inst: PartInstance): { sets: number; rituals: number; next: Ritual; strength: number } {
+    const rituals = this.keepOf(inst, 'rituals');
+    return { sets: this.keepOf(inst, 'sets'), rituals, next: RITUALS[rituals % RITUALS.length], strength: Math.min(MAX_STRENGTH, rituals) };
+  }
+
+  /** The ritual under way, and how long it has left. */
+  ritualNow(t = this.now): { kind: Ritual; left: number; strength: number } | null {
+    const r = this.ritual;
+    return r && r.until > t ? { kind: r.kind, left: r.until - t, strength: r.s } : null;
+  }
+
+  /** A set was completed (lanes, a drop-target bank, Level Lights, Rank Lights): the Altar counts it, and every few start a ritual. */
+  private setDone(ev: { t: number; ballId?: number }): ScoreEvent[] {
+    const altar = this.decor((r) => r.altar);
+    if (!altar || this.ritual) return []; // no count while a ritual is under way
+    const a = PARTS[altar.def].recipe.altar!, st = this.altarOf(altar);
+    if (st.sets + 1 < a.sets) { this.keep(altar, { sets: st.sets + 1 }); return []; }
+    this.keep(altar, { sets: 0, rituals: st.rituals + 1 });
+    const s = st.strength, kind = st.next;
+    this.ritual = { kind, until: ev.t + a.seconds, s, next: ev.t, ballId: ev.ballId ?? 1, uid: altar.uid };
+    const what = kind === 'tempest' ? `lightning strikes ${tempestRate(s)} parts a second` : kind === 'inferno' ? `every hit zaps the ${infernoReach(s)} nearest parts` : `${swarmSparks(s)} sparks`;
+    const e = this.award(altar, ev.t, altar.x, altar.y, 'bonus', 0, 0, 0, [`${what}, for ${a.seconds} s`], `${RITUAL_NAMES[kind].toUpperCase()}!`);
+    if (kind === 'swarm') e.sparks = [{ n: swarmSparks(s), x: 12, y: 45, r: 0, parent: ev.ballId ?? 1, top: true }];
+    return [e];
   }
 
   /** How many parts this Tesla Coil arcs to: its base, one more every few levels, up to its most. */
@@ -892,6 +1001,20 @@ export class Scorer {
    */
   tick(t: number): ScoreEvent[] {
     const out: ScoreEvent[] = [];
+    const rit = this.ritual;
+    if (rit && t >= rit.until) this.ritual = null;
+    else if (rit?.kind === 'tempest') {
+      // the Tempest: lightning strikes a random part, a few times a second
+      const altar = this.getParts().find((p) => p.uid === rit.uid);
+      while (altar && rit.next <= t) {
+        rit.next += 1 / tempestRate(rit.s);
+        const pool = this.zapTargets(altar, t).sort((a, b) => a.uid - b.uid);
+        if (!pool.length) continue;
+        const hit = pool[Math.floor(this.rng.next() * pool.length)];
+        this.now = t;
+        out.push(...this.zap(altar, [hit], { t, ballId: rit.ballId, speed: 20 }, 'storm'));
+      }
+    }
     for (const [uid, k] of [...this.kegs]) {
       if (k.spent || k.at > t) continue;
       const inst = this.placed().find((p) => p.uid === uid);
