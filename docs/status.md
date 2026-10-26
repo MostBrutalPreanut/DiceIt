@@ -9,9 +9,9 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 443 pass, 0 fail (32 files) |
+| Unit tests | 455 pass, 0 fail (33 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
-| Browser smoke test | 105 checks ok, no console errors |
+| Browser smoke test | 129 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.6 ms a frame; 3.5 ms with 4 balls, 24 sparks and zaps |
 | Balance run | see the balance section below |
 
@@ -113,6 +113,12 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   +1,630 / +4,994, Spider Nest +365 / +2,080, Marble Jar +4 / +2,528. The tool's table has no other spark source for
   the Whale to eat and never fills a Jar, so those are floors; the Insurance Policy only pays on a lost last ball.
   **Tuned**: the Splitter was $6 with a 4 s wait and measured +10,480 / +20,025, twice the Sparkler; now $7 and 5 s.
+- **Four mechanisms**: Gumball Machine, Bank Ring, Helping Hand and Spider Wheel (the Magic Trunk is skipped). Gain
+  per round over a plain Pop Bumper, mid / late: Gumball +9,153 / +21,371, Bank Ring +5,346 / +15,026, Spider Wheel
+  +241 / +2,544 (the tool counts no cash, rerolls or Mult it wins, so a floor). The Helping Hand is a guard and
+  scores nothing itself, like the plain extra flipper (which measures +1,103 / +3,242 over a Pop). **Tuned**: the
+  Gumball locked in multiball too, so each third lock made two more balls: +222,322 mid. It now locks only the last
+  ball in play, once a round. The escape fuzz on a table with all four: 0 escapes, 0 stuck in 200 balls.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

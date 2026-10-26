@@ -23,7 +23,8 @@ export type PartId =
   | 'clock' | 'altar' | 'bulb' | 'feet' | 'tray' | 'mirror' | 'wizard' | 'pinata'
   | 'grape' | 'echo' | 'spot' | 'bonsai' | 'capsule' | 'ice' | 'well'
   | 'wreck' | 'broom' | 'bucket' | 'hutch'
-  | 'split' | 'whale' | 'insure' | 'nest' | 'jar';
+  | 'split' | 'whale' | 'insure' | 'nest' | 'jar'
+  | 'gumball' | 'ring' | 'hand' | 'wheel';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip' | 'inlay' | 'decor';
 
@@ -228,6 +229,14 @@ export interface Recipe {
   nest?: { chance: number };
   /** Marble Jar: every `every` hits of the ball on it add a marble, for the run (up to `max`); every ball you launch brings one spark per marble. */
   jar?: { every: number; max: number };
+  /** Gumball Machine: a lock. A ball shot in is held and a new one comes to the plunger; the `n`th lock sets them all loose (multiball). */
+  lock?: { n: number };
+  /** Bank Ring: while one is on the table, `hold` of every hit is held back as heat; rolling through it banks the ball's heat at ×`x`. A drain loses it. */
+  ring?: { hold: number; x: number };
+  /** Helping Hand: a small flipper that flips itself when the ball comes near (half the time it sends the ball at the nearest scoring part). */
+  hand?: boolean;
+  /** Spider Wheel: a scoop that spins a wheel of awards (WHEEL); a flipper press stops it (or it stops by itself after `seconds`). `speed` segments a second. */
+  wheel?: { seconds: number; speed: number };
   /** Gremlin Hutch (decor): this many gremlins wander the table (see GREMLIN). */
   gremlins?: number;
   /** Ritual Altar (decor): every `sets` sets completed start a `seconds` s ritual (see RITUALS). */
@@ -260,6 +269,15 @@ export function wizardNeed(parts: PartInstance[]): number {
   const types = new Set(parts.filter((p) => p.placed && PARTS[p.def].kind !== 'decor' && PARTS[p.def].recipe.points).map((p) => p.def));
   return Math.min(PARTS.wizard.recipe.wizard!.max, types.size);
 }
+/**
+ * The Spider Wheel's eight awards, in order round the wheel. Collect all eight in a run and the next spin is Wheel
+ * Mania instead: 3 more balls (a 4-ball multiball) and every hit ×2 for 20 s.
+ */
+export const WHEEL = [
+  { id: 'double', name: '×2 FOR 20 S' }, { id: 'cash', name: '$3' }, { id: 'ball', name: 'EXTRA BALL' }, { id: 'lamps', name: 'LAMPS LIT' },
+  { id: 'mult', name: '+1 MULT' }, { id: 'reroll', name: 'FREE REROLL' }, { id: 'points', name: '300 POINTS' }, { id: 'zilch', name: 'ZILCH' },
+] as const;
+export type WheelAward = (typeof WHEEL)[number]['id'];
 /** A gremlin knocked out by the ball: points, $ (up to `moneyCap` a round from all gremlins); back GREMLIN_OUT s later. */
 export const GREMLIN = { points: 100, money: 1, moneyCap: 5 };
 /** Is this decor (it stands on the cabinet, never on the table)? */
@@ -317,7 +335,7 @@ export const ZAP_COOLDOWN = 0.5;
  */
 export const zappable = (id: PartId) => {
   const k = PARTS[id].kind, r = PARTS[id].recipe;
-  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule || r.bucket || r.insure) return false;
+  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule || r.bucket || r.insure || r.ring) return false;
   return k === 'bumper' || k === 'kicker' || k === 'spinner' || k === 'rollover' || k === 'lamp' || k === 'target' || k === 'mover';
 };
 
@@ -669,6 +687,25 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'onceABall' }, dials: [],
   },
 
+  gumball: {
+    id: 'gumball', name: 'Gumball Machine', blurb: 'Lock three. Then let them all go.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 1,
+    shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 30, per: 'lock', lock: { n: 3 }, perLevel: 6 }, dials: [],
+  },
+  ring: {
+    id: 'ring', name: 'Bank Ring', blurb: 'Your points, held in trust. Collect before you drain.', kind: 'rollover', rarity: 'rare', tags: ['money'], cost: 8, weight: 1,
+    shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
+    recipe: { ring: { hold: 0.3, x: 1.5 } }, dials: [],
+  },
+  hand: {
+    id: 'hand', name: 'Helping Hand', blurb: 'A little flipper with a mind of its own.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 7, weight: 1,
+    shape: { type: 'circle', r: 2.0 }, rotatable: false, kickUnit: 0, recipe: { hand: true }, dials: [],
+  },
+  wheel: {
+    id: 'wheel', name: 'Spider Wheel', blurb: 'Spin to win. Flip to stop. Mostly win.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 8, weight: 1,
+    shape: { type: 'circle', r: 1.35 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 20, per: 'spin', wheel: { seconds: 3, speed: 5 }, perLevel: 4 }, dials: [{ ...powerDial('eject'), tradeoff: 'How hard it fires the ball back out.' }],
+  },
   split: {
     id: 'split', name: 'Splitter', blurb: 'One ball in. Two sparks out.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 7, weight: 2,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
@@ -850,6 +887,8 @@ export interface PartInstance {
   bursts?: number;
   /** Bonsai Bumper and Time Capsule: rounds played with it on the table (a Bonsai's count starts again when it is moved). */
   age?: number;
+  /** Spider Wheel: the awards it has given this run (all eight, and the next spin is Wheel Mania). */
+  spun?: number[];
   /** Marble Jar: the ball's hits on it so far this run, and the marbles they have added. */
   jarHits?: number;
   marbles?: number;
@@ -1010,6 +1049,10 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
   if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
   if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
+  if (r.lock) lines.push({ tag: 'spawn', text: `A lock: a ball shot into it is held, and a new one comes to the plunger at no cost. The ${r.lock.n === 3 ? 'third' : `${r.lock.n}th`} lock lets all ${r.lock.n} loose at once: a real multiball. Once a round: after that, and in multiball, a ball rolls straight through for its points.` });
+  if (r.ring) lines.push({ tag: 'combo', text: `While it is on the table, ${Math.round(r.ring.hold * 100)}% of every hit is held back as heat. Roll the ball through it to bank that ball's heat at ×${r.ring.x}; a drain loses whatever is not banked.` }, { tag: 'note', text: 'It scores nothing itself, and a zap or a spark never banks: only the ball does.' });
+  if (r.hand) lines.push({ tag: 'note', text: `A small flipper that flips by itself when a ball comes near it from above. About half the time it means the shot: the ball goes straight at the nearest part that scores.` }, { tag: 'note', text: 'It needs no button, and it never flips on TILT.' });
+  if (r.wheel) lines.push({ tag: 'combo', text: `A scoop: it catches the ball and spins a wheel of ${WHEEL.length} awards. Press a flipper to stop it (or it stops by itself after ${r.wheel.seconds} s): ${WHEEL.map((w) => w.name.toLowerCase()).join(', ')}.` }, { tag: 'set', text: `Collect all ${WHEEL.length} in a run${inst?.spun?.length ? ` (${inst.spun.length} so far)` : ''} and the next spin is Wheel Mania: a 4-ball multiball, every hit ×2 for 20 s.` });
   if (r.split) lines.push({ tag: 'spawn', text: `When the ball rolls over it, ${r.split.n} sparks split off, one to each side. Then it needs ${r.split.cooldown} s.` });
   if (r.whale) lines.push({ tag: 'spawn', text: `It swallows every spark that touches it (${r.whale.swallow} points each). Every ${r.whale.every}th it spouts: ${r.whale.sparks} sparks out of its blowhole and ${r.whale.points} points (${r.whale.perBall} spouts a ball at most).` });
   if (r.insure) lines.push({ tag: 'note', text: `Scores nothing. If the last ball of a round drains short of the goal, ${r.insure.sparks} sparks rain down from the top, once, for one last try. Then the policy is used up and leaves the table.` }, { tag: 'note', text: 'A comeback, never a crutch: it pays out only on the last ball of a round you have not cleared.' });

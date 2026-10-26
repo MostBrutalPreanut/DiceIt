@@ -71,6 +71,8 @@ export interface SparkState {
 }
 
 export interface FlipperState {
+  /** A Helping Hand: it flips by itself. */
+  auto?: boolean;
   x: number;
   y: number;
   angle: number;
@@ -105,7 +107,7 @@ interface BallRef {
   age: number;
   slowTime: number;
   prevLocal: Map<number, Local>;
-  held: { uid: number; until: number } | null;
+  held: { uid: number; until: number; since?: number } | null;
   /** Sim time until which a drain of this ball is saved (set when the plunger launches it; 0 = not saveable). */
   saveUntil: number;
   /** Speed just before the last step: the impact speed, since the contact has already bounced it by the time we see it. */
@@ -133,6 +135,8 @@ interface FlipperRef {
   on: boolean;
   uid?: number;
   length: number;
+  /** Helping Hand: it flips itself. Up until `until`, ready again at `ready`; `aim` is where it means to send the ball. */
+  auto?: { until: number; ready: number; aim: { x: number; y: number } | null };
 }
 interface BankState {
   shapes: any[];
@@ -152,6 +156,10 @@ interface PartRef {
   readyAt?: number;
   /** The sliding piece (duck, goalie, roller): its kinematic body, where it is along its rail, and how fast it goes. */
   mover?: { body: any; dir: 1 | -1; speedX: number };
+  /** Gumball Machine: the balls it has locked so far (the last one sets them all loose), and until when it catches nothing (it just let them go). */
+  locks?: number;
+  quietUntil?: number;
+  spent?: boolean;
   /** Gremlin Hutch: its gremlins, each a little sensor body that wanders the table (`out` until it is back). */
   gremlins?: { body: any; ph: number; out: number }[];
 }
@@ -161,6 +169,11 @@ export const GREMLIN_OUT = 10;
 const GREMLIN_R = 0.6;
 /** A gremlin's path at time t: two slow, different sines, so the pair never walk in step. */
 const gremlinAt = (t: number, ph: number) => ({ x: 12 + 8.5 * Math.sin(t * 0.31 + ph), y: 31 + 13.5 * Math.sin(t * 0.19 + ph * 1.7) });
+/** Helping Hand: how long a flip lasts, how long it rests after one, how often it means to make the shot, and how hard. */
+const HAND_FLIP = 0.18;
+const HAND_REST = 0.6;
+const HAND_AIM = 0.5;
+const HAND_SPEED = 34;
 /** Broomstick: how long a ride lasts at most, and how fast it flies. */
 const RIDE_TIME = 1;
 const RIDE_SPEED = 32;
@@ -370,7 +383,7 @@ export class Sim {
     sd.density = 2;
     sd.friction = 0.3;
     sd.restitution = 0.15;
-    sd.userData = { kind: 'flipper', side };
+    sd.userData = { kind: 'flipper', side, uid };
     sd.filter.categoryBits = CAT.flipper; // sparks pass through flippers
     B.b2CreatePolygonShape(body, sd, poly);
 
@@ -401,6 +414,7 @@ export class Sim {
 
     if (def.kind === 'flipper') {
       const f = this.buildFlipper(inst.def === 'flipperR' ? 'R' : 'L', inst.x, inst.y, inst.uid, FLIPPER_LENGTH * SMALL_FLIPPER);
+      if (def.recipe.hand) f.auto = { until: 0, ready: 0, aim: null };
       this.flippers.push(f);
       this.parts.set(inst.uid, { inst: { ...inst, dials: { ...inst.dials } }, body: f.body, flipper: f });
       return;
@@ -653,7 +667,7 @@ export class Sim {
   flipperStates(): FlipperState[] {
     return this.flippers.map((f) => {
       const p = B.b2Body_GetPosition(f.body);
-      return { x: p.x, y: p.y, angle: B.b2RevoluteJoint_GetAngle(f.joint), side: f.side, pivotX: f.pivotX, pivotY: f.pivotY, uid: f.uid, length: f.length };
+      return { x: p.x, y: p.y, angle: B.b2RevoluteJoint_GetAngle(f.joint), side: f.side, pivotX: f.pivotX, pivotY: f.pivotY, uid: f.uid, length: f.length, auto: !!f.auto };
     });
   }
 
@@ -700,10 +714,13 @@ export class Sim {
       if (want !== this.sideOn[side]) {
         this.sideOn[side] = want;
         this.events.push({ type: 'flipper', t, side, on: want });
+        // a flipper press stops a Spider Wheel that is spinning
+        if (want) for (const b of this.balls) if (b.held && b.held.since !== undefined && this.tick > b.held.since && PARTS[this.parts.get(b.held.uid)?.inst.def ?? 'pop'].recipe.wheel) b.held.until = this.tick;
       }
     }
+    this.stepHands(t);
     for (const f of this.flippers) {
-      f.on = this.sideOn[f.side];
+      f.on = f.auto ? t < f.auto.until : this.sideOn[f.side];
       B.b2RevoluteJoint_SetMotorSpeed(f.joint, f.sign * (f.on ? FLIPPER_SPEED_UP : -FLIPPER_SPEED_DOWN));
     }
 
@@ -950,6 +967,80 @@ export class Sim {
     }
   }
 
+  /**
+   * Helping Hand: a small flipper that flips itself when a ball comes near it from above. Half the time it means to
+   * make the shot: the ball goes straight at the nearest part that scores.
+   */
+  private stepHands(t: number) {
+    for (const f of this.flippers) {
+      const a = f.auto;
+      if (!a || t < a.ready || this.tilted) continue;
+      const near = this.balls.find((b) => {
+        if (b.held) return false;
+        const p = B.b2Body_GetPosition(b.body), v = B.b2Body_GetLinearVelocity(b.body);
+        const along = (p.x - f.pivotX) * f.sign;
+        return along > -0.3 && along < f.length + 0.3 && p.y > f.pivotY - 0.4 && p.y < f.pivotY + 1.6 && v.y < 1;
+      });
+      if (!near) continue;
+      a.until = t + HAND_FLIP;
+      a.ready = t + HAND_REST;
+      a.aim = null;
+      if (this.rng.next() < HAND_AIM) {
+        const p = B.b2Body_GetPosition(near.body);
+        let best: { x: number; y: number } | null = null, bd = Infinity;
+        for (const pr of this.parts.values()) {
+          const d = PARTS[pr.inst.def];
+          if (!d.recipe.points || d.kind === 'flipper' || d.kind === 'decor' || pr.inst.y < p.y + 2) continue;
+          const dist = Math.hypot(pr.inst.x - p.x, pr.inst.y - p.y);
+          if (dist < bd) { bd = dist; best = { x: pr.inst.x, y: pr.inst.y }; }
+        }
+        a.aim = best;
+      }
+    }
+  }
+
+  private handShot(uid: number, ballId: number) {
+    const f = this.flippers.find((q) => q.uid === uid), b = this.balls.find((q) => q.id === ballId);
+    if (!f?.auto?.aim || !b || !f.on) return;
+    // aim above the target by as much as the ball will drop on its way there
+    const p = B.b2Body_GetPosition(b.body), g = -B.b2World_GetGravity(this.worldId).y * this.mods.ballGravity;
+    const d0 = Math.hypot(f.auto.aim.x - p.x, f.auto.aim.y - p.y), drop = (g * d0 * d0) / (2 * HAND_SPEED * HAND_SPEED);
+    const dx = f.auto.aim.x - p.x, dy = f.auto.aim.y + drop - p.y, d = Math.hypot(dx, dy) || 1;
+    B.b2Body_SetLinearVelocity(b.body, V((dx / d) * HAND_SPEED, (dy / d) * HAND_SPEED));
+    f.auto.aim = null;
+  }
+
+  /** Gumball Machine: a ball shot in is locked and a new one comes to the plunger; the last lock sets them all loose. */
+  private lockBall(br: BallRef, pr: PartRef, hit: Extract<SimEvent, { type: 'partHit' }>) {
+    const n = PARTS[pr.inst.def].recipe.lock!.n;
+    pr.locks = (pr.locks ?? 0) + 1;
+    B.b2DestroyBody(br.body);
+    this.balls = this.balls.filter((x) => x !== br);
+    if (pr.locks < n) {
+      const at = this.laneSpot();
+      this.addBall(at.x, at.y, 0, 0);
+      this.awaitingPlunge = true;
+      this.plungeCharge = 0;
+      this.plungeWasHeld = true;
+      this.events.push({ ...hit, caught: true, index: pr.locks });
+      return;
+    }
+    pr.locks = 0;
+    pr.spent = true;
+    pr.quietUntil = this.time + 1;
+    this.events.push({ ...hit, caught: true, index: n });
+    for (let k = 0; k < n && this.balls.length < MAX_BALLS; k++) {
+      const a = this.rng.range(-0.8, 0.8) + (k - (n - 1) / 2) * 0.5, s = this.rng.range(20, 26);
+      const id = this.addBall(pr.inst.x, pr.inst.y, -Math.sin(a) * s, Math.cos(a) * s);
+      this.events.push({ type: 'extraBall', t: this.time, uid: pr.inst.uid, ballId: id });
+    }
+  }
+
+  /** The balls a Gumball Machine holds right now. */
+  locksOf(uid: number): number {
+    return this.parts.get(uid)?.locks ?? 0;
+  }
+
   /** Wrecking Ball: make a ball bigger for a while. It grows only where there is room (see stepBigBalls). */
   growBall(id: number, k: number, seconds: number, now = false) {
     const b = this.balls.find((x) => x.id === id);
@@ -1088,6 +1179,9 @@ export class Sim {
       const part = a?.kind === 'part' ? a : b?.kind === 'part' ? b : null;
       // a Broomstick ride ends at the first thing the ball touches: a wall, a part, a flipper
       if (ball) { const rb = this.balls.find((x) => x.id === ball.id); if (rb?.ride) this.endRide(rb); }
+      // a Helping Hand that means to make the shot sends the ball at its target
+      const fl = a?.kind === 'flipper' ? a : b?.kind === 'flipper' ? b : null;
+      if (ball && fl?.uid !== undefined) this.handShot(fl.uid, ball.id);
       const spark = a?.kind === 'spark' ? a : b?.kind === 'spark' ? b : null;
       if (spark && part) {
         // a spark bounces off what it hits (a bumper still kicks it) and scores on it; it never drops a target
@@ -1233,9 +1327,16 @@ export class Sim {
         const drag = 1 - 0.08 * dialValue(pr.inst, 'drag');
         B.b2Body_SetLinearVelocity(br.body, V(vel.x * drag, vel.y * drag));
         this.events.push({ ...hit, spins });
+      } else if (def.kind === 'saucer' && def.recipe.lock) {
+        // it locks only the last ball in play (one waiting in the lane does not count), and only once a round: in
+        // multiball, or once it has let its balls go, a ball just rolls through for its points
+        if (this.time < (pr.quietUntil ?? 0)) continue;
+        if (!pr.spent && this.balls.every((o) => o === br || this.inLane(o))) this.lockBall(br, pr, hit);
+        else this.events.push(hit);
       } else if (def.kind === 'saucer') {
         if ([...this.balls].some((o) => o.held?.uid === pr.inst.uid)) continue; // one at a time
-        br.held = { uid: pr.inst.uid, until: this.tick + Math.round(dialValue(pr.inst, 'hold') / this.dt) };
+        const hold = def.recipe.wheel ? def.recipe.wheel.seconds : dialValue(pr.inst, 'hold'); // a Spider Wheel spins until a flipper stops it
+        br.held = { uid: pr.inst.uid, until: this.tick + Math.round(hold / this.dt), since: this.tick };
         B.b2Body_SetTransform(br.body, V(pr.inst.x, pr.inst.y), B.b2MakeRot(0));
         B.b2Body_SetLinearVelocity(br.body, V(0, 0));
         B.b2Body_SetGravityScale(br.body, 0);

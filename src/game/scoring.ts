@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, GREMLIN, grownPoints, hasTag, HOT_WINDOW, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, wizardNeed, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, GREMLIN, grownPoints, hasTag, HOT_WINDOW, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, WHEEL, wizardNeed, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { TABLE_H, TABLE_W } from '../sim/constants';
@@ -39,6 +39,10 @@ export interface ScoreEvent {
   blast?: number;
   /** Sparks to shoot out (the game hands them to the sim): a burst round the part, or rain from the top later. */
   sparks?: SparkBurst[];
+  /** Spider Wheel: what it gave (the game pays a reroll and prints the balls). */
+  wheel?: { award: string };
+  /** Spider Wheel: a free reroll in the next shop. */
+  reroll?: boolean;
   /** Wrecking Ball: this ball grows for a while. */
   grow?: { ballId: number; k: number; seconds: number };
   /** Scored by a ball that is a Wrecking Ball right now (the table shakes). */
@@ -205,6 +209,12 @@ export class Scorer {
   /** Ritual Altar: what a test ball's altar has kept (a real round's goes on the part, through onKeep), and the ritual under way. */
   private kept = new Map<number, Partial<PartInstance>>();
   private ritual: { kind: Ritual; until: number; s: number; next: number; ballId: number; uid: number } | null = null;
+  /** Bank Ring: the heat each ball is carrying (points held back, not yet banked), and the ball the current event is for. */
+  private heat = new Map<number, number>();
+  private curBall = 1;
+  /** Spider Wheel: when each wheel caught its ball (it is spinning), and until when its ×2 lasts. */
+  private spinning = new Map<number, number>();
+  private wheelXUntil = -1;
   /** The Whale: sparks each one has swallowed this ball, and how often it spouted. */
   private whaleFed = new Map<number, { fed: number; spouts: number }>();
   /** Wrecking Ball: until when each ball is a wrecking ball. */
@@ -333,6 +343,9 @@ export class Scorer {
     this.echoes.clear();
     this.wrecking.clear();
     this.whaleFed.clear();
+    this.heat.clear();
+    this.spinning.clear();
+    this.wheelXUntil = -1;
     this.wizTypes.clear();
     this.wizUntil = -1;
     this.ritual = null;
@@ -519,6 +532,7 @@ export class Scorer {
   private situational(ev?: { ballId?: number; t: number; ride?: boolean }): { x: number; notes: string[] } {
     const m = this.mods, notes: string[] = [];
     let x = 1;
+    if (ev && ev.t < this.wheelXUntil) { x *= 2; notes.push('x2 wheel'); }
     if (ev?.ride) { const b = PARTS.broom.recipe.ride!.x; x *= b; notes.push(`x${b} broomstick`); }
     if (ev?.ballId !== undefined && (this.wrecking.get(ev.ballId) ?? -1) > ev.t) { const w = PARTS.wreck.recipe.wreck!.x; x *= w; notes.push(`x${w} wrecking ball`); }
     const rank = ev?.ballId === undefined ? null : this.rankOf(ev.ballId, ev.t);
@@ -595,7 +609,15 @@ export class Scorer {
 
   private award(inst: PartInstance, t: number, x: number, y: number, kind: ScoreEvent['kind'], base: number, multGain: number, money: number, notes: string[], label?: string, spins?: number, xmult = 1): ScoreEvent {
     const multBefore = this.mult;
-    const points = Math.round(base * multBefore);
+    let points = Math.round(base * multBefore);
+    // a Bank Ring on the table holds part of every hit back as the ball's heat, until it is banked
+    const ring = kind === 'hit' && points > 0 && !PARTS[inst.def].recipe.ring ? this.placed().find((p) => PARTS[p.def].recipe.ring && !this.jammed.has(p.def)) : undefined;
+    let held = 0;
+    if (ring) {
+      held = Math.round(points * PARTS[ring.def].recipe.ring!.hold);
+      points -= held;
+      this.heat.set(this.curBall, (this.heat.get(this.curBall) ?? 0) + held);
+    }
     // the Old Bells' rings multiply the whole Mult, so every +Mult a ball gains counts ×ringX too
     this.mult = Math.round((this.mult + multGain * this.ringX) * xmult * 1000) / 1000;
     this.peakMult = Math.max(this.peakMult, this.mult);
@@ -605,7 +627,7 @@ export class Scorer {
     if (kind === 'bonus') this.flashStrips(t);
     this.addLedger(inst, points, money, this.mult - multBefore);
     this.checkLater();
-    return { t, uid: inst.uid, def: inst.def, x, y, kind, base, points, multBefore, multAfter: this.mult, money, notes, label, spins };
+    return { t, uid: inst.uid, def: inst.def, x, y, kind, base, points, multBefore, multAfter: this.mult, money, notes: held ? [...notes, `${held} held as heat`] : notes, label, spins };
   }
 
   /** Anything paid a bonus: every Glow Strip lights up for a while. */
@@ -638,15 +660,18 @@ export class Scorer {
   consume(ev: SimEvent): ScoreEvent[] {
     if (ev.type === 'drain') {
       this.ranks.delete(ev.ballId); // a drain loses the rank
+      this.heat.delete(ev.ballId); // and any heat it had not banked
       return [];
     }
     if (ev.type === 'ballSaved') {
       this.saversUsed.add(ev.uid);
       return [];
     }
-    if (ev.type === 'gremlin') return this.gremlin(ev);
+    if (ev.type === 'gremlin') { this.curBall = ev.ballId; return this.gremlin(ev); }
+    if (ev.type === 'partRelease') { this.curBall = ev.ballId; return this.wheelStop(ev); }
     if (ev.type !== 'partHit') return [];
     this.now = ev.t;
+    this.curBall = ev.ballId;
     const inst = this.getParts().find((p) => p.uid === ev.uid && p.placed);
     if (!inst) return [];
     const out = this.hit(inst, ev);
@@ -695,6 +720,18 @@ export class Scorer {
     }
     // a moving part scores only when its moving piece is hit (the duck, the roller), not its rail
     if (def.kind === 'mover' && !ev.mover) return out;
+
+    // a Bank Ring: the ball rolling through banks its heat (a zap or a spark never does)
+    if (r.ring) {
+      if (ev.zap || ev.spark) return out;
+      const heat = this.heat.get(ev.ballId) ?? 0;
+      if (heat <= 0) return out;
+      this.heat.set(ev.ballId, 0);
+      const banked = Math.round(heat * r.ring.x);
+      const e = this.award(inst, ev.t, ev.x, ev.y, 'bonus', banked / Math.max(1e-9, this.mult), 0, 0, [`${heat} heat x${r.ring.x}`], `BANKED ${banked.toLocaleString('en-US')}!`);
+      out.push(e);
+      return out;
+    }
 
     // the Whale swallows a spark; every so often it spouts them back out
     if (r.whale && ev.swallow) {
@@ -888,6 +925,8 @@ export class Scorer {
       // the third notch rings the bell: ×1.2 on the Mult of this ball and every ball after it, for the rest of the run
       if (rang) out.push(this.ring(inst, ev));
       if (midnight) out.push(midnight);
+      if (r.lock && ev.caught) scored.label ??= (ev.index ?? 0) >= r.lock.n ? 'MULTIBALL!' : `LOCK ${ev.index}/${r.lock.n}`;
+      if (r.wheel && ev.caught) { this.spinning.set(inst.uid, ev.t); scored.label ??= 'SPIN!'; }
       if (r.wreck && !ev.zap && !ev.spark && !this.firedThisBall.has(inst.uid)) {
         // the Wrecking Ball: once a ball, this ball gets big (and every hit it makes pays more) for a while
         this.firedThisBall.set(inst.uid, 1);
@@ -1123,6 +1162,51 @@ export class Scorer {
     return this.award(inst, t, inst.x, inst.y, 'bonus', 0, 0, 0, ['one last try'], 'INSURED!');
   }
 
+  /** A ball's heat (Bank Ring): points held back, not yet banked. */
+  heatOf(ballId: number): number {
+    return this.heat.get(ballId) ?? 0;
+  }
+
+  /** The segment a spinning Spider Wheel points at now, or null if it is not spinning. */
+  wheelAt(inst: PartInstance, t = this.now): number | null {
+    const t0 = this.spinning.get(inst.uid), w = PARTS[inst.def].recipe.wheel;
+    return t0 === undefined || !w ? null : Math.floor((t - t0) * w.speed) % WHEEL.length;
+  }
+
+  /** A Spider Wheel lets its ball go: it stops where it points, and pays that award (or Wheel Mania, once all are in). */
+  private wheelStop(ev: { t: number; uid: number; ballId: number }): ScoreEvent[] {
+    const inst = this.placed().find((p) => p.uid === ev.uid);
+    const seg = inst ? this.wheelAt(inst, ev.t) : null;
+    if (!inst || seg === null) return [];
+    this.spinning.delete(inst.uid);
+    this.now = ev.t;
+    const spun = this.spunOf(inst);
+    const situ = this.situational(ev);
+    if (spun.length >= WHEEL.length) {
+      // Wheel Mania: a 4-ball multiball, and every hit ×2 for a while
+      this.keep(inst, { spun: [] });
+      this.wheelXUntil = ev.t + 20;
+      const e = this.award(inst, ev.t, inst.x, inst.y, 'bonus', 0, 0, 0, ['3 more balls, every hit x2 for 20 s'], 'WHEEL MANIA!');
+      e.balls = { n: 3, x: inst.x, y: inst.y, uid: inst.uid };
+      e.wheel = { award: 'mania' };
+      return [e];
+    }
+    const w = WHEEL[seg];
+    if (!spun.includes(seg)) this.keep(inst, { spun: [...spun, seg] });
+    let base = 0, mult = 0, money = 0;
+    const e0: Partial<ScoreEvent> = {};
+    if (w.id === 'double') this.wheelXUntil = ev.t + 20;
+    if (w.id === 'cash' && !this.mods.noCoins) money = this.take(this.moneyPaid, 'wheel', 3, undefined);
+    if (w.id === 'ball') e0.balls = { n: 1, x: inst.x, y: inst.y, uid: inst.uid };
+    if (w.id === 'lamps') this.flashLamps(ev.t, 10);
+    if (w.id === 'mult') mult = this.gain(1);
+    if (w.id === 'reroll') e0.reroll = true;
+    if (w.id === 'points') base = Math.round(300 * modFactor(inst.def, this.mods) * situ.x);
+    const e = this.award(inst, ev.t, inst.x, inst.y, 'bonus', base, mult, money, [w.name.toLowerCase()], w.name === 'ZILCH' ? 'ZILCH!' : w.name);
+    Object.assign(e, e0, { wheel: { award: w.id } });
+    return [e];
+  }
+
   /** An Ice Sculpture has melted away: a last word on the ledger. */
   melted(inst: PartInstance, t: number): ScoreEvent {
     return this.award(inst, t, inst.x, inst.y, 'bonus', 0, 0, 0, ['melted away'], 'PUDDLE!');
@@ -1149,6 +1233,11 @@ export class Scorer {
   /** What the scorer keeps on a part for the run: the game's copy (onKeep) or, for a test ball, its own. */
   private keepOf<K extends 'sets' | 'rituals' | 'hp' | 'bursts' | 'jarHits' | 'marbles'>(inst: PartInstance, key: K): number {
     return this.kept.get(inst.uid)?.[key] ?? inst[key] ?? 0;
+  }
+
+  /** A Spider Wheel's awards collected this run. */
+  spunOf(inst: PartInstance): number[] {
+    return this.kept.get(inst.uid)?.spun ?? inst.spun ?? [];
   }
 
   private keep(inst: PartInstance, patch: Partial<PartInstance>) {
@@ -1235,6 +1324,7 @@ export class Scorer {
         if (!pool.length) continue;
         const hit = pool[Math.floor(this.rng.next() * pool.length)];
         this.now = t;
+        this.curBall = rit.ballId;
         out.push(...this.zap(altar, [hit], { t, ballId: rit.ballId, speed: 20 }, 'storm'));
       }
     }
@@ -1246,6 +1336,7 @@ export class Scorer {
       if (!inst || this.jammed.has(inst.def)) continue;
       const r = this.recipe(inst.def).keg!, m = this.mods;
       this.now = t;
+      this.curBall = k.ballId; // its heat goes to the ball that lit it
       const situ = this.situational({ ballId: k.ballId, t });
       const pts = Math.round(r.blast * modFactor(inst.def, m) * situ.x);
       const e = this.award(inst, t, inst.x, inst.y, 'bonus', pts, 0, 0, [`${pts} blast`, ...situ.notes], 'KABOOM!');
