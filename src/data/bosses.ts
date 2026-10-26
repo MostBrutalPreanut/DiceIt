@@ -52,15 +52,15 @@ export const BOSSES: Record<BossId, BossDef> = {
   jammer: { id: 'jammer', name: 'The Jammer', final: false, shout: 'THE JAMMER GOT IN',
     text: 'Your most numerous part type is jammed: it scores nothing this round.', jam: 'mostNumerous' },
   flatRate: { id: 'flatRate', name: 'Flat Rate', final: false, shout: 'FLAT RATE. NO BIG MULTS',
-    text: 'Every Mult gain is halved (and ×Mults move half as far).', mods: (m) => { m.multGain *= 0.5; } },
+    text: 'Every Mult gain is 30% smaller (and ×Mults move 30% less far).', mods: (m) => { m.multGain *= 0.7; } },
   magnet: { id: 'magnet', name: 'The Magnet', final: false, shout: 'THE MAGNET IS ON',
     text: 'A magnet under the drain pulls every ball towards it.', mods: (m) => { m.magnet = { ...DRAIN, strength: 22, radius: 16 }; } },
 
   // ---- final bosses (round 15): two problems at once ----
   auditor: { id: 'auditor', name: 'The Auditor', final: true, shout: 'THE AUDITOR WILL SEE YOU NOW',
-    text: 'Your decals are switched off until you reach half the goal, and the goal is 20% higher.', goalX: 1.2, decalsOffUntilHalf: true },
+    text: 'Your decals are switched off until you reach half the goal, and the goal is 10% higher.', goalX: 1.1, decalsOffUntilHalf: true },
   overlord: { id: 'overlord', name: 'The Overlord', final: true, shout: 'KNEEL BEFORE THE OVERLORD',
-    text: 'Every ball, a random part type on your table is switched off, and every Mult gain is halved.', jam: 'randomEachBall', mods: (m) => { m.multGain *= 0.5; } },
+    text: 'Every ball, a random part type on your table is switched off, and every Mult gain is 30% smaller.', jam: 'randomEachBall', mods: (m) => { m.multGain *= 0.7; } },
   whirlpool: { id: 'whirlpool', name: 'The Whirlpool', final: true, shout: 'HERE COMES THE WHIRLPOOL',
     text: "A whirlpool drags every ball towards the drain, the table is steeper, and every ball's clock is 40 seconds.",
     mods: (m) => { m.magnet = { ...DRAIN, strength: 30, radius: 18 }; m.ballGravity *= 1.2; m.ballClock = Math.min(m.ballClock, 40); } },

@@ -123,10 +123,10 @@ describe('what each boss does', () => {
     expect(g.scorer.consume(hit(50))[0].base).toBe(8);
   });
 
-  it('Flat Rate: Mult gains are halved', () => {
+  it('Flat Rate: Mult gains are 30% smaller', () => {
     const g = bossRound('flatRate');
     g.scorer.consume(hit(4)); // the Big Boi
-    expect(g.scorer.mult).toBeCloseTo(1.075);
+    expect(g.scorer.mult).toBeCloseTo(1.105);
   });
 
   it('The Magnet and The Whirlpool pull balls towards the drain', () => {
@@ -142,21 +142,21 @@ describe('what each boss does', () => {
     expect(drift('whirlpool')).toBeGreaterThan(0.05);
   });
 
-  it('The Auditor: decals are off until half the goal, and the goal is 20% higher', () => {
+  it('The Auditor: decals are off until half the goal, and the goal is 10% higher', () => {
     const g = bossRound('auditor', (x) => { x.decals = [{ id: 'overclock', target: 'pop' }]; });
-    expect(g.scorer.goal).toBe(Math.round(goalFor(15) * 1.2));
+    expect(g.scorer.goal).toBe(Math.round(goalFor(15) * 1.1));
     expect(g.scorer.consume(hit(1))[0].base).toBe(20);
     g.scorer.score = g.scorer.goal / 2;
     g.scorer.consume(hit(2));
     expect(g.scorer.consume(hit(3))[0].base).toBe(Math.round((20 + 2) * 1.5));
   });
 
-  it('The Overlord: a random part type is switched off every ball, and Mult gains are halved', () => {
+  it('The Overlord: a random part type is switched off every ball, and Mult gains are 30% smaller', () => {
     const g = bossRound('overlord', (x) => { x.layout.parts.push(makePart('coin', 50, 12, 28, true), makePart('sling', 51, 8, 22, true)); });
     const seen = new Set<string>();
     for (let i = 0; i < 12; i++) { g.scorer.startBall(); expect(g.scorer.jammed.size).toBe(1); seen.add([...g.scorer.jammed][0]); }
     expect(seen.size).toBeGreaterThan(1);
-    expect(g.mods.multGain).toBe(0.5);
+    expect(g.mods.multGain).toBe(0.7);
   });
 
   it('every boss plays a whole round with the bot and nothing breaks', async () => {
