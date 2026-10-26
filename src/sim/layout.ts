@@ -65,6 +65,7 @@ function distToSegment(px: number, py: number, s: { x1: number; y1: number; x2: 
 
 /** Can a part of this type sit at (x, y)? `ignoreUid` lets a part being dragged ignore itself. */
 export function canPlace(layout: Layout, id: PartId, x: number, y: number, ignoreUid?: number): boolean {
+  if (PARTS[id].kind === 'inlay') return false; // a gem goes into a part, never on the table itself
   const r = footprint(PARTS[id]);
   if (x - r < BUILD_AREA.x0 || x + r > BUILD_AREA.x1 || y - r < BUILD_AREA.y0 || y + r > BUILD_AREA.y1) return false;
   // keep clear of the cabinet walls (the dome and chamfer are not rectangles), with room for a ball between: a gap

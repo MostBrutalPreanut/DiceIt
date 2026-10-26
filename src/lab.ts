@@ -9,7 +9,6 @@ import { THEMES } from './render/theme';
 
 /** The states worth seeing per part: idle first, then whatever it can light, drop or say. */
 const STATES: Partial<Record<PartId, [string, PartState][]>> = {
-  pop: [['idle', {}], ['hit', { hit: true }], ['lvl 2', { level: 2 }], ['max lvl', { level: 5 }]],
   coin: [['idle', {}], ['hit', { hit: true }], ['max lvl', { level: 5 }]],
   mega: [['idle', {}], ['oof', { hit: true }]],
   sling: [['idle', {}], ['hit', { hit: true }]],
@@ -27,6 +26,7 @@ const STATES: Partial<Record<PartId, [string, PartState][]>> = {
   keg: [['idle', {}], ['lit', { lit: true }], ['spent', { armed: false }]],
   laser: [['ready', {}], ['recharging', { lit: false }]],
   gong: [['idle', {}], ['hit', { hit: true }]],
+  pop: [['idle', {}], ['hit', { hit: true }], ['lvl 2', { level: 2 }], ['max lvl', { level: 5 }], ['ruby', { gem: 'ruby' }], ['gold leaf', { gem: 'goldleaf' }], ['red seal', { gem: 'redseal' }]],
   bell: [['idle', {}], ['hit', { hit: true }], ['2 notches', { seg: 2 }], ['rung', { lit: false, seg: 1 }]],
 };
 const ANGLE: Partial<Record<PartId, number>> = { sling: -0.55, spinner: 0.3, deflector: 0.4, bank: 0.15, vari: 0.2, kickback: -0.5, printer: 0.3 };

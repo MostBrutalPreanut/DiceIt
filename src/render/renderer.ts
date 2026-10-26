@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Texture, type Text } from 'pixi.js';
-import { dialValue, footprint, lampStats, LEVEL_RADIUS, PARTS, SMALL_FLIPPER, type PartId, type PartInstance } from '../data/parts';
+import { dialValue, footprint, gemFits, isInlay, lampStats, LEVEL_RADIUS, PARTS, SMALL_FLIPPER, type PartId, type PartInstance } from '../data/parts';
 import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
 import { BALL_R, BUILD_AREA, FLIPPER_LENGTH, FLIPPER_REST, TABLE_W } from '../sim/constants';
@@ -507,6 +507,7 @@ export class Renderer {
       if (lt) { lt.glow = Math.max(0, lt.glow - dt * 0.7); if (lt.glow === 0) this.lastTier.delete(p.uid); }
       const ps = this.partState(game, p, lanes, banks, kick, savers, heldNear);
       if (def.recipe.perLevel) ps.level = game.scorer.levelOf(p);
+      if (p.inlay) ps.gem = p.inlay;
       // glows live on the floor, under every part: lamps, lit inserts, armed kickbacks, a ready saver
       const r = footprint(def);
       if (!tilted) {
@@ -605,7 +606,10 @@ export class Renderer {
       pv.sprite.alpha = 0.6;
       pv.sprite.scale.set(1);
       pv.sprite.tint = st.ghost.valid ? 0xffffff : num(mix(t.accent, '#ffffff', 0.25));
-      dashedRing(fx, v, st.ghost.x, st.ghost.y, footprint(def), st.ghost.valid ? t.ink : t.accent, v.lw);
+      if (isInlay(st.ghost.def)) {
+        // a gem in hand: every part it fits is ringed in the gem's colour (it goes into the one it is dropped on)
+        for (const q of game.placed) if (!q.fixed && gemFits(st.ghost.def, q.def)) dashedRing(fx, v, q.x, q.y, footprint(PARTS[q.def]) + 0.35, t.role[st.ghost.def], v.lw * 1.4, t.ink);
+      } else dashedRing(fx, v, st.ghost.x, st.ghost.y, footprint(def), st.ghost.valid ? t.ink : t.accent, v.lw);
     } else {
       const pv = this.parts.get(-1);
       if (pv) { pv.sprite.destroy(); this.parts.delete(-1); }

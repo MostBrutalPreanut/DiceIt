@@ -11,9 +11,10 @@ import { bigBoiOf, DRAGON, ORDER, type MachineId } from './bigboi';
 export type PartId =
   | 'pop' | 'coin' | 'mega' | 'sling' | 'spinner' | 'lane' | 'printer' | 'flipper' | 'lamp' | 'deflector' | 'uplight' | 'bank' | 'kickback' | 'saver' | 'vari'
   | 'ding' | 'piggy' | 'magnet' | 'thunder' | 'jackpot' | 'xlane' | 'golden' | 'disco' | 'trophy' | 'plate' | 'fame'
-  | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell' | 'tesla' | 'keg' | 'laser' | 'gong';
+  | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell' | 'tesla' | 'keg' | 'laser' | 'gong'
+  | 'ruby' | 'garnet' | 'emerald' | 'opal' | 'goldleaf' | 'redseal';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
-  | 'mover' | 'goal' | 'strip';
+  | 'mover' | 'goal' | 'strip' | 'inlay';
 
 /**
  * Rarity decides when a part turns up in the shop and how much it does. Commons are there from round 1;
@@ -161,6 +162,47 @@ export interface Recipe {
   beam?: { cooldown: number };
   /** Shockwave Gong: every `every`th hit of a ball booms, and every part on the table is zapped. */
   boom?: { every: number };
+  /** An inlay (a gem set into a part on the table), and the parts it fits. What each gem does: see the INLAY constants. */
+  gem?: GemFit;
+}
+
+/** The parts a gem fits: any that scores when hit, one that fires once a ball, one that goes dark or recharges, one that grows. */
+export type GemFit = 'scoring' | 'onceABall' | 'cooldown' | 'growth';
+/** What the gems do: a Ruby's part pays ×1.5; a Garnet halves dark and recharge times; Gold Leaf adds +1 a score (up to 5× the part's points); a Red Seal's part is dark this long after its double. */
+export const RUBY_X = 1.5;
+export const GARNET_X = 0.5;
+export const LEAF_CAP = 5;
+export const SEAL_DARK = 0.5;
+/** The kinds of part a gem can be set into (never flippers, savers, the Kickback, bars, floor pieces, gems or Big Boi). */
+const INLAY_KINDS = new Set<PartKind>(['bumper', 'kicker', 'spinner', 'rollover', 'lamp', 'target', 'saucer', 'mover', 'goal', 'bank']);
+const FIT_TEXT: Record<GemFit, string> = {
+  scoring: 'any part that scores when the ball hits it (not Big Boi)',
+  onceABall: 'a part that fires once a ball (the Disco Ball, Hall of Fame)',
+  cooldown: 'a part that goes dark or recharges (X Lane, Goal!, the Laser Turret, the Powder Keg)',
+  growth: 'a part that grows as it is hit (the Pop Bumper, the Duck Gallery, the Trophy Cup)',
+};
+const GEM_TEXT: Partial<Record<PartId, string>> = {
+  ruby: `Its part pays ×${RUBY_X}.`,
+  garnet: 'Its part\'s dark or recharge time is halved (X Lane, Goal!, the Laser Turret\'s recharge, the Powder Keg\'s re-arm).',
+  emerald: 'Its part fires twice a ball instead of once.',
+  opal: 'Every hit on its part counts twice for its growth (the Pops\' growth, the Duck\'s points, the Trophy\'s polish).',
+  goldleaf: `Every time its part scores, it is worth +1 more, for the rest of the run (up to +${LEAF_CAP}× its points).`,
+  redseal: `Every hit on its part scores twice; then the part is dark for ${SEAL_DARK} s.`,
+};
+
+/** Is this a gem (an inlay), not a part that goes on the table? */
+export const isInlay = (id: PartId) => PARTS[id].kind === 'inlay';
+
+/** Does this gem fit into this part? */
+export function gemFits(gem: PartId, part: PartId): boolean {
+  const g = PARTS[gem].recipe.gem, d = PARTS[part], r = d.recipe;
+  if (!g || part === 'mega' || !INLAY_KINDS.has(d.kind)) return false;
+  switch (g) {
+    case 'scoring': return !!r.points;
+    case 'onceABall': return !!r.perBall;
+    case 'cooldown': return !!(r.cooldown || r.beam || r.keg);
+    case 'growth': return !!(r.grow || r.keep);
+  }
 }
 
 /** A zapped part cannot be zapped again for this long (seconds). */
@@ -238,6 +280,8 @@ export interface PartDef {
   pack?: number;
   /** Relative chance of appearing in the shop, within its rarity. 0 = never sold (Big Boi comes with the machine). */
   weight: number;
+  /** The shop sells it from this round on, whatever its rarity (the gems: round 7). */
+  from?: number;
   shape: Shape;
   rotatable: boolean;
   /** Ball speed added per point of the Bounce dial (bumpers and kickers). */
@@ -474,6 +518,32 @@ export const PARTS: Record<PartId, PartDef> = {
     mover: { travel: 1.7, speed: 3, shape: { type: 'box', hw: 0.75, hh: 0.22 }, y: -0.45, restitution: 0.55 },
   },
 
+  // ---- gems: set into a part on the table (one each), sold from round 7 ----
+  ruby: {
+    id: 'ruby', name: 'Ruby', blurb: 'Set it in a part. The part gets greedy.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 6, weight: 1, from: 7,
+    shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'scoring' }, dials: [],
+  },
+  garnet: {
+    id: 'garnet', name: 'Garnet', blurb: 'Set it in a part that rests. It rests less.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 4, weight: 1, from: 7,
+    shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'cooldown' }, dials: [],
+  },
+  opal: {
+    id: 'opal', name: 'Opal', blurb: 'Set it in a part that grows. It grows faster.', kind: 'inlay', rarity: 'uncommon', tags: [], cost: 5, weight: 1, from: 7,
+    shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'growth' }, dials: [],
+  },
+  goldleaf: {
+    id: 'goldleaf', name: 'Gold Leaf', blurb: 'The part is worth a little more every time. For good.', kind: 'inlay', rarity: 'rare', tags: [], cost: 6, weight: 1, from: 7,
+    shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'scoring' }, dials: [],
+  },
+  redseal: {
+    id: 'redseal', name: 'Red Seal', blurb: 'Every hit counts twice. Then it needs a breather.', kind: 'inlay', rarity: 'rare', tags: [], cost: 7, weight: 1, from: 7,
+    shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'scoring' }, dials: [],
+  },
+  emerald: {
+    id: 'emerald', name: 'Emerald', blurb: 'Set it in a once-a-ball part. Twice a ball.', kind: 'inlay', rarity: 'rare', tags: [], cost: 8, weight: 1, from: 7,
+    shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'onceABall' }, dials: [],
+  },
+
   // ---- not for sale: every machine has one Big Boi in the middle, and what he does depends on the machine ----
   mega: {
     id: 'mega', name: 'Big Boi', blurb: 'Heavy, rude, hard to miss.', kind: 'bumper', rarity: 'legendary', tags: ['bigboi', 'bumper'], cost: 6, weight: 0,
@@ -526,6 +596,10 @@ export interface PartInstance {
   polish?: number;
   /** Old Bell: notches towards its next ring (rounds in which it was hit). */
   notches?: number;
+  /** The gem set into it (an inlay), if any. */
+  inlay?: PartId;
+  /** Gold Leaf: what its gem has added to its points so far this run. */
+  leaf?: number;
   /**
    * Free to move until the next round: bought in this visit to the workshop, or its move already paid. `paid`
    * is what it cost, refunded if it goes back before a round is played with it.
@@ -634,6 +708,11 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   const level = effectiveLevel(def.id, ctx.level ?? 0, mods);
   const r = def.id === 'mega' ? bigBoiOf(ctx.machine).recipe : def.recipe;
   const lines: DescLine[] = [];
+  if (r.gem) {
+    lines.push({ tag: 'combo', text: GEM_TEXT[def.id] ?? '' });
+    lines.push({ tag: 'note', text: `A gem: drop it on a part on your table to set it in. It fits ${FIT_TEXT[r.gem]}. One gem a part; a new one sends the old one back to your toolbox, and selling the part does too.` });
+    return lines;
+  }
   const factor = (inst ? dialFactor(inst) : 1) * modFactor(def.id, mods);
   const setPts = r.setBonus ? r.setBonus.points * mods.setFactor : 0, setMult = r.setBonus ? r.setBonus.mult * mods.setFactor : 0;
   const f = (n: number) => num(Math.round(n * factor * 100) / 100);
@@ -726,6 +805,11 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.strip) lines.push({ tag: 'lamp', text: `Lies under the floor: other parts can stand on it. Every time anything pays a bonus (a set, a jackpot, a level up...), it lights for ${r.strip.seconds} s, and every part standing on it pays +${Math.round(r.strip.bonus * 100)}%.` });
   if (r.plate) lines.push({ tag: 'score', text: `Lies in the floor: other parts can stand on it. Every bumper within ${num(r.plate.reach)} of it (Big Boi too) pays ×${num(r.plate.x)}, and plates multiply.` });
   if (def.id === 'mega') lines.push(...bigBoiLines(ctx.machine, factor, mods));
+  if (inst?.inlay && PARTS[inst.inlay]) {
+    // the gem's own sentence, about "its part", said of this part: "every time it scores..."
+    const said = (GEM_TEXT[inst.inlay] ?? '').replace(/its part's/gi, 'its').replace(/its part/gi, 'it').replace(/\.$/, '');
+    lines.push({ tag: 'combo', text: `Set with a ${PARTS[inst.inlay].name}: ${said.charAt(0).toLowerCase()}${said.slice(1)}${inst.inlay === 'goldleaf' && inst.leaf ? ` (+${inst.leaf} so far)` : ''}.` });
+  }
   return lines;
 }
 

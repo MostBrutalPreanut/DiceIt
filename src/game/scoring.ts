@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, footprint, grownPoints, hasTag, HOT_WINDOW, lampStats, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, RANK_NAMES, tierOf, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, grownPoints, hasTag, HOT_WINDOW, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, modFactor, PARTS, RANK_NAMES, RUBY_X, SEAL_DARK, tierOf, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { TABLE_H, TABLE_W } from '../sim/constants';
@@ -72,6 +72,8 @@ export interface ScorerOpts {
   onPolish?: (inst: PartInstance, by: number, cap: number) => number;
   /** Called when an Old Bell gets its notch for the round, for real (like onLevelUp). Returns true if that notch rang it. */
   onNotch?: (inst: PartInstance, notches: number) => boolean;
+  /** Called when Gold Leaf adds +1 to its part, for real (like onPolish). Returns what it adds now. */
+  onLeaf?: (inst: PartInstance, cap: number) => number;
   /** Old Bell rings so far this run: every ball's Mult is ×1.2 for each (default none). */
   rings?: number;
   /** The run's decals and the boss (neutral if absent). */
@@ -143,6 +145,11 @@ export class Scorer {
   private firedThisBall = new Map<number, number>();
   /** The jackpot pot: ball hits when each scoop last cashed. */
   private potFrom = new Map<number, number>();
+  /** Red Seal: until when each sealed part is dark after its double, and whether the double is being scored now. */
+  private sealDark = new Map<number, number>();
+  private sealing = false;
+  /** Gold Leaf a test ball's parts have earned (a real round's goes on the part, through onLeaf). */
+  private leafed = new Map<number, number>();
   /** Zaps: until when each part cannot be zapped again. */
   private zapCool = new Map<number, number>();
   /** Powder Kegs this ball: lit (blowing at `at`) or spent (until `at`), whose ball lit it and how far down a chain it is. */
@@ -257,6 +264,7 @@ export class Scorer {
     this.mult = this.ballStartMult();
     this.ranks.clear();
     this.zapCool.clear();
+    this.sealDark.clear();
     this.kegs.clear();
     this.gongHits.clear();
     this.ballHits = 0;
@@ -418,7 +426,8 @@ export class Scorer {
     const lvl = (r.perLevel ?? 0) * this.effLevel(inst);
     const variety = r.variety ? r.variety * this.variety : 0;
     const order = this.order === inst.uid ? ORDER.x : 1;
-    return Math.round(((points ?? r.points) + lvl + grown + variety + this.potOf(inst)) * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * (1 + this.stripBonusAt(inst)) * this.plateXAt(inst) * order);
+    const leaf = inst.inlay === 'goldleaf' ? this.leafOf(inst) : 0, ruby = inst.inlay === 'ruby' ? RUBY_X : 1;
+    return Math.round(((points ?? r.points) + leaf + lvl + grown + variety + this.potOf(inst)) * ruby * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * (1 + this.stripBonusAt(inst)) * this.plateXAt(inst) * order);
   }
 
   /** The short number drawn on the part itself ("100", "10/spin", "+25%", "x1.25"). */
@@ -540,7 +549,7 @@ export class Scorer {
     // the goal: a ball past the goalie (the goalie and the posts score nothing)
     if (def.kind === 'goal') {
       if (!ev.goal || this.coolingDown(inst.uid, ev.t)) return out;
-      this.coolUntil.set(inst.uid, ev.t + (r.cooldown ?? 1.5));
+      this.coolUntil.set(inst.uid, ev.t + (r.cooldown ?? 1.5) * this.coolX(inst));
       const situ = this.situational(ev);
       const pts = Math.round(((r.points ?? 0) + (r.perLevel ?? 0) * this.effLevel(inst)) * modFactor(inst.def, m) * (1 + this.lampBonusAt(inst).sum) * situ.x);
       const x = this.takeX(inst.def, this.gainX(r.goal!.xmult), this.gainX(r.goal!.xmultCap));
@@ -559,7 +568,7 @@ export class Scorer {
     // X Lane and other ×Mult lights without points
     if (!r.points && r.xmult) {
       if (this.coolingDown(inst.uid, ev.t)) return out;
-      if (r.cooldown) this.coolUntil.set(inst.uid, ev.t + r.cooldown);
+      if (r.cooldown) this.coolUntil.set(inst.uid, ev.t + r.cooldown * this.coolX(inst));
       const x = this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined);
       out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [], x > 1.0001 ? `MULT x${x.toFixed(2)}` : 'X LANE MAXED', undefined, x));
       if (r.lightsLane) { const lane = this.lightNextLane(); if (lane) out.push(...this.checkLaneSet(lane, ev, inst)); }
@@ -567,10 +576,14 @@ export class Scorer {
     }
 
     if (r.points) {
-      if (r.perBall && (this.firedThisBall.get(inst.uid) ?? 0) >= r.perBall) return out;
+      const gem = inst.inlay;
+      if (gem === 'redseal' && !this.sealing && (this.sealDark.get(inst.uid) ?? -1) > ev.t) return out; // dark after its double
+      if (r.perBall && (this.firedThisBall.get(inst.uid) ?? 0) >= r.perBall * (gem === 'emerald' ? 2 : 1)) return out;
       // an Old Bell's first hit of the round pays its toll instead of its points (and earns the round's notch)
       const toll = r.bell && !ev.zap && !this.firedThisRoundOf(inst.uid) ? r.bell.first : 0; // only the ball itself rings it
       const pts = toll || r.points;
+      const leaf = gem === 'goldleaf' ? this.leafOf(inst) : 0;
+      const ruby = gem === 'ruby' ? RUBY_X : 1;
       const spins = ev.spins ?? 1;
       const grown = grownPoints(r, this.hitsOf(inst.def));
       const level = (r.perLevel ?? 0) * this.effLevel(inst);
@@ -588,6 +601,8 @@ export class Scorer {
       if (tier && inst.def === 'vari') notes.push(`x${tier.x} ${tier.name} hit`);
       if (Math.abs(factor - 1) > 0.001) notes.push(`x${Math.round(factor * 100) / 100} dial`);
       const mf = modFactor(inst.def, m);
+      if (leaf) notes.push(`+${leaf} gold leaf`);
+      if (ruby > 1) notes.push(`x${ruby} ruby`);
       if (Math.abs(mf - 1) > 0.001) notes.push(`x${Math.round(mf * 100) / 100} decals`);
       if (lamp.sum) notes.push(`+${Math.round(lamp.sum * 100)}% lamp`);
       const strip = this.stripBonusAt(inst);
@@ -636,14 +651,15 @@ export class Scorer {
       if (r.mult && multGain < this.gain(r.mult) - 1e-9) notes.push('Mult maxed for this ball');
       if (r.spinMult) multGain += this.gain(this.take(this.multPaid, 'spin', r.spinMult * m.spinMult * spins, (r.spinMultCap ?? 0) * m.spinMult));
       const xmult = r.typeX ? this.typeXNow(r.typeX) : r.xmult ? this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
-      const base = Math.round((pts + level + grown + variety + pot) * spins * tierX * factor * mf * (1 + lamp.sum) * (1 + strip) * plate * edge * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
-      this.hitsByType.set(inst.def, this.hitsOf(inst.def) + 1);
-      if (r.feeds) this.hitsByType.set(r.feeds.id, this.hitsOf(r.feeds.id) + r.feeds.n);
+      const base = Math.round((pts + leaf + level + grown + variety + pot) * spins * tierX * factor * mf * ruby * (1 + lamp.sum) * (1 + strip) * plate * edge * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
+      const twice = gem === 'opal' ? 2 : 1; // an Opal counts every hit twice for growth
+      this.hitsByType.set(inst.def, this.hitsOf(inst.def) + twice);
+      if (r.feeds) this.hitsByType.set(r.feeds.id, this.hitsOf(r.feeds.id) + r.feeds.n * twice);
       this.typesHit.add(inst.def);
       if (r.jackpot) this.potFrom.set(inst.uid, this.ballHits);
       if (r.keep) {
         const before = inst.polish ?? 0;
-        const now = this.onPolish ? this.onPolish(inst, r.keep.per, r.keep.cap) : Math.min(r.keep.cap, before + r.keep.per);
+        const now = this.onPolish ? this.onPolish(inst, r.keep.per * twice, r.keep.cap) : Math.min(r.keep.cap, before + r.keep.per * twice);
         notes.push(now > before ? `+${Math.round((now - before) * 100) / 100} kept Mult` : 'fully polished');
       }
       if (r.perBall) this.firedThisBall.set(inst.uid, (this.firedThisBall.get(inst.uid) ?? 0) + 1);
@@ -675,6 +691,14 @@ export class Scorer {
         const n = (this.gongHits.get(inst.uid) ?? 0) + 1;
         this.gongHits.set(inst.uid, n);
         if (n % r.boom.every === 0) out.push(...this.boom(inst, ev));
+      }
+      // Gold Leaf: this part is worth +1 more from now on (up to LEAF_CAP times its points)
+      if (gem === 'goldleaf') this.addLeaf(inst, LEAF_CAP * r.points);
+      // Red Seal: the hit scores a second time, then the part is dark for a moment
+      if (gem === 'redseal' && !this.sealing) {
+        this.sealing = true;
+        try { out.push(...this.hit(inst, ev)); } finally { this.sealing = false; }
+        this.sealDark.set(inst.uid, ev.t + SEAL_DARK);
       }
     }
 
@@ -770,6 +794,22 @@ export class Scorer {
     return this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [`Mult x${x} on every ball for the rest of the run`], `THE BELL RINGS! x${x}`, undefined, x);
   }
 
+  /** A Garnet halves its part's dark and recharge times. */
+  private coolX(inst: PartInstance) {
+    return inst.inlay === 'garnet' ? GARNET_X : 1;
+  }
+
+  /** What Gold Leaf adds to this part's points so far. */
+  leafOf(inst: PartInstance): number {
+    return this.leafed.get(inst.uid) ?? inst.leaf ?? 0;
+  }
+
+  /** Gold Leaf: +1 for good (the run's, through onLeaf; a test ball's, in this scorer only). */
+  private addLeaf(inst: PartInstance, cap: number) {
+    if (this.opts.onLeaf) this.opts.onLeaf(inst, cap);
+    else this.leafed.set(inst.uid, Math.min(cap, this.leafOf(inst) + 1));
+  }
+
   /** How many parts this Tesla Coil arcs to: its base, one more every few levels, up to its most. */
   arcsOf(inst: PartInstance): number {
     const z = this.recipe(inst.def).zap;
@@ -815,7 +855,7 @@ export class Scorer {
       if (k.spent || k.at > t) continue;
       const inst = this.placed().find((p) => p.uid === uid);
       k.spent = true;
-      k.at = t + (inst ? this.recipe(inst.def).keg?.rearm ?? 0 : 0);
+      k.at = t + (inst ? (this.recipe(inst.def).keg?.rearm ?? 0) * this.coolX(inst) : 0);
       if (!inst || this.jammed.has(inst.def)) continue;
       const r = this.recipe(inst.def).keg!, m = this.mods;
       this.now = t;
@@ -839,7 +879,7 @@ export class Scorer {
   /** A Laser Turret fires: a beam through it at a random angle, wall to wall; every part on the line is zapped. */
   private fire(laser: PartInstance, scored: ScoreEvent, ev: ZapCause): ScoreEvent[] {
     const r = this.recipe(laser.def).beam!;
-    this.coolUntil.set(laser.uid, ev.t + r.cooldown);
+    this.coolUntil.set(laser.uid, ev.t + r.cooldown * this.coolX(laser));
     const a = this.rng.next() * Math.PI, dx = Math.cos(a), dy = Math.sin(a);
     // the beam runs until it leaves the table, both ways
     const reach = (sx: number, sy: number) => {

@@ -36,16 +36,28 @@ export interface PartState {
   part?: 'base' | 'mover';
   /** A Lamp's brightness (0 to 5 steps). */
   bright?: number;
+  /** The gem set into the part (an inlay): a little stone at its front. */
+  gem?: PartId;
 }
 export type Mood = 'happy' | 'oof' | 'sad' | 'shocked' | 'cool';
 
 export const stateKey = (st: PartState) =>
-  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0, st.part ?? '', st.bright ?? ''].join('.');
+  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0, st.part ?? '', st.bright ?? '', st.gem ?? ''].join('.');
 
 const ringS = (cx: number, cy: number, r: number, n = 20, ry = r): Pt[] => ring(cx, cy, r, n, ry);
 
 /** Draws one part at sim position (x, y). The returned container holds a Graphics and any lettering. */
 export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, angle = 0, st: PartState = {}): Container {
+  if (st.gem) {
+    // a part with a gem set in it: the part, and the stone at its front edge
+    const out = drawPart(v, t, id, x, y, angle, { ...st, gem: undefined });
+    const sh = PARTS[id].shape, front = sh.type === 'circle' ? sh.r * 0.82 : sh.hh * 0.9;
+    const g = new Graphics(), p = new Prop(v, t);
+    gemStone(p, v, t, st.gem, x, y - front, 0.45, 0.32);
+    p.draw(g);
+    out.addChild(g);
+    return out;
+  }
   const def = PARTS[id], role = mat(t, levelColour(t, id, def.recipe.perLevel ? st.level ?? 0 : 0)), metal = mat(t, t.metal);
   const out = new Container();
   const under = new Graphics(), body = new Graphics(), over = new Graphics();
@@ -277,6 +289,13 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.face(ring(x, y, r * 0.92, 26).map(([a, b]) => P(v, a, b, 0.46)), bell.shade, { sil: false, line: 0.4 });
       p.face(ring(x - r * 0.2, y + r * 0.1, r * 0.18, 14).map(([a, b]) => P(v, a, b, 1.2)), bell.light, { sil: false, line: 0 });
       p.cyl(x, y, 0.14, 1.46, 0.22, metal);
+      break;
+    }
+    case 'ruby': case 'garnet': case 'opal': case 'goldleaf': case 'redseal': case 'emerald': {
+      // a gem as sold: the stone on a little velvet cushion
+      shadow(under, v, t, x, y, 0.6, 0.5);
+      p.cyl(x, y, 0.62, 0, 0.2, mat(t, mix(t.accent, t.shadeTint, 0.35)));
+      gemStone(p, v, t, id, x, y, 0.22, 0.48);
       break;
     }
     case 'keg': {
@@ -624,6 +643,28 @@ export function levelColour(t: Theme, id: PartId, level: number): string {
   if (level <= 0) return base;
   const to = id === 'coin' ? t.accent : t.role.coin;
   return mixHue(base, to, Math.min(level, MAX_LEVEL) / MAX_LEVEL);
+}
+
+/**
+ * A gem at (x, y, z), `s` across: a cut stone (an octagon with a bright table), a crinkled square of gold leaf, or
+ * a red wax seal with a star pressed in it.
+ */
+function gemStone(p: Prop, v: View, t: Theme, id: PartId, x: number, y: number, z: number, s: number) {
+  const c = t.role[id];
+  const at = (pts: Pt[], dz = 0) => pts.map(([a, b]) => P(v, a, b, z + dz));
+  if (id === 'goldleaf') {
+    const leaf: Pt[] = [[x - s, y - s * 0.7], [x - s * 0.2, y - s * 0.95], [x + s * 0.9, y - s * 0.75], [x + s, y + s * 0.2], [x + s * 0.6, y + s * 0.9], [x - s * 0.5, y + s * 0.8], [x - s * 0.95, y + s * 0.1]];
+    p.face(at(leaf), c, { line: 0.4 });
+    p.face(at(leaf.map(([a, b]) => [x + (a - x) * 0.45 - s * 0.15, y + (b - y) * 0.45 + s * 0.1] as Pt), 0.01), mix(c, WHITE, 0.55), { sil: false, line: 0 });
+  } else if (id === 'redseal') {
+    p.face(at(ring(x, y, s, 14).map(([a, b], i) => [x + (a - x) * (i % 2 ? 1 : 0.9), y + (b - y) * (i % 2 ? 1 : 0.9)] as Pt)), c, { line: 0.45 });
+    p.face(at(ring(x, y, s * 0.62, 18), 0.01), mix(c, t.ink, 0.25), { sil: false, line: 0.3 });
+    p.face(at(star(x, y, s * 0.45, s * 0.2, 5, Math.PI / 2), 0.02), mix(c, WHITE, 0.35), { sil: false, line: 0 });
+  } else {
+    p.face(at(ring(x, y, s, 8)), mix(c, t.ink, 0.2), { line: 0.45 });
+    p.face(at(ring(x, y, s * 0.62, 8), 0.04), c, { sil: false, line: 0.3 });
+    p.face(at(ring(x - s * 0.22, y + s * 0.22, s * 0.16, 8), 0.06), WHITE, { sil: false, line: 0 });
+  }
 }
 
 /** A floor arrow insert showing where an eject sends the ball (rotatable ejectors: Ball Printer). */

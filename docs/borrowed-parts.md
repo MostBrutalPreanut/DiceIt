@@ -12,7 +12,8 @@ Every card is on a review page with Approve / Change / Skip and a notes box per 
 https://claude.ai/artifact/UMabyQfo79xB2nmhH6c1fv (private to its owner; the decisions are saved there).
 
 **Built so far:** Rank Lights and the Old Bell (step 1 of §4), as revised in §6.3; zaps, the Tesla Coil, the Powder Keg, the
-Laser Turret (was Laser Cross: one beam is not a cross) and the Shockwave Gong (step 2). See [balance-plan.md](balance-plan.md) §2 for their numbers.
+Laser Turret (was Laser Cross: one beam is not a cross) and the Shockwave Gong (step 2); the inlays: Ruby, Garnet,
+Opal, Gold Leaf, Red Seal and Emerald (step 3; the Topaz waits for sparks in step 4). See [balance-plan.md](balance-plan.md) §2 for their numbers.
 
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show

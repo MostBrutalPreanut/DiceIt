@@ -9,7 +9,7 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 345 pass, 0 fail (24 files) |
+| Unit tests | 363 pass, 0 fail (25 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
 | Browser smoke test | 104 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.5 ms a frame |
@@ -59,6 +59,10 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   random direction; the gong's 8th hit of a ball zaps the whole table. Gain per round over a plain Pop Bumper on
   the power tool's table, mid / late: Tesla +6,568 / +18,913, Laser +1,935 / +9,678, Keg +3,337 / +7,989, Gong
   +1,068 / +3,730.
+- **Gems (inlays, step 3)**: Ruby, Garnet, Opal, Gold Leaf, Red Seal and Emerald, sold from round 7. Drag one from the
+  shop (or the toolbox) onto a part: every part it fits is ringed in its colour while it is in hand, and it shows as
+  a small stone at the part's front. **Not measured yet**: the par player and the auto-builder never buy or set a
+  gem, so `npm run balance` cannot see them. Emerald on a Disco Ball (×2.5 twice a ball) is the one to watch.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

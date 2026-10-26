@@ -1,7 +1,7 @@
 import './style.css';
 import './ui/menu.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { dialValue, footprint, PARTS, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
+import { dialValue, footprint, isInlay, PARTS, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
 import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, KIND_NAMES, type DecalId, type DecalPick } from './data/decals';
 import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
 import { FINAL_ROUND } from './data/bosses';
@@ -12,7 +12,7 @@ import { Renderer, type DrawState } from './render/renderer';
 import { FxOverlay } from './render/overlay';
 import { FACTORY, roleFill, themeById, THEMES, themeVars, type Theme } from './render/theme';
 import { DT } from './sim/constants';
-import { canPlace, canPlaceLedge } from './sim/layout';
+import { canPlaceLedge } from './sim/layout';
 import { clampLedge, LEDGE, ledgeSeg } from './sim/table';
 import { Bot } from './sim/bot';
 import type { Input, SimEvent } from './sim/sim';
@@ -456,7 +456,7 @@ async function main() {
     if (over === canvas) {
       const p = renderer.toSim(cx, cy);
       part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y) : game.buyAndPlace(d.slot, p.x, p.y);
-      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); } else { say('NO ROOM THERE'); return false; }
+      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : 'NO ROOM THERE'); return false; }
     } else if (over?.closest('#inventoryBox')) {
       part = d.slot === null ? game.grant(d.id) : game.buy(d.slot);
       if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(d.slot !== null && !game.hasRoomFor(d.id) ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
@@ -562,12 +562,12 @@ async function main() {
     }
     if (armed !== null) {
       if (game.place(armed, p.x, p.y, true)) {
-        selected = armed;
+        selected = game.part(armed) ? armed : game.lastInlaid; // a gem went into a part: select the part
         armed = null;
         audio.place();
         sayKey('place');
         persist();
-      }
+      } else if (isInlay(game.part(armed)?.def ?? 'pop')) say('DROP IT ON A PART IT FITS');
     } else {
       const hit = hitPart(p.x, p.y);
       const decal = renderer.decalAt(e.clientX, e.clientY);
@@ -659,13 +659,13 @@ async function main() {
     if (e.target === canvas) {
       const p = renderer.toSim(e.clientX, e.clientY);
       if (game.place(armed, p.x, p.y, true)) {
-        selected = armed;
+        selected = game.part(armed) ? armed : game.lastInlaid;
         armed = null;
         audio.place();
         sayKey('place');
         persist();
         refreshWorkshop();
-      }
+      } else if (isInlay(game.part(armed)?.def ?? 'pop')) say('DROP IT ON A PART IT FITS');
     }
   });
 
@@ -1301,9 +1301,9 @@ async function main() {
       : null;
     const armedPart = armed != null ? game.part(armed) : undefined;
     drawState.ghost = game.editable && (shopDrag?.moving || shopDrag?.carry) && pointer
-      ? { def: shopDrag.id, x: pointer.x, y: pointer.y, angle: 0, valid: canPlace(game.layout, shopDrag.id, pointer.x, pointer.y) }
+      ? { def: shopDrag.id, x: pointer.x, y: pointer.y, angle: 0, valid: game.canDropAt(shopDrag.id, pointer.x, pointer.y) }
       : game.editable && armedPart && pointer
-        ? { def: armedPart.def, x: pointer.x, y: pointer.y, angle: armedPart.angle, valid: canPlace(game.layout, armedPart.def, pointer.x, pointer.y) }
+        ? { def: armedPart.def, x: pointer.x, y: pointer.y, angle: armedPart.angle, valid: game.canDropAt(armedPart.def, pointer.x, pointer.y) }
         : null;
     renderer.draw(game, dt, drawState);
     updateHud(dt);
