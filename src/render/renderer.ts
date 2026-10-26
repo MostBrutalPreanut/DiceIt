@@ -537,6 +537,13 @@ export class Renderer {
       case 'clock': { const c = game.scorer.clockState(), hits = PARTS.clock.recipe.clock!.hits; return { lit: game.scorer.madnessLeft(game.sim.time) > 0, seg: c.struck ? 12 : Math.floor((c.minutes / hits) * 12) }; }
       case 'altar': { const now = game.scorer.ritualNow(game.sim.time), a = game.scorer.altarOf(p); return { lit: !!now, seg: Math.min(8, Math.round((a.sets / PARTS.altar.recipe.altar!.sets) * 8)) }; }
       case 'bulb': return { lit: true };
+      case 'grape': return { hit: pulse > 0.35, lit: game.scorer.grapeBunch(p).golden };
+      case 'echo': return { hit: pulse > 0.35 };
+      case 'spot': return { hit: pulse > 0.35, lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'bonsai': return { hit: pulse > 0.35, seg: Math.min(5, p.age ?? 0) };
+      case 'capsule': return { lit: game.capsuleRipe(p) };
+      case 'ice': { const full = PARTS.ice.recipe.points!, left = p.ice ?? full; return { hit: pulse > 0.35, seg: Math.min(4, Math.floor((1 - left / full) * 5)) }; }
+      case 'well': return { hit: pulse > 0.35, seg: Math.ceil((p.well ?? 0) / 3) };
       case 'pinata': { const h = game.scorer.pinataOf(p); return { hit: pulse > 0.35, armed: !h.burst, seg: h.max ? Math.min(4, Math.floor(((h.max - h.left) / h.max) * 5)) : 0 }; }
       case 'wizard': { const w = game.scorer.wizardState(game.sim.time); return { hit: pulse > 0.35, lit: !tilted && w.left > 0, seg: w.lit, bright: w.need }; }
       default: return {};
@@ -600,6 +607,7 @@ export class Renderer {
         if (p.def === 'golden') this.glow(p.x, p.y, r * 1.8, t.role.golden, 0.35);
         if (p.def === 'keg' && ps.lit) this.glow(p.x, p.y, r * 2.2, t.role.coin, 0.4 + 0.25 * Math.sin(this.time * 30));
         if (p.def === 'laser' && ps.lit) this.glow(p.x, p.y, r * 1.6, t.role.laser, 0.3);
+        if (p.def === 'spot' && ps.lit) this.glow(p.x, p.y, PARTS.spot.recipe.spot!.reach, t.role.spot, 0.18);
         // WIZARD MODE: a light show, every part on the table glowing in a colour that cycles round the table
         if (wizard) this.glow(p.x, p.y, r * 2, WIZARD_SHOW[Math.floor(this.time * 6 + p.x * 0.3 + p.y * 0.2) % WIZARD_SHOW.length], 0.45);
         // the Cook's order: the one part he lit glows until it is hit

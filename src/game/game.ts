@@ -7,7 +7,7 @@ import {
 } from '../data/decals';
 import { BOSSES, bossOf, FINAL_ROUND, planBosses, type BossDef, type BossId } from '../data/bosses';
 import type { MachineId } from '../data/bigboi';
-import { canPlace, canPlaceLedge, decorParts, ensureBigBoi, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
+import { canPlace, canPlaceLedge, decorParts, WALL_GAP, ensureBigBoi, inventoryParts, loadLayout, placedParts, starterLayout, type Layout } from '../sim/layout';
 import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
 import { clampLedge, LEDGE } from '../sim/table';
 import { GOALS, GOAL_GROWTH } from '../data/goals';
@@ -442,6 +442,8 @@ export class Game {
   }
 
   continueAfterRound() {
+    // a round played: the Bonsai Bumpers and Time Capsules on the table are a round older
+    for (const p of this.placed) if (PARTS[p.def].recipe.bonsai || PARTS[p.def].recipe.capsule) p.age = (p.age ?? 0) + 1;
     this.round++;
     this.mods = this.workshopMods(); // the new round's shop (the Side Mirror counts the rounds)
     this.shop = this.freshShop(new Rng(this.runSeed * 1000 + this.round), this.shop);
@@ -836,6 +838,31 @@ export class Game {
   }
 
   /** One shop offer's worth of parts: a pack's pieces know they belong together. */
+  /** Is this a Time Capsule that has been on the table for all its rounds? */
+  capsuleRipe(p: PartInstance): boolean {
+    const c = PARTS[p.def].recipe.capsule;
+    return !!c && (p.age ?? 0) >= c.rounds;
+  }
+
+  /** Wishing Well: throw $1 in (up to its limit each visit to the workshop). False if you cannot. */
+  wish(uid: number): boolean {
+    const p = this.part(uid), w = p ? PARTS[p.def].recipe.well : undefined;
+    if (!this.editable || !p || !w || this.money < 1) return false;
+    const n = p.wished?.round === this.round ? p.wished.n : 0;
+    if (n >= w.perRound) return false;
+    this.checkpoint();
+    if (!this.sandbox) this.money -= 1;
+    p.well = (p.well ?? 0) + 1;
+    p.wished = { round: this.round, n: n + 1 };
+    return true;
+  }
+
+  /** How many more $ a Wishing Well takes this visit. */
+  wishesLeft(p: PartInstance): number {
+    const w = PARTS[p.def].recipe.well;
+    return w ? w.perRound - (p.wished?.round === this.round ? p.wished.n : 0) : 0;
+  }
+
   /** Take the Piñata's prize: the part (or pack) goes into the toolbox for free, and the other two go. */
   takePrize(i: number): PartInstance | null {
     const id = this.shop.prize?.[i];
@@ -867,7 +894,8 @@ export class Game {
     const n = PARTS[id].pack ?? 1;
     const probe: Layout = { ...this.layout, parts: [...this.layout.parts, makePart(id, -1, x, y, true)] };
     const spots: ({ x: number; y: number } | null)[] = [{ x, y }];
-    const step = 2.4;
+    // a pack's pieces go side by side; a Grape Bunch's snug against each other (they pay for touching)
+    const step = PARTS[id].recipe.grape ? 2 * footprint(PARTS[id]) + WALL_GAP + 0.05 : 2.4;
     const offsets = [[1, 0], [-1, 0], [2, 0], [-2, 0], [0, -1], [0, 1], [1, -1], [-1, -1], [1, 1], [-1, 1], [0, -2], [0, 2]];
     let toolbox = this.sandbox ? Infinity : this.toolboxSlots - this.inventory.length;
     for (let k = 1; k < n; k++) {
@@ -1011,7 +1039,7 @@ export class Game {
 
   /** What removing this part does to your money: a part bought this visit goes back for what it cost; any other costs the scrap fee. */
   removeValue(p: PartInstance): number {
-    if (this.sandbox) return 0;
+    if (this.sandbox || this.capsuleRipe(p)) return 0;
     if (p.loose) return p.paid ?? 0;
     return this.mods.freeMoves ? 0 : -UPKEEP.scrap;
   }
@@ -1038,6 +1066,14 @@ export class Game {
     this.sim.removePart(uid);
     if (p.inlay) this.returnGem(p.inlay); // its gem comes out first
     this.decorChanged(p.def);
+    if (this.capsuleRipe(p)) {
+      // a Time Capsule dug up after its rounds: a free pick of legendary parts, above the shop
+      const legend = SHOP_IDS.filter((id) => PARTS[id].rarity === 'legendary' && !this.ownedDecor().includes(id));
+      const rng = new Rng(this.runSeed * 6007 + this.round * 13 + p.uid);
+      const pick: PartId[] = [];
+      while (pick.length < PARTS.capsule.recipe.capsule!.pick && legend.length) pick.push(legend.splice(Math.floor(rng.next() * legend.length), 1)[0]);
+      this.shop.prize = pick;
+    }
     return value;
   }
 
@@ -1060,6 +1096,7 @@ export class Game {
     if (checkpoint) this.checkpoint();
     if (moving) this.payMove(p);
     this.clearHeat();
+    if (moving && PARTS[p.def].recipe.bonsai) delete p.age; // a Bonsai that is moved starts again
     p.x = x;
     p.y = y;
     p.placed = true;
@@ -1080,6 +1117,7 @@ export class Game {
     this.payMove(p);
     this.clearHeat();
     if (this.toolboxFull) { const refund = this.sellOverflow(p); this.decorChanged(p.def); return refund; }
+    if (PARTS[p.def].recipe.bonsai) delete p.age;
     p.placed = false;
     this.sim.updatePart(p);
     this.decorChanged(p.def);
@@ -1157,6 +1195,7 @@ export class Game {
     for (const ev of events) {
       for (const s of this.scorer.consume(ev)) result.score.push(s);
       if (ev.type === 'tilt') result.game.push({ type: 'tilt' });
+      if (ev.type === 'flipper' && ev.on && this.mode === 'round') this.melt(result);
     }
     for (const s of this.scorer.tick(this.sim.time)) result.score.push(s); // a Powder Keg's fuse burns down
     this.spawnSparks(result.score);
@@ -1164,6 +1203,20 @@ export class Game {
     // a ball ends when the LAST ball on the table is gone (the Ball Printer makes multiball)
     if (this.mode === 'round' && this.sim.ballCount === 0 && !this.sim.awaitingPlunge) this.endBall(false, result);
     return result;
+  }
+
+  /** A flipper press in a round: every Ice Sculpture loses a point; one at zero is a puddle, and gone. */
+  private melt(result: StepResult) {
+    for (const p of this.placed) {
+      const ice = PARTS[p.def].recipe.ice;
+      if (!ice) continue;
+      p.ice = Math.max(0, (p.ice ?? PARTS[p.def].recipe.points ?? 0) - ice.melt);
+      if (p.ice > 0) continue;
+      result.score.push(this.scorer.melted(p, this.sim.time));
+      this.layout.parts = this.layout.parts.filter((q) => q.uid !== p.uid);
+      this.sim.removePart(p.uid);
+      if (p.inlay) this.returnGem(p.inlay);
+    }
   }
 
   private endBall(forced: boolean, result?: StepResult) {

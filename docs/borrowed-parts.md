@@ -20,7 +20,9 @@ rollover with one segment per scoring part type on the table (up to 8); the ball
 MODE (2 more balls, no ×Mult limits and every Lamp ablaze for 30 s, once a round). The Piñata (step 7): a rare target with 40
 health; each of the ball's hits takes 1–4 by speed (a zap or a spark 1); at zero it bursts into 15 sparks and $5,
 and the next shop offers a free pick of one of three parts (rolled as if three rounds later). Broken for the rest
-of the round, it comes back with 20 more health; its damage carries over. See [balance-plan.md](balance-plan.md) §2 for their numbers.
+of the round, it comes back with 20 more health; its damage carries over. The cheap scalers (step 8): Grape Bunch,
+Echo Cave, Spotlight, Bonsai Bumper, Time Capsule, Ice Sculpture and Wishing Well, as approved (the Wishing Well's
++Mult is capped at +3 a ball; the Ice Sculpture melts 3 a press, not 1, after measuring; a Time Capsule's prize uses the Piñata's free-pick box, legendaries only). See [balance-plan.md](balance-plan.md) §2 for their numbers.
 
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show

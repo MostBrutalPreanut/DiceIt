@@ -197,6 +197,8 @@ export class Scorer {
   /** Ritual Altar: what a test ball's altar has kept (a real round's goes on the part, through onKeep), and the ritual under way. */
   private kept = new Map<number, Partial<PartInstance>>();
   private ritual: { kind: Ritual; until: number; s: number; next: number; ballId: number; uid: number } | null = null;
+  /** Echo Caves: the caves each ball has gone through in a row (any other part it hits breaks the chain). */
+  private echoes = new Map<number, number[]>();
   /** Piñatas that burst this round (broken until the next one). */
   private burst = new Set<number>();
   /** Wizard Lamp: its segments this round, the types the ball itself has hit this ball, whether it fired this round, until when WIZARD MODE lasts. */
@@ -316,6 +318,7 @@ export class Scorer {
     this.mult = this.ballStartMult();
     this.clockStruck = false;
     this.madUntil = -1;
+    this.echoes.clear();
     this.wizTypes.clear();
     this.wizUntil = -1;
     this.ritual = null;
@@ -388,6 +391,50 @@ export class Scorer {
     for (const pl of this.placed()) {
       const r = PARTS[pl.def].recipe.plate;
       if (r && Math.hypot(pl.x - inst.x, pl.y - inst.y) <= r.reach) x *= r.x;
+    }
+    return x;
+  }
+
+  /** Grape Bunch: once more for every bunch touching it; a cluster of enough of them (touching, chained) pays double. */
+  grapeX(inst: PartInstance): number {
+    const g = PARTS[inst.def].recipe.grape;
+    if (!g) return 1;
+    const b = this.grapeBunch(inst);
+    return (1 + b.touching) * (b.golden ? 2 : 1);
+  }
+
+  /** A Grape Bunch's neighbours: how many touch it, and whether its cluster is big enough to turn golden. */
+  grapeBunch(inst: PartInstance): { touching: number; golden: boolean } {
+    const g = PARTS[inst.def].recipe.grape;
+    if (!g) return { touching: 0, golden: false };
+    const bunches = this.placed().filter((p) => p.def === inst.def);
+    const near = (a: PartInstance, b: PartInstance) => a.uid !== b.uid && Math.hypot(a.x - b.x, a.y - b.y) <= g.touch;
+    const seen = new Set([inst.uid]), stack = [inst];
+    while (stack.length) { const a = stack.pop()!; for (const b of bunches) if (!seen.has(b.uid) && near(a, b)) { seen.add(b.uid); stack.push(b); } }
+    return { touching: bunches.filter((b) => near(inst, b)).length, golden: seen.size >= g.golden };
+  }
+
+  /**
+   * Echo Cave: ×2 for every other cave the ball went through in a row just before it (zaps and sparks neither count
+   * nor break the chain; any other part the ball hits does). Other parts call this too, to break the chain.
+   */
+  private echoX(inst: PartInstance, ev: { ballId: number; zap?: boolean; spark?: boolean }): number {
+    if (ev.zap || ev.spark) return 1;
+    const e = PARTS[inst.def].recipe.echo;
+    if (!e) { this.echoes.delete(ev.ballId); return 1; }
+    const chain = this.echoes.get(ev.ballId) ?? [];
+    const others = new Set(chain.filter((uid) => uid !== inst.uid)).size;
+    this.echoes.set(ev.ballId, [...chain, inst.uid]);
+    return Math.min(e.cap, 2 ** others);
+  }
+
+  /** Spotlights: ×their x for each lit one within reach (Spotlights multiply). */
+  spotXAt(inst: PartInstance, t = this.now): number {
+    if (PARTS[inst.def].recipe.spot) return 1;
+    let x = 1;
+    for (const sp of this.placed()) {
+      const r = PARTS[sp.def].recipe.spot;
+      if (r && !this.jammed.has(sp.def) && !this.coolingDown(sp.uid, t) && Math.hypot(sp.x - inst.x, sp.y - inst.y) <= r.reach) x *= r.x;
     }
     return x;
   }
@@ -485,7 +532,9 @@ export class Scorer {
     const variety = r.variety ? r.variety * this.variety : 0;
     const order = this.order === inst.uid ? ORDER.x : 1;
     const leaf = inst.inlay === 'goldleaf' ? this.leafOf(inst) : 0, ruby = inst.inlay === 'ruby' ? RUBY_X : 1;
-    return Math.round(((points ?? r.points) + leaf + lvl + grown + variety + this.potOf(inst)) * ruby * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * (1 + this.stripBonusAt(inst)) * this.plateXAt(inst) * order);
+    const pts = points ?? (r.ice ? inst.ice ?? r.points : r.points);
+    const extra = (r.bonsai ?? 0) * (inst.age ?? 0) + (r.well ? r.well.points * (inst.well ?? 0) : 0);
+    return Math.round((pts + leaf + lvl + grown + variety + this.potOf(inst) + extra) * ruby * spins * tierX * dialFactor(inst) * modFactor(inst.def, this.mods) * (1 + this.lampBonusAt(inst).sum) * (1 + this.stripBonusAt(inst)) * this.plateXAt(inst) * this.grapeX(inst) * this.spotXAt(inst) * order);
   }
 
   /** The short number drawn on the part itself ("100", "10/spin", "+25%", "x1.25"). */
@@ -630,6 +679,14 @@ export class Scorer {
     // a moving part scores only when its moving piece is hit (the duck, the roller), not its rail
     if (def.kind === 'mover' && !ev.mover) return out;
 
+    // a Spotlight: the ball's hit knocks it dark for a while (it scores nothing itself)
+    if (r.spot) {
+      if (ev.zap || ev.spark || this.coolingDown(inst.uid, ev.t)) return out;
+      this.coolUntil.set(inst.uid, ev.t + r.spot.dark);
+      out.push(this.award(inst, ev.t, ev.x, ev.y, 'hit', 0, 0, 0, [`dark for ${r.spot.dark} s`], 'LIGHTS OUT'));
+      return out;
+    }
+
     // a part that scores nothing itself can still make the ball hot (a Deflector's bank shot)
     if (!r.points && r.hot && !r.xmult) {
       this.hot.set(ev.ballId, { until: ev.t + HOT_WINDOW, bonus: r.hot * m.hotFactor });
@@ -653,7 +710,7 @@ export class Scorer {
       if (r.perBall && (this.firedThisBall.get(inst.uid) ?? 0) >= r.perBall * (gem === 'emerald' ? 2 : 1)) return out;
       // an Old Bell's first hit of the round pays its toll instead of its points (and earns the round's notch)
       const toll = r.bell && !ev.zap && !ev.spark && !this.firedThisRoundOf(inst.uid) ? r.bell.first : 0; // only the ball itself rings it
-      const pts = toll || r.points;
+      const pts = toll || (r.ice ? inst.ice ?? r.points : r.points); // an Ice Sculpture pays what it has left
       const leaf = gem === 'goldleaf' ? this.leafOf(inst) : 0;
       const ruby = gem === 'ruby' ? RUBY_X : 1;
       const spins = ev.spins ?? 1;
@@ -683,6 +740,15 @@ export class Scorer {
       if (plate > 1) notes.push(`x${Math.round(plate * 100) / 100} power plate`);
       const edge = r.edgeShot && ev.edge ? r.edgeShot.x : 1;
       if (edge > 1) notes.push(`x${edge} edge shot`);
+      const bonsai = (r.bonsai ?? 0) * (inst.age ?? 0), well = r.well ? r.well.points * (inst.well ?? 0) : 0;
+      if (bonsai) notes.push(`+${bonsai} bonsai`);
+      if (well) notes.push(`+${well} wishes`);
+      const bunch = this.grapeX(inst);
+      if (bunch > 1) notes.push(`x${bunch} bunch`);
+      const echo = this.echoX(inst, ev);
+      if (echo > 1) notes.push(`x${echo} echo`);
+      const spot = this.spotXAt(inst, ev.t);
+      if (spot > 1) notes.push(`x${spot} spotlight`);
       this.roundHits++;
       this.ballHits++;
       const midnight = this.clockHit(ev);
@@ -722,9 +788,10 @@ export class Scorer {
       // Mult: plus, times, and per spin
       let multGain = this.gain(this.take(this.multPaid, inst.def, r.mult ?? 0, r.multCap));
       if (r.mult && multGain < this.gain(r.mult) - 1e-9) notes.push('Mult maxed for this ball');
+      if (r.well && inst.well) multGain += this.gain(this.take(this.multPaid, 'well', r.well.mult * inst.well, r.well.multCap));
       if (r.spinMult) multGain += this.gain(this.take(this.multPaid, 'spin', r.spinMult * m.spinMult * spins, (r.spinMultCap ?? 0) * m.spinMult));
       const xmult = r.typeX ? this.typeXNow(r.typeX) : r.xmult ? this.takeX(inst.def, this.gainX(r.xmult), r.xmultCap ? this.gainX(r.xmultCap) : undefined) : 1;
-      const base = Math.round((pts + leaf + level + grown + variety + pot) * spins * tierX * factor * mf * ruby * (1 + lamp.sum) * (1 + strip) * plate * edge * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
+      const base = Math.round((pts + leaf + level + grown + variety + pot + bonsai + well) * spins * tierX * factor * mf * ruby * (1 + lamp.sum) * (1 + strip) * plate * edge * bunch * echo * spot * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
       const twice = gem === 'opal' ? 2 : 1; // an Opal counts every hit twice for growth
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + twice);
       if (r.feeds) this.hitsByType.set(r.feeds.id, this.hitsOf(r.feeds.id) + r.feeds.n * twice);
@@ -971,6 +1038,11 @@ export class Scorer {
     const e = this.award(inst, ev.t, inst.x, inst.y, 'bonus', 0, 0, this.mods.noCoins ? 0 : pn.money, [`${pn.sparks} sparks, $${pn.money}, a free part in the next shop`], 'PIÑATA!');
     e.sparks = [{ n: pn.sparks, x: inst.x, y: inst.y, r: footprint(PARTS[inst.def]) + 0.45, parent: ev.ballId }];
     return e;
+  }
+
+  /** An Ice Sculpture has melted away: a last word on the ledger. */
+  melted(inst: PartInstance, t: number): ScoreEvent {
+    return this.award(inst, t, inst.x, inst.y, 'bonus', 0, 0, 0, ['melted away'], 'PUDDLE!');
   }
 
   /** A Piñata's health: what it has left, its most, and whether it has burst this round. */

@@ -17,7 +17,8 @@ export type PartId =
   | 'flipperR' | 'duck' | 'goal' | 'strip' | 'roller' | 'rank' | 'bell' | 'tesla' | 'keg' | 'laser' | 'gong'
   | 'ruby' | 'garnet' | 'emerald' | 'opal' | 'goldleaf' | 'redseal' | 'topaz'
   | 'sparkler' | 'firecracker' | 'rocks'
-  | 'clock' | 'altar' | 'bulb' | 'feet' | 'tray' | 'mirror' | 'wizard' | 'pinata';
+  | 'clock' | 'altar' | 'bulb' | 'feet' | 'tray' | 'mirror' | 'wizard' | 'pinata'
+  | 'grape' | 'echo' | 'spot' | 'bonsai' | 'capsule' | 'ice' | 'well';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip' | 'inlay' | 'decor';
 
@@ -192,6 +193,20 @@ export interface Recipe {
    * of `pick` parts in the next shop. Broken for the rest of the round; the damage it took is kept from round to round.
    */
   pinata?: { health: number; grow: number; sparks: number; money: number; pick: number };
+  /** Grape Bunch: pays once more for every Grape Bunch touching it (centres within `touch`); a cluster of `golden` or more pays double. */
+  grape?: { touch: number; golden: number };
+  /** Echo Cave: ×2 for every other Echo Cave the ball went through in a row (no other part hit in between), up to ×`cap`. */
+  echo?: { cap: number };
+  /** Spotlight: every part within `reach` pays ×`x` while it is lit; a hit of the ball knocks it dark for `dark` s. */
+  spot?: { reach: number; x: number; dark: number };
+  /** Bonsai Bumper: +this many points for every round it has stayed on the table without being moved. */
+  bonsai?: number;
+  /** Time Capsule: removed after `rounds` rounds on the table, it pays a free pick of one of `pick` legendary parts. */
+  capsule?: { rounds: number; pick: number };
+  /** Ice Sculpture: its points melt by `melt` every time you press a flipper (in a round); at zero it is gone. */
+  ice?: { melt: number };
+  /** Wishing Well: in the workshop, throw in $1 at a time (up to `perRound` a round): each adds +`points` to its hits and +`mult` Mult a hit (up to +`multCap` a ball from all wells). */
+  well?: { perRound: number; points: number; mult: number; multCap: number };
   /** Ritual Altar (decor): every `sets` sets completed start a `seconds` s ritual (see RITUALS). */
   altar?: { sets: number; seconds: number };
   /**
@@ -277,7 +292,7 @@ export const ZAP_COOLDOWN = 0.5;
  */
 export const zappable = (id: PartId) => {
   const k = PARTS[id].kind, r = PARTS[id].recipe;
-  if (r.xmult || r.typeX || r.rank) return false;
+  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule) return false;
   return k === 'bumper' || k === 'kicker' || k === 'spinner' || k === 'rollover' || k === 'lamp' || k === 'target' || k === 'mover';
 };
 
@@ -627,6 +642,41 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 0.5 }, rotatable: false, kickUnit: 0, recipe: { gem: 'onceABall' }, dials: [],
   },
 
+  grape: {
+    id: 'grape', name: 'Grape Bunch', blurb: 'Grapes like company. Lots of company.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, pack: 3, weight: 2,
+    shape: { type: 'circle', r: 0.7 }, rotatable: false, kickUnit: 8,
+    recipe: { points: 10, per: 'hit', grape: { touch: 3.1, golden: 4 }, perLevel: 2 }, dials: [kickDial(1.5)],
+  },
+  echo: {
+    id: 'echo', name: 'Echo Cave', blurb: 'Hello... hello... hello...', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 6, weight: 2,
+    shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 15, per: 'roll-over', echo: { cap: 8 }, perLevel: 3 }, dials: [],
+  },
+  spot: {
+    id: 'spot', name: 'Spotlight', blurb: 'Everyone near it shines. Do not touch the lamp.', kind: 'target', rarity: 'uncommon', tags: ['light'], cost: 6, weight: 2,
+    shape: { type: 'circle', r: 0.75 }, rotatable: false, kickUnit: 0,
+    recipe: { spot: { reach: 5, x: 1.5, dark: 10 } }, dials: [],
+  },
+  bonsai: {
+    id: 'bonsai', name: 'Bonsai Bumper', blurb: 'Leave it be. It grows on you.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
+    shape: { type: 'circle', r: 0.95 }, rotatable: false, kickUnit: 10,
+    recipe: { points: 10, per: 'hit', bonsai: 4, perLevel: 2 }, dials: [kickDial(2)],
+  },
+  capsule: {
+    id: 'capsule', name: 'Time Capsule', blurb: 'Bury it now. Dig it up later.', kind: 'target', rarity: 'rare', tags: [], cost: 8, weight: 1,
+    shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
+    recipe: { capsule: { rounds: 6, pick: 3 } }, dials: [],
+  },
+  ice: {
+    id: 'ice', name: 'Ice Sculpture', blurb: 'Worth a fortune. Melting fast.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
+    shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 6,
+    recipe: { points: 250, per: 'hit', ice: { melt: 3 } }, dials: [],
+  },
+  well: {
+    id: 'well', name: 'Wishing Well', blurb: 'Toss a coin. Make a wish. Toss another.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper', 'money'], cost: 4, weight: 2,
+    shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 8,
+    recipe: { points: 10, per: 'hit', well: { perRound: 5, points: 3, mult: 0.02, multCap: 3 }, perLevel: 2 }, dials: [kickDial(1.5)],
+  },
   pinata: {
     id: 'pinata', name: 'Piñata', blurb: 'Whack it till it bursts. Candy for everyone.', kind: 'target', rarity: 'rare', tags: ['target'], cost: 9, weight: 1,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
@@ -726,6 +776,13 @@ export interface PartInstance {
   /** Piñata: the damage it has taken towards its next burst, and how often it has burst this run. */
   hp?: number;
   bursts?: number;
+  /** Bonsai Bumper and Time Capsule: rounds played with it on the table (a Bonsai's count starts again when it is moved). */
+  age?: number;
+  /** Ice Sculpture: the points it has left (it melts). */
+  ice?: number;
+  /** Wishing Well: the $ thrown in, and how much this workshop visit (round number and $). */
+  well?: number;
+  wished?: { round: number; n: number };
   /**
    * Free to move until the next round: bought in this visit to the workshop, or its move already paid. `paid`
    * is what it cost, refunded if it goes back before a round is played with it.
@@ -877,6 +934,15 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
   if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
   if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
+  if (r.grape) lines.push({ tag: 'combo', text: `It pays once more for every Grape Bunch touching it (set snug against it). ${r.grape.golden} or more in one bunch turn golden: they all pay double.` });
+  if (r.echo) lines.push({ tag: 'combo', text: `×2 for every other Echo Cave the ball went through just before it, with nothing else hit in between (up to ×${r.echo.cap}). Line them up along one shot.` });
+  if (r.spot) lines.push({ tag: 'lamp', text: `While it is lit, every part within ${r.spot.reach} units pays ×${r.spot.x} (Spotlights multiply). A hit of the ball knocks it dark for ${r.spot.dark} s: build round it, then keep the ball off it. It scores nothing itself.` });
+  if (r.spot) lines.push({ tag: 'note', text: 'Zaps and sparks never knock it dark: only the ball itself does.' });
+  if (r.bonsai) lines.push({ tag: 'grow', text: `+${r.bonsai} for every round it has stayed on the table without being moved${inst?.age ? ` (+${r.bonsai * inst.age} now)` : ''}. Moving it starts the count again.` });
+  if (r.capsule) lines.push({ tag: 'note', text: `Scores nothing. After ${r.capsule.rounds} rounds on the table${inst ? ` (${Math.min(inst.age ?? 0, r.capsule.rounds)} so far)` : ''}, remove it: the next shop offers you one of ${r.capsule.pick} legendary parts, free. Removed earlier, it pays nothing back.` });
+  if (r.capsule) lines.push({ tag: 'note', text: 'The ball bounces off it. Moving it or putting it in your toolbox keeps its count.' });
+  if (r.ice) lines.push({ tag: 'note', text: `It melts: every time you press a flipper in a round, its points go down by ${r.ice.melt}${inst?.ice !== undefined ? ` (${inst.ice} left)` : ''}. At 0 it is a puddle, and it is gone.` });
+  if (r.well) lines.push({ tag: 'money', text: `In the workshop, throw $1 in (up to $${r.well.perRound} a round): every $1 in it adds +${r.well.points} to its hits and +${r.well.mult} Mult a hit, for the rest of the run (up to +${r.well.multCap} Mult a ball)${inst?.well ? `. $${inst.well} in it now` : ''}.` });
   if (r.pinata) {
     const max = r.pinata.health + r.pinata.grow * (inst?.bursts ?? 0), left = max - (inst?.hp ?? 0);
     lines.push({ tag: 'combo', text: `It has ${max} health${inst?.hp ? ` (${left} left)` : ''}. Every hit of the ball takes 1 to 4, the faster the more (a zap or a spark takes 1).` });

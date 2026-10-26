@@ -9,7 +9,7 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 407 pass, 0 fail (29 files) |
+| Unit tests | 422 pass, 0 fail (30 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
 | Browser smoke test | 105 checks ok, no console errors |
 | Renderer cost (smoke, software GL) | about 2.6 ms a frame; 3.5 ms with 4 balls, 24 sparks and zaps |
@@ -88,6 +88,16 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   health; the damage carries over. Gain per round on the power tool's table, mid / late: +5,731 / +13,848 (+9,346 /
   +23,375 over a plain Pop Bumper), above the Tesla Coil at the same price, before the money and the free part. If
   it plays too strong, the 15 sparks are the first thing to cut.
+- **The cheap scalers (step 8)**: Grape Bunch (pack of 3, pays more for each touching bunch, golden at 4), Echo Cave
+  (×2 per cave the ball went through in a row), Spotlight (×1.5 near it until the ball knocks it dark), Bonsai Bumper
+  (+4 a round unmoved), Time Capsule (a free legendary pick after 6 rounds), Ice Sculpture (250 a hit, melting with
+  every flipper press) and Wishing Well ($1 at a time in the workshop for +3 points and +0.02 Mult a hit). Gain per
+  round over a plain Pop Bumper on the power tool's table, mid / late: Echo Cave +5,086 / +14,685, Spotlight +1,726 /
+  +5,879, Bonsai +1,821 / +5,363, Well +842 / +4,247, Grape Bunch +650 / +2,245. The tool cannot see what these
+  build up over a run (it never ages a Bonsai, fills a Well or sets the grapes snug), so those are their floors.
+  **Tuned**: the Ice Sculpture melts 3 points a flipper press, not 1. At 1 the bot's 60 presses a round left it
+  scoring 70% of round 1 and lasting four rounds; at 3 it pays about 4,300 over a round and a half, the burst it is
+  meant to be.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

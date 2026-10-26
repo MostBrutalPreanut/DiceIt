@@ -197,6 +197,7 @@ async function main() {
       const now = w.left > 0 ? `WIZARD MODE: ${Math.ceil(w.left)} s left` : w.fired ? 'Wizard Mode done this round' : `${w.lit} of ${w.need || wizardNeed(game.layout.parts)} types hit this ball`;
       return `${now}. ${statsLine(game.scorer.ledger.get(inst.uid))}`;
     }
+    if (PARTS[inst.def].recipe.capsule) { const c = PARTS[inst.def].recipe.capsule!; return game.capsuleRipe(inst) ? 'Ripe: remove it for a free legendary pick!' : `${inst.age ?? 0} of ${c.rounds} rounds on the table.`; }
     if (!isDecor(inst.def)) return statsLine(game.scorer.ledger.get(inst.uid));
     if (!inst.placed) return 'In the toolbox: decor works only on the cabinet.';
     const r = PARTS[inst.def].recipe;
@@ -410,6 +411,7 @@ async function main() {
         ${def.dials.map((d) => `<div class="dial"><div class="row2"><span>${d.label}</span><b id="dv-${d.id}">${d.fmt ? d.fmt(dialValue(part, d.id)) : dialValue(part, d.id)}</b></div>
           <input data-dial="${d.id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${dialValue(part, d.id)}" /><div class="hint">${d.tradeoff}</div></div>`).join('')}
         <div class="stats" id="selLive">${liveLine(part)}</div>
+        ${def.recipe.well ? `<div class="btnrow"><button id="btnWish" ${game.wishesLeft(part) > 0 && game.money >= 1 ? '' : 'disabled'} title="Every $1 in it: +${def.recipe.well.points} to its hits and +${def.recipe.well.mult} Mult a hit, for the rest of the run">Throw in $1 (${game.wishesLeft(part)} left this visit)</button></div>` : ''}
         ${part.fixed ? '<div class="hint">Part of every machine: it stays where it is.</div>' : `<div class="btnrow acts">
           <button id="btnMove" ${broke ? 'disabled' : ''} title="Pick it up and click the table to set it down${def.rotatable ? ' (R or the wheel turns it)' : ''}">Move ${price}</button>
           <button id="btnStore" ${broke ? 'disabled' : ''}>To toolbox ${price}</button>
@@ -431,6 +433,8 @@ async function main() {
           persist();
         };
       }
+      const wishBtn = card.querySelector<HTMLButtonElement>('#btnWish');
+      if (wishBtn) wishBtn.onclick = () => { if (game.wish(part.uid)) { audio.coinLand(); say('MAKE A WISH'); persist(); refreshWorkshop(); } };
       if (!part.fixed) {
         $('btnMove').onclick = () => startMove(part.uid);
         $('btnStore').onclick = () => storeSelected();
