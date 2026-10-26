@@ -23,6 +23,8 @@ export interface Machine {
   levels?: Levels;
   /** The machine (what its Big Boi does); the Factory if absent. */
   machine?: MachineId;
+  /** Old Bell rings the run has so far (every ball's Mult ×1.2 each). */
+  rings?: number;
 }
 
 /** One simulated round with every ball played out (no goal), as the bot plays it. */
@@ -54,6 +56,7 @@ export function playRounds(m: Machine, o: PlayOptions): RoundSample[] {
     g.layout = cloneLayout(m.layout);
     g.fixedMods = { ...neutralMods(), ...m.mods };
     if (m.machine) g.machine = m.machine;
+    g.rings = m.rings ?? 0;
     migrateParts(g.layout, m.levels);
     g.goalOverride = Infinity;
     g.seed = o.seed * 1000 + i * 7 + 1;
@@ -114,8 +117,9 @@ const ANGLE_STEP = Math.PI / 12;
 /** A random valid spot for a part, or null if the board has no room for it. */
 function randomSpot(layout: Layout, part: PartInstance, rng: Rng): { x: number; y: number } | null {
   const r = footprint(PARTS[part.def]);
-  for (let i = 0; i < 80; i++) {
-    const x = rng.range(BUILD_AREA.x0 + r, BUILD_AREA.x1 - r), y = rng.range(BUILD_AREA.y0 + r, BUILD_AREA.y1 - r);
+  const decor = PARTS[part.def].kind === 'decor'; // decor goes on the cabinet round the table
+  for (let i = 0; i < (decor ? 400 : 80); i++) {
+    const x = decor ? rng.range(-1.5, 27.5) : rng.range(BUILD_AREA.x0 + r, BUILD_AREA.x1 - r), y = decor ? rng.range(-1, 54) : rng.range(BUILD_AREA.y0 + r, BUILD_AREA.y1 - r);
     if (canPlace(layout, part.def, x, y, part.uid)) return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
   }
   return null;

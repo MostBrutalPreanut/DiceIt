@@ -36,16 +36,28 @@ export interface PartState {
   part?: 'base' | 'mover';
   /** A Lamp's brightness (0 to 5 steps). */
   bright?: number;
+  /** The gem set into the part (an inlay): a little stone at its front. */
+  gem?: PartId;
 }
 export type Mood = 'happy' | 'oof' | 'sad' | 'shocked' | 'cool' | 'blink';
 
 export const stateKey = (st: PartState) =>
-  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0, st.part ?? '', st.bright ?? ''].join('.');
+  [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0, st.part ?? '', st.bright ?? '', st.gem ?? ''].join('.');
 
 const ringS = (cx: number, cy: number, r: number, n = 20, ry = r): Pt[] => ring(cx, cy, r, n, ry);
 
 /** Draws one part at sim position (x, y). The returned container holds a Graphics and any lettering. */
 export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, angle = 0, st: PartState = {}): Container {
+  if (st.gem) {
+    // a part with a gem set in it: the part, and the stone at its front edge
+    const out = drawPart(v, t, id, x, y, angle, { ...st, gem: undefined });
+    const sh = PARTS[id].shape, front = sh.type === 'circle' ? sh.r * 0.82 : sh.hh * 0.9;
+    const g = new Graphics(), p = new Prop(v, t);
+    gemStone(p, v, t, st.gem, x, y - front, 0.45, 0.32);
+    p.draw(g);
+    out.addChild(g);
+    return out;
+  }
   const def = PARTS[id], role = mat(t, levelColour(t, id, def.recipe.perLevel ? st.level ?? 0 : 0)), metal = mat(t, t.metal);
   const out = new Container();
   const under = new Graphics(), body = new Graphics(), over = new Graphics();
@@ -111,6 +123,19 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.face([mid(0, zc - half), mid(1, zc - half), mid(1, zc + half), mid(0, zc + half)], Math.cos(ph) >= 0 ? role.base : role.shade);
       if (half > 0.14) for (const a of [0.25, 0.5, 0.75]) p.face([mid(a - 0.06, zc - half), mid(a + 0.06, zc - half), mid(a + 0.06, zc + half), mid(a - 0.06, zc + half)], role.light, { sil: false, line: 0 });
       drawPost(back ? ends[0] : ends[1]);
+      break;
+    }
+    case 'rank': {
+      // a gem-shaped insert with a chevron (a promotion) on a wire switch; lit, it shines
+      const lit = !!st.lit, c = t.role.rank;
+      const gem = (k: number): Pt[] => [[x, y + r * k], [x + r * 0.8 * k, y], [x, y - r * k], [x - r * 0.8 * k, y]];
+      p.face(gem(1).map(([a, b]) => P(v, a, b, 0.01)), metal.mid, { line: 0.4 });
+      p.face(gem(0.8).map(([a, b]) => P(v, a, b, 0.02)), lit ? mix(c, WHITE, 0.35) : mix(c, t.shadeTint, 0.6), { line: 0.4, sil: false });
+      for (const dy of [-0.3, 0.05]) {
+        const ch: Pt[] = [[x - r * 0.4, y + dy * r], [x, y + (dy + 0.3) * r], [x + r * 0.4, y + dy * r], [x + r * 0.4, y + (dy - 0.16) * r], [x, y + (dy + 0.14) * r], [x - r * 0.4, y + (dy - 0.16) * r]];
+        p.face(ch.map(([a, b]) => P(v, a, b, 0.03)), lit ? t.paper : mix(c, t.shadeTint, 0.85), { line: 0.3, sil: false });
+      }
+      for (const sx of [-1, 1]) p.cyl(x + sx * r * 0.98, y, 0.15, 0, 0.5, metal);
       break;
     }
     case 'lane': {
@@ -264,6 +289,254 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.face(ring(x, y, r * 0.92, 26).map(([a, b]) => P(v, a, b, 0.46)), bell.shade, { sil: false, line: 0.4 });
       p.face(ring(x - r * 0.2, y + r * 0.1, r * 0.18, 14).map(([a, b]) => P(v, a, b, 1.2)), bell.light, { sil: false, line: 0 });
       p.cyl(x, y, 0.14, 1.46, 0.22, metal);
+      break;
+    }
+    case 'ruby': case 'garnet': case 'opal': case 'goldleaf': case 'redseal': case 'emerald': case 'topaz': {
+      // a gem as sold: the stone on a little velvet cushion
+      shadow(under, v, t, x, y, 0.6, 0.5);
+      p.cyl(x, y, 0.62, 0, 0.2, mat(t, mix(t.accent, t.shadeTint, 0.35)));
+      gemStone(p, v, t, id, x, y, 0.22, 0.48);
+      break;
+    }
+    case 'keg': {
+      // a powder keg: a wooden barrel with two iron hoops and a fuse; lit, the fuse sparks; spent, it is charred
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      const spent = st.armed === false;
+      const wood = spent ? mat(t, mix(t.role.keg, t.ink, 0.55)) : st.hit ? mat(t, mix(t.role.keg, WHITE, 0.35)) : role;
+      const iron = spent ? mat(t, mix(t.metal, t.ink, 0.5)) : metal;
+      p.cyl(x, y, r * 0.84, 0, 0.18, wood);
+      p.cyl(x, y, r * 0.88, 0.18, 0.06, iron);
+      p.cyl(x, y, r * 0.95, 0.24, 0.5, wood);
+      p.cyl(x, y, r * 0.88, 0.74, 0.06, iron);
+      p.cyl(x, y, r * 0.84, 0.8, 0.2, wood);
+      p.face(ring(x, y, r * 0.6, 20).map(([a, b]) => P(v, a, b, 1.0)), wood.shade, { sil: false, line: 0.35 });
+      if (!spent) {
+        const [fx0, fy0] = P(v, x + r * 0.15, y, 1.0), [fx1, fy1] = P(v, x + r * 0.4, y + r * 0.1, 1.8);
+        p.op((g) => {
+          g.moveTo(fx0, fy0).quadraticCurveTo(fx0 - v.S * 0.1, (fy0 + fy1) / 2, fx1, fy1).stroke({ width: v.lw * 1.4 + v.S * 0.06, color: t.ink, cap: 'round' });
+          g.moveTo(fx0, fy0).quadraticCurveTo(fx0 - v.S * 0.1, (fy0 + fy1) / 2, fx1, fy1).stroke({ width: v.S * 0.06, color: t.paper, cap: 'round' });
+          if (st.lit) g.star(fx1, fy1, 7, v.S * 0.38, v.S * 0.16).fill(t.role.coin).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' });
+        });
+      }
+      break;
+    }
+    case 'laser': {
+      // a little laser turret: a domed head on a post, one big lens on top; dark while it recharges
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      p.cyl(x, y, r * 0.42, 0.16, 0.36, metal);
+      const head = st.hit ? mat(t, mix(t.role.laser, WHITE, 0.4)) : role;
+      const dome = [0, 0.4, 0.75, 1].flatMap((u) => ring(x, y, r * 0.78 * Math.cos((u * Math.PI) / 2.4), 24).map(([a, b]) => P(v, a, b, 0.52 + u * 0.7)));
+      p.face(hull(dome), head.base);
+      const ready = st.lit !== false;
+      p.face(ring(x, y - r * 0.08, r * 0.3, 18).map(([a, b]) => P(v, a, b, 1.2)), ready ? WHITE : mix(t.role.laser, t.ink, 0.5), { sil: false, line: 0.45 });
+      if (ready) p.face(ring(x, y - r * 0.08, r * 0.16, 14).map(([a, b]) => P(v, a, b, 1.22)), t.role.laser, { sil: false, line: 0 });
+      break;
+    }
+    case 'gong': {
+      // a brass gong hung upright in a wooden frame
+      shadow(under, v, t, x, y, r * 1.05, r * 0.7);
+      const brass = st.hit ? mat(t, mix(t.role.gong, WHITE, 0.45)) : role, wood = mat(t, t.rim);
+      p.cyl(x, y, r * 0.9, 0, 0.14, mat(t, t.paper));
+      p.cyl(x - r * 0.95, y, 0.13, 0.14, 3.1, wood);
+      // the view squashes height, so the upright disc is drawn taller than it is wide to read as round
+      const R = r * 0.78, zc = 1.75, tall = 1.9;
+      const disc = (k: number): Pt[] => Array.from({ length: 28 }, (_, i) => { const a = (i / 28) * Math.PI * 2; return P(v, x + Math.cos(a) * R * k, y - 0.05, zc + Math.sin(a) * R * k * tall); });
+      p.face(disc(1), brass.shade, { line: 0.5 });
+      p.face(disc(0.86), brass.base, { sil: false, line: 0.3 });
+      p.face(disc(0.32), brass.light, { sil: false, line: 0.3 });
+      p.cyl(x + r * 0.95, y, 0.13, 0.14, 3.1, wood);
+      p.op((g) => {
+        const [ax, ay] = P(v, x - r * 0.95, y, 3.2), [bx, by] = P(v, x + r * 0.95, y, 3.2);
+        g.moveTo(ax, ay).lineTo(bx, by).stroke({ width: v.S * 0.2 + v.lw, color: t.ink, cap: 'round' });
+        g.moveTo(ax, ay).lineTo(bx, by).stroke({ width: v.S * 0.2, color: t.rim, cap: 'round' });
+      });
+      break;
+    }
+    case 'sparkler': {
+      // a sparkler: a thin wire on a bumper skirt, its tip a fizzing star (dark while it recharges)
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      p.cyl(x, y, r * 0.55, 0.16, 0.22, role);
+      p.cyl(x, y, 0.09, 0.38, 2.3, metal);
+      const ready = st.lit !== false;
+      const fizz = st.hit ? WHITE : ready ? t.role.sparkler : mix(t.role.sparkler, t.ink, 0.5);
+      const [sx, sy] = P(v, x, y, 2.75);
+      p.op((g) => {
+        g.star(sx, sy, 8, S * (ready ? 0.8 : 0.5), S * 0.3).fill(fizz).stroke({ width: v.lw * 0.7, color: t.ink, join: 'round' });
+        if (ready) g.circle(sx, sy, S * 0.17).fill(WHITE);
+      });
+      break;
+    }
+    case 'firecracker': {
+      // a firecracker: a striped rocket on its launch stand, nose up; once it has gone, only the empty stand is left
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      p.cyl(x, y, r * 0.62, 0.16, 0.18, metal);
+      if (st.armed === false) {
+        p.cyl(x, y, r * 0.3, 0.34, 0.3, mat(t, mix(t.metal, t.ink, 0.5)));
+        p.face(ring(x, y, r * 0.22, 14).map(([a, b]) => P(v, a, b, 0.65)), t.ink, { sil: false, line: 0 });
+        break;
+      }
+      const body = st.hit ? mat(t, mix(t.role.firecracker, WHITE, 0.4)) : role, band = mat(t, t.paper);
+      p.cyl(x, y, r * 0.4, 0.34, 1.0, body);
+      p.cyl(x, y, r * 0.4, 1.34, 0.3, band);
+      p.cyl(x, y, r * 0.4, 1.64, 1.0, body);
+      p.face(hull([...ring(x, y, r * 0.4, 18).map(([a, b]) => P(v, a, b, 2.64)), P(v, x, y, 3.8)]), band.base);
+      // the fuse, out of the bottom
+      const [fx0, fy0] = P(v, x + r * 0.3, y, 0.4), [fx1, fy1] = P(v, x + r * 0.62, y - r * 0.2, 0.34);
+      p.op((g) => g.moveTo(fx0, fy0).lineTo(fx1, fy1).stroke({ width: v.lw * 1.2, color: t.ink, cap: 'round' }));
+      break;
+    }
+    case 'rocks': {
+      // a pile of rocks, one boulder per spark it sheds a hit (1 to 5), on a low base
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      p.cyl(x, y, r, 0, 0.14, mat(t, t.paper));
+      const stone = st.hit ? mat(t, mix(t.role.rocks, WHITE, 0.35)) : role;
+      const spots: [number, number, number, number][] = [[0, -0.1, 0.5, 0.14], [-0.42, 0.15, 0.36, 0.14], [0.42, 0.18, 0.38, 0.14], [0.05, 0.32, 0.34, 0.14], [0, 0.05, 0.3, 1.2]];
+      const n = Math.max(1, Math.min(5, st.seg ?? 1));
+      // farther first, the top stone last
+      const order = spots.slice(0, n).map((q, i) => ({ q, i })).sort((a, b) => (a.i === 4 ? 1 : b.i === 4 ? -1 : b.q[1] - a.q[1]));
+      for (const { q: [dx, dy, k, z0] } of order) {
+        const R = r * k, cx = x + dx * r, cy = y + dy * r;
+        const pts = [0, 0.45, 0.8, 1].flatMap((u) => ring(cx, cy, R * Math.cos((u * Math.PI) / 2.3), 9).map(([a, b]) => P(v, a, b, z0 + u * R * 2.6)));
+        p.face(hull(pts), stone.base);
+        p.face(ring(cx - R * 0.3, cy + R * 0.15, R * 0.3, 7).map(([a, b]) => P(v, a, b, z0 + R * 2.2)), stone.light, { sil: false, line: 0 });
+      }
+      break;
+    }
+    case 'clock': {
+      // a mantel clock: a wooden case on a plinth, a round face on its front; the hands creep from 9 to midnight
+      shadow(under, v, t, x, y, r * 1.0, r * 0.75);
+      const wood = mat(t, t.role.clock), hw = r * 0.62, d = r * 0.42;
+      p.prism(box(x, y, hw + 0.12, d + 0.1, 0), 0, 0.25, mat(t, mix(t.role.clock, t.ink, 0.25)));
+      p.prism(box(x, y, hw, d, 0), 0.25, 2.3, wood);
+      // a rounded top
+      p.face(hull([0, 0.35, 0.7, 1].flatMap((u) => [P(v, x - hw * Math.cos((u * Math.PI) / 2), y - d, 2.55 + Math.sin((u * Math.PI) / 2) * 0.55), P(v, x + hw * Math.cos((u * Math.PI) / 2), y - d, 2.55 + Math.sin((u * Math.PI) / 2) * 0.55)])), wood.base);
+      const R = hw * 0.78, zc = 1.75, tall = 1.9;
+      const disc = (k: number): Pt[] => Array.from({ length: 24 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return P(v, x + Math.cos(a) * R * k, y - d - 0.02, zc + Math.sin(a) * R * k * tall); });
+      p.face(disc(1), st.lit ? mix(t.accent, WHITE, 0.5) : t.paper, { line: 0.5 });
+      const seg = st.seg ?? 0, hour = Math.PI - (seg / 12) * (Math.PI / 2), minute = Math.PI / 2 - ((seg % 4) / 4) * Math.PI * 2;
+      const hand = (a: number, k: number, w: number) => {
+        const [cx, cy] = P(v, x, y - d - 0.03, zc), [hx, hy] = P(v, x + Math.cos(a) * R * k, y - d - 0.03, zc + Math.sin(a) * R * k * tall);
+        p.op((g) => g.moveTo(cx, cy).lineTo(hx, hy).stroke({ width: w, color: t.ink, cap: 'round' }));
+      };
+      hand(seg >= 12 ? Math.PI / 2 : hour, 0.55, v.lw * 1.2);
+      hand(minute, 0.85, v.lw * 0.8);
+      if (st.lit) { const [sx, sy] = P(v, x + hw * 0.9, y - d, 3.2); p.op((g) => g.star(sx, sy, 8, S * 0.55, S * 0.22).fill(t.accent).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' })); }
+      break;
+    }
+    case 'altar': {
+      // a stone altar: a carved block with eight runes (they light up as sets are completed) and two candles
+      shadow(under, v, t, x, y, r * 1.05, r * 0.8);
+      const stone = mat(t, t.role.altar), hw = r * 0.85, d = r * 0.5;
+      p.prism(box(x, y, hw + 0.1, d + 0.1, 0), 0, 0.3, mat(t, mix(t.role.altar, t.ink, 0.3)));
+      p.prism(box(x, y, hw, d, 0), 0.3, 1.25, stone);
+      p.prism(box(x, y, hw + 0.15, d + 0.12, 0), 1.55, 0.25, mat(t, mix(t.role.altar, WHITE, 0.15)));
+      const on = st.seg ?? 0;
+      for (let i = 0; i < 8; i++) {
+        const [rx, ry] = P(v, x - hw * 0.8 + (i * hw * 1.6) / 7, y - d - 0.02, 0.92 + (i % 2) * 0.22);
+        const lit = st.lit || i < on;
+        p.op((g) => g.circle(rx, ry, S * 0.1).fill(lit ? t.accent : mix(t.role.altar, t.ink, 0.45)).stroke({ width: v.lw * 0.4, color: t.ink }));
+      }
+      for (const dx of [-hw * 0.55, hw * 0.55]) {
+        p.cyl(x + dx, y, 0.16, 1.8, 0.75, mat(t, t.paper), { n: 12 });
+        const [fx, fy] = P(v, x + dx, y, 2.75);
+        const big = st.lit ? 1.6 : 1;
+        p.op((g) => {
+          g.ellipse(fx, fy - S * 0.12 * big, S * 0.13 * big, S * 0.24 * big).fill(st.lit ? t.accent : t.role.sparkler).stroke({ width: v.lw * 0.5, color: t.ink });
+          g.ellipse(fx, fy - S * 0.06 * big, S * 0.05 * big, S * 0.1 * big).fill(WHITE);
+        });
+      }
+      break;
+    }
+    case 'bulb': {
+      // a spare bulb on a little stand: a glass globe over a screw base
+      shadow(under, v, t, x, y, r * 0.9, r * 0.9);
+      p.cyl(x, y, r * 0.75, 0, 0.18, mat(t, t.paper));
+      p.cyl(x, y, r * 0.32, 0.18, 0.45, metal);
+      for (let i = 0; i < 3; i++) p.cyl(x, y, r * 0.34, 0.3 + i * 0.12, 0.05, mat(t, mix(t.metal, t.ink, 0.3)), { n: 16 });
+      const glass = mat(t, t.role.bulb);
+      const globe = [0, 0.3, 0.6, 0.85, 1].flatMap((u) => ring(x, y, r * 0.62 * Math.sin(Math.PI * (0.25 + u * 0.75)), 20).map(([a, b]) => P(v, a, b, 0.65 + u * 1.25)));
+      p.face(hull(globe), glass.base);
+      p.face(ring(x - r * 0.2, y + r * 0.1, r * 0.14, 10).map(([a, b]) => P(v, a, b, 1.45)), WHITE, { sil: false, line: 0 });
+      break;
+    }
+    case 'feet': {
+      // a rubber foot: a fat black stopper with a ribbed rim
+      shadow(under, v, t, x, y, r * 0.95, r * 0.95);
+      const rubber = mat(t, t.role.feet);
+      p.cyl(x, y, r * 0.85, 0, 0.35, rubber);
+      p.cyl(x, y, r * 0.7, 0.35, 0.3, mat(t, mix(t.role.feet, WHITE, 0.15)));
+      p.cyl(x, y, r * 0.3, 0.65, 0.12, metal);
+      break;
+    }
+    case 'tray': {
+      // a coin tray: a shallow brass dish with a little pile of coins in it
+      shadow(under, v, t, x, y, r * 1.0, r * 0.8);
+      const brass = mat(t, t.role.tray);
+      p.prism(box(x, y, r * 0.9, r * 0.6, 0, 0.25), 0, 0.3, brass);
+      p.face(box(x, y, r * 0.72, r * 0.45, 0, 0.2).map(([a, b]) => P(v, a, b, 0.3)), brass.shade, { sil: false, line: 0.35 });
+      for (const [dx, dy, n] of [[-0.25, 0.05, 3], [0.25, -0.05, 2]] as const) for (let i = 0; i < n; i++) p.cyl(x + dx * r, y + dy * r, r * 0.26, 0.22 + i * 0.1, 0.08, mat(t, t.role.coin), { n: 16 });
+      break;
+    }
+    case 'mirror': {
+      // a side mirror on a stalk: a round glass in a frame, catching the light
+      shadow(under, v, t, x, y, r * 0.8, r * 0.6);
+      p.cyl(x, y, r * 0.55, 0, 0.18, metal);
+      p.cyl(x, y, 0.1, 0.18, 1.1, metal, { n: 10 });
+      const R = r * 0.7, zc = 2.0, tall = 1.8;
+      const disc = (k: number): Pt[] => Array.from({ length: 24 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return P(v, x + Math.cos(a) * R * k, y - 0.05, zc + Math.sin(a) * R * k * tall); });
+      p.face(disc(1), t.role.mirror === undefined ? t.metal : mix(t.metal, t.ink, 0.2), { line: 0.5 });
+      p.face(disc(0.8), t.role.mirror, { sil: false, line: 0.3 });
+      const [gx, gy] = P(v, x - R * 0.3, y - 0.06, zc + R * 0.6);
+      p.op((g) => g.moveTo(gx, gy).lineTo(gx + S * 0.25, gy + S * 0.3).stroke({ width: v.lw * 0.9, color: WHITE, cap: 'round' }));
+      break;
+    }
+    case 'tesla': {
+      // a Tesla coil: a copper winding on a bumper skirt, under a round terminal that crackles when hit
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      const top = st.hit ? mat(t, mix(t.role.tesla, WHITE, 0.55)) : role;
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      p.cyl(x, y, r * 0.5, 0.16, 0.12, metal);
+      // the winding: copper turns with a thin dark gap between each
+      const copper = mat(t, mix(t.role.coin, t.accent, 0.4));
+      for (let i = 0; i < 6; i++) p.cyl(x, y, r * (0.5 - i * 0.025), 0.28 + i * 0.17, 0.13, copper);
+      // the terminal: a fat ring (a toroid) in the coil's colour
+      const z0 = 1.35;
+      const tor = [[0, 0.5], [0.3, 0.78], [0.6, 0.8], [1, 0.55]] as const;
+      p.face(hull(tor.flatMap(([u, k]) => ring(x, y, r * k, 26).map(([a, b]) => P(v, a, b, z0 + u * 0.5)))), top.base);
+      p.face(ring(x, y, r * 0.3, 18).map(([a, b]) => P(v, a, b, z0 + 0.5)), top.shade, { sil: false, line: 0.35 });
+      p.face(ring(x - r * 0.4, y + r * 0.15, r * 0.12, 12).map(([a, b]) => P(v, a, b, z0 + 0.42)), top.light, { sil: false, line: 0 });
+      break;
+    }
+    case 'bell': {
+      // an old bronze bell hung in a wooden yoke; three pips on its skirt count the notches. Rung this round, it goes dull
+      shadow(under, v, t, x, y, r * 1.05, r * 1.05);
+      const quiet = st.lit === false;
+      const bronze = st.hit ? mat(t, mix(t.role.bell, WHITE, 0.4)) : quiet ? mat(t, mix(t.role.bell, t.shadeTint, 0.45)) : role;
+      p.cyl(x, y, r, 0, 0.16, mat(t, t.paper));
+      const wood = mat(t, t.rim);
+      p.cyl(x - r * 0.9, y + r * 0.2, 0.14, 0.16, 2.2, wood);
+      // a real bell's profile: a flared lip, a waist, a round shoulder
+      const H = 1.7, prof = [[0, 0.92], [0.06, 0.8], [0.2, 0.62], [0.5, 0.52], [0.78, 0.5], [0.92, 0.4], [1, 0.22]] as const;
+      const pts = prof.flatMap(([u, k]) => ring(x, y, r * k, 26).map(([a, b]) => P(v, a, b, 0.28 + u * H)));
+      p.cyl(x, y, r * 0.94, 0.16, 0.14, mat(t, bronze.shade)); // the lip, under the body
+      p.face(hull(pts), bronze.base);
+      p.face(ring(x - r * 0.22, y + r * 0.1, r * 0.12, 12).map(([a, b]) => P(v, a, b, 0.28 + 0.8 * H)), WHITE, { sil: false, line: 0 });
+      p.cyl(x, y, 0.15, 0.28 + H, 0.3, metal);
+      p.cyl(x + r * 0.9, y + r * 0.2, 0.14, 0.16, 2.2, wood);
+      const notches = PARTS.bell.recipe.bell!.notches;
+      p.op((g) => {
+        const [ax, ay] = P(v, x - r * 0.9, y + r * 0.2, 2.3), [bx, by] = P(v, x + r * 0.9, y + r * 0.2, 2.3);
+        g.moveTo(ax, ay).lineTo(bx, by).stroke({ width: v.S * 0.2 + v.lw, color: t.ink, cap: 'round' });
+        g.moveTo(ax, ay).lineTo(bx, by).stroke({ width: v.S * 0.2, color: t.rim, cap: 'round' });
+        for (let i = 0; i < notches; i++) {
+          const a = -Math.PI / 2 + (i - (notches - 1) / 2) * 0.55;
+          const [X, Y] = P(v, x + Math.cos(a) * r * 0.94, y + Math.sin(a) * r * 0.94, 0.17);
+          g.circle(X, Y, v.S * 0.15).fill(i < (st.seg ?? 0) ? t.role.golden : mix(t.paper, t.shadeTint, 0.5)).stroke({ width: v.lw * 0.45, color: t.ink });
+        }
+      });
       break;
     }
     case 'trophy': {
@@ -510,6 +783,28 @@ export function levelColour(t: Theme, id: PartId, level: number): string {
   if (level <= 0) return base;
   const to = id === 'coin' ? t.accent : t.role.coin;
   return mixHue(base, to, Math.min(level, MAX_LEVEL) / MAX_LEVEL);
+}
+
+/**
+ * A gem at (x, y, z), `s` across: a cut stone (an octagon with a bright table), a crinkled square of gold leaf, or
+ * a red wax seal with a star pressed in it.
+ */
+function gemStone(p: Prop, v: View, t: Theme, id: PartId, x: number, y: number, z: number, s: number) {
+  const c = t.role[id];
+  const at = (pts: Pt[], dz = 0) => pts.map(([a, b]) => P(v, a, b, z + dz));
+  if (id === 'goldleaf') {
+    const leaf: Pt[] = [[x - s, y - s * 0.7], [x - s * 0.2, y - s * 0.95], [x + s * 0.9, y - s * 0.75], [x + s, y + s * 0.2], [x + s * 0.6, y + s * 0.9], [x - s * 0.5, y + s * 0.8], [x - s * 0.95, y + s * 0.1]];
+    p.face(at(leaf), c, { line: 0.4 });
+    p.face(at(leaf.map(([a, b]) => [x + (a - x) * 0.45 - s * 0.15, y + (b - y) * 0.45 + s * 0.1] as Pt), 0.01), mix(c, WHITE, 0.55), { sil: false, line: 0 });
+  } else if (id === 'redseal') {
+    p.face(at(ring(x, y, s, 14).map(([a, b], i) => [x + (a - x) * (i % 2 ? 1 : 0.9), y + (b - y) * (i % 2 ? 1 : 0.9)] as Pt)), c, { line: 0.45 });
+    p.face(at(ring(x, y, s * 0.62, 18), 0.01), mix(c, t.ink, 0.25), { sil: false, line: 0.3 });
+    p.face(at(star(x, y, s * 0.45, s * 0.2, 5, Math.PI / 2), 0.02), mix(c, WHITE, 0.35), { sil: false, line: 0 });
+  } else {
+    p.face(at(ring(x, y, s, 8)), mix(c, t.ink, 0.2), { line: 0.45 });
+    p.face(at(ring(x, y, s * 0.62, 8), 0.04), c, { sil: false, line: 0.3 });
+    p.face(at(ring(x - s * 0.22, y + s * 0.22, s * 0.16, 8), 0.06), WHITE, { sil: false, line: 0 });
+  }
 }
 
 /** A floor arrow insert showing where an eject sends the ball (rotatable ejectors: Ball Printer). */

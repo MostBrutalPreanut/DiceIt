@@ -9,10 +9,10 @@ built game in headless Chromium), the balance tool (`npm run balance -- --verify
 | Check | Result |
 |---|---|
 | Type check (`npx tsc --noEmit`) | clean |
-| Unit tests | 317 pass, 0 fail (25 files) |
+| Unit tests | 399 pass, 0 fail (27 files) |
 | Build (`npm run build`, `npm run artifact`) | builds; the single-file game is about 2 MB |
-| Browser smoke test | 104 checks ok, no console errors |
-| Renderer cost (smoke, software GL) | about 2.5 ms a frame |
+| Browser smoke test | 105 checks ok, no console errors |
+| Renderer cost (smoke, software GL) | about 2.6 ms a frame; 3.5 ms with 4 balls, 24 sparks and zaps |
 | Balance run | see the balance section below |
 
 The smoke test's timing checks (physics speed, frame cost, the shop's roll-in wait) fail when the machine is
@@ -46,6 +46,36 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
   as two.
 - **New parts** this pass: Trophy Cup (rare, kept Mult), Power Plate (uncommon, bumpers on it pay ×1.5), Hall of
   Fame (legendary, once a ball ×1.1 Mult for every part type on the table).
+- **Rank Lights and the Old Bell** (rare, step 1 of [borrowed-parts.md](borrowed-parts.md)): a pack of three
+  lights that ranks the ball up (×1.2, ×1.4, ×1.6 on its hits for 40 s), and a bell whose first hit each round earns
+  a notch; three notches ring it for ×1.2 Mult on every ball for the rest of the run. Measured with
+  `tools/power.ts`: Rank Lights sit between Lane Rollovers and X Lane per dollar (1,119 a $ mid, 3,306 late). The
+  bell's single-round number cannot show its rings; the par player now notches its bells between rounds.
+- **Zaps and the Tesla Coil** (rare, $9): every hit arcs lightning to the 2 nearest parts (3 and 4 with levels),
+  which score as if hit. Measured: 328 a $ mid, 1,043 late, on the power tool's small table (about Lane
+  Rollovers per dollar; a plain Pop Bumper there measures -1,205 / -3,176). It should do more on a full board.
+- **Powder Keg, Laser Turret, Shockwave Gong** (the rest of step 2): a keg's fuse burns 2.5 s, then it blows and
+  zaps everything within 6 (kegs chain, 4 at most, and re-arm after 6 s); the turret fires a wall-to-wall beam in a
+  random direction; the gong's 8th hit of a ball zaps the whole table. Gain per round over a plain Pop Bumper on
+  the power tool's table, mid / late: Tesla +6,568 / +18,913, Laser +1,935 / +9,678, Keg +3,337 / +7,989, Gong
+  +1,068 / +3,730.
+- **Gems (inlays, step 3)**: Ruby, Garnet, Opal, Gold Leaf, Red Seal and Emerald, sold from round 7. Drag one from the
+  shop (or the toolbox) onto a part: every part it fits is ringed in its colour while it is in hand, and it shows as
+  a small stone at the part's front. **Not measured yet**: the par player and the auto-builder never buy or set a
+  gem, so `npm run balance` cannot see them. Emerald on a Disco Ball (×2.5 twice a ball) is the one to watch.
+- **Sparks (step 4)**: little bonus balls that score on what they touch (as the ball that made them), never touch
+  flippers, balls or each other, and fade after 4 s; 24 glow at most. Made by the **Sparkler** (common, $3), the
+  **Rock Pile** (uncommon, $4), the **Firecracker** (rare, $8, a rocket once a ball that rains 6 sparks), the Powder
+  Keg's blast and the **Topaz** gem. Balls no longer collide with each other. Gain per round over a plain Pop Bumper
+  on the power tool's table, mid / late: Sparkler +4,200 / +8,619, Rock Pile +3,017 / +9,986, Firecracker +5,768 /
+  +14,661. The drawing drops its extras when frames run long (see borrowed-parts §7.3).
+- **Decor (step 5)**: a new kind of part that stands on the cabinet (the corners above the dome, the apron), never on
+  the table: the ball never touches it and it takes no table room. One of each in a run. The **Midnight Clock**
+  (180 scoring hits, then 20 s of ×2), the **Ritual Altar** (every 8 sets a ritual: Tempest, Inferno, Swarm, each
+  stronger than the last) and four cabinet upgrades (Spare Bulb, Rubber Feet, Coin Tray, Side Mirror). Gain per
+  round on the power tool's table, mid / late (decor costs no table room, so against the bare table): Clock +603 /
+  +1,391, Altar +2,631 / +5,980. The Clock is the weak one on that small table (it rarely reaches midnight without
+  zaps and sparks); watch it in playtests. The par player does not buy decor yet.
 - **Crossed Wires**: the bot now swaps hands, as a player would (it used to score almost nothing on that boss).
 
 ## Does not work yet, or is unproven

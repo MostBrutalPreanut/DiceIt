@@ -56,5 +56,18 @@ export const TILT_DECAY = 0.3;
 /** Balls on the table at once (the Ball Printer stops printing here). */
 export const MAX_BALLS = 4;
 
+/**
+ * Sparks: small bonus balls that never cost or save a ball. They glow for SPARK_GLOW s, then shrink and fade over
+ * SPARK_FADE s. They fall at SPARK_GRAVITY of a ball's gravity, touch only walls and parts (never flippers, balls or
+ * each other), and at most SPARK_CAP glow at once: one more makes the oldest start its fade.
+ */
+export const SPARK_R = 0.32;
+export const SPARK_GLOW = 2.5;
+export const SPARK_FADE = 1.5;
+export const SPARK_GRAVITY = 0.6;
+export const SPARK_CAP = 24;
+/** Collision categories: the table (walls and parts), flippers, balls, sparks. */
+export const CAT = { table: 1, flipper: 2, ball: 4, spark: 8 } as const;
+
 /** Seconds after a launch during which a Ball Saver returns a drained ball to the plunger lane. */
 export const SAVER_WINDOW = 8;

@@ -1,4 +1,5 @@
-import { footprint, makePart, PARTS, underFloor, type PartId, type PartInstance } from '../data/parts';
+import { footprint, isDecor, makePart, PARTS, underFloor, type PartId, type PartInstance } from '../data/parts';
+import { decorFits } from './cabinet';
 import { BUILD_AREA, DEFAULT_GRAVITY } from './constants';
 import { clampLedge, LEDGE, ledgeSeg, tableSegments } from './table';
 
@@ -38,7 +39,10 @@ export function starterLayout(): Layout {
   };
 }
 
-export const placedParts = (l: Layout) => l.parts.filter((p) => p.placed);
+/** The parts on the table (decor stands on the cabinet: see decorParts). */
+export const placedParts = (l: Layout) => l.parts.filter((p) => p.placed && !isDecor(p.def));
+/** The decor standing on the cabinet. */
+export const decorParts = (l: Layout) => l.parts.filter((p) => p.placed && isDecor(p.def));
 export const inventoryParts = (l: Layout) => l.parts.filter((p) => !p.placed);
 
 export function cloneLayout(l: Layout): Layout {
@@ -65,13 +69,19 @@ function distToSegment(px: number, py: number, s: { x1: number; y1: number; x2: 
 
 /** Can a part of this type sit at (x, y)? `ignoreUid` lets a part being dragged ignore itself. */
 export function canPlace(layout: Layout, id: PartId, x: number, y: number, ignoreUid?: number): boolean {
+  if (PARTS[id].kind === 'inlay') return false; // a gem goes into a part, never on the table itself
   const r = footprint(PARTS[id]);
+  if (isDecor(id)) {
+    // decor stands on the cabinet, clear of the decal slots and of other decor (never on the table)
+    if (!decorFits(r, x, y)) return false;
+    return layout.parts.every((p) => !p.placed || p.uid === ignoreUid || !isDecor(p.def) || Math.hypot(p.x - x, p.y - y) >= r + footprint(PARTS[p.def]) + 0.15);
+  }
   if (x - r < BUILD_AREA.x0 || x + r > BUILD_AREA.x1 || y - r < BUILD_AREA.y0 || y + r > BUILD_AREA.y1) return false;
   // keep clear of the cabinet walls (the dome and chamfer are not rectangles), with room for a ball between: a gap
   // narrower than the ball is a pocket it can come to rest in (the same room the ledge keeps from the parts)
   for (const s of segsFor(layout.ledge)) if (distToSegment(x, y, s) < r + WALL_GAP) return false;
   for (const p of layout.parts) {
-    if (!p.placed || p.uid === ignoreUid) continue;
+    if (!p.placed || p.uid === ignoreUid || isDecor(p.def)) continue;
     if (underFloor(id) !== underFloor(p.def)) continue; // a part may stand on a floor light (a Glow Strip)
     // leave room for a ball between parts; two solid ones need a ball and a bit, or the gap is a pocket a ball rests in
     const min = r + footprint(PARTS[p.def]) + (solid(id) && solid(p.def) ? WALL_GAP : 0.9);
@@ -84,7 +94,7 @@ export function canPlace(layout: Layout, id: PartId, x: number, y: number, ignor
 export function canPlaceLedge(layout: Layout, y: number): boolean {
   if (y !== clampLedge(y)) return false;
   const s = ledgeSeg(y);
-  for (const p of layout.parts) if (p.placed && distToSegment(p.x, p.y, s) < footprint(PARTS[p.def]) + WALL_GAP) return false;
+  for (const p of layout.parts) if (p.placed && !isDecor(p.def) && distToSegment(p.x, p.y, s) < footprint(PARTS[p.def]) + WALL_GAP) return false;
   return true;
 }
 
