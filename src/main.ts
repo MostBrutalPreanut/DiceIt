@@ -2,7 +2,7 @@ import './style.css';
 import './ui/menu.css';
 import { callout, type CalloutKey } from './data/callouts';
 import { dialValue, footprint, MAX_LEVEL, PARTS, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
-import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, decalTitle, KIND_NAMES, SKIP_PAY, type DecalId, type DecalPick } from './data/decals';
+import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, KIND_NAMES, type DecalId, type DecalPick } from './data/decals';
 import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
 import { FINAL_ROUND } from './data/bosses';
 import { AudioFx } from './audio';
@@ -120,13 +120,6 @@ async function main() {
     let url = icons.get(key);
     if (!url) { url = renderer.icon(id, w, h, { theme: t }).toDataURL(); icons.set(key, url); }
     return url;
-  };
-  const decalURL = (id: DecalId) => {
-    const key = `${theme.id}:decal:${id}`;
-    let url = icons.get(key);
-    const look = game.decalLook(id);
-    if (!url && look) { url = renderer.decalIcon(look, game.decalRarity(id), 56).toDataURL(); icons.set(key, url); }
-    return url ?? '';
   };
 
   function applyTheme(t: Theme) {
