@@ -20,6 +20,15 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
 
 ## Works
 
+- **Library** (main menu and pause menu): every part and decal, by rarity, kept on this device across runs. Found
+  ones in colour with their full card; the rest are silhouettes named ??? with a hint cut out (decor and the
+  round lumps get a symbol, gems their first letter, decals what is printed on them). A part is found the first
+  time a run owns it, a decal when it is stuck on the apron; the display says NEW IN THE LIBRARY. Pictures are
+  baked a few a frame, so the screen opens at once.
+- **Feedback** (`P`, or the menus' P feedback button): name, topic (the game's parts, your machine's parts and
+  decals, your Library) and message, sent with a run snapshot to a Google Sheet through an Apps Script web app.
+  **Not live yet**: `FEEDBACK_URL` in `src/ui/feedback.ts` is empty until the script is deployed
+  ([feedback.md](feedback.md)); until then messages wait on the device.
 - **Main menu**: BIG BOI / PINBALL DESIGNER over a demo machine that plays itself. Resume (with the round and
   money of the saved run), New Game (asks before abandoning a run), Scoreboard, Settings.
 - **Machine picker**: the three full cabinets from the key art, each with its Big Boi and what he does.

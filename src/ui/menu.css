@@ -37,7 +37,8 @@ body.inmenu #center { height: 100%; min-height: 0; padding-left: min(340px, 28vw
 .mpanel::before, .mpanel::after { content: ''; position: absolute; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--metal); border: var(--lw-detail) solid var(--ink); }
 .mpanel::before { left: 6px; } .mpanel::after { right: 6px; }
 .mbtn { --hc: var(--accent); position: relative; display: grid; justify-items: start; gap: 1px; width: 100%; text-align: left; padding: 10px 18px 9px; border-radius: 16px; background: var(--paper); border: var(--lw-widget) solid var(--ink); box-shadow: 0 4px 0 var(--ink); transition: transform .14s cubic-bezier(.3,1.8,.5,1), box-shadow .14s, background-color .12s; }
-.mbtn[data-hue="lane"] { --hc: var(--role-lane-fill); } .mbtn[data-hue="pop"] { --hc: var(--role-pop-fill); }
+.mbtn[data-hue="lane"] { --hc: var(--role-lane-fill); } .mbtn[data-hue="pop"] { --hc: var(--role-pop-fill); } .mbtn[data-hue="coin"] { --hc: var(--role-coin-fill); }
+.mbtn small b { font-weight: 800; color: var(--accent); }
 .mbtn .disp { font-size: 26px; line-height: 1; transform: translateY(2px); }
 .mbtn small { font: 700 12.5px var(--ui); color: var(--faint); }
 /* hover: the button takes its own loud colour, jumps up and tilts, and an arrow points at it */
@@ -63,11 +64,11 @@ body.inmenu #center { height: 100%; min-height: 0; padding-left: min(340px, 28vw
 @media (prefers-reduced-motion: reduce) { .m-main .in, .mtitle .mboi { animation: none; } }
 #menu .mbtn:focus-visible { outline-offset: 2px; }
 .mbtn.danger .disp { color: var(--accent); }
-.mfoot { font-size: 12px; color: var(--ink); opacity: .75; display: flex; gap: 6px; align-items: center; }
-.mfoot kbd:nth-of-type(2) { margin-right: 4px; } .mfoot kbd:nth-of-type(3) { margin-left: 8px; }
+.mfoot { font-size: 12px; color: var(--ink); display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.mfoot > span { display: inline-flex; gap: 5px; align-items: center; opacity: .75; }
 
 /* ---- the screens with a header: picker, scoreboard, settings ---- */
-#menu.m-picker, #menu.m-scores, #menu.m-settings { background: color-mix(in srgb, var(--bg) 90%, transparent); }
+#menu.m-picker, #menu.m-scores, #menu.m-settings, #menu.m-library { background: color-mix(in srgb, var(--bg) 90%, transparent); }
 .mhead { display: flex; align-items: flex-start; gap: 18px; max-width: 1180px; margin: 0 auto 18px; }
 .mhead h2 { margin: 0; font-size: clamp(30px, 4vw, 44px); line-height: 1; color: var(--paper); -webkit-text-stroke: 7px var(--ink); paint-order: stroke fill; text-shadow: 4px 5px 0 var(--drop); transform: translateY(3px); }
 .mhead p { margin: 8px 0 0; max-width: 680px; font-size: 13.5px; color: var(--ink); }
@@ -189,7 +190,7 @@ body.inmenu #center { height: 100%; min-height: 0; padding-left: min(340px, 28vw
   .mhead { flex-direction: column; gap: 8px; }
   .mtut { margin-left: 0; }
   .mtitle .mboiwrap { width: 96px; bottom: -30px; }
-  .mfoot { display: none; }
+  .mfoot > span { display: none; }
   .mtitle .t1 { -webkit-text-stroke-width: 9px; }
   .sbrow { grid-template-columns: 26px 12px minmax(0, 1fr) auto; }
   .sbrow .res { display: none; }

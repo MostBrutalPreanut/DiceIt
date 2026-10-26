@@ -28,6 +28,11 @@ import { Scoreboard, sourceOfSave, type RunResult } from './ui/scoreboard';
 import { Attract } from './attract';
 import { around, Tutorial, TUTORIAL_KEY, type Box, type Step } from './ui/tutorial';
 import './ui/tutorial.css';
+import { decalHint, discover, LIBRARY_KEY, LIBRARY_PARTS, ownedPartIds, PART_HINTS, parseLibrary, partKnown, decalKnown, LIBRARY_DECALS } from './data/library';
+import { silhouette } from './ui/silhouette';
+import './ui/library.css';
+import { countNames, Feedback, TOPICS, type TopicGroup } from './ui/feedback';
+import './ui/feedback.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORE = 'pinball-roguelite.run.v2';
@@ -78,6 +83,72 @@ async function main() {
     gameOver: () => say('GAME OVER. INSERT COIN'),
   });
   const dial = new MultDial($('multDial'));
+
+  // ---- the Library: every part and decal this device has found, across runs ------------------------------------
+  const library = parseLibrary(store.get(LIBRARY_KEY));
+  /** Parts handed out by the Test Lab this session: nothing found there counts. */
+  const labUids = new Set<number>();
+  /** Note what the live run owns; anything new goes in the Library, and the display says so. */
+  function noteFound() {
+    if (!hasRun || attract.on) return;
+    if (game.sandbox) { for (const p of game.layout.parts) labUids.add(p.uid); return; }
+    const fresh = discover(library, ownedPartIds(game.layout.parts.filter((p) => !labUids.has(p.uid))), game.decals);
+    const names = [...fresh.parts.map((id) => PARTS[id].name), ...fresh.decals.map((id) => DECALS[id].name)];
+    if (!names.length) return;
+    store.set(LIBRARY_KEY, JSON.stringify(library));
+    say(names.length > 2 ? `${names.length} NEW IN THE LIBRARY` : `NEW IN THE LIBRARY: ${names.join(' AND ')}`);
+  }
+  /** A Library entry's picture: in the menus' colours, or as its locked silhouette with the hint cut out. */
+  const libIcon = (kind: 'part' | 'decal' | 'boi', id: string, locked: boolean, cachedOnly = false) => {
+    const key = `lib:${theme.id}:${kind}:${id}:${locked ? 1 : 0}`;
+    let url = icons.get(key);
+    if (url || cachedOnly) return url ?? '';
+    if (kind === 'boi') url = boiURL(id as MachineId, 'happy');
+    else if (kind === 'decal') {
+      const d = DECALS[id as DecalId], c = renderer.decalIcon(d.look, d.rarity, 96);
+      url = (locked ? silhouette(c, decalHint(id as DecalId)) : c).toDataURL();
+    } else {
+      const c = renderer.icon(id as PartId, 96, 96, { theme });
+      url = (locked ? silhouette(c, PART_HINTS[id as PartId]) : c).toDataURL();
+    }
+    icons.set(key, url);
+    return url;
+  };
+
+  // ---- feedback: P anywhere, or the menus' Feedback buttons. Made before anything else listens for keys, so the
+  // form gets every key first while it is open.
+  const feedback = new Feedback({
+    store,
+    canOpen: () => !tour.open && !menu.busy && !shopDrag && !carry && !ledgeDrag,
+    topics: () => {
+      const run = hasRun && !attract.on;
+      const mine = run ? [...new Set([...game.layout.parts.map((p) => (p.def === 'mega' ? BIG_BOIS[BIG_BOI_FOR[game.machine]].title : PARTS[p.def].name)), ...game.layout.parts.flatMap((p) => (p.inlay ? [PARTS[p.inlay].name] : []))])].sort() : [];
+      const stuck = run ? game.decals.map((d) => DECALS[d.id].name) : [];
+      const groups: TopicGroup[] = [{ label: 'The game', options: ['General', ...TOPICS] }];
+      if (mine.length) groups.push({ label: 'A part on your machine', options: mine.map((n) => `Part: ${n}`) });
+      if (stuck.length) groups.push({ label: 'A decal on your apron', options: stuck.map((n) => `Decal: ${n}`) });
+      const found = LIBRARY_PARTS.filter((id) => partKnown(library, id) && !mine.includes(PARTS[id].name)).map((id) => `Part: ${PARTS[id].name}`)
+        .concat(LIBRARY_DECALS.filter((id) => decalKnown(library, id) && !stuck.includes(DECALS[id].name)).map((id) => `Decal: ${DECALS[id].name}`));
+      if (found.length) groups.push({ label: 'Found in your Library', options: found });
+      // the part whose card is open is probably what it is about
+      const sel = selected !== null ? game.part(selected) : undefined;
+      return { groups, pick: run && sel ? `Part: ${sel.def === 'mega' ? BIG_BOIS[BIG_BOI_FOR[game.machine]].title : PARTS[sel.def].name}` : undefined };
+    },
+    snapshot: () => {
+      const where = menu.open ? (menu.paused ? `paused (${menu.screen})` : `menu (${menu.screen})`) : game.mode === 'workshop' ? 'workshop' : game.mode === 'round' ? 'playing a round' : game.mode;
+      if (!hasRun || attract.on) return { where };
+      const name = (p: PartInstance) => (p.def === 'mega' ? BIG_BOIS[BIG_BOI_FOR[game.machine]].title : PARTS[p.def].name) + (p.inlay ? ` (${PARTS[p.inlay].name})` : '');
+      return {
+        where, machine: themeById(game.machine)?.tagline ?? game.machine, round: game.round, money: game.money,
+        score: game.mode === 'workshop' ? undefined : Math.round(game.scorer.score), goal: game.scorer.goal, runScore: Math.round(game.runScore),
+        parts: countNames(game.placed.map(name)), toolbox: countNames(game.inventory.map(name)), decals: game.decals.map((d) => DECALS[d.id].name).join(', '),
+      };
+    },
+    face: (mood) => boiURL(game.machine ?? theme.id, mood),
+    // the game holds still while the form is open (main loop), and no key stays held down behind it
+    opened: () => { keys.clear(); $('tip').hidden = true; },
+    closed: () => { last = performance.now(); },
+  });
 
   // ---- state shared by input, workshop and HUD ------------------------------------------------
   const keys = new Set<string>();
@@ -564,6 +635,7 @@ async function main() {
 
   function refreshWorkshop() {
     reportSold();
+    noteFound();
     if (carry && !game.part(carry.uid)?.placed) carry = null; // the part in hand was stored, sold or undone away
     if (selectedDecal !== null && !game.decals[selectedDecal]) selectedDecal = null;
     renderUpgrades();
@@ -1170,8 +1242,8 @@ async function main() {
     keysKey = key;
     const k = (key: string, what: string) => `<kbd>${key}</kbd><span>${what}</span>`;
     $('keys').innerHTML = mode === 'play'
-      ? [k(keyLabel(bound.left), ''), k(keyLabel(bound.right), 'flippers'), k(keyLabel(bound.launch), 'shoot'), k('Z', ''), k('X', 'nudge'), k('Tab', 'cash out'), k('Esc', 'pause')].join(' ')
-      : [k('Enter', 'play round'), k(keyLabel(bound.launch), 'test ball'), k('R', 'rotate'), k('Del', 'to toolbox'), k('Ctrl+Z', 'undo'), k('Esc', 'pause')].join(' ');
+      ? [k(keyLabel(bound.left), ''), k(keyLabel(bound.right), 'flippers'), k(keyLabel(bound.launch), 'shoot'), k('Z', ''), k('X', 'nudge'), k('Tab', 'cash out'), k('Esc', 'pause'), k('P', 'feedback')].join(' ')
+      : [k('Enter', 'play round'), k(keyLabel(bound.launch), 'test ball'), k('R', 'rotate'), k('Del', 'to toolbox'), k('Ctrl+Z', 'undo'), k('Esc', 'pause'), k('P', 'feedback')].join(' ');
   }
 
   let ballsKey = '';
@@ -1459,6 +1531,11 @@ async function main() {
     settings: () => settings,
     setSettings: (s) => { audio.unlock(); applySettings(s); },
     wake: () => audio.unlock(),
+    library: () => library,
+    libIcon,
+    librarySeen: () => { library.seen = Date.now(); store.set(LIBRARY_KEY, JSON.stringify(library)); },
+    machine: () => theme.id as MachineId,
+    feedback: () => feedback.show(),
   });
 
   // ---- main loop ------------------------------------------------------------------------------------------------
@@ -1537,7 +1614,7 @@ async function main() {
       frames++;
       return;
     }
-    if (menu.paused) { acc = 0; renderer.draw(game, 0, drawState); return; }
+    if (menu.paused || feedback.open) { acc = 0; renderer.draw(game, 0, drawState); return; }
     acc += dt;
     let n = 0;
     while (!frozen && acc >= DT && n < 24) {

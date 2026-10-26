@@ -30,6 +30,21 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(await page.evaluate(() => window.__pinball.game.scorer.score > 0), 'the bot scores on the attract table');
   check(await page.evaluate(() => localStorage.getItem('pinball-roguelite.run.v2')) === null, 'the attract table never saves');
   await page.screenshot({ path: `${out}/smoke-0-menu.png` });
+  // the Library: every part and decal, only Big Boi and the Pop Bumper found on a first visit
+  await page.click('#menu [data-act="library"]');
+  await page.waitForSelector('#menu .lbcard');
+  check(await page.locator('#menu .lbcard:not(.locked)').count() === 4, 'the Library starts with the three Big Bois and the Pop Bumper');
+  check(await page.locator('#menu .lbcard.locked .lbname').first().innerText() === '???', 'everything else is a silhouette with ??? for a name');
+  await page.click('#menu [data-libtab="decals"]');
+  check(await page.locator('#menu .lbcard').count() > 30 && await page.locator('#menu .lbcard:not(.locked)').count() === 0, 'its decal shelf is all silhouettes');
+  await page.screenshot({ path: `${out}/smoke-0l-library.png` });
+  await page.keyboard.press('Escape');
+  check(await page.isVisible('#menu .mpanel'), 'Esc goes back from the Library');
+  // P opens the feedback form over the menu, and Esc closes it again
+  await page.keyboard.press('KeyP');
+  check(await page.isVisible('.fbwrap form'), 'P opens the feedback form');
+  await page.keyboard.press('Escape');
+  check(await page.locator('.fbwrap').count() === 0 && await page.isVisible('#menu .mpanel'), 'Esc closes it, and the menu is still there');
   // there is no default machine: New Game shows the three cabinets, and each machine names its Big Boi
   await page.click('#menu [data-act="new"]');
   await page.waitForSelector('#menu .cab');
@@ -503,7 +518,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   // keyboard: arrows move the focus, Enter goes
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
-  check(await page.isVisible('#menu .setcard') || await page.locator('#menu .sbrow').count() > 0, 'the arrows and Enter drive the main menu');
+  check(await page.isVisible('#menu .setcard') || await page.locator('#menu .sbrow, #menu .lbcard').count() > 0, 'the arrows and Enter drive the main menu');
 
   if (errors.length) fail('console errors:\n' + errors.join('\n'));
   else console.log('ok: no console errors');
