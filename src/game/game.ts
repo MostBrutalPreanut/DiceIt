@@ -196,6 +196,8 @@ export class Game {
   private history: string[] = [];
   private future: string[] = [];
   private runSeed = 1;
+  /** The run's seed: tells one run from the next (a reveal already played in one run plays again in a new one). */
+  get runId() { return this.runSeed; }
   /** Seed for the next sim reset (tools set it to vary the plunger and saucer randomness). */
   seed = 1;
   /** Tools: play a round against this goal instead of the table's (Infinity = play every ball out). */

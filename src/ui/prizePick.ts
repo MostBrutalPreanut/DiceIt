@@ -60,7 +60,7 @@ export class PrizePicker {
 
   private get key() {
     const g = this.host.game;
-    return JSON.stringify([g.round, g.shop.prize, g.shop.prizeFrom ?? 'pinata']);
+    return JSON.stringify([g.runId, g.round, g.shop.prize, g.shop.prizeFrom ?? 'pinata']);
   }
 
   /** Is a prize waiting that the pop-up is not showing (it was put away)? The shop shows a button for it. */

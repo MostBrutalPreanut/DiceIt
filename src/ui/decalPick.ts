@@ -75,7 +75,7 @@ export class DecalPicker {
     const owed = g.pending !== null && g.editable;
     if (this.phase === 'outro') return; // the pick's flight finishes on its own
     if (!owed) { if (this.phase !== 'closed') this.close(); return; }
-    const offerKey = JSON.stringify([g.round, g.pending]);
+    const offerKey = JSON.stringify([g.runId, g.round, g.pending]);
     const key = JSON.stringify([offerKey, g.decals.length, this.host.renderer.theme.id]);
     if (key === this.drawnKey && this.phase !== 'closed') return;
     const replay = offerKey !== this.revealedKey;
