@@ -39,7 +39,7 @@ export interface PartState {
   /** The gem set into the part (an inlay): a little stone at its front. */
   gem?: PartId;
 }
-export type Mood = 'happy' | 'oof' | 'sad' | 'shocked' | 'cool';
+export type Mood = 'happy' | 'oof' | 'sad' | 'shocked' | 'cool' | 'blink';
 
 export const stateKey = (st: PartState) =>
   [st.letter ?? '', st.lit ? 1 : 0, st.target ?? '', st.down ? st.down.map((d) => (d ? 1 : 0)).join('') : '', st.hit ? 1 : 0, st.spin ?? '', st.seg ?? '', st.armed === false ? 0 : 1, st.busy ? 1 : 0, st.follow ? 1 : 0, st.mood ?? '', st.level ?? 0, st.part ?? '', st.bright ?? '', st.gem ?? ''].join('.');
@@ -871,6 +871,9 @@ function face(p: Prop, v: View, t: Theme, x: number, y: number, z: number, r: nu
       for (const [X, Y] of eyePts) g.roundRect(X - w, Y - h, w * 2, h * 1.9, h * 0.8).fill(t.ink);
       for (const [X, Y] of eyePts) g.moveTo(X - w * 0.6, Y - h * 0.4).lineTo(X - w * 0.1, Y - h * 0.75).stroke({ width: lw * 0.6, color: WHITE, cap: 'round' });
     });
+  } else if (mood === 'blink') {
+    // eyes shut for a moment (the menu's Big Boi blinks)
+    p.op((g) => { for (const [X, Y] of eyePts) g.moveTo(X - s * 0.17, Y).quadraticCurveTo(X, Y + s * 0.13, X + s * 0.17, Y).stroke({ width: lw * 0.7, color: t.ink, cap: 'round' }); });
   } else if (follow) {
     // the whites, baked; the renderer draws the pupils so they can follow the ball
     const big = mood === 'shocked' ? 1.25 : 1;
@@ -886,7 +889,7 @@ function face(p: Prop, v: View, t: Theme, x: number, y: number, z: number, r: nu
       }
     };
     switch (mood) {
-      case 'happy': g.moveTo(X - s * 0.22, Y).quadraticCurveTo(X, Y + s * 0.28, X + s * 0.22, Y).stroke({ width: lw * 0.6, color: t.ink, cap: 'round' }); break;
+      case 'happy': case 'blink': g.moveTo(X - s * 0.22, Y).quadraticCurveTo(X, Y + s * 0.28, X + s * 0.22, Y).stroke({ width: lw * 0.6, color: t.ink, cap: 'round' }); break;
       case 'oof': g.ellipse(X, Y + s * 0.06, s * 0.14, s * 0.18).fill(t.ink); break;
       case 'sad': // a bad shot: droopy brows, a frown
         brow(0, -0.08);

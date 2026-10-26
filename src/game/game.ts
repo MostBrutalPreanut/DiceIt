@@ -42,6 +42,9 @@ export const TOOLBOX_SLOTS = 4;
 export const UPKEEP = { move: 1, scrap: 1 } as const;
 
 /** Two significant figures: goals read as 4,300 or 12,000, not 4,312. */
+/** A new part's angle: only parts that turn keep the one they were aimed at while carried. */
+const aimed = (id: PartId, angle: number) => (PARTS[id].rotatable ? Math.round(angle * 1000) / 1000 : 0);
+
 export function niceGoal(n: number): number {
   const mag = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, n))) - 1));
   return Math.round(n / mag) * mag;
@@ -579,6 +582,8 @@ export class Game {
     this.rings = 0;
     this.machine = machine;
     this.layout = starterLayout();
+    // the starting bumpers wait in the toolbox: put them wherever you like, free to place and to move this visit
+    for (const p of this.layout.parts) if (!p.fixed) { p.placed = false; p.loose = true; }
     this.round = 1;
     this.money = START_MONEY;
     this.decals = [];
@@ -608,6 +613,11 @@ export class Game {
     this.history.push(this.snapshot());
     if (this.history.length > 80) this.history.shift();
     this.future = [];
+  }
+
+  /** How many steps undo can go back: a part carried and put back undoes to the depth it was picked up at. */
+  get historyDepth() {
+    return this.history.length;
   }
 
   get canUndo() {
@@ -701,10 +711,11 @@ export class Game {
   // ---- test lab (sandbox) --------------------------------------------------------------------------
 
   /** Test Lab: add any part to the inventory for free. */
-  grant(id: PartId): PartInstance | null {
+  grant(id: PartId, angle = 0): PartInstance | null {
     if (!this.editable || !this.sandbox || id === 'mega') return null;
     this.checkpoint();
     const inst = makePart(id, this.layout.nextUid++);
+    inst.angle = aimed(id, angle);
     inst.fresh = true;
     this.layout.parts.push(inst);
     return inst;
@@ -792,8 +803,8 @@ export class Game {
     return this.sandbox || this.money >= cost;
   }
 
-  /** Buy an offer into the inventory. Returns the new part, or null if you cannot. */
-  buy(slot: number): PartInstance | null {
+  /** Buy an offer into the inventory (turned to `angle` when it can turn). Returns the new part, or null if you cannot. */
+  buy(slot: number, angle = 0): PartInstance | null {
     const id = this.shop.offers[slot];
     if (!this.editable || !id || !this.hasRoomFor(id)) return null;
     const cost = this.priceAt(slot);
@@ -801,16 +812,17 @@ export class Game {
     this.checkpoint();
     if (!this.sandbox) this.money -= cost;
     this.sold(slot);
-    const pack = this.makePack(id, cost);
+    const pack = this.makePack(id, cost, angle);
     for (const inst of pack) { inst.fresh = true; this.layout.parts.push(inst); }
     return pack[0];
   }
 
   /** One shop offer's worth of parts: a pack's pieces know they belong together. */
-  private makePack(id: PartId, cost: number): PartInstance[] {
+  private makePack(id: PartId, cost: number, angle = 0): PartInstance[] {
     const n = PARTS[id].pack ?? 1, first = this.layout.nextUid;
     return Array.from({ length: n }, (_, i) => {
       const inst = makePart(id, this.layout.nextUid++);
+      inst.angle = aimed(id, angle);
       if (n > 1) inst.group = first;
       inst.loose = true;
       inst.paid = Math.floor(cost / n) + (i < cost % n ? 1 : 0); // the pieces' refunds add up to the price
@@ -874,7 +886,7 @@ export class Game {
   }
 
   /** Buy an offer straight onto the board at (x, y), dragged from the shop: it needs room on the table, not in the toolbox. A gem goes into the part there. */
-  buyAndPlace(slot: number, x: number, y: number): PartInstance | null {
+  buyAndPlace(slot: number, x: number, y: number, angle = 0): PartInstance | null {
     const id = this.shop.offers[slot];
     if (!this.editable || !id) return null;
     if (isInlay(id)) {
@@ -895,7 +907,7 @@ export class Game {
     this.checkpoint();
     if (!this.sandbox) this.money -= cost;
     this.sold(slot);
-    const pack = this.makePack(id, cost);
+    const pack = this.makePack(id, cost, angle);
     pack.forEach((inst, i) => {
       const at = spots[i];
       if (at) Object.assign(inst, { x: at.x, y: at.y, placed: true });
@@ -914,7 +926,7 @@ export class Game {
   }
 
   /** Test Lab: any part, free, straight onto the board. */
-  grantAndPlace(id: PartId, x: number, y: number): PartInstance | null {
+  grantAndPlace(id: PartId, x: number, y: number, angle = 0): PartInstance | null {
     if (!this.editable || !this.sandbox || id === 'mega' || !this.canDropAt(id, x, y)) return null;
     this.checkpoint();
     if (isInlay(id)) {
@@ -923,11 +935,12 @@ export class Game {
       this.setInlay(gem, target);
       return target;
     }
-    return this.addPlaced(id, x, y);
+    return this.addPlaced(id, x, y, angle);
   }
 
-  private addPlaced(id: PartId, x: number, y: number): PartInstance {
+  private addPlaced(id: PartId, x: number, y: number, angle = 0): PartInstance {
     const inst = makePart(id, this.layout.nextUid++, x, y, true);
+    inst.angle = aimed(id, angle);
     this.layout.parts.push(inst);
     this.clearHeat();
     this.sim.updatePart(inst);
@@ -1089,6 +1102,9 @@ export class Game {
     this.sim.spawnBall();
   }
 
+  /** Game events from outside a step (Cash Out ends the round between steps): the next step reports them. */
+  private queued: GameEvent[] = [];
+
   cashOut() {
     if (this.mode === 'round' && this.scorer.goalReached) this.endBall(true);
   }
@@ -1096,7 +1112,8 @@ export class Game {
   // ---- stepping -------------------------------------------------------------------
 
   step(input: Input = NO_INPUT): StepResult {
-    const result: StepResult = { sim: [], score: [], game: [] };
+    const result: StepResult = { sim: [], score: [], game: this.queued };
+    this.queued = [];
     if (this.mode === 'roundEnd' || this.mode === 'runOver') {
       // the table is empty, but the flippers still follow the buttons: freezing the sim here left a flipper
       // that was held as the last ball drained stuck up for the whole payout screen
@@ -1121,7 +1138,7 @@ export class Game {
   }
 
   private endBall(forced: boolean, result?: StepResult) {
-    const out: GameEvent[] = result ? result.game : [];
+    const out: GameEvent[] = result ? result.game : this.queued;
     if (forced) this.sim.reset(this.layout, { seed: this.seed++, mods: simModsOf(this.mods), ballClock: this.mods.ballClock }); // Cash Out: clear the table at once
     this.ballsLeft--;
     out.push({ type: 'ballEnd', ballsLeft: this.ballsLeft });

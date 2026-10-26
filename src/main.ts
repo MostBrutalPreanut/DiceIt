@@ -1,7 +1,7 @@
 import './style.css';
 import './ui/menu.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { dialValue, footprint, isDecor, isInlay, PARTS, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
+import { dialValue, footprint, isDecor, isInlay, PARTS, RITUAL_NAMES, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
 import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, KIND_NAMES, type DecalId, type DecalPick } from './data/decals';
 import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
 import { FINAL_ROUND } from './data/bosses';
@@ -9,10 +9,11 @@ import { AudioFx } from './audio';
 import { Game, goalFor, parseRun, type Arrangement, type GameEvent, type Payout, type RunSave } from './game/game';
 import type { ScoreEvent } from './game/scoring';
 import { Renderer, type DrawState } from './render/renderer';
+import type { Mood } from './render/props';
 import { FxOverlay } from './render/overlay';
 import { FACTORY, roleFill, themeById, THEMES, themeVars, type Theme } from './render/theme';
 import { DT } from './sim/constants';
-import { canPlaceLedge } from './sim/layout';
+import { canPlaceLedge, starterLayout } from './sim/layout';
 import { clampLedge, LEDGE, ledgeSeg } from './sim/table';
 import { Bot } from './sim/bot';
 import type { Input, SimEvent } from './sim/sim';
@@ -21,7 +22,6 @@ import { applyBackdrop, chase, makeBulbs, MultDial, Odometer } from './ui/hud';
 import { DecalPicker } from './ui/decalPick';
 import './ui/decalPick.css';
 import { Flyers, setFlyEffects } from './ui/flyers';
-import './ui/flyers.css';
 import { Menu, type SavedRunInfo } from './ui/menu';
 import { keyLabel, loadSettings, saveSettings, type Settings } from './ui/settings';
 import { Scoreboard, sourceOfSave, type RunResult } from './ui/scoreboard';
@@ -66,7 +66,7 @@ async function main() {
   const overlay = new FxOverlay(theme);
   await overlay.init();
   const audio = new AudioFx();
-  /** Points and coins fly from the part to the score dock and the money stack. */
+  /** Points and coins fly from the part to the score and the money stack. */
   const flyers = new Flyers(overlay, renderer, { coinLand: () => audio.coinLand() });
   const odometer = new Odometer($('score'));
   // the demo machine behind the main menu: it plays, it never saves
@@ -86,12 +86,16 @@ async function main() {
   let hover: number | null = null;
   let hoverDecal: number | null = null;
   let selectedDecal: number | null = null;
-  let dragging: { uid: number; dx: number; dy: number; moved: boolean; warned?: boolean } | null = null;
   let dragFromInventory = false;
-  /** An offer being dragged out of the shop (slot null: the Test Lab catalog). */
-  let shopDrag: { id: PartId; slot: number | null; x0: number; y0: number; moving: boolean; carry: boolean; el: HTMLElement } | null = null;
-  /** A part picked up off the table with a click: it follows the pointer until the next click sets it down. */
-  let carry: { uid: number; moved: boolean } | null = null;
+  /** An offer being dragged out of the shop (slot null: the Test Lab catalog), and the angle R has turned it to. */
+  let shopDrag: { id: PartId; slot: number | null; x0: number; y0: number; moving: boolean; carry: boolean; el: HTMLElement; angle: number } | null = null;
+  /**
+   * A part being moved (the Move button on its card): it follows the pointer until the next click sets it down.
+   * `depth` is the undo history when it was picked up, so putting it back undoes the move and any turns.
+   */
+  let carry: { uid: number; moved: boolean; depth: number; fee: number } | null = null;
+  /** Where a decal's card points (the click that opened it); a part's card follows the part. */
+  let inspectAt: { x: number; y: number } | null = null;
   /** The wall ledge being dragged up or down the left wall: where it would go, and where the grab started. */
   let ledgeDrag: { dy: number; y: number } | null = null;
   let hoverLedge = false;
@@ -123,6 +127,14 @@ async function main() {
     const key = `${t.id}:${id}:${w}x${h}`;
     let url = icons.get(key);
     if (!url) { url = renderer.icon(id, w, h, { theme: t }).toDataURL(); icons.set(key, url); }
+    return url;
+  };
+
+  /** Big Boi pulling a face, in a machine's colours: the main menu's title wears him (he blinks, and minds being poked). */
+  const boiURL = (id: MachineId, mood: Mood) => {
+    const key = `boi:${id}:${mood}`;
+    let url = icons.get(key);
+    if (!url) { url = renderer.icon('mega', 150, 120, { theme: themeById(id) ?? FACTORY, st: { mood } }).toDataURL(); icons.set(key, url); }
     return url;
   };
 
@@ -176,14 +188,26 @@ async function main() {
     tip.hidden = false;
     placeTip(cx, cy);
   };
+  /** A part's live line: what it did this round; decor says how it stands instead (it is never hit). */
+  const liveLine = (inst: PartInstance) => {
+    if (!isDecor(inst.def)) return statsLine(game.scorer.ledger.get(inst.uid));
+    if (!inst.placed) return 'In the toolbox: decor works only on the cabinet.';
+    const r = PARTS[inst.def].recipe;
+    if (r.clock) { const t = game.scorer.label(inst); return t === 'MIDNIGHT' ? 'Midnight Madness: every hit pays double!' : `The clock says ${t}. Midnight comes at ${r.clock.hits} hits.`; }
+    if (r.altar) {
+      const a = game.scorer.altarOf(inst), now = game.scorer.ritualNow();
+      return now ? `${RITUAL_NAMES[now.kind]} under way: ${Math.ceil(now.left)} s left.` : `${a.sets} of ${r.altar.sets} sets towards the next ritual: a ${RITUAL_NAMES[a.next]} (strength ${a.strength + 1}).`;
+    }
+    return 'Working: it stands on the cabinet.';
+  };
   const tipPart = (def: PartDef, inst: PartInstance | undefined, cx: number, cy: number, live: boolean) => {
     const tip = $('tip');
     tip.className = 'card tipcard';
     tip.style.setProperty('--head', roleVar(def.id));
     const row = inst ? game.scorer.ledger.get(inst.uid) : undefined;
     tip.innerHTML = partCard(def, inst, { ...ctxFor(def, inst), scorer: live ? game.scorer : undefined, mult: game.scorer.mult }, {
-      stats: live ? statsLine(row) : undefined,
-      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? `drag to move${inst && game.moveFee(inst) ? ` ($${game.moveFee(inst)}, once a visit)` : ''} · R rotate · Del to toolbox` : 'in the workshop: drag, R rotate, Del to toolbox') : inst ? 'click it, then the table' : 'drag it onto the table, or Buy to put it in the toolbox',
+      stats: live && inst ? liveLine(inst) : live ? statsLine(row) : undefined,
+      keys: inst?.fixed ? 'part of every machine: it stays where it is' : live ? (game.editable ? `click it to move, store or sell it${inst && game.moveFee(inst) ? ` · moving costs $${game.moveFee(inst)}` : ''}` : 'in the workshop: click it to move, store or sell it') : inst ? 'click it, then the table · R turns it' : 'drag it onto the table (R turns it), or Buy to put it in the toolbox',
     });
     tip.hidden = false;
     placeTip(cx, cy);
@@ -235,7 +259,7 @@ async function main() {
         audio.unlock();
         e.preventDefault();
         if (shopDrag?.carry) return; // the capture handler deals with a click while something is in hand
-        shopDrag = { id: def.id, slot, x0: e.clientX, y0: e.clientY, moving: false, carry: false, el };
+        shopDrag = { id: def.id, slot, x0: e.clientX, y0: e.clientY, moving: false, carry: false, el, angle: 0 };
       });
     });
   }
@@ -318,65 +342,121 @@ async function main() {
     }
   }
 
-  function renderSelected() {
-    const card = $('selected');
-    const inst = game.part(selected ?? -1);
-    card.hidden = !inst || !game.editable;
-    if (!inst || !game.editable) return;
-    const def = defFor(inst.def);
-    card.className = 'card tipcard';
-    card.style.setProperty('--head', roleVar(def.id));
-    card.innerHTML = `${partCard(def, inst, { ...ctxFor(def, inst), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false })}
-      ${def.dials.map((d) => `<div class="dial"><div class="row2"><span>${d.label}</span><b id="dv-${d.id}">${d.fmt ? d.fmt(dialValue(inst, d.id)) : dialValue(inst, d.id)}</b></div>
-        <input data-dial="${d.id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${dialValue(inst, d.id)}" /><div class="hint">${d.tradeoff}</div></div>`).join('')}
-      <div class="live" id="selLive">${liveText(inst)}</div>
-      ${inst.fixed ? '<div class="hint">Part of every machine: it stays where it is.</div>' : `<div class="btnrow">
-        ${def.rotatable ? '<button id="btnRotL">⟲ 15°</button><button id="btnRotR">15° ⟳</button>' : ''}
-        ${inst.placed ? '<button id="btnStore">To toolbox</button>' : ''}
-        <button id="btnSell">${removeLabel(inst)}</button>
-      </div>`}`;
-    for (const input of card.querySelectorAll<HTMLInputElement>('input[data-dial]')) {
-      for (const ev of ['pointerdown', 'keydown'] as const) input.addEventListener(ev, () => game.checkpoint());
-      input.oninput = () => {
-        const d = def.dials.find((x) => x.id === input.dataset.dial)!;
-        game.setDial(inst.uid, d.id, Number(input.value));
-        $(`dv-${d.id}`).textContent = d.fmt ? d.fmt(Number(input.value)) : input.value;
-        // what it pays follows the dial
-        const now = card.querySelector('.now');
-        const fresh = partCard(def, inst, { ...ctxFor(def, inst), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false }).match(/<div class="now">([\s\S]*?)<\/div>/);
-        if (now && fresh) now.innerHTML = fresh[1];
-        persist();
+  /**
+   * The picked part's card, pinned next to it on the table: what it pays, its dial, and what you can do with it
+   * (Move and To toolbox say what they cost). A decal clicked on the apron gets the same card, with Peel.
+   */
+  function renderInspect() {
+    const card = $('inspect');
+    const inst = selected !== null && !carry ? game.part(selected) : undefined;
+    const decal = selectedDecal !== null ? game.decals[selectedDecal] : undefined;
+    const part = inst?.placed ? inst : undefined;
+    card.hidden = !game.editable || (!part && !decal);
+    if (card.hidden) return;
+    if (decal) {
+      card.className = 'card tipcard inspect';
+      card.style.removeProperty('--head');
+      card.innerHTML = `<button class="ix" aria-label="Close">×</button>${decalCard(decal, null)}<div class="btnrow acts"><button id="btnPeel">Peel it off</button></div>`;
+      $('btnPeel').onclick = () => {
+        const name = DECALS[decal.id].name.toUpperCase();
+        if (game.peel(selectedDecal!)) { selectedDecal = null; audio.remove(); say(`${name} PEELED. GONE FOR GOOD`); persist(); afterHistory(); }
       };
+    } else if (part) {
+      const def = defFor(part.def);
+      const fee = game.moveFee(part), broke = fee > game.money, scrap = -game.removeValue(part) > game.money;
+      const price = `<span class="fee ${fee ? '' : 'free'}">${fee ? `$${fee}` : 'free'}</span>`;
+      card.className = 'card tipcard inspect';
+      card.style.setProperty('--head', roleVar(def.id));
+      card.innerHTML = `<button class="ix" aria-label="Close">×</button>${partCard(def, part, { ...ctxFor(def, part), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false, compact: true })}
+        ${def.dials.map((d) => `<div class="dial"><div class="row2"><span>${d.label}</span><b id="dv-${d.id}">${d.fmt ? d.fmt(dialValue(part, d.id)) : dialValue(part, d.id)}</b></div>
+          <input data-dial="${d.id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${dialValue(part, d.id)}" /><div class="hint">${d.tradeoff}</div></div>`).join('')}
+        <div class="stats" id="selLive">${liveLine(part)}</div>
+        ${part.fixed ? '<div class="hint">Part of every machine: it stays where it is.</div>' : `<div class="btnrow acts">
+          <button id="btnMove" ${broke ? 'disabled' : ''} title="Pick it up and click the table to set it down${def.rotatable ? ' (R or the wheel turns it)' : ''}">Move ${price}</button>
+          <button id="btnStore" ${broke ? 'disabled' : ''}>To toolbox ${price}</button>
+          <button id="btnSell" class="sell" ${scrap ? 'disabled' : ''}>${removeLabel(part)}</button>
+        </div>
+        <div class="hint feehint">${broke ? `Moving it costs $${fee} and you have $${game.money}.` : fee ? `Moving it costs $${fee}, once a visit: after that it moves free until the next round.` : 'Moving it is free right now.'}</div>`}`;
+      for (const input of card.querySelectorAll<HTMLInputElement>('input[data-dial]')) {
+        for (const ev of ['pointerdown', 'keydown'] as const) input.addEventListener(ev, () => game.checkpoint());
+        input.oninput = () => {
+          const d = def.dials.find((x) => x.id === input.dataset.dial)!;
+          game.setDial(part.uid, d.id, Number(input.value));
+          $(`dv-${d.id}`).textContent = d.fmt ? d.fmt(Number(input.value)) : input.value;
+          // what it pays follows the dial
+          const now = card.querySelector('.now'), math = card.querySelector('.math');
+          const fresh = partCard(def, part, { ...ctxFor(def, part), scorer: game.scorer, mult: game.scorer.mult }, { recipe: false, compact: true });
+          const pick = (cls: string) => fresh.match(new RegExp(`<div class="${cls}[^"]*">([\\s\\S]*?)</div>`))?.[1];
+          if (now) now.innerHTML = pick('now') ?? now.innerHTML;
+          if (math) math.innerHTML = pick('math') ?? math.innerHTML;
+          persist();
+        };
+      }
+      if (!part.fixed) {
+        $('btnMove').onclick = () => startMove(part.uid);
+        $('btnStore').onclick = () => storeSelected();
+        $('btnSell').onclick = () => removePart(part);
+      }
     }
-    if (inst.fixed) return;
-    const rot = (dir: number) => { game.rotate(inst.uid, dir * (Math.PI / 12)); persist(); };
-    if (def.rotatable) { $('btnRotL').onclick = () => rot(1); $('btnRotR').onclick = () => rot(-1); }
-    if (inst.placed) $('btnStore').onclick = () => storeSelected();
-    $('btnSell').onclick = () => removePart(inst);
+    card.querySelector<HTMLButtonElement>('.ix')!.onclick = () => { selected = null; selectedDecal = null; refreshWorkshop(); };
+    placeInspect(true);
   }
 
-  /** The decal clicked on the apron: what it does, and (between rounds) the Peel button. */
-  function renderDecal() {
-    const card = $('decalCard');
-    const d = selectedDecal !== null ? game.decals[selectedDecal] : undefined;
-    card.hidden = !d || !game.editable;
-    if (!d || !game.editable) return;
-    card.className = 'card tipcard';
-    card.innerHTML = `${decalCard(d, true)}<div class="btnrow"><button id="btnPeel">Peel it off</button></div>`;
-    $('btnPeel').onclick = () => {
-      const name = DECALS[d.id].name.toUpperCase();
-      if (game.peel(selectedDecal!)) { selectedDecal = null; audio.remove(); say(`${name} PEELED. GONE FOR GOOD`); persist(); afterHistory(); }
-    };
+  /** Keep the card beside its part (to the right, or the left at the edge), on screen. */
+  let inspectPos = '';
+  function placeInspect(force = false) {
+    const card = $('inspect');
+    if (card.hidden) return;
+    const inst = selected !== null ? game.part(selected) : undefined;
+    let ax: number, ay: number, gap: number;
+    if (inst?.placed && selectedDecal === null) {
+      const c = renderer.toClient(inst.x, inst.y, 0.5), e = renderer.toClient(inst.x + footprint(PARTS[inst.def]), inst.y, 0.5);
+      ax = c.x; ay = c.y; gap = Math.abs(e.x - c.x) + 16;
+    } else if (inspectAt) { ax = inspectAt.x; ay = inspectAt.y; gap = 28; } else return;
+    const w = card.offsetWidth, h = card.offsetHeight;
+    let left = ax + gap;
+    if (left + w > innerWidth - 8) left = ax - gap - w;
+    left = Math.max(8, Math.min(left, innerWidth - w - 8));
+    const top = Math.max(8, Math.min(ay - h * 0.3, innerHeight - h - 8));
+    const key = `${Math.round(left)}|${Math.round(top)}`;
+    if (key === inspectPos && !force) return;
+    inspectPos = key;
+    card.style.left = `${Math.round(left)}px`;
+    card.style.top = `${Math.round(top)}px`;
   }
 
-  const liveText = (inst: PartInstance) => {
-    const label = game.scorer.label(inst);
-    const row = game.scorer.ledger.get(inst.uid);
-    const out: string[] = [];
-    if (label) out.push(`Pays right now: ${label}`);
-    if (row) out.push(statsLine(row));
-    return out.join('<br>') || 'Not hit yet.';
-  };
+  /** Move: the part comes off its spot and follows the pointer; the next click on the table sets it down. */
+  function startMove(uid: number) {
+    const inst = game.part(uid);
+    if (!inst || inst.fixed || !inst.placed || !game.editable) return;
+    const fee = game.moveFee(inst);
+    if (fee > game.money) { say(`MOVING IT COSTS $${fee}`); return; }
+    carry = { uid, moved: false, depth: game.historyDepth, fee };
+    selected = uid;
+    selectedDecal = null;
+    $('tip').hidden = true;
+    audio.pickUp();
+    say(fee ? `MOVING IT COSTS $${fee}. CLICK TO SET IT DOWN` : 'CLICK TO SET IT DOWN');
+    refreshWorkshop();
+  }
+  /** Set the carried part down where it is. */
+  function putDown() {
+    if (!carry) return;
+    const paid = carry.moved ? carry.fee : 0;
+    carry = null;
+    audio.place();
+    if (paid) say(`MOVED FOR $${paid}`);
+    persist();
+    refreshWorkshop();
+  }
+  /** Put the carried part back where it was picked up (and undo any turns): nothing is paid. */
+  function dropCarry() {
+    if (!carry) return;
+    const depth = carry.depth;
+    carry = null;
+    while (game.historyDepth > depth && game.undo()) { /* back to where it was */ }
+    persist();
+  }
 
   /** The remove button: a part bought this visit goes back for what it cost; any other costs the scrap fee. */
   function removeLabel(inst: PartInstance) {
@@ -447,8 +527,7 @@ async function main() {
     renderBoss();
     renderShop();
     renderInventory();
-    renderSelected();
-    renderDecal();
+    renderInspect();
     updateStepper(); // the Play Round button follows a pick or a skip at once, not on the next frame
   }
 
@@ -459,10 +538,10 @@ async function main() {
     let part: PartInstance | null = null;
     if (over === canvas) {
       const p = spotFor(d.id, cx, cy);
-      part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y) : game.buyAndPlace(d.slot, p.x, p.y);
+      part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y, d.angle) : game.buyAndPlace(d.slot, p.x, p.y, d.angle);
       if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? 'DECOR GOES ON THE CABINET' : 'NO ROOM THERE'); return false; }
     } else if (over?.closest('#inventoryBox')) {
-      part = d.slot === null ? game.grant(d.id) : game.buy(d.slot);
+      part = d.slot === null ? game.grant(d.id, d.angle) : game.buy(d.slot, d.angle);
       if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(d.slot !== null && !game.hasRoomFor(d.id) ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
     } else return false;
     persist();
@@ -523,7 +602,7 @@ async function main() {
   /** Right-click or Esc: whatever is in hand goes back where it came from. */
   function cancelHold() {
     if (shopDrag) { endShop(); audio.remove(); }
-    if (carry) { if (carry.moved) game.undo(); carry = null; audio.remove(); persist(); }
+    if (carry) { dropCarry(); audio.remove(); }
     armed = null;
     refreshWorkshop();
   }
@@ -551,24 +630,19 @@ async function main() {
     return Math.hypot(x - (s.x1 + u * dx), y - (s.y1 + u * dy)) < 0.9;
   };
 
+  // a part on the table is picked with a click (its card opens beside it); it only moves with the card's Move button
   canvas.addEventListener('pointerdown', (e) => {
     audio.unlock();
     if (!game.editable || e.button !== 0) return;
     const p = renderer.toSim(e.clientX, e.clientY);
     pointer = p;
     pointerCab = renderer.toCabinet(e.clientX, e.clientY);
-    if (!carry && armed === null && !hitAt(e.clientX, e.clientY) && onLedge(p.x, p.y)) {
+    if (carry) { putDown(); return; } // a part being moved: this click sets it down where it is
+    if (armed === null && !hitAt(e.clientX, e.clientY) && onLedge(p.x, p.y)) {
       const y = game.layout.ledge ?? LEDGE.default;
       ledgeDrag = { dy: y - p.y, y };
       canvas.setPointerCapture(e.pointerId);
       audio.pickUp();
-      return;
-    }
-    if (carry) { // a part picked up off the table: this click sets it down where it is
-      carry = null;
-      audio.place();
-      persist();
-      refreshWorkshop();
       return;
     }
     if (armed !== null) {
@@ -584,16 +658,14 @@ async function main() {
       const hit = hitAt(e.clientX, e.clientY);
       const decal = renderer.decalAt(e.clientX, e.clientY);
       if (hit) {
-        selected = hit.uid;
+        selected = selected === hit.uid ? null : hit.uid; // a second click closes its card
         selectedDecal = null;
-        if (!hit.fixed) { // the Big Boi in the middle stays put
-          const q = isDecor(hit.def) ? pointerCab : p;
-          dragging = { uid: hit.uid, dx: hit.x - q.x, dy: hit.y - q.y, moved: false };
-          canvas.setPointerCapture(e.pointerId);
-        }
+        $('tip').hidden = true;
       } else if (decal !== null && game.decals[decal]) {
-        selectedDecal = decal;
+        selectedDecal = selectedDecal === decal ? null : decal;
+        inspectAt = { x: e.clientX, y: e.clientY };
         selected = null;
+        $('tip').hidden = true;
       } else { selected = null; selectedDecal = null; }
     }
     refreshWorkshop();
@@ -608,66 +680,42 @@ async function main() {
     if (carry && game.editable) {
       const q = isDecor(game.part(carry.uid)?.def ?? 'pop') ? pointerCab : pointer;
       if (game.place(carry.uid, q.x, q.y, !carry.moved)) carry.moved = true;
-      const box = $('inventoryBox').getBoundingClientRect();
-      $('inventoryBox').classList.toggle('drop', e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom);
-    }
-    if (dragging && game.editable) {
-      const dp = game.part(dragging.uid);
-      if (!dragging.moved && dp && game.moveFee(dp) > game.money && !dragging.warned) { dragging.warned = true; say(`MOVING IT COSTS $${game.moveFee(dp)}`); }
-      const q = dp && isDecor(dp.def) ? pointerCab : pointer;
-      if (game.place(dragging.uid, q.x + dragging.dx, q.y + dragging.dy, !dragging.moved)) {
-        dragging.moved = true;
-        const box = $('inventoryBox');
-        const r = box.getBoundingClientRect();
-        box.classList.toggle('drop', e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
-      }
     }
     showTip(e.clientX, e.clientY);
   });
-  canvas.addEventListener('pointerup', (e) => {
-    if (ledgeDrag) {
-      const y = ledgeDrag.y;
-      ledgeDrag = null;
-      if (y !== (game.layout.ledge ?? LEDGE.default)) {
-        if (game.moveLedge(y)) { audio.place(); say('LEDGE MOVED. THE BALL WILL NOTICE'); persist(); } else say('NO ROOM THERE');
-      }
-      refreshWorkshop();
-      return;
+  canvas.addEventListener('pointerup', () => {
+    if (!ledgeDrag) return;
+    const y = ledgeDrag.y;
+    ledgeDrag = null;
+    if (y !== (game.layout.ledge ?? LEDGE.default)) {
+      if (game.moveLedge(y)) { audio.place(); say('LEDGE MOVED. THE BALL WILL NOTICE'); persist(); } else say('NO ROOM THERE');
     }
-    if (dragging) {
-      // a click without a drag picks the part up: it follows the pointer until the next click
-      if (!dragging.moved) { carry = { uid: dragging.uid, moved: false }; dragging = null; audio.pickUp(); refreshWorkshop(); return; }
-      // dropped on the toolbox: take it off the board
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      if (el?.closest('#inventoryBox')) storeSelected();
-      else audio.place();
-      persist();
-      dragging = null;
-      $('inventoryBox').classList.remove('drop');
-      refreshWorkshop();
-    }
+    refreshWorkshop();
   });
-  // a part carried off the table can be put in the toolbox with a click on it
-  $('inventoryBox').addEventListener('pointerdown', (e) => {
-    if (!carry || e.button !== 0) return;
-    e.stopPropagation();
-    selected = carry.uid;
-    carry = null;
-    $('inventoryBox').classList.remove('drop');
-    storeSelected();
-  }, true);
   canvas.addEventListener('pointerleave', () => {
     pointer = null; pointerCab = null; hover = null; hoverDecal = null; hoverLedge = false; $('tip').hidden = true;
-    // a part in hand goes back to its spot when the pointer leaves the table (reaching for its card, say)
-    if (carry) { if (carry.moved) { game.undo(); persist(); } carry = null; refreshWorkshop(); }
+    // a part being moved goes back to its spot when the pointer leaves the table
+    if (carry) { dropCarry(); refreshWorkshop(); }
   });
   canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); });
   canvas.addEventListener('wheel', (e) => {
-    const uid = armed ?? selected;
-    if (uid == null || !game.editable) return;
+    if (!game.editable || !(shopDrag?.moving || shopDrag?.carry || armed !== null || carry || selected !== null)) return;
     e.preventDefault();
-    game.rotate(uid, (e.deltaY < 0 ? 1 : -1) * (Math.PI / 12));
+    turn(e.deltaY < 0 ? 1 : -1);
   }, { passive: false });
+  /** R or the wheel: turn whatever is in hand (an offer, a toolbox part, a part being moved), or the picked part, by 15°. */
+  function turn(dir: number) {
+    if (!game.editable) return;
+    const step = dir * (Math.PI / 12);
+    if (shopDrag && (shopDrag.moving || shopDrag.carry)) {
+      if (PARTS[shopDrag.id].rotatable) { const TAU = Math.PI * 2; shopDrag.angle = (((shopDrag.angle + step) % TAU) + TAU) % TAU; }
+      return;
+    }
+    const uid = armed ?? carry?.uid ?? selected;
+    if (uid == null) return;
+    game.rotate(uid, step);
+    if (!carry) persist();
+  }
   // dragging an inventory part onto the table: release over the canvas to place it
   addEventListener('pointerup', (e) => {
     if (!dragFromInventory || armed === null) { dragFromInventory = false; return; }
@@ -696,9 +744,10 @@ async function main() {
 
   function showTip(cx: number, cy: number) {
     if (shopDrag?.moving || shopDrag?.carry || carry) { $('tip').hidden = true; return; }
-    const inst = hover != null && !dragging ? game.part(hover) : undefined;
-    if (inst) { tipPart(defFor(inst.def), inst, cx, cy, true); return; }
-    const d = hoverDecal !== null && !dragging ? game.decals[hoverDecal] : undefined;
+    const inst = hover != null ? game.part(hover) : undefined;
+    // the picked part already has its card open beside it
+    if (inst && !(inst.uid === selected && !$('inspect').hidden)) { tipPart(defFor(inst.def), inst, cx, cy, true); return; }
+    const d = hoverDecal !== null && hoverDecal !== selectedDecal ? game.decals[hoverDecal] : undefined;
     if (d) {
       const tip = $('tip');
       tip.className = 'card tipcard';
@@ -707,11 +756,11 @@ async function main() {
       placeTip(cx, cy);
       return;
     }
-    if (hoverLedge && !dragging) {
+    if (hoverLedge) {
       tipPlain('<b>Wall ledge</b>: a ball sliding down the left wall rolls back into the field off it, so where it sits decides where those balls land. Every run puts it somewhere new; drag it up or down the wall to move it (free).', cx, cy);
       return;
     }
-    if (hoverDecal !== null && !dragging && game.decals.length < DECAL_SLOTS) {
+    if (hoverDecal !== null && !d && game.decals.length < DECAL_SLOTS && !game.decals[hoverDecal]) {
       tipPlain('<b>Empty decal slot</b>: beat a boss and pick one of three decals, and it sticks here. One per boss: four by the final boss.', cx, cy);
       return;
     }
@@ -742,14 +791,16 @@ async function main() {
     if (e.code === 'KeyX') nudgePulse = 1;
     if (e.code === 'Tab') game.cashOut();
     if (e.code === 'Enter' && game.canStart && overlayEl.hidden) startRound();
+    else if (e.code === 'Enter' && !overlayEl.hidden) { if (clearReveal) clearReveal(); else overlayEl.querySelector<HTMLButtonElement>('#btnNext, #btnEndless, #btnAgain')?.click(); }
     if (e.code === 'KeyM') say(audio.toggleMute() ? 'SOUND OFF. THE SILENCE IS LOUD' : 'SOUND ON');
     if (e.code === settings.keys.launch && game.mode === 'workshop' && game.sim.ballCount === 0) { game.testBall(); sayKey('start'); }
-    if (e.code === 'KeyR' && game.editable) {
-      const uid = armed ?? selected;
-      if (uid != null) { game.rotate(uid, (e.shiftKey ? -1 : 1) * (Math.PI / 12)); persist(); }
+    if (e.code === 'KeyR' && game.editable) turn(e.shiftKey ? -1 : 1);
+    if ((e.code === 'Delete' || e.code === 'Backspace') && game.editable && !carry) storeSelected();
+    if (e.code === 'Escape') {
+      if (shopDrag || carry || armed !== null) cancelHold();
+      else if (game.editable && (selected !== null || selectedDecal !== null)) { selected = null; selectedDecal = null; refreshWorkshop(); } // Esc closes the card first
+      else openPause();
     }
-    if ((e.code === 'Delete' || e.code === 'Backspace') && game.editable) storeSelected();
-    if (e.code === 'Escape') { if (shopDrag || carry || armed !== null) cancelHold(); else { selected = null; selectedDecal = null; refreshWorkshop(); openPause(); } }
   });
   addEventListener('keyup', (e) => keys.delete(e.code));
   addEventListener('blur', () => keys.clear());
@@ -900,7 +951,7 @@ async function main() {
   };
   const onScore = (s: ScoreEvent) => {
     renderer.onScore(s);
-    // points fly to the score dock, coins to the money stack, a rising Mult stamps and flies to the dial: effects point at their consequence
+    // points fly to the score, coins to the money stack, a rising Mult stamps and flies to the dial: effects point at their consequence
     if (!simulating) flyers.onScore(s);
     if (s.multAfter > s.multBefore + 1e-9 && !simulating) {
       const now = performance.now();
@@ -926,6 +977,8 @@ async function main() {
     if (g.type === 'goal') { audio.goal(); renderer.onBigMoment(); sayKey('goal'); }
     if (g.type === 'roundWon') {
       board.noteBest(game.scorer.score);
+      audio.roundWon(g.runWon);
+      renderer.bigBoiMood('cool', 6);
       if (g.runWon) { say('THE FINAL BOSS IS DOWN. YOU WIN. FREE PLAY!'); renderer.bigBoiMood('cool', 30); board.record(game, 'won', game.sandbox); } else sayKey('roundWon');
       showOverlay(g.runWon ? 'champ' : 'won', g.payout); persist();
     }
@@ -933,39 +986,95 @@ async function main() {
     if (g.type === 'ballEnd') lastMultBand = 1;
   };
 
-  // overlayEl is declared up top (the keyboard needs it)
+  /** While an end-of-round card is still counting in: call it to skip to the end. */
+  let clearReveal: (() => void) | null = null;
+  /**
+   * The cards at the end of a round, all built the same way: a banner drops in (Big Boi pulling a face beside it),
+   * the score counts up, the rest prints line by line, and the buttons pop up last. A click (or Enter) skips to the end.
+   *  - won: ROUND CLEARED, with the payout, coin by coin
+   *  - champ: the final boss is down, YOU WIN: keep playing (endless, every boss back in the draw) or start again
+   *  - over: GAME OVER: how far along the map you got, your points, what your machine became
+   */
   function showOverlay(kind: 'won' | 'champ' | 'over', payout?: Payout) {
     overlayEl.hidden = false;
+    overlayEl.onpointerdown = null;
+    clearReveal = null;
     overlayEl.classList.toggle('full', kind !== 'won');
-    if (kind === 'champ' && payout) {
-      // the final boss is down: the run is won. Keep playing (endless, every boss back in the draw) or start again
-      overlayEl.innerHTML = `<div class="card summary champ"><h3>You beat the machine!</h3>
-        <div class="hint">${game.boss?.name ?? 'The final boss'} is down: ${fmt(game.scorer.score)} of ${fmt(game.scorer.goal)}.</div>
-        <div class="roundmap">${mapSvg(FINAL_ROUND + 1)}</div>
-        <div class="stats"><span><b>${FINAL_ROUND}</b><small>rounds cleared</small></span><span><b>${fmt(game.runScore)}</b><small>total points</small></span><span><b>${game.decals.length}</b><small>decals</small></span></div>
-        <div class="btnrow"><button class="primary disp" id="btnEndless">Keep playing (endless)</button><button class="disp" id="btnAgain">New run</button></div></div>`;
-      ($('btnEndless') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; game.continueAfterRound(); sayKey(game.pending ? 'upgrade' : 'workshop'); refreshWorkshop(); persist(); };
-      ($('btnAgain') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; openMenu('picker'); };
-      return;
-    }
+    const boss = game.boss, score = game.scorer.score;
+    const colours = ['var(--accent)', 'var(--coin)', 'var(--role-pop-fill)', 'var(--role-lane-fill)', 'var(--glow)'];
+    const confetti = (n: number) => `<div class="cl-confetti" aria-hidden="true">${Array.from({ length: n }, (_, i) => `<i style="left:${(i * 37) % 100}%;--d:${((i * 53) % 90) / 100}s;--x:${((i * 29) % 60) - 30}px;--r:${(i * 97) % 360}deg;background:${colours[i % 5]}"></i>`).join('')}</div>`;
+    const head = (chip: string, title: string, mood: Mood) => `<div class="cl-head"><span class="cl-rays" aria-hidden="true"></span><span class="cl-round disp">${chip}</span><h3 class="cl-title disp">${title}</h3><img class="cl-boi" alt="" src="${boiURL(game.machine, mood)}"></div>`;
+    const scoreRow = `<div class="cl-score"><b class="disp" id="clScore">0</b><span>of ${fmt(game.scorer.goal)}</span></div>`;
+    const stats = (items: [string | number, string][]) => `<div class="stats cl-step">${items.map(([v, l]) => `<span><b>${v}</b><small>${l}</small></span>`).join('')}</div>`;
     if (kind === 'won' && payout) {
-      overlayEl.innerHTML = `<div class="card"><h3>Round ${game.round} cleared!</h3>
-        <div class="hint">Score ${fmt(game.scorer.score)} vs goal ${fmt(game.scorer.goal)}</div><br/>
-        ${payout.lines.map((l) => `<div class="pay"><span>${l.label}</span><span>$${l.amount}</span></div>`).join('')}
-        <div class="pay total"><span>Total</span><span>$${payout.total}</span></div><div class="hint">Cash on hand: $${game.money}. Spend it in the shop.</div><br/>
-        <button class="primary disp" id="btnNext">${game.round % BOSS_EVERY === 0 ? 'Pick a decal' : 'To the workshop'}</button></div>`;
-      ($('btnNext') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; game.continueAfterRound(); sayKey(game.pending ? 'upgrade' : 'workshop'); refreshWorkshop(); persist(); };
+      overlayEl.innerHTML = `<div class="card clear won">${confetti(28)}${head(`Round ${game.round}`, 'Cleared!', 'cool')}
+        <div class="cl-body">${scoreRow}
+          <div class="cl-lines">${payout.lines.map((l) => `<div class="pay cl-step cl-coin"><span>${l.label}</span><b>+$${l.amount}</b></div>`).join('')}</div>
+          <div class="pay total cl-step cl-total"><span>Total</span><span>$${payout.total}</span></div>
+          <div class="hint cl-step">Cash on hand: <b>$${game.money}</b>. Spend it in the shop.</div>
+          <div class="cl-step cl-btns"><button class="primary disp cl-next" id="btnNext">${game.round % BOSS_EVERY === 0 ? 'Pick a decal' : 'To the workshop'}</button></div>
+          <div class="cl-skip">click to skip</div>
+        </div></div>`;
+      $('btnNext').onclick = () => { overlayEl.hidden = true; overlayEl.onpointerdown = null; game.continueAfterRound(); sayKey(game.pending ? 'upgrade' : 'workshop'); refreshWorkshop(); persist(); };
+    } else if (kind === 'champ') {
+      overlayEl.innerHTML = `<div class="card clear summary win">${confetti(64)}${head('The machine is beaten', 'You win!', 'cool')}
+        <div class="cl-body">${scoreRow}
+          <p class="cl-sub cl-step">${boss?.name ?? 'The final boss'} is down. All ${FINAL_ROUND} rounds, cleared.</p>
+          <div class="roundmap cl-step">${mapSvg(FINAL_ROUND + 1)}</div>
+          ${stats([[FINAL_ROUND, 'rounds cleared'], [fmt(game.runScore), 'total points'], [game.decals.length, 'decals']])}
+          <div class="btnrow cl-step cl-btns"><button class="primary disp cl-next" id="btnEndless">Keep playing (endless)</button><button class="disp" id="btnAgain">New run</button></div>
+          <div class="cl-skip">click to skip</div>
+        </div></div>`;
+      $('btnEndless').onclick = () => { overlayEl.hidden = true; overlayEl.onpointerdown = null; game.continueAfterRound(); sayKey(game.pending ? 'upgrade' : 'workshop'); refreshWorkshop(); persist(); };
+      $('btnAgain').onclick = () => { overlayEl.hidden = true; overlayEl.onpointerdown = null; openMenu('picker'); };
     } else {
-      // the run in one card: how far along the map you got, your points, what your machine became
-      const boss = game.boss;
-      overlayEl.innerHTML = `<div class="card summary"><h3>Run over</h3>
-        <div class="hint">${fmt(game.scorer.score)} of ${fmt(game.scorer.goal)} on round ${game.round}${boss ? `, against ${boss.name}` : ''}.</div>
-        <div class="roundmap">${mapSvg(game.round)}</div>
-        <div class="stats"><span><b>${game.round - 1}</b><small>rounds cleared</small></span><span><b>${fmt(game.runScore)}</b><small>total points</small></span><span><b>${game.placed.length}</b><small>parts on the table</small></span></div>
-        <div class="btnrow"><button class="primary disp" id="btnAgain">New run</button><button class="disp" id="btnToMenu">Main menu</button></div></div>`;
-      ($('btnAgain') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; openMenu('picker'); };
-      ($('btnToMenu') as HTMLButtonElement).onclick = () => { overlayEl.hidden = true; openMenu(); };
+      const short = Math.max(0, game.scorer.goal - score);
+      overlayEl.innerHTML = `<div class="card clear summary lose">${head(`Round ${game.round}`, 'Game over', 'sad')}
+        <div class="cl-body">${scoreRow}
+          <p class="cl-sub cl-step">${fmt(short)} short${boss ? `, against ${boss.name}` : ''}. The machine wins this time.</p>
+          <div class="roundmap cl-step">${mapSvg(game.round)}</div>
+          ${stats([[game.round - 1, 'rounds cleared'], [fmt(game.runScore), 'total points'], [game.placed.length, 'parts on the table']])}
+          <div class="btnrow cl-step cl-btns"><button class="primary disp cl-next" id="btnAgain">New run</button><button class="disp" id="btnToMenu">Main menu</button></div>
+          <div class="cl-skip">click to skip</div>
+        </div></div>`;
+      $('btnAgain').onclick = () => { overlayEl.hidden = true; overlayEl.onpointerdown = null; openMenu('picker'); };
+      $('btnToMenu').onclick = () => { overlayEl.hidden = true; overlayEl.onpointerdown = null; openMenu(); };
     }
+    const card = overlayEl.querySelector<HTMLElement>('.clear')!;
+    const steps = [...card.querySelectorAll<HTMLElement>('.cl-step')];
+    const scoreEl = $('clScore');
+    const timers: number[] = [];
+    let raf = 0;
+    const finish = () => {
+      timers.forEach(clearTimeout);
+      cancelAnimationFrame(raf);
+      scoreEl.textContent = fmt(score);
+      for (const el of steps) el.classList.add('on');
+      card.classList.add('done');
+      clearReveal = null;
+    };
+    clearReveal = finish;
+    // the score counts up (slower, with a sigh, when the run is lost)
+    const t0 = performance.now(), countFor = kind === 'over' ? 1300 : 900;
+    const count = (now: number) => {
+      const u = Math.min(1, (now - t0) / countFor);
+      scoreEl.textContent = fmt(score * (1 - Math.pow(1 - u, 3)));
+      if (u < 1) raf = requestAnimationFrame(count);
+    };
+    raf = requestAnimationFrame(count);
+    // then the rest prints, a line at a time: a coin for each payout line, a stamp for the total; the buttons pop up last
+    let coin = 0;
+    steps.forEach((el, i) => {
+      const last = el.classList.contains('cl-btns');
+      timers.push(window.setTimeout(() => {
+        el.classList.add('on');
+        if (el.classList.contains('cl-coin')) audio.tally(coin++);
+        else if (el.classList.contains('cl-total')) audio.buy();
+        else if (!last) audio.print(1);
+        if (last) { card.classList.add('done'); clearReveal = null; }
+      }, countFor + 150 + i * (kind === 'won' ? 280 : 340) + (last ? 200 : 0)));
+    });
+    overlayEl.onpointerdown = (e) => { if (clearReveal) { e.preventDefault(); clearReveal(); } };
   }
 
   // ---- HUD ------------------------------------------------------------------------------------------------------
@@ -1039,9 +1148,11 @@ async function main() {
     const inRound = game.mode === 'round' || game.mode === 'roundEnd' || game.mode === 'runOver';
     // the scoreboard says which half of the loop you are in: the workshop (buy and place), or play
     const playing = game.mode !== 'workshop';
+    // the music gets going while a round is played, more so as the goal gets close
+    audio.setIntensity(game.mode === 'round' ? 0.55 + 0.45 * Math.min(1, sc.score / Math.max(1, sc.goal)) : 0);
     $('phaseTitle').textContent = playing ? 'PLAY' : 'WORKSHOP';
     document.body.classList.toggle('playing', playing);
-    odometer.set(sc.score);
+    odometer.set(Math.round(flyers.shownScore)); // the drums count the points in as they land
     renderer.idle(playing ? fmt(sc.score) : `ROUND ${game.round}  GOAL ${fmt(goalFor(game.round))}`);
     $('mult').textContent = `×${sc.mult.toFixed(2)}`;
     $('mult').classList.toggle('hot', sc.mult >= 2);
@@ -1054,7 +1165,7 @@ async function main() {
     $('toGo').textContent = inRound ? (sc.goalReached ? 'GOAL HIT!' : `${fmt(Math.max(0, goal - sc.score))} to go`) : 'next round';
     $('goalFill').style.width = inRound ? `${Math.min(100, (sc.score / goal) * 100)}%` : '0%';
     $('goalFill').parentElement!.classList.toggle('hit', inRound && sc.goalReached);
-    flyers.hud({ round: sc, score: sc.score, goal, mult: sc.mult, money: game.sandbox ? null : game.money + (inRound ? sc.money : 0), playing, theme });
+    flyers.hud({ round: sc, score: sc.score, mult: sc.mult, theme });
     updateBalls(inRound);
     $('tiltFill').style.width = `${Math.min(100, game.sim.tiltMeter * 100)}%`;
     $('tiltFill').classList.toggle('danger', game.sim.tiltMeter > 0.55 || game.sim.tilted);
@@ -1068,7 +1179,6 @@ async function main() {
     const cash = $('btnCash') as HTMLButtonElement;
     cash.hidden = game.mode !== 'round';
     cash.disabled = !(game.mode === 'round' && sc.goalReached);
-    $('workshop').hidden = game.mode !== 'workshop';
     ($('btnUndo') as HTMLButtonElement).disabled = !game.canUndo;
     ($('btnRedo') as HTMLButtonElement).disabled = !game.canRedo;
     $('labTools').hidden = !game.sandbox;
@@ -1119,7 +1229,7 @@ async function main() {
       $('ledgerTotal').textContent = fmt(rows.reduce((a, [, g]) => a + g.points, 0));
       if (game.editable && selected != null && $('selLive')) {
         const inst = game.part(selected);
-        if (inst) $('selLive').innerHTML = liveText(inst);
+        if (inst) $('selLive').innerHTML = liveLine(inst);
       }
     }
   }
@@ -1172,7 +1282,11 @@ async function main() {
       if (hasRun && game.mode === 'workshop') persist();
       if (shopDrag || carry || armed !== null) cancelHold();
       overlayEl.hidden = true;
+      clearReveal = null;
       $('tip').hidden = true;
+      $('inspect').hidden = true;
+      selected = null;
+      selectedDecal = null;
       keys.clear();
       attract.start(theme.id);
       say('BIG BOI. PINBALL DESIGNER');
@@ -1223,7 +1337,8 @@ async function main() {
       const decals = Array.from({ length: DECAL_SLOTS }, (_, i) => { const d = r.decals[i]; return d ? { look: DECALS[d].look, rarity: DECALS[d].rarity } : null; });
       return renderer.tableShot(r.parts, 220, 456, { theme: t, ledge: r.ledge, decals }).toDataURL();
     },
-    bigBoi: (id) => iconURL('mega', 150, 120, themeById(id) ?? FACTORY),
+    bigBoi: (id, mood = 'happy') => boiURL(id, mood),
+    poke: () => { audio.unlock(); audio.poke(); say(['OI!', 'HEY. WATCH THE PAINT', 'THAT TICKLES', 'BIG BOI SAYS HI', 'POKE ME AGAIN. I DARE YOU'][Math.floor(Math.random() * 5)]); },
     settings: () => settings,
     setSettings: (s) => { audio.unlock(); applySettings(s); },
     wake: () => audio.unlock(),
@@ -1277,6 +1392,8 @@ async function main() {
       for (let f = 0; f < Math.round(seconds * 60); f++) { attract.step(1 / 60); renderer.draw(game, 1 / 60, IDLE_DRAW); }
     },
     theme: (id: string) => pickTheme(id),
+    /** Put a new run's starting bumpers from the toolbox onto their old spots, settled in (moving them costs again), for checks written for that start. */
+    seatStarters() { for (const p of starterLayout().parts) if (!p.fixed && game.place(p.uid, p.x, p.y)) delete game.part(p.uid)!.loose; refreshWorkshop(); },
     refresh: () => refreshWorkshop(),
   };
   (window as unknown as { __pinball: typeof debug }).__pinball = debug;
@@ -1294,6 +1411,7 @@ async function main() {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (attract.on) {
+      audio.setIntensity(0);
       attract.step(dt);
       attractDmd(dt);
       renderer.draw(game, dt, IDLE_DRAW);
@@ -1322,12 +1440,13 @@ async function main() {
     const ptr = (id: PartId) => (isDecor(id) ? pointerCab : pointer);
     const sp = shopDrag ? ptr(shopDrag.id) : null, ap = armedPart ? ptr(armedPart.def) : null;
     drawState.ghost = game.editable && (shopDrag?.moving || shopDrag?.carry) && sp
-      ? { def: shopDrag.id, x: sp.x, y: sp.y, angle: 0, valid: game.canDropAt(shopDrag.id, sp.x, sp.y) }
+      ? { def: shopDrag.id, x: sp.x, y: sp.y, angle: PARTS[shopDrag.id].rotatable ? shopDrag.angle : 0, valid: game.canDropAt(shopDrag.id, sp.x, sp.y) }
       : game.editable && armedPart && ap
         ? { def: armedPart.def, x: ap.x, y: ap.y, angle: armedPart.angle, valid: game.canDropAt(armedPart.def, ap.x, ap.y) }
         : null;
     renderer.draw(game, dt, drawState);
     updateHud(dt);
+    placeInspect();
     // the marquee bulbs chase (they hold still in Calm mode)
     bulbClock += dt;
     if (!calm && bulbClock > 0.35) { bulbClock = 0; chase(document, ++bulbPhase); }

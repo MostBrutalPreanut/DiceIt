@@ -62,7 +62,7 @@ export interface TipCtx {
  * The tooltip's fixed anatomy (art-direction §6): header, the next-hit number, the math as chips
  * (cross-part effects as their own chip), the recipe, this round, the dial with its trade-off, controls.
  */
-export function partCard(def: PartDef, inst: PartInstance | undefined, c: TipCtx, opts: { keys?: string; blurb?: boolean; stats?: string; dial?: boolean; recipe?: boolean } = {}): string {
+export function partCard(def: PartDef, inst: PartInstance | undefined, c: TipCtx, opts: { keys?: string; blurb?: boolean; stats?: string; dial?: boolean; recipe?: boolean; compact?: boolean } = {}): string {
   const r = def.recipe;
   const level = r.perLevel ? effectiveLevel(def.id, c.level, c.mods) : 0;
   const lvl = (r.perLevel ?? 0) * level;
@@ -81,15 +81,19 @@ export function partCard(def: PartDef, inst: PartInstance | undefined, c: TipCtx
     const pays = (b: number) => Math.round(b * mult);
     const top = tiers ? tiers[tiers.length - 1].x : 1;
     const now = tiers ? `${pays(base)}–${pays(base * top)}` : String(pays(base));
-    o.push(`<div class="now">${live ? `Next ${per} pays ${now}` : `Pays ${now} per ${per}`}</div>`);
     const chips: [string, string][] = [[String(r.points + lvl), 'base']];
     if (grown) chips.push([`+${grown}`, 'grown this ball']);
     if (Math.abs(dial - 1) > 0.001) chips.push([`×${num(dial)}`, 'dial']);
     if (Math.abs(upg - 1) > 0.001) chips.push([`×${num(upg)}`, 'upgrades']);
     if (tiers) chips.push([`×1–${top}`, 'hit tier']);
     if (lamp) chips.push([`+${Math.round(lamp * 100)}%`, 'Lamp glow']);
-    if (live) chips.push([`×${(c.mult ?? 1).toFixed(2)}`, 'your Mult']);
-    o.push(`<div class="chips">${chips.slice(0, 5).map(([v, l]) => `<span><b>${v}</b><small>${l}</small></span>`).join('')}</div>`);
+    const line = live ? `Next ${per} pays ${now}` : `Pays ${now} per ${per}`;
+    // compact (the picked part's card): the headline a size down, the math as one small line, no Mult
+    if (opts.compact) o.push(`<div class="now sm">${line}</div><div class="math">${chips.slice(0, 5).map(([v, l]) => `${l} <b>${v}</b>`).join(' · ')}</div>`);
+    else {
+      if (live) chips.push([`×${(c.mult ?? 1).toFixed(2)}`, 'your Mult']);
+      o.push(`<div class="now">${line}</div><div class="chips">${chips.slice(0, 5).map(([v, l]) => `<span><b>${v}</b><small>${l}</small></span>`).join('')}</div>`);
+    }
   }
   if (opts.recipe !== false) o.push(descHtml(def, inst, { level: c.level, mods: c.mods, machine: c.machine }));
   if (opts.stats) o.push(`<div class="stats">${opts.stats}</div>`);

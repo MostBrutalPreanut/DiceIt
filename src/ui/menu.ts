@@ -5,6 +5,7 @@ import { BIG_BOI_FOR, BIG_BOIS, defOn, type MachineId } from '../data/bigboi';
 import { DECALS } from '../data/decals';
 import { FINAL_ROUND } from '../data/bosses';
 import { describe } from '../data/parts';
+import type { Mood } from '../render/props';
 import { themeById, themeVars, THEMES, type Theme } from '../render/theme';
 import { fmt } from './html';
 import { backdropTile } from './hud';
@@ -28,8 +29,10 @@ export interface MenuHooks {
   records(): RunRecord[];
   /** A finished build as a picture (data URL). */
   thumb(rec: RunRecord): string;
-  /** Big Boi in a machine's colours (data URL). */
-  bigBoi(machine: MachineId): string;
+  /** Big Boi in a machine's colours (data URL), pulling a face (happy unless asked). */
+  bigBoi(machine: MachineId, mood?: Mood): string;
+  /** Big Boi on the main menu was poked. */
+  poke(): void;
   settings(): Settings;
   setSettings(s: Settings): void;
   /** Any key or click in a menu (browsers only start sound after one). */
@@ -67,6 +70,10 @@ export class Menu {
   private root: HTMLElement;
   /** The machine the attract table is showing: the title's Big Boi wears it. */
   private machine: MachineId = 'factory';
+  /** The title's Big Boi: when he next blinks, and the face he is pulling after a poke. */
+  private blinkTimer = 0;
+  private faceTimer = 0;
+  private face: Mood | null = null;
 
   constructor(private hooks: MenuHooks) {
     this.root = document.getElementById('menu')!;
@@ -88,6 +95,7 @@ export class Menu {
   /** Settings, opened over the screen you are on (Back returns to it). */
   showSettings() { this.show('settings'); }
   close() {
+    this.stopBoi();
     this.screen = null;
     this.binding = null;
     this.confirmOpen = null;
@@ -100,7 +108,7 @@ export class Menu {
   setMachine(id: MachineId) {
     this.machine = id;
     const img = this.root.querySelector<HTMLImageElement>('.mboi');
-    if (img) img.src = this.hooks.bigBoi(id);
+    if (img) img.src = this.hooks.bigBoi(id, this.face ?? 'happy');
   }
 
   /** New Game: a run in storage is abandoned first, so ask. */
@@ -112,6 +120,7 @@ export class Menu {
   }
 
   private show(s: Screen) {
+    this.stopBoi();
     this.screen = s;
     this.binding = null;
     this.confirmOpen = null;
@@ -134,16 +143,19 @@ export class Menu {
       const best = this.hooks.records()[0];
       const resume = run && t
         ? `<button class="mbtn primary" data-act="resume"><span class="disp">Resume</span><small>${esc(title(t.tagline))} · round ${run.round} · $${run.money}${run.won ? ' · endless' : ''}</small></button>` : '';
+      // every piece pops in from the side, one after another (--i is its turn)
+      let i = 0;
+      const n = () => `style="--i:${i++}"`;
       return `<section class="mscreen">
         <div class="mcol">
-          <h1 class="mtitle" aria-label="Big Boi Pinball Designer"><img class="mboi" alt="" src="${this.hooks.bigBoi(this.machine)}"><span class="t1 disp">BIG BOI</span><span class="t2 disp">PINBALL DESIGNER</span></h1>
-          <nav class="mpanel" aria-label="Main menu">
-            ${resume}
-            <button class="mbtn ${run ? '' : 'primary'}" data-act="new"><span class="disp">New Game</span><small>${run ? 'ends the run above' : 'pick a machine and build it up'}</small></button>
-            <button class="mbtn" data-act="scores"><span class="disp">Scoreboard</span><small>${best ? `best: ${best.cleared} rounds, ${fmt(best.score)}` : 'your finished runs'}</small></button>
-            <button class="mbtn" data-act="settings"><span class="disp">Settings</span><small>sound, graphics, buttons</small></button>
+          <h1 class="mtitle" aria-label="Big Boi Pinball Designer"><span class="t1 disp in" ${n()}>BIG BOI</span><span class="t2 disp in" ${n()}>PINBALL DESIGNER</span><span class="mboiwrap in" ${n()}><img class="mboi" alt="Big Boi. Poke him" title="Poke him" src="${this.hooks.bigBoi(this.machine)}"></span></h1>
+          <nav class="mpanel in" aria-label="Main menu" ${n()}>
+            ${resume.replace('class="mbtn primary"', () => `class="mbtn primary in" ${n()}`)}
+            <button class="mbtn ${run ? '' : 'primary'} in" ${n()} data-act="new"><span class="disp">New Game</span><small>${run ? 'ends the run above' : 'pick a machine and build it up'}</small></button>
+            <button class="mbtn in" ${n()} data-act="scores" data-hue="lane"><span class="disp">Scoreboard</span><small>${best ? `best: ${best.cleared} rounds, ${fmt(best.score)}` : 'your finished runs'}</small></button>
+            <button class="mbtn in" ${n()} data-act="settings" data-hue="pop"><span class="disp">Settings</span><small>sound, graphics, buttons</small></button>
           </nav>
-          <div class="mfoot"><kbd>↑</kbd><kbd>↓</kbd> choose <kbd>Enter</kbd> go</div>
+          <div class="mfoot in" ${n()}><kbd>↑</kbd><kbd>↓</kbd> choose <kbd>Enter</kbd> go</div>
         </div>
       </section>`;
     }
@@ -212,8 +224,8 @@ export class Menu {
         <div class="pbody">
           ${run && t ? `<p class="pinfo">${esc(title(t.tagline))} · round ${run.round}</p>` : ''}
           <button class="mbtn primary" data-act="unpause"><span class="disp">Resume</span><small>back to the table <kbd>Esc</kbd></small></button>
-          <button class="mbtn" data-act="settings"><span class="disp">Settings</span><small>sound, graphics, buttons</small></button>
-          <button class="mbtn" data-act="quit"><span class="disp">Quit to Main Menu</span><small>${run ? 'the run stays saved; a round in play starts over' : 'this run is over and on the scoreboard'}</small></button>
+          <button class="mbtn" data-act="settings" data-hue="pop"><span class="disp">Settings</span><small>sound, graphics, buttons</small></button>
+          <button class="mbtn" data-act="quit" data-hue="lane"><span class="disp">Quit to Main Menu</span><small>${run ? 'the run stays saved; a round in play starts over' : 'this run is over and on the scoreboard'}</small></button>
           ${run ? '<button class="mbtn danger" data-act="abandon"><span class="disp">Abandon Run</span><small>ends it, onto the scoreboard</small></button>' : ''}
         </div>
       </div>
@@ -271,7 +283,61 @@ export class Menu {
         };
       }
     }
+    if (s === 'main') {
+      // the pieces stop being "in" once they have landed, so a later hover or poke animation starts clean
+      for (const el of q<HTMLElement>('.in')) el.addEventListener('animationend', (e) => { if (e.target === el) el.classList.remove('in'); });
+      const img = this.root.querySelector<HTMLImageElement>('.mboi')!;
+      img.onclick = () => this.pokeBoi(img);
+      this.blinkLater(img);
+    }
+    // the scoreboard and settings close with a click anywhere outside them
+    if (s === 'scores' || s === 'settings') {
+      this.root.onclick = (e) => {
+        if (this.screen !== s || this.confirmOpen || this.binding) return;
+        if (!(e.target as HTMLElement).closest('.setcard, .sblist, .sbdetail, .sbempty, .mhead h2, .mhead p, button, input, label')) this.back();
+      };
+    } else this.root.onclick = null;
     if (s === 'pause') this.root.querySelector('.bulbs')!.innerHTML = Array.from({ length: 13 }, (_, i) => `<i class="${i % 2 ? 'on' : ''}"></i>`).join('');
+  }
+
+  // ---- the title's Big Boi: he blinks now and then, and pulls a face when poked ---------------------------------
+
+  private stopBoi() {
+    clearTimeout(this.blinkTimer);
+    clearTimeout(this.faceTimer);
+    this.face = null;
+  }
+  private blinkLater(img: HTMLImageElement) {
+    clearTimeout(this.blinkTimer);
+    this.blinkTimer = window.setTimeout(() => {
+      if (!img.isConnected) return;
+      if (!this.face) {
+        img.src = this.hooks.bigBoi(this.machine, 'blink');
+        const twice = Math.random() < 0.25;
+        window.setTimeout(() => {
+          if (this.face || !img.isConnected) return;
+          img.src = this.hooks.bigBoi(this.machine);
+          if (twice) window.setTimeout(() => { if (!this.face && img.isConnected) { img.src = this.hooks.bigBoi(this.machine, 'blink'); window.setTimeout(() => { if (!this.face && img.isConnected) img.src = this.hooks.bigBoi(this.machine); }, 110); } }, 140);
+        }, 130);
+      }
+      this.blinkLater(img);
+    }, 2200 + Math.random() * 2800);
+  }
+  private pokeBoi(img: HTMLImageElement) {
+    const faces: Mood[] = ['oof', 'shocked', 'cool', 'sad'];
+    const pick = faces.filter((f) => f !== this.face)[Math.floor(Math.random() * (faces.length - (this.face ? 1 : 0)))];
+    this.face = pick;
+    img.src = this.hooks.bigBoi(this.machine, pick);
+    img.classList.remove('poked');
+    void img.offsetWidth; // restart the wobble
+    img.classList.add('poked');
+    this.hooks.poke();
+    clearTimeout(this.faceTimer);
+    this.faceTimer = window.setTimeout(() => {
+      this.face = null;
+      img.classList.remove('poked');
+      if (img.isConnected) img.src = this.hooks.bigBoi(this.machine);
+    }, 1100);
   }
 
   /** Change settings; `rerender` redraws the screen (buttons that show state), keeping focus on the same control. */

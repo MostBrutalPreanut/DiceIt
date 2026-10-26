@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Rectangle, Sprite, Texture, type Text } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
 import { dialValue, footprint, gemFits, isDecor, isInlay, lampStats, LEVEL_RADIUS, PARTS, SMALL_FLIPPER, type PartId, type PartInstance } from '../data/parts';
 import { HEAT_H, HEAT_W, type Game } from '../game/game';
 import type { ScoreEvent } from '../game/scoring';
@@ -58,7 +58,6 @@ const kzFor = (k: number) => 0.3 + 0.3 * Math.min(1, Math.max(0, (1 - k) / 0.14)
 
 interface Baked { tex: Texture; ax: number; ay: number }
 interface PartView { sprite: Sprite }
-interface Tag { c: Container; g: Graphics; txt: Text; text: string }
 
 /** Draws the latest sim state. It reads the sim and never writes to it. */
 export class Renderer {
@@ -72,7 +71,6 @@ export class Renderer {
   private glowLayer = new Container();
   private partLayer = new Container();
   private ballG = new Graphics();
-  private tagLayer = new Container();
   private topG = new Graphics();
   /** Zaps: lightning from a Tesla Coil to each part it made score, for a moment. */
   private arcs: { x1: number; y1: number; x2: number; y2: number; age: number; seed: number; z1?: number }[] = [];
@@ -120,7 +118,6 @@ export class Renderer {
   private movers = new Map<number, PartView>();
   private flippers = new Map<string, Graphics>();
   private plungerG = new Graphics();
-  private tags = new Map<number, Tag>();
   private pulses = new Map<number, number>();
   private lastTier = new Map<number, { tier: number; glow: number }>();
   private spin = new Map<number, { angle: number; speed: number }>();
@@ -148,14 +145,14 @@ export class Renderer {
     this.partLayer.sortableChildren = true;
     this.particles = new Particles(this.app.renderer, this.theme);
     this.dmd = new DotMatrix(this.theme);
-    this.machine.addChild(this.staticSprite, this.dmd.view, this.glowLayer, this.floorFx, this.partLayer, this.ballG, this.sparkLayer, this.particles.layer, this.tagLayer, this.topG);
+    this.machine.addChild(this.staticSprite, this.dmd.view, this.glowLayer, this.floorFx, this.partLayer, this.ballG, this.sparkLayer, this.particles.layer, this.topG);
     this.world.addChild(this.machine);
     this.app.stage.addChild(this.world, this.tiltLayer);
     this.glowTex = makeGlowTexture();
     this.dotTex = makeDotTexture();
     this.partLayer.addChild(this.plungerG);
     this.layout();
-    // Pixi only follows window resizes on its own; the stage can also change size with the page (the score dock)
+    // Pixi only follows window resizes on its own; the stage can also change size with the page
     new ResizeObserver(() => { this.app.resize(); this.layout(); }).observe(host);
   }
 
@@ -166,8 +163,6 @@ export class Renderer {
     this.sparkTex = null;
     this.particles.bake(t);
     this.dmd.setTheme(t);
-    for (const tag of this.tags.values()) tag.c.destroy({ children: true });
-    this.tags.clear();
   }
 
   setCalm(on: boolean) {
@@ -645,7 +640,6 @@ export class Renderer {
       }
       if (p.def === 'uplight' && (st.selectedUid === p.uid || st.hoverUid === p.uid)) dashedRing(fx, v, p.x, p.y, LEVEL_RADIUS, t.role.pop, v.lw, t.ink);
       if (def.mover) this.drawMover(game, p, pulse, jx, jy);
-      this.drawTag(game, p);
       if (p.def === 'mega') this.drawEyes(game, p, pv.sprite.zIndex + 1, seenEyes, ps.mood ?? 'happy', jx, jy);
     }
     for (const [uid, g] of this.eyes) if (!seenEyes.has(uid)) { g.destroy(); this.eyes.delete(uid); }
@@ -662,7 +656,6 @@ export class Renderer {
     if (st.ghost) seen.add(-1);
     for (const [uid, pv] of this.parts) if (!seen.has(uid)) { pv.sprite.destroy(); this.parts.delete(uid); }
     for (const [uid, mv] of this.movers) if (!seen.has(uid)) { mv.sprite.destroy(); this.movers.delete(uid); }
-    for (const [uid, tag] of this.tags) if (!seen.has(uid)) { tag.c.destroy({ children: true }); this.tags.delete(uid); }
 
     if (st.ghost) {
       const def = PARTS[st.ghost.def];
@@ -897,36 +890,6 @@ export class Renderer {
       g.ellipse(X + dx, Y + dy, v.S * 0.11, v.S * 0.14).fill(this.theme.ink);
       g.circle(X + dx - v.S * 0.03, Y + dy - v.S * 0.04, v.S * 0.03).fill(WHITE);
     }
-  }
-
-  /** The live value printed on a part: a paper sticker, a hair rotated (its level is in the part's art). */
-  private drawTag(game: Game, p: PartInstance) {
-    const t = this.theme, v = this.view, def = PARTS[p.def];
-    const text = def.kind === 'saver' || def.kind === 'flipper' || def.kind === 'deflector' ? null : game.scorer.label(p);
-    let tag = this.tags.get(p.uid);
-    if (!text) { if (tag) tag.c.visible = false; return; }
-    const fs = Math.max(9, v.S * 0.62);
-    if (!tag) {
-      const c = new Container(), g = new Graphics(), txt = label(text, fs, t.ink);
-      c.addChild(g, txt);
-      c.rotation = (-4 * Math.PI) / 180;
-      this.tagLayer.addChild(c);
-      tag = { c, g, txt, text: '' };
-      this.tags.set(p.uid, tag);
-    }
-    if (tag.text !== text || tag.txt.style.fontSize !== fs) {
-      tag.text = text;
-      tag.txt.text = text;
-      tag.txt.style.fontSize = fs;
-      const w = tag.txt.width + fs * 0.9, h = fs * 1.35;
-      tag.g.clear();
-      tag.g.roundRect(-w / 2, -h / 2, w, h, h / 2).fill(t.paper).stroke({ width: v.lw * 0.7, color: t.ink });
-    }
-    tag.c.visible = true;
-    const floorTag = def.kind === 'mover' || def.kind === 'goal' || def.kind === 'strip' || def.kind === 'spinner' || def.kind === 'rollover' || def.kind === 'lamp' || def.kind === 'kicker' || def.kind === 'kickback' || def.kind === 'target' || def.kind === 'bank' || p.def === 'magnet' || p.def === 'jackpot';
-    const z = p.def === 'mega' ? 2.05 : p.def === 'printer' ? 1.75 : p.def === 'pop' && t.popMotif === 'cone' ? 1.6 : p.def === 'ding' || p.def === 'trophy' ? 1.7 : p.def === 'thunder' || p.def === 'golden' ? 1.2 : 0.95;
-    const [X, Y] = isDecor(p.def) ? P(v, p.x, p.y - footprint(def) - 0.6, cabZ(p.x, p.y)) : floorTag ? P(v, p.x, p.y - footprint(def) - 0.75, 0) : P(v, p.x, p.y, z);
-    tag.c.position.set(X, Y);
   }
 
   private drawFlippers(game: Game) {

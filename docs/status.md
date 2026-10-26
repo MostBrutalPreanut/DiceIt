@@ -30,7 +30,7 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
 - **Scoreboard**: every finished run (won, lost, abandoned), best first, with its final build drawn.
 - **Decal pick after a boss**: BOSS BEATEN, three sticker cards slap down and flip, the pick flies onto the
   apron. Keyboard (1/2/3, arrows, Enter, S to skip), mouse and touch.
-- **Score dock** by the table: points fly from the part into it as chips, coins fly to the money.
+- **Flying points**: points fly from the part to the score on the scoreboard panel as chips, coins fly to the money.
 - **Castle Crash**: a rock flagstone path and a castle-and-forest land around the machine.
 - **Sound**: a softer, warmer mix; every part has its own sound (the spinner ratchets and whirs, the bell
   ding-dongs, the duck quacks); new music for each machine.
@@ -87,7 +87,7 @@ heavily loaded (several test runs at once). On a quiet machine they pass. That i
 - **Nobody has listened to the new sound.** It passes an offline check (no clipping, no NaN, every sound ends) but
   needs a listening pass.
 - **docs/concept PNGs** still say FREE PLAY, and the art direction doc still describes the old castle path.
-- **The score dock trails the real score** by about half a second while chips fly (the display and receipt show
+- **The scoreboard's score trails the real score** by about half a second while chips fly (the display and receipt show
   it at once).
 
 ## Balance

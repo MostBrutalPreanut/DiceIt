@@ -7,6 +7,7 @@ import type { Game } from './game/game';
 import type { ScoreEvent } from './game/scoring';
 import { Bot } from './sim/bot';
 import { DT } from './sim/constants';
+import { starterLayout } from './sim/layout';
 
 /** The demo build: the starter machine plus a handful of parts, roughly the concept art's mid-run table. */
 export const DEMO_BUILD: { id: PartId; x: number; y: number; a?: number }[] = [
@@ -23,6 +24,7 @@ const DEMO_MACHINES: MachineId[] = ['factory', 'diner', 'castle'];
 /** Put the demo build on the game's table (the Test Lab places parts for free; it is switched off again). */
 export function buildDemo(game: Game, machine: MachineId) {
   game.newRun(machine);
+  for (const p of starterLayout().parts) if (!p.fixed) game.place(p.uid, p.x, p.y); // the starting bumpers, where they always stood
   const lab = game.sandbox;
   game.sandbox = true;
   for (const q of DEMO_BUILD) {
