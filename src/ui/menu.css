@@ -72,6 +72,12 @@ body.inmenu #center { height: 100%; min-height: 0; padding-left: min(340px, 28vw
 .mhead h2 { margin: 0; font-size: clamp(30px, 4vw, 44px); line-height: 1; color: var(--paper); -webkit-text-stroke: 7px var(--ink); paint-order: stroke fill; text-shadow: 4px 5px 0 var(--drop); transform: translateY(3px); }
 .mhead p { margin: 8px 0 0; max-width: 680px; font-size: 13.5px; color: var(--ink); }
 .mback { flex: none; margin-top: 4px; border-radius: 99px; padding: 6px 14px; font-weight: 800; box-shadow: 0 3px 0 var(--ink); }
+/* the picker's Tutorial switch: Big Boi offers to show you around (on for your first run) */
+.mtut { flex: none; margin-left: auto; display: flex; align-items: center; gap: 10px; padding: 7px 12px 7px 8px; background: var(--paper); border: var(--lw-frame) solid var(--ink); border-radius: 18px; box-shadow: 4px 5px 0 var(--drop); rotate: 1.5deg; }
+.mtut img { width: 52px; height: auto; margin: -14px 0 -6px; filter: drop-shadow(2px 3px 0 var(--drop)); rotate: -6deg; }
+.mtut > span:not(.seg) { display: grid; line-height: 1.1; }
+.mtut b { font-size: 21px; transform: translateY(2px); }
+.mtut small { font: 700 11.5px var(--ui); color: var(--faint); }
 
 /* ---- the machine picker: three cabinets, each in its own machine's colours ---- */
 .cabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; max-width: 1180px; margin: 0 auto; }
@@ -173,6 +179,7 @@ body.inmenu #center { height: 100%; min-height: 0; padding-left: min(340px, 28vw
   #menu.m-main { background: color-mix(in srgb, var(--bg) 62%, transparent); }
   .m-main .mscreen { padding-top: 40px; overflow: visible; }
   .mcol { margin: 0 auto; }
+  .mhead { flex-wrap: wrap; }
   .cabs { grid-template-columns: minmax(0, 1fr); max-width: 520px; }
   .cab .stage { height: 300px; }
   .sbwrap { grid-template-columns: minmax(0, 1fr); }
@@ -180,6 +187,7 @@ body.inmenu #center { height: 100%; min-height: 0; padding-left: min(340px, 28vw
 }
 @media (max-width: 560px) {
   .mhead { flex-direction: column; gap: 8px; }
+  .mtut { margin-left: 0; }
   .mtitle .mboiwrap { width: 96px; bottom: -30px; }
   .mfoot { display: none; }
   .mtitle .t1 { -webkit-text-stroke-width: 9px; }
