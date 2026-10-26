@@ -539,6 +539,9 @@ export class Renderer {
       case 'clock': { const c = game.scorer.clockState(), hits = PARTS.clock.recipe.clock!.hits; return { lit: game.scorer.madnessLeft(game.sim.time) > 0, seg: c.struck ? 12 : Math.floor((c.minutes / hits) * 12) }; }
       case 'altar': { const now = game.scorer.ritualNow(game.sim.time), a = game.scorer.altarOf(p); return { lit: !!now, seg: Math.min(8, Math.round((a.sets / PARTS.altar.recipe.altar!.sets) * 8)) }; }
       case 'bulb': return { lit: true };
+      case 'gumball': return { hit: pulse > 0.35, seg: game.sim.locksOf(p.uid) };
+      case 'wheel': { const at = game.scorer.wheelAt(p, game.sim.time); return { hit: pulse > 0.35, lit: at !== null, seg: at ?? -1 }; }
+      case 'ring': { const b = game.sim.ballStates()[0], h = b ? game.scorer.heatOf(b.id) : 0; return { seg: h > 0 ? Math.min(5, 1 + Math.floor(Math.log10(h))) : 0 }; }
       case 'split': return { hit: pulse > 0.35, lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
       case 'whale': return { hit: pulse > 0.35, seg: game.scorer.whaleOf(p) % PARTS.whale.recipe.whale!.every };
       case 'jar': return { hit: pulse > 0.35, seg: game.scorer.marblesOf(p) };
@@ -929,7 +932,7 @@ export class Renderer {
       let g = this.flippers.get(key);
       if (!g) { g = new Graphics(); this.partLayer.addChild(g); this.flippers.set(key, g); }
       g.clear();
-      drawFlipper(g, this.view, this.theme, f.x, f.y, f.angle, f.side === 'L' ? 1 : -1, f.length);
+      drawFlipper(g, this.view, this.theme, f.x, f.y, f.angle, f.side === 'L' ? 1 : -1, f.length, f.auto);
       g.zIndex = -f.y * 100 + 1;
     }
     for (const [k, g] of this.flippers) if (!seen.has(k)) { g.destroy(); this.flippers.delete(k); }
@@ -1036,7 +1039,7 @@ export class Renderer {
       const vv = { ...v, S, lw: 2.2 };
       if (id === 'ball') { const g = new Graphics(); drawBall(g, vv, t, 0, 0, BALL_WEAR.plain); const c = new Container(); c.addChild(g); return c; }
       if (id === 'button') return drawButton(vv, t);
-      if (id === 'flipper' || id === 'flipperR') { const g = new Graphics(); drawFlipper(g, vv, t, 0, 0, id === 'flipper' ? -0.49 : 0.49, id === 'flipper' ? 1 : -1, FLIPPER_LENGTH * SMALL_FLIPPER); const c = new Container(); c.addChild(g); return c; }
+      if (id === 'flipper' || id === 'flipperR' || id === 'hand') { const g = new Graphics(); drawFlipper(g, vv, t, 0, 0, id === 'flipperR' ? 0.49 : -0.49, id === 'flipperR' ? -1 : 1, FLIPPER_LENGTH * SMALL_FLIPPER, id === 'hand'); const c = new Container(); c.addChild(g); return c; }
       const a = id === 'sling' ? -0.55 : id === 'spinner' ? 0.3 : id === 'deflector' ? 0.4 : id === 'bank' ? 0.15 : id === 'vari' ? 0.2 : id === 'kickback' ? -0.5 : id === 'printer' ? 0.3 : id === 'piggy' ? 0.25 : id === 'magnet' || id === 'jackpot' ? 0.3 : 0;
       return drawPart(vv, t, id, 0, 0, a, { lit: true, letter: t.laneWord[0], target: 'pop', down: [false, false, true], armed: true, seg: 2, ...(opts.st ?? {}) });
     };
@@ -1072,9 +1075,9 @@ export class Renderer {
     holder.addChild(flips);
     // far parts first, as on the table; extra flippers are drawn at rest
     for (const p of [...parts].sort((a, b) => b.y - a.y)) {
-      if (p.def === 'flipper' || p.def === 'flipperR') {
-        const g = new Graphics(), side = p.def === 'flipper' ? 1 : -1;
-        drawFlipper(g, v, t, p.x, p.y, -side * FLIPPER_REST, side, FLIPPER_LENGTH * SMALL_FLIPPER);
+      if (p.def === 'flipper' || p.def === 'flipperR' || p.def === 'hand') {
+        const g = new Graphics(), side = p.def === 'flipperR' ? -1 : 1;
+        drawFlipper(g, v, t, p.x, p.y, -side * FLIPPER_REST, side, FLIPPER_LENGTH * SMALL_FLIPPER, p.def === 'hand');
         holder.addChild(g);
       } else holder.addChild(drawPart(v, t, p.def, p.x, p.y, p.angle, { level: p.level, letter: t.laneWord[0], mood: 'happy' }));
     }

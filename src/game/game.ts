@@ -97,6 +97,8 @@ export interface RunSave {
   won?: boolean;
   /** Old Bell rings so far this run (absent in older saves). */
   rings?: number;
+  /** Free rerolls won in play, not yet spent. */
+  bonusRerolls?: number;
 }
 
 /** Validate a saved run from storage. Returns null for anything that is not a v2 save. */
@@ -190,6 +192,9 @@ export class Game {
   runScore = 0;
   /** Sparks owed to the table later (a Firecracker's burst): when, and what. */
   private pendingSparks: (SparkBurst & { at: number })[] = [];
+  /** Free rerolls won in play (the Spider Wheel), for the shop; and how many were spent (a new shop for each). */
+  bonusRerolls = 0;
+  private wonRerolls = 0;
   /** A Piñata burst this round: the next shop owes a free pick. */
   private prizeDue = false;
   /** WIZARD MODE's extra balls, and when they leave: it is a 30 s multiball, not two balls for keeps. */
@@ -396,7 +401,13 @@ export class Game {
   /** The scorer asked for sparks: shoot them out now, or keep them for later (a firework bursts after its flight). */
   private spawnSparks(score: ScoreEvent[]) {
     for (const s of score) if (s.grow) this.sim.growBall(s.grow.ballId, s.grow.k, s.grow.seconds);
-    for (const s of score) if (s.balls) this.wizardBalls = { ids: this.sim.launchBalls(s.balls.n, s.balls.x, s.balls.y, s.balls.uid), until: s.t + (PARTS[s.def].recipe.wizard?.seconds ?? 0) };
+    for (const s of score) {
+      if (!s.balls) continue;
+      const ids = this.sim.launchBalls(s.balls.n, s.balls.x, s.balls.y, s.balls.uid);
+      const w = PARTS[s.def].recipe.wizard;
+      if (w) this.wizardBalls = { ids, until: s.t + w.seconds }; // WIZARD MODE's balls leave when it ends; a wheel's stay
+    }
+    for (const s of score) if (s.reroll && this.mode === 'round') this.bonusRerolls++; // a Spider Wheel's free reroll (not a test ball's)
     if (this.wizardBalls && this.sim.time >= this.wizardBalls.until) {
       for (const id of this.wizardBalls.ids) this.sim.retireBall(id);
       this.wizardBalls = null;
@@ -601,6 +612,7 @@ export class Game {
     this.runScore = 0;
     this.rings = 0;
     this.prizeDue = false;
+    this.bonusRerolls = 0;
     this.machine = machine;
     this.layout = starterLayout();
     // the starting bumpers wait in the toolbox: put them wherever you like, free to place and to move this visit
@@ -778,7 +790,7 @@ export class Game {
   save(): RunSave {
     return {
       v: 2, layout: this.layout, money: this.money, round: this.round, shop: this.shop, sandbox: this.sandbox, runSeed: this.runSeed,
-      picks: this.decals, pending: this.pending, runScore: this.runScore, machine: this.machine, bosses: this.bossPlan, won: this.won, rings: this.rings,
+      picks: this.decals, pending: this.pending, runScore: this.runScore, machine: this.machine, bosses: this.bossPlan, won: this.won, rings: this.rings, bonusRerolls: this.bonusRerolls,
     };
   }
 
@@ -798,6 +810,7 @@ export class Game {
     this.resolved = null;
     this.runScore = s.runScore ?? 0;
     this.rings = s.rings ?? 0;
+    this.bonusRerolls = s.bonusRerolls ?? 0;
     this.history = [];
     this.future = [];
     this.layout.parts = this.layout.parts.filter((p) => p.def in PARTS);
@@ -817,7 +830,7 @@ export class Game {
   }
 
   get rerollCost() {
-    return this.sandbox || this.shop.rerolls < this.mods.freeRerolls ? 0 : 1 + this.shop.rerolls - this.mods.freeRerolls;
+    return this.sandbox || this.bonusRerolls > 0 || this.shop.rerolls < this.mods.freeRerolls ? 0 : 1 + this.shop.rerolls - this.mods.freeRerolls;
   }
 
   canAfford(cost: number) {
@@ -1027,9 +1040,13 @@ export class Game {
   reroll(): boolean {
     if (!this.editable || !this.canAfford(this.rerollCost)) return false;
     this.checkpoint();
-    if (!this.sandbox) this.money -= this.rerollCost;
-    const rerolls = this.shop.rerolls + 1;
-    this.shop = { ...this.freshShop(new Rng(this.runSeed * 7919 + this.round * 131 + rerolls), this.shop), rerolls };
+    // a reroll won in play goes first, and does not make the next paid one dearer
+    const won = this.bonusRerolls > 0;
+    if (won) this.bonusRerolls--;
+    else if (!this.sandbox) this.money -= this.rerollCost;
+    const rerolls = this.shop.rerolls + (won ? 0 : 1);
+    this.wonRerolls += won ? 1 : 0;
+    this.shop = { ...this.freshShop(new Rng(this.runSeed * 7919 + this.round * 131 + rerolls + this.wonRerolls * 997), this.shop), rerolls };
     return true;
   }
 

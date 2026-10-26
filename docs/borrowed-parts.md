@@ -34,7 +34,12 @@ the spark parts first: the Splitter (2 sparks off to the sides, then dark 5 s; $
 every 6th it spouts 6 sparks and 300, 3 spouts a ball), the Insurance Policy (the last ball drained short of the
 goal: 10 sparks from the top, once, then it is gone), the Spider Nest (25% of hits lay an egg that hatches into 3
 sparks on the first part it hits) and the Marble Jar (a marble every 25 hits, up to 5; every launch brings a spark
-per marble).
+per marble). Then four mechanisms: the Gumball Machine (a lock: two balls are held and a new one comes to the
+plunger each time; the third lock lets all three loose. It locks only the last ball in play and once a round,
+after measuring), the Bank Ring (30% of every hit is held as the ball's heat; rolling through banks it at ×1.5, a
+drain loses it), the Helping Hand (a small flipper that flips by itself when a ball comes near; half its flips aim
+at the nearest scoring part above) and the Spider Wheel (a scoop whose wheel of 8 awards a flipper press stops;
+all 8 in a run is Wheel Mania, 3 more balls at ×2 for 20 s). The Magic Trunk is skipped for now.
 
 **The review is done (26 Oct 2026): read §6 first.** It records every decision, the parts that changed and a new
 kind of part (decor). §7 is the plan for sparks and for keeping the CPU cost down. The tables in §3 still show

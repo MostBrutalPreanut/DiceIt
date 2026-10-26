@@ -901,6 +901,51 @@ export function drawPart(v: View, t: Theme, id: PartId, x: number, y: number, an
       p.cyl(x, y, 0.55, 0, 0.08, metal);
       break;
     }
+    case 'hand': {
+      // the Helping Hand is drawn live from the sim too (with its glove, see drawFlipper); its plate is painted its colour
+      p.cyl(x, y, 0.55, 0, 0.08, mat(t, t.role.hand));
+      break;
+    }
+    case 'gumball': {
+      // a gumball machine: a glass globe of gumballs on a red stand, a chute where the ball goes in; locked balls show in the globe
+      shadow(under, v, t, x, y, r * 1.0, r * 1.0);
+      const red = mat(t, st.hit ? mix(t.role.gumball, WHITE, 0.4) : t.role.gumball);
+      p.face(ring(x, y, r * 0.9, 24).map(([a, b]) => P(v, a, b, 0.01)), t.ink, { line: 0.4 });
+      p.cyl(x, y + r * 0.3, r * 0.55, 0, 0.9, red);
+      p.face(hull([0, 0.4, 0.8, 1].flatMap((u) => ring(x, y + r * 0.3, r * 0.6 * Math.sin(Math.PI * (0.2 + u * 0.8)), 20).map(([a, b]) => P(v, a, b, 0.9 + u * 1.2)))), mix(t.role.jar, WHITE, 0.4));
+      const n = Math.min(3, st.seg ?? 0), cols = ['#ffd23f', '#55d08f', '#62b8ff', '#ff7fb0', '#ff9f1c', '#8a63f2'];
+      p.op((g) => {
+        for (let i = 0; i < 6; i++) { const [cx, cy] = P(v, x + ((i % 3) - 1) * r * 0.28, y + r * 0.3, 1.2 + Math.floor(i / 3) * 0.4); g.circle(cx, cy, S * 0.12).fill(cols[i]).stroke({ width: v.lw * 0.3, color: t.ink }); }
+        for (let i = 0; i < n; i++) { const [cx, cy] = P(v, x + (i - 1) * r * 0.3, y + r * 0.3, 1.75); g.circle(cx, cy, S * 0.2).fill(WHITE).stroke({ width: v.lw * 0.6, color: t.ink }); }
+      });
+      break;
+    }
+    case 'ring': {
+      // a Bank Ring: a gold hoop standing over the lane; it glows warmer the more heat the ball carries
+      const heat = Math.min(5, st.seg ?? 0) / 5, gold = mat(t, mix(t.role.ring, '#ff5d2f', heat * 0.6));
+      p.face(ring(x, y, r, 24).map(([a, b]) => P(v, a, b, 0.01)), mix(t.role.ring, t.paper, 0.6), { line: 0.4 });
+      p.face(ring(x, y, r * 0.5, 18).map(([a, b]) => P(v, a, b, 0.02)), mix(gold.base, WHITE, 0.25 - heat * 0.25), { line: 0.35 }); // the coin it banks
+      const arc = (rr: number) => Array.from({ length: 17 }, (_, i): Pt => { const a = (i / 16) * Math.PI; return P(v, x + Math.cos(a) * rr, y, Math.sin(a) * rr * 2); });
+      p.face([...arc(r * 1.0), ...arc(r * 0.68).reverse()], gold.base, { line: 0.5 });
+      break;
+    }
+    case 'wheel': {
+      // a Spider Wheel: a scoop under a wheel of eight coloured awards with a spider on the hub; the lit one is where it points
+      shadow(under, v, t, x, y, r * 1.0, r * 1.0);
+      p.face(ring(x, y - r * 0.35, r * 0.45, 18).map(([a, b]) => P(v, a, b, 0.01)), t.ink, { line: 0.4 });
+      const cols = ['#ff5d8f', '#ffd23f', '#55d08f', '#ff9f1c', '#62b8ff', '#3cc3b1', '#8a63f2', '#b8b2cc'], R = r * 0.85, zc = 1.9, tall = 1.8, on = st.seg ?? -1;
+      p.cyl(x - R * 0.9, y + 0.3, 0.1, 0, zc, metal, { n: 8 });
+      p.cyl(x + R * 0.9, y + 0.3, 0.1, 0, zc, metal, { n: 8 });
+      for (let i = 0; i < 8; i++) {
+        const a0 = Math.PI / 2 - (i / 8) * Math.PI * 2, a1 = a0 - Math.PI / 4;
+        const pts: Pt[] = [P(v, x, y + 0.3, zc)];
+        for (let k = 0; k <= 4; k++) { const a = a0 + ((a1 - a0) * k) / 4; pts.push(P(v, x + Math.cos(a) * R, y + 0.3, zc + Math.sin(a) * R * tall)); }
+        p.face(pts, st.lit && i === on ? WHITE : i === on ? mix(cols[i], WHITE, 0.4) : cols[i], { line: 0.35 });
+      }
+      const [hx, hy] = P(v, x, y + 0.3, zc);
+      p.op((g) => { g.circle(hx, hy, S * 0.22).fill(t.ink); g.poly([hx - S * 0.12, hy - R * S * tall * v.kz * 1.05, hx + S * 0.12, hy - R * S * tall * v.kz * 1.05, hx, hy - R * S * tall * v.kz * 0.8]).fill(t.accent).stroke({ width: v.lw * 0.5, color: t.ink }); });
+      break;
+    }
     case 'duck': case 'roller': case 'goal': case 'bucket': {
       const m = def.mover!, sh = def.shape.type === 'box' ? def.shape : { hw: 3, hh: 0.6 };
       const base = st.part !== 'mover', piece = st.part !== 'base';
@@ -1137,7 +1182,7 @@ function face(p: Prop, v: View, t: Theme, x: number, y: number, z: number, r: nu
 }
 
 /** A flipper at any angle (the sim's), drawn live: rubber band, coloured bat, metal pivot cap. */
-export function drawFlipper(g: Graphics, v: View, t: Theme, px: number, py: number, angle: number, sign: 1 | -1, length = FLIPPER_LENGTH) {
+export function drawFlipper(g: Graphics, v: View, t: Theme, px: number, py: number, angle: number, sign: 1 | -1, length = FLIPPER_LENGTH, hand = false) {
   const p = new Prop(v, t);
   const k = length < FLIPPER_LENGTH ? 0.8 : 1;
   const tip: Pt = [px + Math.cos(angle) * length * sign, py + Math.sin(angle) * length * sign];
@@ -1145,8 +1190,17 @@ export function drawFlipper(g: Graphics, v: View, t: Theme, px: number, py: numb
   const rubber = hull([...ring(px, py, 0.66 * k, 16), ...ring(tip[0], tip[1], 0.36 * k, 12)]);
   shadowPoly(g, v, t, rubber, 0.22);
   p.prism(rubber, 0, 0.28, mat(t, t.role.flipper === t.paper ? t.accent : t.rubber));
-  p.prism(outline, 0.28, 0.24, mat(t, t.role.flipper));
+  p.prism(outline, 0.28, 0.24, mat(t, hand ? t.role.hand : t.role.flipper));
   p.cyl(px, py, 0.24, 0.52, 0.12, mat(t, t.metal), { n: 16 });
+  // a Helping Hand wears a little white glove on its pivot: it flips by itself
+  if (hand) {
+    const [gx, gy] = P(v, px, py, 0.7), S = v.S;
+    p.op((q) => {
+      q.roundRect(gx - S * 0.3, gy - S * 0.26, S * 0.5, S * 0.44, S * 0.16).fill(WHITE).stroke({ width: v.lw * 0.6, color: t.ink });
+      q.circle(gx + S * 0.3 * sign, gy - S * 0.02, S * 0.13).fill(WHITE).stroke({ width: v.lw * 0.6, color: t.ink });
+      for (let i = 0; i < 3; i++) q.moveTo(gx - S * 0.18 + i * S * 0.13, gy - S * 0.24).lineTo(gx - S * 0.18 + i * S * 0.13, gy - S * 0.08).stroke({ width: v.lw * 0.5, color: t.ink });
+    });
+  }
   p.draw(g);
 }
 

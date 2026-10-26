@@ -884,6 +884,8 @@ export class AudioFx {
     else if (label === 'PIÑATA!') this.pinataBurst();
     else if (label === 'GOTCHA!') this.thwack();
     else if (label === 'THAR SHE BLOWS!') this.pinataBurst();
+    else if (id === 'ring') this.jackpotFanfare();
+    else if (label === 'WHEEL MANIA!' || label === 'MULTIBALL!') this.wizardMode();
     else if (id === 'altar') this.ritual(label === 'TEMPEST!' ? 0 : label === 'INFERNO!' ? 1 : 2);
     else if (id === 'rank') this.rankUp(label?.startsWith('DIAMOND') ? 3 : label?.startsWith('GOLD') ? 2 : 1);
     else if (id === 'disco') this.disco();
