@@ -1,0 +1,44 @@
+VARIANT (not in the game): a zap on Big Boi pays half (src/game/scoring.ts), against the same commit without it (control first).
+
+== buildsH0
+
+BUILDS: rounds 13-15 judged (final boss in 15), then endless until a loss. Per variant and player: beat r15 (n), last round won (median, max), r15 score/goal p50
+build                               $    variant  pro                         avg                         poor
+foreman-elevator                     76  full       0%(2) last   13/13  x-      0%(2) last   13/14  x0.3    0%(2) last 10.5/11  x-    
+foreman-elevator                     76  auto       0%(2) last   13/13  x-      0%(2) last   13/14  x0.1    0%(2) last    5/10  x-    
+dragon-purist-siege                  53  full       0%(2) last   13/14  x0.2    0%(2) last 13.5/14  x0.3    0%(2) last 10.5/11  x-    
+dragon-purist-siege                  53  auto       0%(2) last   13/14  x0.2   50%(2) last 14.5/15  x0.6    0%(2) last  6.5/13  x-    
+cook-target-practice-banks          108  full       0%(2) last   13/13  x-      0%(2) last   12/13  x-      0%(2) last    5/10  x-    
+cook-target-practice-banks          108  auto       0%(2) last   13/13  x-      0%(2) last   12/13  x-      0%(2) last    5/10  x-    
+cook-autopilot-survival             118  full       0%(2) last   11/12  x-      0%(2) last 11.5/12  x-      0%(2) last   11/12  x-    
+cook-autopilot-survival             118  auto       0%(2) last 12.5/13  x-      0%(2) last   12/12  x-      0%(2) last 11.5/12  x-    
+foreman-furnace                     116  full       0%(2) last 13.5/14  x0.1    0%(2) last 11.5/12  x-      0%(2) last   10/10  x-    
+WHERE THE POINTS COME FROM (round 13-15, full variant, all players): top parts and spark/zap shares
+foreman-elevator                   mega 92%, tesla 7%, gong 1%, uplight 0%                      sparks 0% zaps 67% peakMult p50 6
+dragon-purist-siege                mega 88%, tesla 12%, magnet 0%, uplight 0%                   sparks 0% zaps 72% peakMult p50 6
+cook-target-practice-banks         bank 72%, vari 16%, mega 2%, disco 2%, magnet 1%             sparks 0% zaps 0% peakMult p50 57
+cook-autopilot-survival            mega 77%, tesla 17%, gong 5%, bucket 1%, uplight 0%          sparks 0% zaps 60% peakMult p50 3
+foreman-furnace                    mega 58%, pop 40%, magnet 1%, xlane 0%, sling 0%             sparks 0% zaps 0% peakMult p50 11
+factory-spotlit-tesla-crown        mega 37%, ding 24%, tesla 14%, thunder 13%                   sparks 16% zaps 33% peakMult p50 32
+
+== buildsH
+
+BUILDS: rounds 13-15 judged (final boss in 15), then endless until a loss. Per variant and player: beat r15 (n), last round won (median, max), r15 score/goal p50
+build                               $    variant  pro                         avg                         poor
+foreman-elevator                     76  full       0%(2) last 12.5/13  x-      0%(2) last   11/11  x-      0%(2) last 10.5/11  x-    
+foreman-elevator                     76  auto       0%(2) last   13/13  x-      0%(2) last   13/14  x0.1    0%(2) last    5/10  x-    
+dragon-purist-siege                  53  full       0%(2) last 12.5/13  x-      0%(2) last 12.5/13  x-      0%(2) last    5/10  x-    
+dragon-purist-siege                  53  auto       0%(2) last   13/14  x0.2    0%(2) last   14/14  x0.5    0%(2) last    0/0   x-    
+cook-target-practice-banks          108  full       0%(2) last   13/13  x-      0%(2) last   12/13  x-      0%(2) last    5/10  x-    
+cook-target-practice-banks          108  auto       0%(2) last   13/13  x-      0%(2) last   12/13  x-      0%(2) last    5/10  x-    
+cook-autopilot-survival             118  full       0%(2) last   11/12  x-      0%(2) last 11.5/12  x-      0%(2) last    6/12  x-    
+cook-autopilot-survival             118  auto       0%(2) last   11/11  x-      0%(2) last   12/12  x-      0%(2) last 11.5/12  x-    
+foreman-furnace                     116  full       0%(2) last 13.5/14  x0.1    0%(2) last 11.5/12  x-      0%(2) last   10/10  x-    
+WHERE THE POINTS COME FROM (round 13-15, full variant, all players): top parts and spark/zap shares
+foreman-elevator                   mega 88%, tesla 9%, gong 2%, magnet 0%, uplight 0%           sparks 0% zaps 50% peakMult p50 6
+dragon-purist-siege                mega 85%, tesla 14%, magnet 1%, uplight 0%                   sparks 0% zaps 65% peakMult p50 6
+cook-target-practice-banks         bank 72%, vari 16%, mega 2%, disco 2%, magnet 1%             sparks 0% zaps 0% peakMult p50 57
+cook-autopilot-survival            mega 69%, tesla 22%, gong 7%, bucket 1%, uplight 0%          sparks 0% zaps 48% peakMult p50 3
+foreman-furnace                    mega 58%, pop 40%, magnet 1%, xlane 0%, sling 0%             sparks 0% zaps 0% peakMult p50 11
+factory-spotlit-tesla-crown        mega 30%, ding 27%, tesla 16%, thunder 15%                   sparks 18% zaps 26% peakMult p50 32
+

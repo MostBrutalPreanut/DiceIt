@@ -202,7 +202,10 @@ In order of how much they matter. Nothing below is changed in the game; each has
 2. **Big Boi still takes 76-92% on the Big Boi builds** (target: under 70%, under ~50% for any build). Zaps no longer
    give Mult, but Tesla Coils zap him for his points. Making him unzappable gets him to 56-74% but kills those builds
    (round 13 → rounds 6-11). In normal play he is not dominant (the top part in 1-5 of the late rounds; Pops and Ding-Dong
-   Bells lead). Options: a zap on Big Boi pays half, or Power Plates do not multiply a zap.
+   Bells lead). Measured too: a zap on Big Boi paying half moves him only from 92% / 88% / 77% to 88% / 85% / 69% and
+   costs those builds about half a round ([after/variant-bigboi-zap-half.txt](balance-research/after/variant-bigboi-zap-half.txt)).
+   So the zaps are not the main reason: he is the biggest bumper, in the middle, with Fan Club ×2 and two Plates ×2.25.
+   If it matters, the lever is those multipliers on him (Plates not counting for Big Boi, or Fan Club ×1.5), not the zaps.
 3. **The dream builds still run away**, now finitely: the $294 singularity build clears round 15 at about 15,000× the
    goal (peak Mult ~855k), because five separately capped ×Mults (Disco ×3, Hall of Fame ×3, X Lane ×3, Golden ×3, Goal
    ×4) multiply, and Wizard Mode doubles each. Options: one cap on all ×Mults together a ball (say ×20), or Wizard Mode
