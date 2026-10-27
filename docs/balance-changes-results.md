@@ -12,7 +12,8 @@ Where the measurement says something still needs to change, it is flagged under 
   infinite. The re-measure added six follow-ups (Printer once a ball, Wizard Mode 20 s with doubled caps instead of none,
   Whale 500, Bonsai +10, Overheat, and Afterglow measured without what it kept).
 - **Money is where you wanted it**: about two cheap parts or one good one a round, never a pile-up.
-- **But nobody wins the run any more** (0-6% of pro runs, against a 30-50% target). With the exploits gone nothing carries
+- **But nobody wins the run any more** (0 of 96 runs as shipped; 0-6% of pro runs in every variant tried, against a
+  30-50% target). With the exploits gone nothing carries
   rounds 12-15. The biggest flag is §6.1: $5 a round and no step 2 of the curve, then a choice between a softer late
   curve or a late scaler the bots do not use.
 
@@ -140,6 +141,7 @@ The real run: shop rolls, decal picks, bosses and money; 4 shopping strategies (
 | **As planned**: $4 a round, 1M final (5 seeds) | 60 | 0% | 0% | 0% | 1-8 | 1-7 |
 | $4 a round, softer late curve (600k final) (10 seeds) | 120 | 2.5% | 0% | 0% | 6-9 | 1.5-6.5 |
 | $5 a round, 1M final (10 seeds) | 120 | 2.5% | 0% | 0% | 2.5-11 | 1.5-8 |
+| **As shipped** (all follow-ups in): $4 a round, 1M final (8 seeds) | 96 | 0% | 0% | 0% | 6-9 | 1.5-7.5 |
 | $5 a round **and** the softer late curve (8 seeds) | 96 | 6% (seeker 25%) | 3% (seeker 13%) | 0% | 2.5-11.5 | 1.5-8 |
 
 The plan's targets were pro 30-50%, avg 15-30%, poor rarely. **None of these comes near**, though $5 and the softer
@@ -209,7 +211,8 @@ In order of how much they matter. Nothing below is changed in the game; each has
    The Jammer 0% (×0.51; jamming the best part of last round costs about half a modern table, whose top part is ~44%), The
    Auditor 0-33% on every table (×0.16-0.6). Suggestions: Cheap Rubber kicks at 70% instead of 50%; the Jammer jams the
    best part's *type* only when it is not the top scorer, or jams the second best; the Auditor's decals come back at a
-   third of the goal.
+   third of the goal. In the shipped campaign Short Fuse is the worst regular boss (41% of the 17 runs that met it lost;
+   the plan's fallback is 45 s), then Night Shift (36%).
 5. **Still above +150% in the census.** Re-censused at the end ([after/pooled-recheck.md](balance-research/after/pooled-recheck.md)):
    the **Ball Printer** at one print a ball is still +187% / +211% mid, +107% / +173% late (it still turns almost every
    ball into a two-ball multiball for the rest of that ball). Options: legendary at $12 (the research's other idea), or
@@ -219,7 +222,7 @@ In order of how much they matter. Nothing below is changed in the game; each has
 6. **Still weak**: the Deflector and the Piggy Bank (net loss in both passes), the Spotlight and the Time Capsule late, Opal
    and Garnet (0-6%), Nest Egg (+6%), Sudden Death for a pro (0%). The Whale's 500-point spout changed nothing: on these
    tables it swallows about 1.5 sparks a round and never reaches a spout (every 6th); it needs a sparks build, or a spout
-   every 3rd. The Bonsai at +10 is still -9% / -14% late (it is moved too often by the placer to age). The four Long rail parts cannot fit on a full late
+   every 3rd. The Bonsai at +10 is still -9% / -14% late (a 4-round census segment lets it age 4 rounds at most: +40; over a whole run it would be worth more than the census shows). The four Long rail parts cannot fit on a full late
    table (as designed now: "Needs room").
 7. **Overheat** was added by the plan's own 10.2 rule, but the long clock-off ball lives it was meant for did not go away
    (multiball castle up to 600 s, Diner autopilot 420 s): with the clock off a pro simply keeps those balls up. It did cut
