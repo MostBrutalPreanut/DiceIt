@@ -1,5 +1,5 @@
 import * as B from 'phaser-box2d/dist/PhaserBox2D.js';
-import { dialValue, footprint, GARNET_X, PARTS, SMALL_FLIPPER, triPoints, zappable, type PartInstance } from '../data/parts';
+import { dialValue, footprint, GARNET_X, OVERHEAT, PARTS, SMALL_FLIPPER, triPoints, zappable, type PartInstance } from '../data/parts';
 import {
   BALL_R, BALL_SEARCH_AFTER, BALL_SEARCH_AGAIN, BALL_SEARCH_KICKS, BALL_SPAWN, BALL_TIMEOUT, CAT, DT, FLIPPER_LENGTH, FLIPPER_REST,
   FLIPPER_SPEED_DOWN, FLIPPER_SPEED_UP, FLIPPER_TORQUE, FLIPPER_UP, LANE_FLOOR_Y, LANE_TOP_Y,
@@ -171,6 +171,8 @@ interface PartRef {
   spent?: boolean;
   /** A catcher that rests: until when a ball rolls over it instead of being caught (a Ball Printer after printing). */
   restUntil?: number;
+  /** Overheat: when this catcher last caught (the last few times). */
+  fired?: number[];
   /** Spider Wheel: it has spun this ball (one spin a ball; the ball rolls over it until the next ball). */
   spunBall?: boolean;
   /** Gremlin Hutch: its gremlins, each a little sensor body that wanders the table (`out` until it is back). */
@@ -1346,6 +1348,9 @@ export class Sim {
         // closing time (the ball clock ran out), a resting catcher, a wheel that has spun this ball: the ball rolls over it for its points
         if (this.timeUp || this.time < (pr.restUntil ?? 0) || (def.recipe.wheel && pr.spunBall)) { this.events.push(hit); continue; }
         if ([...this.balls].some((o) => o.held?.uid === pr.inst.uid)) continue; // one at a time
+        // Overheat: a catcher that has caught OVERHEAT.n times within OVERHEAT.within s rests (no self-playing loops)
+        pr.fired = [...(pr.fired ?? []).filter((at) => this.time - at < OVERHEAT.within), this.time];
+        if (pr.fired.length >= OVERHEAT.n) { pr.fired = []; pr.restUntil = this.time + OVERHEAT.rest; }
         const hold = def.recipe.wheel ? def.recipe.wheel.seconds : dialValue(pr.inst, 'hold'); // a Spider Wheel spins until a flipper stops it
         br.held = { uid: pr.inst.uid, until: this.tick + Math.round(hold / this.dt), since: this.tick };
         B.b2Body_SetTransform(br.body, V(pr.inst.x, pr.inst.y), B.b2MakeRot(0));

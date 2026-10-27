@@ -295,3 +295,26 @@ describe('phase 7: weak parts, gems and decals', () => {
     expect(PARTS.whale.recipe.whale!.points).toBe(500);
   });
 });
+
+describe('phase 10: Overheat (the clock-off study found balls alive for minutes)', () => {
+  it('a Tesla Coil that arcs 4 times in 6 s rests 5 s: it still scores, but does not arc', () => {
+    const tesla = makePart('tesla', 1, 12, 30, true), pop = makePart('pop', 2, 14, 30, true);
+    const s = scorer([tesla, pop]);
+    const zaps = (t: number) => s.consume(hit(1, { t })).filter((e) => e.zap).length;
+    expect([0, 1, 2, 3].map(zaps).every((n) => n > 0)).toBe(true); // the fourth in 6 s: then it overheats
+    expect(zaps(4)).toBe(0);
+    expect(zaps(7)).toBe(0);
+    expect(zaps(9)).toBeGreaterThan(0); // rested
+  });
+
+  it('a catcher that catches 4 times in 6 s rests 5 s (balls roll over it)', () => {
+    const sim = createSim(layoutOf(makePart('jackpot', 1, 12, 30, true)), { seed: 1 });
+    let caught = 0;
+    for (let k = 0; k < 6; k++) {
+      sim.addBall(12, 31.5, 0, -6);
+      for (const e of run(sim, 0.9)) if (e.type === 'partHit' && e.caught) caught++;
+    }
+    expect(caught).toBe(4);
+    expect(describePart(PARTS.jackpot).map((l) => l.text).join(' ')).toContain('Overheats');
+  });
+});

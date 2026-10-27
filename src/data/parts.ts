@@ -338,6 +338,9 @@ export function gemFits(gem: PartId, part: PartId): boolean {
   }
 }
 
+/** Overheat (no self-playing loops): a catcher or a Tesla Coil that fires `n` times within `within` s rests `rest` s. */
+export const OVERHEAT = { n: 4, within: 6, rest: 5 };
+const OVERHEAT_TEXT = `Overheats: if it fires ${OVERHEAT.n} times in ${OVERHEAT.within} s, it rests ${OVERHEAT.rest} s.`;
 /** What every part that zaps says about it (Tesla Coil, Powder Keg, Laser Turret, Shockwave Gong, Ritual Altar). */
 export const ZAP_NO_MULT = 'Zapped parts score their points, but only the ball itself raises your Mult.';
 /** A zapped part cannot be zapped again for this long (seconds). */
@@ -1194,6 +1197,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     const n = r.spawn + mods.printerExtra;
     lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (at most ${r.printCap === 1 ? 'one' : r.printCap} printed in one ball, and 4 on the table).${r.printRest ? ` After printing it rests ${r.printRest} s: balls roll over it.` : ''} Printed balls share the clock of the ball you launched.` });
   }
+  if (def.kind === 'saucer' || r.zap) lines.push({ tag: 'note', text: OVERHEAT_TEXT });
   if (def.kind === 'saucer') {
     const hold = inst ? dialValue(inst, 'hold') : PARTS[def.id].dials[0]?.default ?? 0.6;
     lines.push({ tag: 'note', text: def.id === 'magnet'

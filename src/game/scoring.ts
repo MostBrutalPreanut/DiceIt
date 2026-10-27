@@ -1,4 +1,4 @@
-import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, GREMLIN, grownPoints, hasTag, HOT_WINDOW, LEAF_STEP, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, WHEEL, wizardNeed, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
+import { dialFactor, dialValue, effectiveLevel, footprint, GARNET_X, GREMLIN, grownPoints, hasTag, HOT_WINDOW, LEAF_STEP, INFERNO_REACH, infernoReach, isDecor, lampStats, LEAF_CAP, LEVEL_RADIUS, MAX_LEVEL, MAX_STRENGTH, modFactor, OVERHEAT, PARTS, RANK_NAMES, RITUAL_NAMES, RITUALS, RUBY_X, SEAL_DARK, swarmSparks, tempestRate, tierOf, TOPAZ_CHANCE, WHEEL, wizardNeed, ZAP_COOLDOWN, zappable, type PartId, type PartInstance, type Recipe, type Ritual } from '../data/parts';
 import { neutralMods, type Mods } from '../data/mods';
 import { bigBoiOf, DRAGON, ORDER, type BigBoiId, type MachineId } from '../data/bigboi';
 import { TABLE_H, TABLE_W } from '../sim/constants';
@@ -1019,7 +1019,7 @@ export class Scorer {
       // the Cook calls a new order; the Dragon loses a plate
       if (inst.def === 'mega') out.push(...this.bigBoiHit(inst, ev));
       // a Tesla Coil arcs to the parts nearest it (a zapped coil does not: a zap never arcs on)
-      if (r.zap && !ev.zap) out.push(...this.arc(inst, ev));
+      if (r.zap && !ev.zap && !this.overheated(inst, ev.t)) out.push(...this.arc(inst, ev));
       // a Laser Turret fires across the table; a Shockwave Gong's tenth hit booms (a zap sets off neither)
       if (r.beam && !ev.zap && !this.coolingDown(inst.uid, ev.t)) out.push(...this.fire(inst, scored, ev));
       if (r.boom && !ev.zap) {
@@ -1357,6 +1357,17 @@ export class Scorer {
     if (kind === 'swarm') e.sparks = [{ n: swarmSparks(s), x: 12, y: 45, r: 0, parent: ev.ballId ?? 1, top: true }];
     return [e];
   }
+
+  /** Overheat: a Tesla Coil that has arced OVERHEAT.n times within OVERHEAT.within s rests (it still scores, but does not arc). */
+  private overheated(inst: PartInstance, t: number): boolean {
+    if ((this.heatRest.get(inst.uid) ?? -1) > t) return true;
+    const fired = [...(this.arcTimes.get(inst.uid) ?? []).filter((at) => t - at < OVERHEAT.within), t];
+    if (fired.length >= OVERHEAT.n) { this.arcTimes.set(inst.uid, []); this.heatRest.set(inst.uid, t + OVERHEAT.rest); }
+    else this.arcTimes.set(inst.uid, fired);
+    return false;
+  }
+  private arcTimes = new Map<number, number[]>();
+  private heatRest = new Map<number, number>();
 
   /** How many parts this Tesla Coil arcs to: its base, one more every few levels, up to its most. */
   arcsOf(inst: PartInstance): number {
