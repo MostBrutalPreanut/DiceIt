@@ -148,6 +148,16 @@ describe('packs: Lane Rollovers come in threes, Level Lights in twos', () => {
     expect(g.money).toBe(50 - PARTS.lane.cost);
   });
 
+  it('the spread shown while the pack is carried is where it lands', () => {
+    for (const [x, y] of [[3.2, 34], [12, 22]]) {
+      const g = new Game();
+      expect(g.canDropAt('lane', x, y)).toBe(true);
+      const shown = g.packSpots('lane', x, y)!;
+      g.buyAndPlace(offer(g, 'lane'), x, y);
+      expect(g.layout.parts.filter((p) => p.def === 'lane').map((p) => (p.placed ? { x: p.x, y: p.y } : null))).toEqual(shown);
+    }
+  });
+
   it('a set is all three lanes of one pack: three lit lanes from two packs are not a set', () => {
     const a = [1, 2, 3].map((u) => ({ ...makePart('lane', u, 4 + u * 2, 30, true), group: 1 }));
     const b = [4, 5, 6].map((u) => ({ ...makePart('lane', u, 4 + u * 2, 36, true), group: 4 }));

@@ -202,7 +202,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.mouse.move(5, 5);
 
   // the toolbox holds four: buying stops, and storing into a full toolbox sells the part for half (after the $1 to move it)
-  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.money = 50; window.__pinball.refresh(); });
+  await page.evaluate(() => { const g = window.__pinball.game; g.newRun(); window.__pinball.seatStarters(); g.round = 2; g.money = 50; window.__pinball.refresh(); }); // past the free moves of the setup before round 1
   for (let i = 0; i < 4; i++) {
     await page.evaluate(() => { const g = window.__pinball.game; g.shop.offers = ['pop', 'pop', 'pop', 'pop']; window.__pinball.refresh(); });
     await page.click('button[data-buy="0"]');
@@ -275,7 +275,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(Math.hypot(moved.x - 8, moved.y - 26) < 0.6, `Move: the part follows the pointer and the next click sets it down (${moved.x.toFixed(1)}, ${moved.y.toFixed(1)})`);
   // moving a part you did not buy this visit costs $1 once, and the card says so; with no money it cannot move
   await page.keyboard.press('Escape');
-  await page.evaluate(() => { const g = window.__pinball.game; for (const q of g.placed) delete q.loose; g.money = 0; window.__pinball.refresh(); });
+  await page.evaluate(() => { const g = window.__pinball.game; for (const q of g.placed) delete q.loose; g.round = 2; g.money = 0; window.__pinball.refresh(); });
   await page.mouse.click(to.x, to.y);
   check(/\$1/.test(await page.innerText('#btnMove')) && await page.isDisabled('#btnMove'), 'Move shows its $1 fee, and is off with no money');
   await page.keyboard.press('Escape');

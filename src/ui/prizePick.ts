@@ -1,4 +1,4 @@
-import { PARTS, RARITY_NAMES, type PartId, type PartInstance } from '../data/parts';
+import { packTag, PARTS, RARITY_NAMES, type PartId, type PartInstance } from '../data/parts';
 import type { AudioFx } from '../audio';
 import type { Game } from '../game/game';
 import { KIND } from './html';
@@ -104,7 +104,7 @@ export class PrizePicker {
       <span class="dp-lift"><span class="dp-flip">
         <span class="dp-back" aria-hidden="true"><span class="dp-backmark disp">?</span><span class="dp-backtag">PRIZE</span></span>
         <span class="dp-face">
-          <span class="dp-art"><span class="dp-burst"></span><img class="dp-img" alt="" draggable="false" src="${this.host.icon(id, ART)}">${sparks}<span class="dp-key" aria-hidden="true">${i + 1}</span><span class="dp-kind">${KIND[def.kind]}</span>${def.pack && def.pack > 1 ? `<span class="pp-pack disp">×${def.pack}</span>` : ''}${room ? '' : '<span class="dp-noroom disp" aria-hidden="true">NO ROOM</span>'}</span>
+          <span class="dp-art"><span class="dp-burst"></span><img class="dp-img" alt="" draggable="false" src="${this.host.icon(id, ART)}">${sparks}<span class="dp-key" aria-hidden="true">${i + 1}</span><span class="dp-kind">${KIND[def.kind]}</span>${packTag(def) ? `<span class="pp-pack disp">${packTag(def)}</span>` : ''}${room ? '' : '<span class="dp-noroom disp" aria-hidden="true">NO ROOM</span>'}</span>
           <span class="dp-body">
             <b class="dp-name disp">${esc(def.name)}</b>
             <span class="dp-meta"><span class="rar r-${def.rarity}">${RARITY_NAMES[def.rarity]}</span></span>

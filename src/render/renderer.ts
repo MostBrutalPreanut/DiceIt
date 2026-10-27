@@ -13,8 +13,11 @@ import { APRON_Z, arrowInserts, buildMachine, CAB, DECAL_SLOT_POS, decalArt, dec
 import { BALL_WEAR, mat, mix, num, roleFill, WHITE, type Theme } from './theme';
 
 export interface DrawState {
-  /** A part following the pointer, about to be placed. */
-  ghost: { def: PartId; x: number; y: number; angle: number; valid: boolean } | null;
+  /**
+   * A part following the pointer, about to be placed. `pack`: where the rest of a pack bought with this drop would
+   * land beside it (the pieces with no room there go to the toolbox), so the spread is no surprise.
+   */
+  ghost: { def: PartId; x: number; y: number; angle: number; valid: boolean; pack?: { x: number; y: number }[] } | null;
   selectedUid: number | null;
   hoverUid: number | null;
   showHeat: boolean;
@@ -678,7 +681,8 @@ export class Renderer {
         dottedLine(this.topG, P(v, hov.x, hov.y, 1.1), P(v, l.x, l.y, 1.95), game.scorer.isLit(l.uid) ? t.ink : mix(t.ink, t.paper, 0.5), v.lw);
       }
     }
-    if (st.ghost) seen.add(-1);
+    const ghosts = st.ghost ? [{ x: st.ghost.x, y: st.ghost.y }, ...(st.ghost.pack ?? [])] : [];
+    ghosts.forEach((_, i) => seen.add(-1 - i));
     for (const [uid, pv] of this.parts) if (!seen.has(uid)) { pv.sprite.destroy(); this.parts.delete(uid); }
     for (const [uid, mv] of this.movers) if (!seen.has(uid)) { mv.sprite.destroy(); this.movers.delete(uid); }
 
@@ -686,17 +690,23 @@ export class Renderer {
       const def = PARTS[st.ghost.def];
       // decor in hand is its little screen until it is near the decor screen, then it snaps in, drawn just as it will sit
       const decorLoose = isDecor(st.ghost.def) && !(st.ghost.x === DECOR_SLOT.x && st.ghost.y === DECOR_SLOT.y);
-      const b = this.baked(st.ghost.def, st.ghost.angle, st.ghost.def === 'lane' ? { letter: t.laneWord[0] } : decorLoose ? { badge: true } : {});
-      let pv = this.parts.get(-1);
-      if (!pv) { pv = { sprite: new Sprite() }; this.partLayer.addChild(pv.sprite); this.parts.set(-1, pv); }
-      pv.sprite.texture = b.tex;
-      pv.sprite.anchor.set(b.ax, b.ay);
-      const [X, Y] = P(v, st.ghost.x, st.ghost.y);
-      pv.sprite.position.set(X, Y);
-      pv.sprite.zIndex = 100000;
-      pv.sprite.alpha = isDecor(st.ghost.def) && !decorLoose && st.ghost.valid ? 0.92 : decorLoose ? 0.85 : 0.6;
-      pv.sprite.scale.set(1);
-      pv.sprite.tint = st.ghost.valid || decorLoose ? 0xffffff : num(mix(t.accent, '#ffffff', 0.25)); // loose decor is not wrong yet, just on its way
+      // the whole pack: the piece in hand and the rest beside it (lanes spell the machine's word left to right, as they will)
+      const order = ghosts.map((g, i) => ({ g, i })).sort((a, b) => a.g.x - b.g.x || a.g.y - b.g.y).map((o) => o.i);
+      ghosts.forEach((g, i) => {
+        const letter = t.laneWord[order.indexOf(i) % t.laneWord.length];
+        const b = this.baked(st.ghost!.def, st.ghost!.angle, st.ghost!.def === 'lane' ? { letter } : decorLoose ? { badge: true } : {});
+        let pv = this.parts.get(-1 - i);
+        if (!pv) { pv = { sprite: new Sprite() }; this.partLayer.addChild(pv.sprite); this.parts.set(-1 - i, pv); }
+        pv.sprite.texture = b.tex;
+        pv.sprite.anchor.set(b.ax, b.ay);
+        const [X, Y] = P(v, g.x, g.y);
+        pv.sprite.position.set(X, Y);
+        pv.sprite.zIndex = 100000 - i;
+        pv.sprite.alpha = isDecor(st.ghost!.def) && !decorLoose && st.ghost!.valid ? 0.92 : decorLoose ? 0.85 : i ? 0.45 : 0.6;
+        pv.sprite.scale.set(1);
+        pv.sprite.tint = st.ghost!.valid || decorLoose ? 0xffffff : num(mix(t.accent, '#ffffff', 0.25)); // loose decor is not wrong yet, just on its way
+        if (i) dashedRing(fx, v, g.x, g.y, footprint(def), t.ink, v.lw * 0.8);
+      });
       if (isInlay(st.ghost.def)) {
         // a gem in hand: every part it fits is ringed in the gem's colour (it goes into the one it is dropped on)
         for (const q of game.placed) if (!q.fixed && gemFits(st.ghost.def, q.def)) dashedRing(fx, v, q.x, q.y, footprint(PARTS[q.def]) + 0.35, t.role[st.ghost.def], v.lw * 1.4, t.ink);
