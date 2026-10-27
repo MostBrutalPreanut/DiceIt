@@ -308,6 +308,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(await page.locator('.dp-card .dp-img').count() === 3, 'every decal card shows the decal it would stick on');
   const cardText = await page.innerText('.dp-card[data-pick="1"]');
   check(/Head Start/i.test(cardText) && /Score/i.test(cardText) && /Common/i.test(cardText) && /\+0\.5 Mult/.test(cardText) && /apron slot 1 of 4/i.test(cardText), 'a decal card reads its name, kind, rarity, rule and the apron slot it goes to');
+  await page.waitForSelector('#upgradeBox.dp-settled', { timeout: 8000 }).catch(() => {}); // a click while the cards still flip in only finishes the reveal
   await page.click('.dp-card[data-pick="1"]'); // waits for the card to land and turn over
   await page.waitForFunction(() => window.__pinball.game.decals.length === 1, null, { timeout: 5000 }).catch(() => {});
   check(await page.evaluate(() => window.__pinball.game.decals.length) === 1, 'taking a card sticks its decal on the apron (once it has flown there)');
