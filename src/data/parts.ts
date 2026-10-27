@@ -572,7 +572,7 @@ export const PARTS: Record<PartId, PartDef> = {
 
   // ---- rare: from round 4 ----
   printer: {
-    id: 'printer', name: 'Ball Printer', blurb: 'Catches a ball and spits out two. Multiball! Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 2,
+    id: 'printer', name: 'Ball Printer', blurb: 'Catches a ball and spits out two. Multiball! Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 10, weight: 1,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
     recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 1, printRest: 12, perLevel: 10 },
     dials: [

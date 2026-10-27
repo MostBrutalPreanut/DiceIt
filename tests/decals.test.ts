@@ -258,10 +258,10 @@ describe('what the decals do: cash', () => {
   it('Free Hands makes moving and scrapping free, and a part with no room sells for its full price', () => {
     const g = new Game();
     g.money = 10;
-    expect(g.sellValue(PARTS.printer)).toBe(4);
+    expect(g.sellValue(PARTS.printer)).toBe(5);
     expect(g.removeValue(g.part(1)!)).toBe(-1); // a Pop Bumper that has played: scrapping it costs
     take(g, 'fullRefund');
-    expect(g.sellValue(PARTS.printer)).toBe(9);
+    expect(g.sellValue(PARTS.printer)).toBe(10);
     expect(g.moveFee(g.part(1)!)).toBe(0);
     expect(g.sell(1)).toBe(0);
     expect(g.money).toBe(10);
