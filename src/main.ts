@@ -1731,4 +1731,5 @@ async function main() {
   openMenu();
 }
 
-void main();
+// the page is shown once the main menu is up (or, if loading failed, as it is)
+void main().finally(() => document.body.classList.remove('booting'));

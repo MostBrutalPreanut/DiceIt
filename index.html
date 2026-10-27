@@ -4,8 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>BIG BOI Pinball Designer</title>
+  <!-- the game stays hidden while it loads, so the play area never shows before the main menu -->
+  <style>body.booting #app { visibility: hidden; }</style>
 </head>
-<body>
+<body class="booting">
   <div id="backdrop" aria-hidden="true"></div>
   <div id="app">
     <aside id="left" class="panel housing">
