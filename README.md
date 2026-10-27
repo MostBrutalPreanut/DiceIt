@@ -48,6 +48,17 @@ npm run concept           # re-render the concept sheets in docs/concept from th
 # prop lab (dev page): every part in every theme and state, with its footprint: http://localhost:5173/lab.html
 ```
 
+## The trailer
+
+```bash
+npm run trailer                                   # films every shot, then cuts trailer-out/trailer.mp4 (about 20 min)
+node tools/trailer/record.cjs trailer-out --preview --only=C2,D1   # a quick low-res look at some shots, with a contact sheet each
+node tools/trailer/assemble.cjs trailer-out       # cut again from the filmed shots (the sound is made here)
+node tools/trailer/search.cjs --only=D3           # find a better take of a shot (written to tools/trailer/takes.json)
+```
+
+A 30-second trailer filmed in the real game: `?trailer` in the address stops the game's clock between frames, so headless Chromium can film it frame by frame at 30 fps, with a bot at the flippers and a camera that moves the view itself (close-ups are drawn at their own size, not blown up). The shot list, the three trailer machines and the words on screen are in `tools/trailer/shots.cjs`: every shot is a few beats of the music long, so the cuts land on the beat. Each shot drops its balls where the action is; `search.cjs` plays a shot many times without drawing, nudging those balls, and keeps the take where the most happens on camera (the sim is deterministic, so the take filmed is the take found). The sound is the game's own kit rendered offline: the factory tune driving harder as the cuts get busier, every sound the shots asked for at its moment, and the title tune from its top under the end card.
+
 ## Layout
 
 ```

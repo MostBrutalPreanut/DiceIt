@@ -60,6 +60,8 @@ const quantK = (k: number) => Math.round(k / K_STEP) * K_STEP;
 const kzFor = (k: number) => 0.3 + 0.3 * Math.min(1, Math.max(0, (1 - k) / 0.14));
 
 interface Baked { tex: Texture; ax: number; ay: number }
+/** Where the trailer's camera looks: a sim point, where on the stage it lands (fractions), and how close. */
+export interface Camera { x: number; y: number; zoom: number; fx?: number; fy?: number }
 interface PartView { sprite: Sprite }
 
 /** Draws the latest sim state. It reads the sim and never writes to it. */
@@ -110,6 +112,12 @@ export class Renderer {
   /** The view at the current tip. */
   view: View = { S: 10, ox: 0, oy: 0, k: 1, kz: 0.3, shx: 0, lw: 1.4 };
   private k = TIP_K;
+  /** The scale that fits the whole machine; the camera multiplies it. */
+  private fitS = 10;
+  private cam: Camera | null = null;
+  private camKey = '';
+  /** The scale the part textures in the cache were baked at. */
+  private bakedS = 0;
   private cache = new Map<string, Baked>();
   private statics = new Map<string, { tex: Texture; x: number; y: number }>();
   private staticKey = '';
@@ -164,6 +172,7 @@ export class Renderer {
     this.flush();
     this.sparkTex?.destroy(true);
     this.sparkTex = null;
+    for (const sp of this.sparkPool) sp.texture = Texture.EMPTY; // drawn again with the new spark next frame
     this.particles.bake(t);
     this.dmd.setTheme(t);
   }
@@ -185,6 +194,26 @@ export class Renderer {
     this.flush(); // every baked texture was made at the old resolution
   }
 
+  /** Draw at this many pixels per CSS pixel (the trailer renders close-ups sharper); every baked texture is made again. */
+  setResolution(res: number) {
+    if (this.app.renderer.resolution === res) return;
+    this.app.renderer.resolution = res;
+    this.flush();
+  }
+
+  /**
+   * The trailer's camera: the sim point (x, y) lands at (fx, fy) of the stage (fractions, the middle by default), at
+   * `zoom` times the normal size; null puts the whole machine back. It moves the view itself, so a close-up is drawn
+   * (and baked) at its own size, as sharp as the normal view.
+   */
+  setCamera(cam: Camera | null) {
+    const key = cam ? `${cam.x}|${cam.y}|${cam.zoom}|${cam.fx ?? 0.5}|${cam.fy ?? 0.5}` : '';
+    if (key === this.camKey) return;
+    this.camKey = key;
+    this.cam = cam;
+    this.applyK(this.view.k);
+  }
+
   /** The backbox's dot-matrix display: a comment scrolls in from the right, holds, then clears. */
   say(text: string) { this.dmd.say(text.toUpperCase()); }
   /** A hit flashes up on the display at once. */
@@ -204,6 +233,9 @@ export class Renderer {
     for (const s of this.statics.values()) s.tex.destroy(true);
     this.statics.clear();
     this.staticKey = '';
+    // nothing may be drawn with a destroyed texture before the next frame hands out new ones (a resize renders at once)
+    for (const v of [...this.parts.values(), ...this.movers.values()]) v.sprite.texture = Texture.EMPTY;
+    this.staticSprite.texture = Texture.EMPTY;
   }
 
   private layout() {
@@ -212,21 +244,34 @@ export class Renderer {
     this.w = w; this.h = h;
     // fit the machine (rim and a little air) at its tallest, flat; the surround may crop on narrow screens
     const ext = machineExtent(TIP_K, kzFor(TIP_K));
-    const S = Math.max(4, Math.min((w - 12) / (RIM.hw * 2 + 1.6), (h - 12) / (ext.top + ext.bottom)));
-    this.view.S = S;
-    this.view.lw = Math.max(1, S * 0.14);
+    this.fitS = Math.max(4, Math.min((w - 12) / (RIM.hw * 2 + 1.6), (h - 12) / (ext.top + ext.bottom)));
     this.flush();
     this.applyK(this.k);
   }
 
   private applyK(k: number) {
-    const v = this.view;
+    const v = this.view, cam = this.cam;
     v.k = k;
     v.kz = kzFor(k);
-    v.ox = this.w / 2 - RIM.cx * v.S;
-    // the whole object (backbox to legs) is centred in the stage
-    const ext = machineExtent(k, v.kz);
-    v.oy = this.h / 2 + ((ext.top - ext.bottom) / 2) * v.S;
+    v.S = this.fitS * (cam?.zoom ?? 1);
+    v.lw = Math.max(1, v.S * 0.14);
+    if (this.particles) this.particles.stickerZoom = Math.sqrt(cam?.zoom ?? 1);
+    if (v.S !== this.bakedS) {
+      // the parts are baked at the view's scale: a new scale bakes them again
+      for (const b of this.cache.values()) b.tex.destroy(true);
+      this.cache.clear();
+      for (const pv of [...this.parts.values(), ...this.movers.values()]) pv.sprite.texture = Texture.EMPTY;
+      this.bakedS = v.S;
+    }
+    if (cam) {
+      v.ox = this.w * (cam.fx ?? 0.5) - (cam.x + cam.y * v.shx) * v.S;
+      v.oy = this.h * (cam.fy ?? 0.5) + cam.y * k * v.S;
+    } else {
+      v.ox = this.w / 2 - RIM.cx * v.S;
+      // the whole object (backbox to legs) is centred in the stage
+      const ext = machineExtent(k, v.kz);
+      v.oy = this.h / 2 + ((ext.top - ext.bottom) / 2) * v.S;
+    }
     // the machine leans and shoves about its bottom centre
     const [px, py] = P(v, RIM.cx, RIM.cy - RIM.hh);
     this.machine.pivot.set(px, py);
@@ -386,7 +431,7 @@ export class Renderer {
       this.statics.clear();
       this.staticKey = '';
     }
-    const key = this.view.k.toFixed(2);
+    const v0 = this.view, key = this.cam ? `${v0.k.toFixed(2)}|${v0.S}|${v0.ox}|${v0.oy}` : v0.k.toFixed(2);
     if (key === this.staticKey) return;
     this.staticKey = key;
     let s = this.statics.get(key);

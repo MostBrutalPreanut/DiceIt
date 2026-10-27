@@ -38,6 +38,12 @@ import './ui/feedback.css';
 
 /** The developer's tools (the Machine & options drawer, the Test Lab) show only with ?dev in the address. */
 const DEV = new URLSearchParams(location.search).has('dev');
+/**
+ * ?trailer: the game is filmed frame by frame by tools/trailer/record.cjs. The clock stands still between frames (the
+ * recorder moves it on), a bot can play, and the sounds are written down with their time instead of played: the
+ * recorder renders them offline afterwards.
+ */
+const TRAILER = new URLSearchParams(location.search).has('trailer');
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORE = 'pinball-roguelite.run.v2';
@@ -78,6 +84,16 @@ async function main() {
   const overlay = new FxOverlay(theme);
   await overlay.init();
   const audio = new AudioFx();
+  /** ?trailer: the clock (ms) the recorder moves on, the bot at the controls, and every sound asked for (at the video's time). */
+  const film = { now: performance.now(), video: 0, steps: 0, bot: null as Bot | null, log: null as { t: number; k: string; a: unknown[] }[] | null };
+  const clock = () => (TRAILER ? film.now : performance.now());
+  if (TRAILER) {
+    for (const k of Object.getOwnPropertyNames(AudioFx.prototype)) {
+      const d = Object.getOwnPropertyDescriptor(AudioFx.prototype, k);
+      if (k === 'constructor' || typeof d?.value !== 'function') continue;
+      (audio as unknown as Record<string, unknown>)[k] = (...a: unknown[]) => { film.log?.push({ t: film.video, k, a: JSON.parse(JSON.stringify(a)) }); return k === 'toggleMute' ? false : undefined; };
+    }
+  }
   /** Points and coins fly from the part to the score and the money stack. */
   const flyers = new Flyers(overlay, renderer, { coinLand: () => audio.coinLand() });
   const odometer = new Odometer($('score'));
@@ -1653,6 +1669,27 @@ async function main() {
     /** Put a new run's starting bumpers from the toolbox onto their old spots, settled in (moving them costs again), for checks written for that start. */
     seatStarters() { for (const p of starterLayout().parts) if (!p.fixed && game.place(p.uid, p.x, p.y)) delete game.part(p.uid)!.loose; refreshWorkshop(); },
     refresh: () => refreshWorkshop(),
+    // ?trailer (tools/trailer/record.cjs): one frame of `ms` (fx false: nothing flies to the hidden panels), the camera, the
+    // drawing resolution, a bot at the controls, the main menu, and the sounds written down since the log was opened
+    frame(ms: number, video: number, fx = true) {
+      film.now += ms;
+      film.video = video;
+      film.steps = Math.round(ms / 1000 / DT);
+      simulating = !fx;
+      try { renderer.app.ticker.update(film.now); overlay.app.ticker.update(film.now); } finally { simulating = false; }
+    },
+    /** Play `seconds` with the bot (or nobody) and draw nothing: the run-up to a shot. */
+    skip(seconds: number) {
+      simulating = true;
+      try { for (let i = Math.round(seconds / DT); i > 0; i--) stepOnce(film.bot ? film.bot.decide(game.sim) : { left: false, right: false, plunge: false, nudge: 0 }); } finally { simulating = false; }
+    },
+    camera: (c: Parameters<Renderer['setCamera']>[0]) => renderer.setCamera(c),
+    resolution: (r: number) => renderer.setResolution(r),
+    autopilot(seed: number | null, skill = 0.9) { film.bot = seed === null ? null : new Bot(seed, skill); },
+    openMenu: () => openMenu(),
+    closeMenu() { attract.stop(); menu.close(); },
+    soundLog(on: boolean) { const l = film.log ?? []; film.log = on ? [] : null; return l; },
+    mood: (m: Mood, s: number) => renderer.bigBoiMood(m, s),
   };
   (window as unknown as { __pinball: typeof debug }).__pinball = debug;
 
@@ -1665,7 +1702,7 @@ async function main() {
   }
 
   renderer.app.ticker.add(() => {
-    const now = performance.now();
+    const now = clock();
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (attract.on) {
@@ -1681,7 +1718,9 @@ async function main() {
     if (menu.paused || feedback.open) { acc = 0; renderer.draw(game, 0, drawState); return; }
     acc += dt;
     let n = 0;
-    while (!frozen && acc >= DT && n < 24) {
+    // a filmed frame is a whole number of steps, so a shot plays out exactly as it did when it was planned
+    if (TRAILER) { for (; n < film.steps; n++) stepOnce(film.bot ? film.bot.decide(game.sim) : readInput()); film.steps = 0; acc = 0; }
+    while (!TRAILER && !frozen && acc >= DT && n < 24) {
       stepOnce(readInput());
       acc -= DT;
       n++;
@@ -1724,6 +1763,7 @@ async function main() {
     if (fpsClock >= 1) { debug.fps = Math.round(frames / fpsClock); frames = 0; fpsClock = 0; }
   });
 
+  if (TRAILER) { renderer.app.ticker.stop(); overlay.app.ticker.stop(); last = film.now; }
   makeBulbs(document);
   applySettings(settings);
   applyTheme(theme);

@@ -15,7 +15,8 @@
     "clears": "vite-node tools/clears.ts",
     "build:single": "vite build -c vite.single.config.ts",
     "artifact": "npm run build:single && node tools/make-artifact.mjs",
-    "concept": "vite-node tools/concept/scenes.ts"
+    "concept": "vite-node tools/concept/scenes.ts",
+    "trailer": "node tools/trailer/record.cjs && node tools/trailer/assemble.cjs"
   },
   "dependencies": {
     "phaser-box2d": "^1.1.0",

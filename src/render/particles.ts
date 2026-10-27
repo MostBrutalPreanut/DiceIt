@@ -194,6 +194,9 @@ export class Particles {
     if (huge) for (let i = 0; i < 4; i++) this.sparkle(x + (Math.random() - 0.5) * 3, y + (Math.random() - 0.5) * 2, z + Math.random(), 1.2, true);
   }
 
+  /** Stickers are drawn at a fixed size on screen; a close-up (the trailer's camera) makes them bigger by this much. */
+  stickerZoom = 1;
+
   clear() {
     for (const q of this.live) this.pc.removeParticle(q.p);
     this.live = [];
@@ -256,7 +259,7 @@ export class Particles {
       const sc = u < 0.1 ? 1.35 - (u / 0.1) * 0.35 : u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3;
       const [X, Y] = P(v, st.x, st.y, Math.max(0.5, st.z));
       st.c.position.set(X, Y);
-      st.c.scale.set(Math.max(0, sc));
+      st.c.scale.set(Math.max(0, sc) * this.stickerZoom);
       st.c.rotation = st.rot + st.spin * st.age;
     }
     this.stickers = this.stickers.filter((s) => {
