@@ -216,7 +216,9 @@ In order of how much they matter. Nothing below is changed in the game; each has
 5. **Still above +150% in the census.** Re-censused at the end ([after/pooled-recheck.md](balance-research/after/pooled-recheck.md)):
    the **Ball Printer** at one print a ball is still +187% / +211% mid, +107% / +173% late (it still turns almost every
    ball into a two-ball multiball for the rest of that ball). Options: legendary at $12 (the research's other idea), or
-   the printed ball leaves after 20 s like Wizard Mode's. The Wizard Lamp at 20 s is now +63% to +119% (fine). Also
+   the printed ball leaves after 20 s like Wizard Mode's. Measured, that second option reads +153% / +164% mid and +75% /
+   +113% late ([after/variant-printer-20s.md](balance-research/after/variant-printer-20s.md)): just over the line mid,
+   under it late; with both (20 s and legendary) it would sit where the other legendaries are. The Wizard Lamp at 20 s is now +63% to +119% (fine). Also
    above the line: the Gumball Machine (+112% / +234% mid; the board said no change) and the Golden Bumper for a pro
    (+175% late).
 6. **Still weak**: the Deflector and the Piggy Bank (net loss in both passes), the Spotlight and the Time Capsule late, Opal
