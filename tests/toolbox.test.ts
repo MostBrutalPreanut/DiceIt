@@ -27,6 +27,7 @@ describe('the toolbox holds four parts', () => {
     const g = rich();
     fill(g, TOOLBOX_SLOTS);
     const onBoard = g.placed[0];
+    g.round = 3; // past the free moves of the first rounds
     const money = g.money;
     expect(g.store(onBoard.uid)).toBe(g.sellValue(PARTS.pop));
     expect(g.money).toBe(money - UPKEEP.move + g.sellValue(PARTS.pop)); // moving it off the table costs, then it sells

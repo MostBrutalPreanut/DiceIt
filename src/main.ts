@@ -1,7 +1,7 @@
 import './style.css';
 import './ui/menu.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { dialValue, footprint, isDecor, isInlay, PARTS, RITUAL_NAMES, wizardNeed, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
+import { dialValue, footprint, isDecor, isInlay, packTag, PARTS, RITUAL_NAMES, wizardNeed, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
 import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, KIND_NAMES, type DecalId, type DecalPick } from './data/decals';
 import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
 import { FINAL_ROUND } from './data/bosses';
@@ -307,7 +307,7 @@ async function main() {
       ? `<button class="buy" data-add="${id}">Add</button>`
       : `${price! < def.cost ? `<s>$${def.cost}</s>` : ''}<button class="buy" data-buy="${index}" ${game.canAfford(price!) && game.editable && game.hasRoomFor(id) ? '' : 'disabled'}>$${price}</button>`;
     const lock = index === null ? '' : `<button class="lock ${locked ? 'on' : ''}" data-lock="${index}" title="${locked ? 'Locked: it stays for the next round. Click to unlock' : 'Lock it: it stays for the next round (and through rerolls)'}">${locked ? 'LOCKED' : 'LOCK'}</button>`;
-    return `<div class="offer r-${def.rarity} ${locked ? 'locked' : ''}" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}${def.pack && def.pack > 1 ? `<span class="pack" title="One offer: a pack of ${def.pack}">×${def.pack}</span>` : ''}</div>
+    return `<div class="offer r-${def.rarity} ${locked ? 'locked' : ''}" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}${packTag(def) ? `<span class="pack" title="One offer: a pack of ${def.pack}, placed one after the other">${packTag(def)}</span>` : ''}</div>
       <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}</div></div>`;
   }
 
@@ -633,6 +633,7 @@ async function main() {
   }
 
   function refreshWorkshop() {
+    if (armed === null) game.enforceToolbox(); // pieces of a pack left past the toolbox's last slot go back for what they cost
     reportSold();
     noteFound();
     if (carry && !game.part(carry.uid)?.placed) carry = null; // the part in hand was stored, sold or undone away
@@ -653,7 +654,7 @@ async function main() {
     if (over === canvas) {
       const p = spotFor(d.id, cx, cy);
       part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y, d.angle) : game.buyAndPlace(d.slot, p.x, p.y, d.angle);
-      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); placedTip(part.uid); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? (game.decor.length ? 'ONE DECOR AT A TIME: STORE THE OTHER FIRST' : 'DECOR GOES IN THE SCREEN UP TOP') : 'NO ROOM THERE'); return false; }
+      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); if (!armNext(part)) sayKey('place'); placedTip(part.uid); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? (game.decor.length ? 'ONE DECOR AT A TIME: STORE THE OTHER FIRST' : 'DECOR GOES IN THE SCREEN UP TOP') : 'NO ROOM THERE'); return false; }
     } else if (over?.closest('#inventoryBox')) {
       part = d.slot === null ? game.grant(d.id, d.angle) : game.buy(d.slot, d.angle);
       if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(d.slot !== null && !game.hasRoomFor(d.id) ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
@@ -717,8 +718,23 @@ async function main() {
   function cancelHold() {
     if (shopDrag) { endShop(); audio.remove(); }
     if (carry) { dropCarry(); audio.remove(); }
+    const piece = armed !== null ? game.part(armed) : undefined;
+    if (piece?.fresh && piece.group !== undefined && PARTS[piece.def].pack) say(game.packRest(piece).length ? 'THE REST WAIT IN THE TOOLBOX' : 'IT WAITS IN THE TOOLBOX');
     armed = null;
     refreshWorkshop();
+  }
+
+  /**
+   * A piece of a pack just went on the table: the next piece bought with it comes to hand at once, to be placed
+   * with the next click. A right-click (or Esc) leaves the rest in the toolbox. False if there is no next piece.
+   */
+  function armNext(put: PartInstance | undefined): boolean {
+    const rest = put ? game.packRest(put) : [];
+    if (!rest.length) return false;
+    const n = PARTS[rest[0].def].pack ?? rest.length + 1;
+    armed = selected = rest[0].uid;
+    say(`NEXT ONE: ${Math.max(2, n - rest.length + 1)} OF ${n}. RIGHT-CLICK: REST TO THE TOOLBOX`);
+    return true;
   }
 
   // ---- pointer: place, select, drag, store -------------------------------------------------------
@@ -762,10 +778,11 @@ async function main() {
     if (armed !== null) {
       const a = spotFor(game.part(armed)?.def ?? 'pop', e.clientX, e.clientY);
       if (game.place(armed, a.x, a.y, true)) {
-        selected = game.part(armed) ? armed : game.lastInlaid; // a gem went into a part: select the part
+        const put = game.part(armed);
+        selected = put ? armed : game.lastInlaid; // a gem went into a part: select the part
         armed = null;
         audio.place();
-        sayKey('place');
+        if (!armNext(put)) sayKey('place');
         persist();
         if (selected !== null) placedTip(selected);
       } else if (isInlay(game.part(armed)?.def ?? 'pop')) say('DROP IT ON A PART IT FITS');
@@ -838,10 +855,11 @@ async function main() {
     if (e.target === canvas) {
       const p = spotFor(game.part(armed)?.def ?? 'pop', e.clientX, e.clientY);
       if (game.place(armed, p.x, p.y, true)) {
-        selected = game.part(armed) ? armed : game.lastInlaid;
+        const put = game.part(armed);
+        selected = put ? armed : game.lastInlaid;
         armed = null;
         audio.place();
-        sayKey('place');
+        if (!armNext(put)) sayKey('place');
         persist();
         refreshWorkshop();
         if (selected !== null) placedTip(selected);
@@ -1421,7 +1439,7 @@ async function main() {
       { say: 'This is your <b>route</b>: 15 rounds to clear, each with a bigger goal. Some of them have their own nasty rules. Those are the <b>bosses</b>, and this box warns you which one is next.', at: () => [...around('#roundMap'), ...around('#bossBox')], scroll: '#roundMap' },
       { say: 'This is the <b>score</b> to beat. It grows every round.', at: () => around('#score', '#left .goalrow', '#left .tube'), scroll: '#score' },
       { say: `This is your <b>toolbox</b>. Right now it holds ${n} bumper${n === 1 ? '' : 's'}. Press one, then press the table to put it there.`, at: () => around('#invWrap'), scroll: '#invWrap' },
-      { say: `Think before you place something: moving it later costs you <b>$${UPKEEP.move}</b>.`, mood: 'oof', at: () => around('#invWrap'), scroll: '#invWrap' },
+      { say: `Moving parts is <b>free</b> for now, and still free after round 1: see where the ball goes, then shuffle things around. After that, every move costs <b>$${UPKEEP.move}</b>.`, mood: 'cool', at: () => around('#invWrap'), scroll: '#invWrap' },
       { say: 'This is your <b>money</b>. Every round you clear pays, every ball you did not need pays extra, and some parts cough up coins when you hit them.', at: () => around('#right .money'), scroll: '#right .moneyrow' },
       { say: 'This is the <b>shop</b>. After every round you can buy new parts for the machine here.', at: () => around('#shopBox'), scroll: '#shopBox' },
       {

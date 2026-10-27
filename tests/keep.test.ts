@@ -73,8 +73,26 @@ describe('Mult that is kept from round to round', () => {
 });
 
 describe('moving and removing parts costs money', () => {
+  it('moving is free in round 1 and the visit after it', () => {
+    const g = new Game();
+    g.money = 0;
+    const pop = g.part(1)!;
+    expect(g.moveFee(pop)).toBe(0);
+    expect(g.place(1, pop.x - 1, pop.y)).toBe(true);
+    clearRound(g);
+    expect(g.round).toBe(2);
+    expect(g.moveFee(g.part(1)!)).toBe(0);
+    const money = g.money;
+    expect(g.store(1)).toBeNull();
+    expect(g.money).toBe(money);
+    expect(g.place(1, pop.x, pop.y)).toBe(true);
+    clearRound(g);
+    expect(g.moveFee(g.part(1)!)).toBe(UPKEEP.move); // round 3 on: moves cost
+  });
+
   it('moving a part that has played a round costs $1, once a visit', () => {
     const g = new Game();
+    g.round = 3;
     g.money = 5;
     const pop = g.part(1)!;
     expect(g.moveFee(pop)).toBe(UPKEEP.move);
@@ -88,6 +106,7 @@ describe('moving and removing parts costs money', () => {
 
   it('with no money a part that has played cannot move', () => {
     const g = new Game();
+    g.round = 3;
     g.money = 0;
     const pop = g.part(1)!;
     expect(g.place(1, pop.x - 1, pop.y)).toBe(false);

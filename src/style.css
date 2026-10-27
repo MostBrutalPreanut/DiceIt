@@ -374,6 +374,7 @@ body.playing .footer { border-top: none; padding-top: 0; }
 .offer .plinth .rar { position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); font-size: 8px; padding: 0 4px; white-space: nowrap; }
 .tipcard .tags, .card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px; }
 .tags .tag { font: 700 10px/1.5 var(--ui); padding: 0 6px; border-radius: 99px; background: var(--chip); border: var(--lw-detail) solid var(--faint); }
+.tags .tag.pack { background: var(--paper); color: var(--ink); border-color: var(--ink); }
 /* lock a shop offer for the next round */
 .offer { grid-template-areas: "icon name buy" "icon blurb lock"; }
 .offer .lock { grid-area: lock; font: 800 9.5px var(--ui); letter-spacing: .06em; padding: 1px 7px; border-radius: 99px; justify-self: end; align-self: end; background: var(--paper); }
