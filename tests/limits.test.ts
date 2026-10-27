@@ -96,7 +96,7 @@ describe('the limits are written on the parts', () => {
     expect(text('mega')).toContain('up to +5 a ball');
     expect(text('coin')).toContain('up to $5 a round');
     expect(text('lane')).toContain('At most 5 sets a ball');
-    expect(text('printer')).toContain('at most 3 printed in one ball');
+    expect(text('printer')).toContain('at most one printed in one ball');
     expect(text('printer')).toContain('off for 12 s');
   });
 
@@ -183,7 +183,7 @@ describe('the ball clock', () => {
 });
 
 describe('the printer limit', () => {
-  it('prints one ball at a time, then is off for 12 s (at most 3 a ball)', () => {
+  it('prints one ball a ball, then is off for 12 s', () => {
     const sim = createSim({ parts: [makePart('printer', 1, 12, 30, true)], gravity: 50, nextUid: 2 });
     sim.spawnBall();
     for (let i = 0; i < 260; i++) sim.step({ ...NO_INPUT, plunge: i < 230 });
@@ -192,8 +192,7 @@ describe('the printer limit', () => {
       sim.addBall(12, 33.5, 0, -20);
       for (let i = 0; i < 240; i++) for (const e of sim.step(NO_INPUT)) if (e.type === 'extraBall') printedAt.push(e.t);
     }
-    expect(printedAt.length).toBeGreaterThan(1);
-    expect(printedAt.length).toBeLessThanOrEqual(3);
+    expect(printedAt.length).toBe(1);
     for (let i = 1; i < printedAt.length; i++) expect(printedAt[i] - printedAt[i - 1]).toBeGreaterThanOrEqual(12);
   });
 });

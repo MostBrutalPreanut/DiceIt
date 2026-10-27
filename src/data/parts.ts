@@ -570,7 +570,7 @@ export const PARTS: Record<PartId, PartDef> = {
   printer: {
     id: 'printer', name: 'Ball Printer', blurb: 'Catches a ball and spits out two. Multiball! Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 3, printRest: 12, perLevel: 10 },
+    recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 1, printRest: 12, perLevel: 10 },
     dials: [
       {
         id: 'hold', label: 'Hold', min: 0.2, max: 2, step: 0.1, default: 0.6,
