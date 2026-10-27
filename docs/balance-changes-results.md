@@ -51,3 +51,42 @@ Every item of phases 1-9 is in, with its card sentence changed in the same place
 | 9.1 | Step 1 curve (1M final) | yes | |
 | 9.2 | Endless as a list to round 30, "You beat it all. Well done!" | yes | |
 | 9.3 | Round numbers | partly | base points are multiples of 5 now (Cha-Ching, Slingshot, Vari-Target, Drop-Target, Ding-Dong, Mag-Grab, Sparkler, Whale's swallow, Jackpot's pot), and so are the bigger per-level steps; the hover card rounds what it shows (to 5 up to 100, two figures above). Per-level steps of 1-3 on cheap parts were left alone (rounding them to 5 would double those parts' late value). |
+
+After the first re-measure (below), four more changes went in, all from what the census measured:
+
+| Change | Why |
+|---|---|
+| Ball Printer prints **once** a ball (was 2), still rests 3 s | still +110% to +432% in both census passes with a cap of 2 (target: under +150%) |
+| Wizard Mode lasts **20 s** (was 30) | +154% / +173% on the mid table in both passes |
+| The Whale's spout pays **500** (was 300) | the plan's own fallback (7.3): still a net loss on the late table in both passes |
+| Bonsai Bumper **+10** a round (was +6) | the plan's own fallback (7.7): a net loss on the late table in both passes |
+
+## 2. The part census (both passes)
+
+Every part on the mid and the late table, 3 players, two passes with different seeds and placements (as in the
+research). Full table: [balance-research/after/pooled.md](balance-research/after/pooled.md). Measured before the four
+changes just above.
+
+**The engines are back in range.** The old runaways now read:
+
+| Part | Before (late avg, pass 1 / 2) | Now (late avg, pass 1 / 2) | Now (mid avg) |
+|---|---|---|---|
+| Spider Wheel | about +930% | +36% / +27% | +68% / +58% |
+| Ball Printer (cap 2) | +417% / +622% | +230% / +110% | +365% / +432% |
+| X Lane | +57% / +83% | +34% / +74% | +96% / +93% |
+| Mag-Grab | +67% / +6% | +22% / +56% | +68% / +58% |
+| Tesla Coil | +12% / +37% | +6% / -13% | +81% / +12% |
+| Disco Ball | (×2.5, no cap) | +20% / +25% | +47% / +42% |
+| Hall of Fame | (no cap) | +82% / +97% | +66% / +60% |
+
+Still above +150% somewhere: the Printer (cut again, above), the Wizard Lamp (cut, above), the Gumball Machine on the mid
+table (+112% / +234%; the board said no change) and the Golden Bumper for a pro (+175% late; +100% to +116% for avg).
+
+Still a net loss in both passes: the Deflector (-32% / -7% mid, -16% / -2% late), the Piggy Bank (-2% to -24%; it pays in
+money, which the census does not count), the Whale and the Bonsai late (buffed, above), the Time Capsule and the
+Spotlight late (-26% / -20%; mid it is mixed). The four big rail parts get no room on the 36-piece late table, as the
+plan expected (the shop card now says "Needs room"). The new parts: Hourglass -6% to +27% (noise), the Vault +19% to
++66%, both in range.
+
+Gems: the Emerald and the Red Seal (in a Thunder) are the only ones that matter (+30-40%). Gold Leaf at +2 a score is +5%
+late, +20% mid; **Opal and Garnet still do nothing measurable (0-6%)**, as before.

@@ -44,7 +44,7 @@ describe('Wizard Lamp', () => {
     expect(s.consume(hit(5, { t: 51 })).some((e) => e.label === 'WIZARD MODE!')).toBe(true);
   });
 
-  it('in WIZARD MODE no ×Mult limit holds', () => {
+  it('in WIZARD MODE every ×Mult limit is doubled, never lifted', () => {
     const passes = (s: Scorer, t0: number) => { for (let i = 0; i < 8; i++) s.consume(hit(7, { t: t0 + i * 3.1 })); return s.mult; };
     const plain = scorer(table());
     const capped = passes(plain, 0);
@@ -52,7 +52,9 @@ describe('Wizard Lamp', () => {
     const s = scorer(table());
     for (const uid of [1, 2, 3, 5]) s.consume(hit(uid));
     const before = s.mult;
-    expect(passes(s, 0.1) / before).toBeGreaterThan(PARTS.xlane.recipe.xmultCap! + 0.5);
+    const wiz = passes(s, 0.1) / before;
+    expect(wiz).toBeGreaterThan(PARTS.xlane.recipe.xmultCap! + 0.5);
+    expect(wiz).toBeLessThanOrEqual(PARTS.xlane.recipe.xmultCap! * 2 + 0.01);
   });
 
   it('the balls fly out of the lamp, never more than the table holds, and leave when WIZARD MODE ends', () => {

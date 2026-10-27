@@ -1,0 +1,149 @@
+
+RUNS: how far each player gets (rounds cleared; 15 = run won; endless rounds after)
+strategy/profile   runs  won   median reached  reached list                 endless reached
+casual/avg            5    0%        1          0,0,1,1,3                    
+casual/poor           5    0%        0          0,0,0,2,3                    
+casual/pro            5    0%        1          0,1,1,6,13                   
+meta/avg              5    0%        4          2,2,4,5,11                   
+meta/poor             5    0%        0          0,0,0,1,1                    
+meta/pro              5    0%        5          2,5,5,9,11                   
+par/avg               5    0%        7          2,2,7,9,11                   
+par/poor              5    0%        1          0,1,1,1,2                    
+par/pro               5    0%        8          1,4,8,14,14                  
+seeker/avg            5    0%        5          3,4,5,6,11                   
+seeker/poor           5    0%        1          0,0,1,1,1                    
+seeker/pro            5    0%        6          1,5,6,9,10                   
+
+FAIL RATE PER ROUND (rounds played -> lost there), all runs of a profile pooled
+round  goal       pro: played lost   score/goal p50 (p10-p90) avg: played lost   score/goal p50 (p10-p90) poor: played lost   score/goal p50 (p10-p90)
+   1       1,000      20    5%   1.98 (1.48-2.42)                 20   10%   1.64 (1.03-3.42)                 20   45%   1.05 (0.19-1.28)             
+   2       1,500      19   21%   1.72 (0.91-3.19)                 18   11%   1.71 (1.00-3.49)                 11   73%   0.58 (0.26-1.66)             
+   3       2,500      15    7%   2.26 (1.13-4.20)                 16   25%   1.70 (0.55-3.39)                  3   67%   0.50 (0.34-1.31)             
+   4       4,000      14    0%   2.63 (1.25-9.77)                 12   17%   2.49 (0.95-3.58)                  1  100%   0.94 (0.94-0.94)             
+   5       6,000      14    7%   2.25 (1.04-6.24)                 10   20%   1.70 (0.30-3.14)                                                         
+   6      10,000      13   23%   1.45 (0.69-2.23)                  8   25%   1.13 (0.50-1.88)                                                         
+   7      15,000      10   20%   1.74 (0.60-4.07)                  6   17%   1.41 (0.98-2.14)                                                         
+   8      25,000       8    0%   2.45 (1.77-3.92)                  5   20%   2.12 (0.93-2.97)                                                         
+   9      40,000       8   13%   1.30 (1.05-1.92)                  4    0%   1.61 (1.23-2.09)                                                         
+  10      70,000       7   29%   1.27 (0.67-2.68)                  4   25%   1.13 (0.58-1.66)                                                         
+  11     120,000       5   20%   1.53 (1.01-2.08)                  3    0%   1.24 (1.05-1.41)                                                         
+  12     200,000       4   25%   1.16 (0.50-1.77)                  3  100%   0.26 (0.23-0.70)                                                         
+  13     350,000       3    0%   1.15 (1.10-1.43)                                                                                                     
+  14     600,000       3   33%   1.11 (0.91-1.38)                                                                                                     
+  15   1,000,000       2  100%   0.65 (0.65-0.66)                                                                                                     
+  16           0                                                                                                                                      
+  17           0                                                                                                                                      
+  18           0                                                                                                                                      
+  19           0                                                                                                                                      
+  20           0                                                                                                                                      
+
+BY STRATEGY: fail rate per round band
+par/pro        r1-5 9% of 22   r6-10 7% of 14   r11-15 20% of 10  r16+ -
+par/avg        r1-5 10% of 21  r6-10 15% of 13  r11-15 50% of 2   r16+ -
+par/poor       r1-5 50% of 10  r6-10 -          r11-15 -          r16+ -
+seeker/pro     r1-5 5% of 22   r6-10 23% of 13  r11-15 100% of 1  r16+ -
+seeker/avg     r1-5 8% of 24   r6-10 25% of 8   r11-15 50% of 2   r16+ -
+seeker/poor    r1-5 63% of 8   r6-10 -          r11-15 -          r16+ -
+casual/pro     r1-5 20% of 15  r6-10 14% of 7   r11-15 25% of 4   r16+ -
+casual/avg     r1-5 50% of 10  r6-10 -          r11-15 -          r16+ -
+casual/poor    r1-5 50% of 10  r6-10 -          r11-15 -          r16+ -
+
+ECONOMY (median over runs): money at shop, spent, bought, rerolls, move fees
+   1  cash $  6  spent $  3  bought 0.9  rerolls 0.0  fees $0.0  end cash $8  parts on table 4  types 2  kept Mult 0.0  levels 0  peak Mult 1.0  wall s 9
+   2  cash $  9  spent $  7  bought 2.0  rerolls 0.0  fees $0.8  end cash $6  parts on table 6.5  types 3  kept Mult 0.0  levels 0  peak Mult 1.1  wall s 6
+   3  cash $  7  spent $  6  bought 1.7  rerolls 0.0  fees $0.5  end cash $8  parts on table 9.5  types 4  kept Mult 0.0  levels 0  peak Mult 2.5  wall s 6
+   4  cash $  9  spent $  7  bought 1.7  rerolls 0.0  fees $0.6  end cash $10  parts on table 12  types 6  kept Mult 0.1  levels 0  peak Mult 3.0  wall s 6
+   5  cash $ 10  spent $  9  bought 2.0  rerolls 0.1  fees $0.3  end cash $9  parts on table 13  types 6.5  kept Mult 0.1  levels 0  peak Mult 3.3  wall s 7
+   6  cash $ 10  spent $  7  bought 1.8  rerolls 0.1  fees $0.7  end cash $11  parts on table 17  types 7  kept Mult 0.1  levels 0  peak Mult 2.8  wall s 10
+   7  cash $ 14  spent $ 13  bought 2.3  rerolls 0.2  fees $0.6  end cash $9  parts on table 20  types 9  kept Mult 0.2  levels 0  peak Mult 4.4  wall s 9
+   8  cash $  9  spent $  8  bought 1.5  rerolls 0.2  fees $0.8  end cash $11  parts on table 23  types 9  kept Mult 0.2  levels 1  peak Mult 6.9  wall s 7
+   9  cash $ 12  spent $  9  bought 2.3  rerolls 0.0  fees $0.4  end cash $12  parts on table 26  types 11.5  kept Mult 0.3  levels 1  peak Mult 6.5  wall s 9
+  10  cash $ 11  spent $  9  bought 2.5  rerolls 0.1  fees $0.4  end cash $7  parts on table 27  types 12  kept Mult 0.4  levels 1  peak Mult 7.5  wall s 10
+  11  cash $  8  spent $  7  bought 1.9  rerolls 0.1  fees $0.5  end cash $6  parts on table 28.5  types 12.5  kept Mult 0.6  levels 4  peak Mult 8.3  wall s 7
+  12  cash $  6  spent $  5  bought 1.4  rerolls 0.0  fees $0.3  end cash $7  parts on table 30  types 12  kept Mult 0.8  levels 4  peak Mult 6.5  wall s 7
+  13  cash $  9  spent $  3  bought 1.0  rerolls 0.0  fees $0.7  end cash $13  parts on table 32  types 14  kept Mult 1.2  levels 10  peak Mult 10.0  wall s 9
+  14  cash $ 13  spent $  5  bought 2.0  rerolls 0.0  fees $0.0  end cash $4  parts on table 34  types 15  kept Mult 1.4  levels 10  peak Mult 10.0  wall s 13
+  15  cash $ 50  spent $  5  bought 1.0  rerolls 0.0  fees $1.0  end cash $44  parts on table 36.5  types 14  kept Mult 2.5  levels 0  peak Mult 9.9  wall s 8
+
+BOSSES: loss rate on each boss (all runs that reached it)
+whirlpool      met   1  lost 100%  score/goal p50 0.66
+overlord       met   1  lost 100%  score/goal p50 0.65
+slippery       met   3  lost  67%  score/goal p50 0.81
+cheapRubber    met   9  lost  33%  score/goal p50 1.30
+shortFuse      met   6  lost  33%  score/goal p50 1.16
+taxMan         met   7  lost  29%  score/goal p50 1.15
+magnet         met  26  lost  23%  score/goal p50 2.03
+jammer         met  10  lost  20%  score/goal p50 1.55
+nightShift     met   7  lost   0%  score/goal p50 1.36
+flatRate       met   4  lost   0%  score/goal p50 1.16
+crossedWires   met   2  lost   0%  score/goal p50 1.74
+
+WHAT SCORED: parts most often in the top-1 of a round, rounds 10+
+pop 23, ding 10, mega 1
+
+mean share of the top part, rounds 10+: 44%
+
+DECALS taken (count) and win rate of runs that had them by round 12
+crowd 4 (0%), comboKing 3 (0%), longFuse 3 (0%), thrifty 2 (0%), bumperCar 2 (0%), levelUp 2 (0%), headStart 2 (0%), lucky 1 (0%), glass 1 (0%), coupon 1 (0%)
+
+LOSSES: the round each run ended, with the build
+par/pro/1 diner lost r9 (jammer) 36,661/40,000 arch - top pop 46, lane 18, vari 17, vault 7, gong 6 | decals heavy,overclock:lane
+par/avg/1 diner lost r8 10,194/25,000 arch - top pop 34, ding 21, vari 16, lane 14, mega 5 | decals heavy,overclock:lane
+seeker/pro/1 diner lost r2 874/1,500 arch bumpers top pop 79, mega 18, sling 2 | decals 
+seeker/avg/1 diner lost r6 (magnet) 5,379/10,000 arch bumpers top pop 44, lane 21, mega 19, vari 13, deflector 2 | decals heavy
+casual/pro/1 diner lost r2 1,398/1,500 arch - top pop 60, mega 40 | decals 
+casual/avg/1 diner lost r2 640/1,500 arch - top pop 63, mega 38 | decals 
+meta/pro/1 diner lost r6 (magnet) 3,568/10,000 arch bigboi top pop 40, mega 26, lane 17, grape 7, magnet 6 | decals purist
+meta/avg/1 diner lost r3 (cheapRubber) 2,264/2,500 arch bigboi top pop 42, mega 38, lane 18, sling 2 | decals 
+par/pro/2 castle lost r5 4,127/6,000 arch - top pop 53, vari 19, lane 11, ding 8, mega 5 | decals crowd
+par/avg/2 castle lost r3 (taxMan) 1,588/2,500 arch - top pop 72, vari 10, lane 10, mega 5, sparkler 3 | decals 
+seeker/pro/2 castle lost r10 45,987/70,000 arch bumpers top ding 43, pop 28, mega 16, lane 7, vari 2 | decals lucky,crowd,comboKing
+seeker/avg/2 castle lost r12 (slippery) 161,815/200,000 arch bumpers top pop 32, ding 28, vari 18, lane 6, mega 6 | decals lucky,crowd,comboKing
+casual/pro/2 castle lost r2 1,203/1,500 arch - top pop 58, lane 19, mega 18, sling 5 | decals 
+casual/avg/2 castle lost r1 991/1,000 arch - top pop 65, mega 32, sling 3 | decals 
+meta/pro/2 castle lost r6 (cheapRubber) 9,825/10,000 arch bigboi top pop 58, vari 16, lane 15, ding 5, mega 4 | decals purist
+meta/avg/2 castle lost r6 (cheapRubber) 4,172/10,000 arch bigboi top pop 40, mega 33, lane 16, vari 9, spinner 2 | decals purist
+par/pro/3 factory lost r15 (whirlpool) 663,540/1,000,000 arch - top pop 46, lane 21, mega 14, rocks 4, nest 4 | decals thrifty,crowd,glass,twin
+par/avg/3 factory lost r10 27,361/70,000 arch - top pop 33, lane 22, ice 22, mega 8, grape 7 | decals lastCall,crowd,glass
+seeker/pro/3 factory lost r6 (jammer) 6,191/10,000 arch bumpers top pop 36, lane 23, keg 21, gong 11, printer 6 | decals bumperCar
+seeker/avg/3 factory lost r7 11,686/15,000 arch bumpers top pop 43, mega 29, grape 8, gong 8, lane 4 | decals bumperCar,crowd
+casual/pro/3 factory lost r14 519,568/600,000 arch - top pop 31, mega 29, lane 11, printer 9, well 6 | decals thrifty,longFuse,coupon,goldenTicket
+casual/avg/3 factory lost r4 1,827/4,000 arch - top mega 43, lane 24, deflector 12, pop 11, lamp 4 | decals rubber
+meta/pro/3 factory lost r12 (shortFuse) 44,362/200,000 arch bumpers top pop 46, gong 19, mega 9, keg 6, printer 5 | decals bumperCar,crowd,levelUp:hourglass
+meta/avg/3 factory lost r12 (shortFuse) 43,407/200,000 arch bumpers top pop 36, ding 19, mega 15, bonsai 8, gong 7 | decals bumperCar,crowd,levelUp:printer
+par/pro/4 diner lost r2 1,491/1,500 arch - top pop 46, mega 28, deflector 11, sparkler 11, spinner 4 | decals 
+par/avg/4 diner lost r3 (magnet) 622/2,500 arch - top pop 44, mega 38, spinner 11, sling 4, deflector 3 | decals 
+seeker/pro/4 diner lost r11 94,636/120,000 arch bumpers top pop 30, ding 28, mega 16, lane 8, sparkler 5 | decals fanClub,bigShelf,overclock:spinner
+seeker/avg/4 diner lost r5 1,283/6,000 arch bumpers top pop 36, ding 36, mega 18, coin 5, deflector 5 | decals fanClub
+casual/pro/4 diner lost r1 235/1,000 arch - top pop 98, deflector 2 | decals 
+casual/avg/4 diner lost r1 763/1,000 arch - top pop 64, mega 26, deflector 10 | decals 
+meta/pro/4 diner lost r10 47,746/70,000 arch lights top pop 38, mega 19, ding 12, vari 7, lane 5 | decals fanClub,bigShelf,overclock:ding
+meta/avg/4 diner lost r5 1,847/6,000 arch bigboi top pop 42, ding 28, mega 14, coin 9, deflector 6 | decals fanClub
+par/pro/5 castle lost r15 (overlord) 645,677/1,000,000 arch - top ding 58, pop 16, mega 8, lane 6, nest 2 | decals longFuse,comboKing,headStart,extraBall
+par/avg/5 castle lost r12 (slippery) 51,996/200,000 arch - top ding 50, mega 16, pop 10, lane 6, sparkler 3 | decals longFuse,comboKing,headStart
+seeker/pro/5 castle lost r7 6,804/15,000 arch bumpers top ding 38, pop 32, mega 11, grape 9, gong 3 | decals longFuse,comboKing
+seeker/avg/5 castle lost r4 3,767/4,000 arch bumpers top pop 52, mega 36, sparkler 4, gong 4, trophy 3 | decals longFuse
+casual/pro/5 castle lost r7 9,290/15,000 arch - top pop 34, ding 24, mega 11, grape 8, gong 7 | decals minimalist,goldenTicket
+casual/avg/5 castle lost r2 1,294/1,500 arch - top mega 74, pop 19, kickback 7 | decals 
+meta/pro/5 castle lost r3 (magnet) 2,326/2,500 arch bigboi top pop 58, mega 29, gong 10, sparkler 3 | decals 
+meta/avg/5 castle lost r3 (magnet) 1,163/2,500 arch bigboi top vari 31, gong 30, pop 25, mega 14 | decals 
+par/poor/1 diner lost r2 1,392/1,500 arch - top pop 60, mega 29, lane 11, sling 0 | decals 
+seeker/poor/1 diner lost r2 539/1,500 arch bumpers top pop 63, mega 37 | decals 
+casual/poor/1 diner lost r1 248/1,000 arch - top pop 84, mega 16 | decals 
+meta/poor/1 diner lost r2 397/1,500 arch bigboi top pop 70, mega 30 | decals 
+par/poor/2 castle lost r3 (taxMan) 1,246/2,500 arch - top pop 63, lane 19, sparkler 10, mega 8 | decals 
+seeker/poor/2 castle lost r1 924/1,000 arch bumpers top pop 83, mega 17 | decals 
+casual/poor/2 castle lost r1 987/1,000 arch - top mega 71, pop 24, sling 5 | decals 
+meta/poor/2 castle lost r1 924/1,000 arch bigboi top pop 83, mega 17 | decals 
+par/poor/3 factory lost r2 869/1,500 arch - top pop 87, deflector 7, mega 6 | decals 
+seeker/poor/3 factory lost r2 908/1,500 arch bumpers top pop 63, mega 32, deflector 3, lamp 2 | decals 
+casual/poor/3 factory lost r4 3,762/4,000 arch - top pop 52, lane 19, mega 18, deflector 7, lamp 4 | decals rubber
+meta/poor/3 factory lost r2 869/1,500 arch bigboi top pop 87, deflector 7, mega 6 | decals 
+par/poor/4 diner lost r1 121/1,000 arch - top mega 66, pop 34 | decals 
+seeker/poor/4 diner lost r1 202/1,000 arch bumpers top pop 51, mega 44, lamp 5 | decals 
+casual/poor/4 diner lost r3 (magnet) 763/2,500 arch - top pop 71, mega 18, sparkler 7, deflector 4 | decals 
+meta/poor/4 diner lost r1 121/1,000 arch bigboi top mega 66, pop 34 | decals 
+par/poor/5 castle lost r2 402/1,500 arch - top pop 73, mega 20, trophy 5, sparkler 2 | decals 
+seeker/poor/5 castle lost r2 256/1,500 arch bumpers top pop 49, mega 31, gong 20 | decals 
+casual/poor/5 castle lost r1 542/1,000 arch - top mega 52, pop 44, gong 5 | decals 
+meta/poor/5 castle lost r1 696/1,000 arch bigboi top pop 42, mega 40, gong 18 | decals 

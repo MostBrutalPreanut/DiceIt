@@ -1,0 +1,53 @@
+
+BUILDS: rounds 13-15 judged (final boss in 15), then endless until a loss. Per variant and player: beat r15 (n), last round won (median, max), r15 score/goal p50
+build                               $    variant  pro                         avg                         poor
+foreman-elevator                     76  full      50%(2) last 15.5/17  x0.7   50%(2) last 15.5/17  x1.1   50%(2) last   15/16  x0.5  
+foreman-elevator                     76  auto      50%(2) last   15/16  x0.8   50%(2) last 14.5/15  x0.9    0%(2) last   14/14  x0.2  
+foreman-elevator                     47  partial    0%(2) last    0/0   x-      0%(2) last    0/0   x-      0%(2) last    0/0   x-    
+dragon-purist-siege                  53  full      50%(2) last 15.5/17  x0.8   50%(2) last 14.5/15  x1.0    0%(2) last   14/14  x0.4  
+dragon-purist-siege                  53  auto      50%(2) last 15.5/17  x0.8   50%(2) last 14.5/15  x1.0    0%(2) last   14/14  x0.4  
+dragon-purist-siege                  29  partial    0%(2) last    0/0   x-      0%(2) last    0/0   x-      0%(2) last    0/0   x-    
+cook-autopilot-survival             132  full      50%(2) last 14.5/15  x0.7    0%(2) last   14/14  x0.5    0%(2) last   14/14  x0.5  
+cook-autopilot-survival             132  auto       0%(2) last   14/14  x0.7    0%(2) last   14/14  x0.6    0%(2) last   14/14  x0.5  
+cook-autopilot-survival              95  partial    0%(2) last   14/14  x0.2    0%(2) last 13.5/14  x0.1    0%(2) last 13.5/14  x0.8  
+xmult-ladder                        122  full       0%(2) last 12.5/13  x-      0%(2) last   12/13  x-      0%(2) last 10.5/11  x-    
+xmult-ladder                        122  auto      50%(2) last   14/16  x1.1    0%(2) last 12.5/13  x-      0%(2) last 12.5/13  x-    
+xmult-ladder                         87  partial    0%(2) last   11/12  x-      0%(2) last    0/0   x-      0%(2) last    0/0   x-    
+hall-of-fame-zoo                    178  full     100%(2) last   18/19  x29.9  50%(2) last 14.5/15  x2.8  100%(2) last   15/15  x5.4  
+hall-of-fame-zoo                    178  auto     100%(2) last 16.5/17  x4.0  100%(2) last   15/15  x1.6  100%(2) last   16/17  x17.3 
+hall-of-fame-zoo                    125  partial    0%(2) last   12/12  x-      0%(2) last   12/13  x-      0%(2) last   11/12  x-    
+foreman-furnace                     115  full       0%(2) last 12.5/13  x-      0%(2) last   11/12  x-      0%(2) last   10/10  x-    
+foreman-furnace                     115  auto       0%(2) last 12.5/13  x-      0%(2) last 11.5/12  x-      0%(2) last    0/0   x-    
+foreman-furnace                      83  partial    0%(2) last 11.5/12  x-      0%(2) last 10.5/11  x-      0%(2) last    0/0   x-    
+dream-disco-fame-singularity        292  full     100%(2) last   22/22  x636363636.4100%(2) last   22/22  x636363636.4100%(2) last   22/22  x636363636.4
+dream-disco-fame-singularity        292  auto     100%(2) last   22/22  x636363636.4100%(2) last   22/22  x636363636.4100%(2) last   22/22  x636363636.4
+dream-disco-fame-singularity        202  partial  100%(2) last   22/22  x58.1 100%(2) last   22/22  x34.5 100%(2) last   22/22  x2.3  
+
+WHERE THE POINTS COME FROM (round 13-15, full variant, all players): top parts and spark/zap shares
+foreman-elevator                   mega 87%, tesla 9%, magnet 4%, gong 0%, uplight 0%           sparks 0% zaps 89% peakMult p50 7
+dragon-purist-siege                mega 79%, tesla 18%, magnet 4%, uplight 0%                   sparks 0% zaps 88% peakMult p50 7
+cook-autopilot-survival            mega 79%, tesla 18%, magnet 2%, gong 0%, uplight 0%          sparks 0% zaps 91% peakMult p50 3
+xmult-ladder                       golden 55%, mega 20%, pop 11%, goal 5%, magnet 2%            sparks 0% zaps 0% peakMult p50 83
+hall-of-fame-zoo                   mega 24%, ding 21%, grape 14%, well 10%, vari 1%             sparks 26% zaps 24% peakMult p50 596
+foreman-furnace                    mega 60%, pop 37%, magnet 1%, lane 0%, spot 0%               sparks 0% zaps 0% peakMult p50 12
+dream-disco-fame-singularity       pop 50%, fame 13%, mega 10%, disco 9%, trophy 4%             sparks 0% zaps 2% peakMult p50 1000000000000000
+
+PERFORMANCE (sim only, Node): wall ms per sim second, worst single step, max sparks / balls
+foreman-elevator                      5.3 ms/s (p90 11.1)  worst step 36.4 ms  sparks 0  balls 1
+dragon-purist-siege                   5.7 ms/s (p90 11.1)  worst step 73.0 ms  sparks 0  balls 1
+cook-autopilot-survival              10.4 ms/s (p90 15.5)  worst step 152.2 ms  sparks 0  balls 1
+xmult-ladder                          7.5 ms/s (p90 14.4)  worst step 68.4 ms  sparks 0  balls 1
+hall-of-fame-zoo                     10.7 ms/s (p90 16.8)  worst step 78.2 ms  sparks 31  balls 3
+foreman-furnace                       7.5 ms/s (p90 16.1)  worst step 31.9 ms  sparks 0  balls 1
+dream-disco-fame-singularity          7.3 ms/s (p90 13.0)  worst step 81.1 ms  sparks 0  balls 3
+
+BY FINAL BOSS (all builds, full+auto): beat rate
+auditor    pro   beat 40% of 10 that reached it; r15 score/goal p50 0.40
+auditor    avg   beat 40% of 10 that reached it; r15 score/goal p50 0.72
+auditor    poor  beat 63% of 8 that reached it; r15 score/goal p50 2.93
+overlord   pro   beat 50% of 2 that reached it; r15 score/goal p50 0.99
+overlord   avg   beat 0% of 2 that reached it; r15 score/goal p50 0.65
+overlord   poor  beat 40% of 10 that reached it; r15 score/goal p50 0.54
+whirlpool  pro   beat 100% of 9 that reached it; r15 score/goal p50 1.26
+whirlpool  avg   beat 88% of 8 that reached it; r15 score/goal p50 1.49
+whirlpool  poor  beat 0% of 2 that reached it; r15 score/goal p50 0.53

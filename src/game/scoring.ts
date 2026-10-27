@@ -352,7 +352,7 @@ export class Scorer {
   private takeX(key: string, x: number, cap: number | undefined): number {
     if (x <= 1) return 1;
     const used = this.xPaid.get(key) ?? 1;
-    if (this.now < this.wizUntil) cap = undefined; // WIZARD MODE: no ×Mult limits
+    if (this.now < this.wizUntil && cap !== undefined) cap *= 2; // WIZARD MODE: every ×Mult limit doubled (never lifted: a ×Mult a hit would run away)
     const got = cap === undefined ? x : Math.max(1, Math.min(x, cap / used));
     this.xPaid.set(key, used * got);
     return got;
@@ -1162,7 +1162,7 @@ export class Scorer {
     return this.award(clock, ev.t, clock.x, clock.y, 'bonus', 0, 0, 0, [`every hit x${c.x} for ${c.seconds} s`], 'MIDNIGHT MADNESS!');
   }
 
-  /** All the Wizard Lamp's segments lit (once a round): WIZARD MODE, more balls, no ×Mult limits, every Lamp ablaze. */
+  /** All the Wizard Lamp's segments lit (once a round): WIZARD MODE, more balls, every ×Mult limit doubled, every Lamp ablaze. */
   private wizardCheck(ev: { t: number }): ScoreEvent | null {
     const need = this.wizardNeedNow();
     if (this.wizFired || need === 0 || this.wizTypes.size < need) return null;
@@ -1172,7 +1172,7 @@ export class Scorer {
     this.wizFired = true;
     this.wizUntil = ev.t + w.seconds;
     this.flashLamps(ev.t, w.seconds);
-    const e = this.award(lamp, ev.t, lamp.x, lamp.y, 'bonus', 0, 0, 0, [`${w.balls} more balls, no ×Mult limits for ${w.seconds} s`], 'WIZARD MODE!');
+    const e = this.award(lamp, ev.t, lamp.x, lamp.y, 'bonus', 0, 0, 0, [`${w.balls} more balls, ×Mult limits doubled for ${w.seconds} s`], 'WIZARD MODE!');
     e.balls = { n: w.balls, x: lamp.x, y: lamp.y, uid: lamp.uid };
     return e;
   }

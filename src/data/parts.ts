@@ -196,7 +196,7 @@ export interface Recipe {
   /**
    * Wizard Lamp: a segment for every different part type the ball itself hits (one for each scoring type on the
    * table when the round starts, at most `max`). All lit: WIZARD MODE for `seconds`: `balls` more balls, every
-   * ×Mult cap lifted, every Lamp at full glow. Once a round.
+   * ×Mult cap doubled, every Lamp at full glow. Once a round.
    */
   wizard?: { max: number; seconds: number; balls: number };
   /**
@@ -1141,7 +1141,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.wizard) {
     const need = ctx.wizardNeed;
     lines.push({ tag: 'combo', text: `It lights a segment for every different part type the ball itself hits this ball (zaps and sparks do not count): one segment for each part type on your table that scores, up to ${r.wizard.max}, counted when the round starts${need ? `. Right now: hit ${need} types` : ''}.` });
-    lines.push({ tag: 'spawn', text: `Light them all and WIZARD MODE starts: for ${r.wizard.seconds} s, ${r.wizard.balls} more balls fly out of it (they leave again when it ends), every ×Mult limit is lifted and every Lamp is at full glow. Once a round. Its balls share your ball's clock.` });
+    lines.push({ tag: 'spawn', text: `Light them all and WIZARD MODE starts: for ${r.wizard.seconds} s, ${r.wizard.balls} more balls fly out of it (they leave again when it ends), every ×Mult limit is doubled and every Lamp is at full glow. Once a round. Its balls share your ball's clock.` });
   }
   const allCap = (what: string) => (r.xmultCap ? ` (all ${what} together: up to ×${xg(r.xmultCap)} a ball)` : '');
   if (r.typeX) lines.push({ tag: 'mult', text: `The first time a ball rolls over it each ball: your Mult ×${xg(1 + r.typeX)} for every different part type on your table (Big Boi too)${ctx.types ? `, ×${num(Math.round((1 + (r.typeX) * mods.multGain) ** ctx.types * 100) / 100)} now` : ''}${allCap('Halls of Fame')}.` });
