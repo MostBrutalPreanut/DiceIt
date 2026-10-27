@@ -41,6 +41,8 @@ export const TOOLBOX_SLOTS = 4;
  * what it cost.
  */
 export const UPKEEP = { move: 1, scrap: 1 } as const;
+/** Moving parts costs nothing in the workshop up to this round: while the board is first set up, before round 1. */
+export const FREE_MOVES_UNTIL = 1;
 
 /** Two significant figures: goals read as 4,300 or 12,000, not 4,312. */
 /** A new part's angle: only parts that turn keep the one they were aimed at while carried. */
@@ -938,9 +940,10 @@ export class Game {
 
   /**
    * Where the rest of a pack goes when its first piece is dropped on the table at (x, y): the nearest free spots
-   * beside it, in a row first (lanes side by side), or the toolbox. null if some piece fits nowhere.
+   * beside it, in a row first (lanes side by side), or the toolbox. null if some piece fits nowhere. The ghost of
+   * an offer in hand shows these spots, so the pack lands where it said it would.
    */
-  private packSpots(id: PartId, x: number, y: number): ({ x: number; y: number } | null)[] | null {
+  packSpots(id: PartId, x: number, y: number): ({ x: number; y: number } | null)[] | null {
     const n = PARTS[id].pack ?? 1;
     const probe: Layout = { ...this.layout, parts: [...this.layout.parts, makePart(id, -1, x, y, true)] };
     const spots: ({ x: number; y: number } | null)[] = [{ x, y }];
@@ -1089,9 +1092,14 @@ export class Game {
     return true;
   }
 
+  /** Moving parts is free while the board is first set up, before round 1 is played: try spots out, then shuffle. */
+  get movesFree(): boolean {
+    return this.round <= FREE_MOVES_UNTIL;
+  }
+
   /** What moving this part costs right now (0 if it was bought this visit, its move is paid, or moves are free). */
   moveFee(p: PartInstance): number {
-    return this.sandbox || p.loose || this.mods.freeMoves ? 0 : UPKEEP.move;
+    return this.sandbox || p.loose || this.mods.freeMoves || this.movesFree ? 0 : UPKEEP.move;
   }
 
   /** What removing this part does to your money: a part bought this visit goes back for what it cost; any other costs the scrap fee. */

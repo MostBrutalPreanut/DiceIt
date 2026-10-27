@@ -1,4 +1,4 @@
-import { describe, dialFactor, dialValue, effectiveLevel, grownPoints, MAX_LEVEL, modFactor, RARITY_NAMES, TAG_NAMES, type DescribeCtx, type PartDef, type PartInstance, type PartKind } from '../data/parts';
+import { describe, dialFactor, dialValue, effectiveLevel, grownPoints, MAX_LEVEL, modFactor, packTag, RARITY_NAMES, TAG_NAMES, type DescribeCtx, type PartDef, type PartInstance, type PartKind } from '../data/parts';
 import type { Mods } from '../data/mods';
 import { DECALS, KIND_NAMES, decalText, decalTitle, type DecalPick } from '../data/decals';
 import { bigBoiOf, type MachineId } from '../data/bigboi';
@@ -55,10 +55,11 @@ function head(def: PartDef, level: number, machine?: MachineId) {
   return `<div class="head"><h4>${name}</h4><span class="kind">${kind}</span>${lv ? `<span class="lvl">${lv}</span>` : ''}</div>`;
 }
 
-/** Rarity and tags, under the header: what decals will care about. */
+/** Rarity, pack size and tags, under the header: what decals will care about. */
 function tagsRow(def: PartDef) {
   if (def.id === 'mega') return `<div class="tags">${def.tags.map((t) => `<span class="tag">${TAG_NAMES[t]}</span>`).join('')}<span class="tag">Not for sale</span></div>`;
-  return `<div class="tags">${rarityChip(def.rarity)}${def.tags.map((t) => `<span class="tag">${TAG_NAMES[t]}</span>`).join('')}</div>`;
+  const pack = packTag(def);
+  return `<div class="tags">${rarityChip(def.rarity)}${pack ? `<span class="tag pack">${pack}</span>` : ''}${def.tags.map((t) => `<span class="tag">${TAG_NAMES[t]}</span>`).join('')}</div>`;
 }
 
 export interface TipCtx {

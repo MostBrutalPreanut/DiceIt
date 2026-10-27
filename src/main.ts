@@ -1,7 +1,7 @@
 import './style.css';
 import './ui/menu.css';
 import { callout, type CalloutKey } from './data/callouts';
-import { dialValue, footprint, isDecor, isInlay, PARTS, RITUAL_NAMES, wizardNeed, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
+import { dialValue, footprint, isDecor, isInlay, packTag, PARTS, RITUAL_NAMES, wizardNeed, SHOP_IDS, type PartDef, type PartId, type PartInstance } from './data/parts';
 import { BOSS_EVERY, DECAL_IDS, DECAL_SLOTS, DECALS, KIND_NAMES, type DecalId, type DecalPick } from './data/decals';
 import { BIG_BOIS, BIG_BOI_FOR, defOn, type MachineId } from './data/bigboi';
 import { FINAL_ROUND } from './data/bosses';
@@ -307,7 +307,7 @@ async function main() {
       ? `<button class="buy" data-add="${id}">Add</button>`
       : `${price! < def.cost ? `<s>$${def.cost}</s>` : ''}<button class="buy" data-buy="${index}" ${game.canAfford(price!) && game.editable && game.hasRoomFor(id) ? '' : 'disabled'}>$${price}</button>`;
     const lock = index === null ? '' : `<button class="lock ${locked ? 'on' : ''}" data-lock="${index}" title="${locked ? 'Locked: it stays for the next round. Click to unlock' : 'Lock it: it stays for the next round (and through rerolls)'}">${locked ? 'LOCKED' : 'LOCK'}</button>`;
-    return `<div class="offer r-${def.rarity} ${locked ? 'locked' : ''}" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}${def.pack && def.pack > 1 ? `<span class="pack" title="One offer: a pack of ${def.pack}">×${def.pack}</span>` : ''}</div>
+    return `<div class="offer r-${def.rarity} ${locked ? 'locked' : ''}" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}${packTag(def) ? `<span class="pack" title="One offer: a pack of ${def.pack}">${packTag(def)}</span>` : ''}</div>
       <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}${def.tags.includes('long') && !game.tableRoomFor(id) ? '<span class="room">Needs room: move or scrap a part first.</span>' : ''}</div></div>`;
   }
 
@@ -661,6 +661,22 @@ async function main() {
     persist();
     return true;
   };
+  /**
+   * Where a pack carried from the shop would spread if it were dropped here: the spots of the other pieces on the
+   * table and how many go to the toolbox; null if some piece fits nowhere (the drop would be refused). Worked out
+   * again only when the spot or the machine changes.
+   */
+  let spreadKey = '', spreadAt: { table: { x: number; y: number }[]; toolbox: number } | null | undefined;
+  function packPreview(d: NonNullable<typeof shopDrag>, at: { x: number; y: number }) {
+    if (d.slot === null || (PARTS[d.id].pack ?? 1) < 2 || !game.canDropAt(d.id, at.x, at.y)) return undefined;
+    const key = `${d.id}|${at.x.toFixed(2)}|${at.y.toFixed(2)}|${game.historyDepth}|${game.inventory.length}`;
+    if (key !== spreadKey) {
+      spreadKey = key;
+      const spots = game.packSpots(d.id, at.x, at.y);
+      spreadAt = spots && { table: spots.slice(1).filter((s): s is { x: number; y: number } => !!s), toolbox: spots.filter((s) => !s).length };
+    }
+    return spreadAt;
+  }
   const endShop = () => {
     if (!shopDrag) return;
     shopDrag.el.classList.remove('dragging');
@@ -1437,7 +1453,7 @@ async function main() {
       { say: 'This is your <b>route</b>: 15 rounds to clear, each with a bigger goal. Some of them have their own nasty rules. Those are the <b>bosses</b>, and this box warns you which one is next.', at: () => [...around('#roundMap'), ...around('#bossBox')], scroll: '#roundMap' },
       { say: 'This is the <b>score</b> to beat. It grows every round.', at: () => around('#score', '#left .goalrow', '#left .tube'), scroll: '#score' },
       { say: `This is your <b>toolbox</b>. Right now it holds ${n} bumper${n === 1 ? '' : 's'}. Press one, then press the table to put it there.`, at: () => around('#invWrap'), scroll: '#invWrap' },
-      { say: `Think before you place something: moving it later costs you <b>$${UPKEEP.move}</b>.`, mood: 'oof', at: () => around('#invWrap'), scroll: '#invWrap' },
+      { say: `Moving parts is <b>free</b> while you set up, before round 1: shoot some test balls and shuffle things around. Once the round starts, every move costs <b>$${UPKEEP.move}</b>.`, mood: 'cool', at: () => around('#invWrap'), scroll: '#invWrap' },
       { say: 'This is your <b>money</b>. Every round you clear pays, every ball you did not need pays extra, and some parts cough up coins when you hit them.', at: () => around('#right .money'), scroll: '#right .moneyrow' },
       { say: 'This is the <b>shop</b>. After every round you can buy new parts for the machine here.', at: () => around('#shopBox'), scroll: '#shopBox' },
       {
@@ -1681,11 +1697,21 @@ async function main() {
     const armedPart = armed != null ? game.part(armed) : undefined;
     const ptr = (id: PartId) => (isDecor(id) ? pointerDecor : pointer);
     const sp = shopDrag ? ptr(shopDrag.id) : null, ap = armedPart ? ptr(armedPart.def) : null;
+    const spread = shopDrag && sp ? packPreview(shopDrag, sp) : undefined;
     drawState.ghost = game.editable && (shopDrag?.moving || shopDrag?.carry) && sp
-      ? { def: shopDrag.id, x: sp.x, y: sp.y, angle: PARTS[shopDrag.id].rotatable ? shopDrag.angle : 0, valid: game.canDropAt(shopDrag.id, sp.x, sp.y) }
+      ? {
+        def: shopDrag.id, x: sp.x, y: sp.y, angle: PARTS[shopDrag.id].rotatable ? shopDrag.angle : 0,
+        valid: game.canDropAt(shopDrag.id, sp.x, sp.y) && spread !== null, pack: spread?.table,
+      }
       : game.editable && armedPart && ap
         ? { def: armedPart.def, x: ap.x, y: ap.y, angle: armedPart.angle, valid: game.canDropAt(armedPart.def, ap.x, ap.y) }
         : null;
+    // the pieces of a pack that will find no room on the table: the toolbox says how many are coming its way
+    const incoming = drawState.ghost && spread ? spread.toolbox : 0;
+    $('inventoryBox').classList.toggle('incoming', incoming > 0);
+    const tag = $('toolIncoming');
+    tag.hidden = !incoming;
+    if (incoming) tag.textContent = `+${incoming} HERE`;
     renderer.draw(game, dt, drawState);
     updateHud(dt);
     placeInspect();

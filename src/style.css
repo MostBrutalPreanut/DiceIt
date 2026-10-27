@@ -247,6 +247,9 @@ body.calm .prizeChip { animation: none; }
 .item .new { position: absolute; top: -6px; right: -4px; font: 800 9px var(--ui); letter-spacing: .08em; color: var(--ink); background: var(--glow); border: var(--lw-detail) solid var(--ink); border-radius: 99px; padding: 0 5px; }
 .item.empty { border: 2px dashed var(--toolbox-dash); cursor: default; }
 #inventoryBox.drop { box-shadow: 0 0 0 4px var(--glow); }
+/* a pack in hand that will not all fit on the table: the toolbox says how many pieces will land in it */
+#inventoryBox.incoming { box-shadow: 0 0 0 3px var(--glow); }
+#toolIncoming { position: absolute; top: -10px; right: 10px; z-index: 2; font: 800 10px/1 var(--ui); letter-spacing: .08em; color: var(--ink); background: var(--glow); border: var(--lw-detail) solid var(--ink); border-radius: 99px; padding: 3px 7px 2px; }
 
 /* the selected part / decal card and the tooltip share one anatomy */
 .tipcard .head { display: flex; align-items: center; gap: 8px; margin: -12px -14px 10px; padding: 10px 14px; background: var(--head, var(--accent)); border-bottom: var(--lw-widget) solid var(--ink); border-radius: 12px 12px 0 0; }
@@ -375,6 +378,7 @@ body.playing .footer { border-top: none; padding-top: 0; }
 .offer .plinth .rar { position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); font-size: 8px; padding: 0 4px; white-space: nowrap; }
 .tipcard .tags, .card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px; }
 .tags .tag { font: 700 10px/1.5 var(--ui); padding: 0 6px; border-radius: 99px; background: var(--chip); border: var(--lw-detail) solid var(--faint); }
+.tags .tag.pack { background: var(--paper); color: var(--ink); border-color: var(--ink); }
 /* lock a shop offer for the next round */
 .offer { grid-template-areas: "icon name buy" "icon blurb lock"; }
 .offer .lock { grid-area: lock; font: 800 9.5px var(--ui); letter-spacing: .06em; padding: 1px 7px; border-radius: 99px; justify-self: end; align-self: end; background: var(--paper); }
