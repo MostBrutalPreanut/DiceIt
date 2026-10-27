@@ -2,7 +2,8 @@
 
 The plan for the session that makes the changes. It comes from the picks and notes on the
 [Big Boi Balance Board](https://claude.ai/artifact/MocZrG7hwpnbKTfqaMBUN4) (61 items, read on 26 Oct), which come from the
-research in [balance-research.md](balance-research.md). **Nothing here is implemented yet.**
+research in [balance-research.md](balance-research.md). **Implemented (27 Oct): what was done, the re-measure and what still
+needs a decision are in [balance-changes-results.md](balance-changes-results.md).**
 
 How to use it:
 

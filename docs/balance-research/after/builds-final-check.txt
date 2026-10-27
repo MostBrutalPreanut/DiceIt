@@ -1,0 +1,16 @@
+
+BUILDS: rounds 13-15 judged (final boss in 15), then endless until a loss. Per variant and player: beat r15 (n), last round won (median, max), r15 score/goal p50
+build                               $    variant  pro                         avg                         poor
+xmult-ladder                        124  full       0%(2) last   13/14  x0.9    0%(2) last 11.5/13  x-      0%(2) last   12/13  x-    
+xmult-ladder                        124  auto      50%(2) last 13.5/15  x1.7    0%(2) last 13.5/14  x0.4    0%(2) last 11.5/12  x-    
+hall-of-fame-zoo                    175  full     100%(2) last   17/17  x3.0   50%(2) last   15/16  x1.1  100%(2) last   15/15  x1.7  
+hall-of-fame-zoo                    175  auto      50%(2) last   15/16  x1.5   50%(2) last   15/16  x0.7    0%(2) last 13.5/14  x0.7  
+dream-disco-fame-singularity        294  full     100%(2) last   22/22  x15120.0100%(2) last   22/22  x6680.0100%(2) last   22/22  x2810.9
+dream-disco-fame-singularity        294  auto     100%(2) last   22/22  x23114.2100%(2) last   22/22  x19789.7100%(2) last   22/22  x1391.2
+
+WHERE THE POINTS COME FROM (round 13-15, full variant, all players): top parts and spark/zap shares
+WHERE THE POINTS COME FROM (round 13-15, full variant, all players): top parts and spark/zap shares
+xmult-ladder                       golden 44%, mega 23%, pop 12%, goal 6%, disco 6%             sparks 0% zaps 0% peakMult p50 92
+hall-of-fame-zoo                   ding 23%, mega 20%, grape 13%, well 5%, bonsai 3%            sparks 27% zaps 23% peakMult p50 92
+dream-disco-fame-singularity       mega 21%, golden 16%, trophy 11%, wizard 10%, bell 6%        sparks 0% zaps 5% peakMult p50 855642
+
