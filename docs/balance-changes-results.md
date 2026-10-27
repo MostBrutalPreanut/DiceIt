@@ -210,11 +210,16 @@ In order of how much they matter. Nothing below is changed in the game; each has
    Auditor 0-33% on every table (×0.16-0.6). Suggestions: Cheap Rubber kicks at 70% instead of 50%; the Jammer jams the
    best part's *type* only when it is not the top scorer, or jams the second best; the Auditor's decals come back at a
    third of the goal.
-5. **Still above +150% in the census**: the Gumball Machine (+112% / +234% mid; the board said no change), the Golden
-   Bumper for a pro (+175% late). The Printer at one print a ball and Wizard Mode at 20 s were not re-censused (the night
-   ran out): re-run `census.ts --parts=printer,wizard,gumball,golden` both passes.
+5. **Still above +150% in the census.** Re-censused at the end ([after/pooled-recheck.md](balance-research/after/pooled-recheck.md)):
+   the **Ball Printer** at one print a ball is still +187% / +211% mid, +107% / +173% late (it still turns almost every
+   ball into a two-ball multiball for the rest of that ball). Options: legendary at $12 (the research's other idea), or
+   the printed ball leaves after 20 s like Wizard Mode's. The Wizard Lamp at 20 s is now +63% to +119% (fine). Also
+   above the line: the Gumball Machine (+112% / +234% mid; the board said no change) and the Golden Bumper for a pro
+   (+175% late).
 6. **Still weak**: the Deflector and the Piggy Bank (net loss in both passes), the Spotlight and the Time Capsule late, Opal
-   and Garnet (0-6%), Nest Egg (+6%), Sudden Death for a pro (0%). The four Long rail parts cannot fit on a full late
+   and Garnet (0-6%), Nest Egg (+6%), Sudden Death for a pro (0%). The Whale's 500-point spout changed nothing: on these
+   tables it swallows about 1.5 sparks a round and never reaches a spout (every 6th); it needs a sparks build, or a spout
+   every 3rd. The Bonsai at +10 is still -9% / -14% late (it is moved too often by the placer to age). The four Long rail parts cannot fit on a full late
    table (as designed now: "Needs room").
 7. **Overheat** was added by the plan's own 10.2 rule, but the long clock-off ball lives it was meant for did not go away
    (multiball castle up to 600 s, Diner autopilot 420 s): with the clock off a pro simply keeps those balls up. It did cut
