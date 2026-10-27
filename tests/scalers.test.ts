@@ -83,18 +83,18 @@ describe('Bonsai Bumper and Time Capsule', () => {
     expect(b.age).toBeUndefined();
   });
 
-  it('a Time Capsule dug up after 6 rounds pays a free pick of legendary parts; earlier, nothing', () => {
+  it('a Time Capsule dug up after 4 rounds pays a free pick of legendary parts; earlier, nothing', () => {
     const g = new Game();
     const c = at('capsule', 81, 12, 24);
     g.layout.parts.push(c);
-    for (let i = 0; i < 5; i++) g.continueAfterRound();
+    for (let i = 0; i < 3; i++) g.continueAfterRound();
     g.money = 50;
     g.sell(81);
     expect(g.shop.prize ?? null).toBeNull();
     const h = new Game();
     const d = at('capsule', 81, 12, 24);
     h.layout.parts.push(d);
-    for (let i = 0; i < 6; i++) h.continueAfterRound();
+    for (let i = 0; i < 4; i++) h.continueAfterRound();
     const money = h.money;
     expect(h.removeValue(d)).toBe(0);
     h.sell(81);

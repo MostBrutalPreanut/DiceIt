@@ -8,8 +8,8 @@ import type { Mods } from './mods';
  * always shown in advance, so you can prepare for it in the shop. Final bosses stack two problems and are harder.
  *
  * Most bosses are plain Mods (the same numbers the decals change); three need a rule of their own:
- *  - The Jammer switches off your most numerous part type for the round,
- *  - The Overlord switches off a random part type every ball,
+ *  - The Jammer switches off the one part that scored most last round, for this round,
+ *  - The Overlord switches off a random part type for the round,
  *  - The Auditor switches your decals off until you reach half the goal.
  */
 export type BossId =
@@ -26,7 +26,7 @@ export interface BossDef {
   goalX?: number;
   mods?: (m: Mods) => void;
   /** Rules that are not plain Mods. */
-  jam?: 'mostNumerous' | 'randomEachBall';
+  jam?: 'topPart' | 'randomEachRound';
   decalsOffUntilHalf?: boolean;
   /** Short shout for the dot-matrix display when the round starts. */
   shout: string;
@@ -44,15 +44,15 @@ export const BOSSES: Record<BossId, BossDef> = {
   slippery: { id: 'slippery', name: 'Slippery Slope', final: false, shout: 'WHO TILTED THE TABLE',
     text: 'The table is steeper: the ball falls 40% faster.', mods: (m) => { m.ballGravity *= 1.4; } },
   nightShift: { id: 'nightShift', name: 'Night Shift', final: false, shout: 'LIGHTS OUT. NIGHT SHIFT',
-    text: 'Lights out: Lamps, lanes, Level Lights, X Lanes and Disco Balls do nothing.', mods: (m) => { m.lightsOut = true; } },
+    text: 'Lights out: Lamps, lanes, Level Lights, X Lanes, Disco Balls and Spotlights pay half.', mods: (m) => { m.lightsDim *= 0.5; } },
   crossedWires: { id: 'crossedWires', name: 'Crossed Wires', final: false, shout: 'WHO WIRED THIS THING',
     text: 'The flipper buttons are swapped: ← works the right flippers, → the left.', mods: (m) => { m.swapFlippers = true; } },
   shortFuse: { id: 'shortFuse', name: 'Short Fuse', final: false, shout: 'SHORT FUSE. HURRY UP',
-    text: "Every ball's clock is 30 seconds.", mods: (m) => { m.ballClock = Math.min(m.ballClock, 30); } },
+    text: "Every ball's clock is 40 seconds.", mods: (m) => { m.ballClock = Math.min(m.ballClock, 40); } },
   jammer: { id: 'jammer', name: 'The Jammer', final: false, shout: 'THE JAMMER GOT IN',
-    text: 'Your most numerous part type is jammed: it scores nothing this round.', jam: 'mostNumerous' },
+    text: 'Your best part from last round (Big Boi aside) is jammed: it scores nothing.', jam: 'topPart' },
   flatRate: { id: 'flatRate', name: 'Flat Rate', final: false, shout: 'FLAT RATE. NO BIG MULTS',
-    text: 'Every Mult gain is 30% smaller (and ×Mults move 30% less far).', mods: (m) => { m.multGain *= 0.7; } },
+    text: 'Every Mult gain is 30% smaller.', mods: (m) => { m.multGain *= 0.7; } },
   magnet: { id: 'magnet', name: 'The Magnet', final: false, shout: 'THE MAGNET IS ON',
     text: 'A magnet under the drain pulls every ball towards it.', mods: (m) => { m.magnet = { ...DRAIN, strength: 22, radius: 16 }; } },
 
@@ -60,7 +60,7 @@ export const BOSSES: Record<BossId, BossDef> = {
   auditor: { id: 'auditor', name: 'The Auditor', final: true, shout: 'THE AUDITOR WILL SEE YOU NOW',
     text: 'Your decals are switched off until you reach half the goal, and the goal is 10% higher.', goalX: 1.1, decalsOffUntilHalf: true },
   overlord: { id: 'overlord', name: 'The Overlord', final: true, shout: 'KNEEL BEFORE THE OVERLORD',
-    text: 'Every ball, a random part type on your table is switched off, and every Mult gain is 30% smaller.', jam: 'randomEachBall', mods: (m) => { m.multGain *= 0.7; } },
+    text: 'A random part type on your table is switched off for the round, and every Mult gain is 30% smaller.', jam: 'randomEachRound', mods: (m) => { m.multGain *= 0.7; } },
   whirlpool: { id: 'whirlpool', name: 'The Whirlpool', final: true, shout: 'HERE COMES THE WHIRLPOOL',
     text: "A whirlpool drags every ball towards the drain, the table is steeper, and every ball's clock is 40 seconds.",
     mods: (m) => { m.magnet = { ...DRAIN, strength: 30, radius: 18 }; m.ballGravity *= 1.2; m.ballClock = Math.min(m.ballClock, 40); } },
@@ -72,12 +72,16 @@ export const FINAL_BOSSES = BOSS_IDS.filter((id) => BOSSES[id].final);
 /** The last round of a run: the final boss. Past it the run goes on (endless) with every boss back in the draw. */
 export const FINAL_ROUND = 15;
 
-/** A run's bosses: four different regular ones and a final one, from the run's seed. */
+/** The first boss (round 3) comes from these: a gentle one, while the machine is still the starter. */
+export const GENTLE_BOSSES: BossId[] = ['taxMan', 'slippery', 'magnet', 'cheapRubber'];
+
+/** A run's bosses: four different regular ones (the first a gentle one) and a final one, from the run's seed. */
 export function planBosses(seed: number): BossId[] {
   const rng = new Rng(seed);
-  const pool = [...REGULAR_BOSSES];
-  const out: BossId[] = [];
-  for (let i = 0; i < 4; i++) out.push(pool.splice(Math.floor(rng.next() * pool.length), 1)[0]);
+  const first = GENTLE_BOSSES[Math.floor(rng.next() * GENTLE_BOSSES.length)];
+  const pool = REGULAR_BOSSES.filter((id) => id !== first);
+  const out: BossId[] = [first];
+  for (let i = 1; i < 4; i++) out.push(pool.splice(Math.floor(rng.next() * pool.length), 1)[0]);
   out.push(FINAL_BOSSES[Math.floor(rng.next() * FINAL_BOSSES.length)]);
   return out;
 }

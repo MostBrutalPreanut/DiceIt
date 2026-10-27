@@ -96,7 +96,8 @@ describe('the limits are written on the parts', () => {
     expect(text('mega')).toContain('up to +5 a ball');
     expect(text('coin')).toContain('up to $5 a round');
     expect(text('lane')).toContain('At most 5 sets a ball');
-    expect(text('printer')).toContain('at most 3 printed in one ball');
+    expect(text('printer')).toContain('at most one printed in one ball');
+    expect(text('printer')).toContain('off for 12 s');
   });
 
   it('the Gold Ball card states its cap', () => {
@@ -163,7 +164,7 @@ describe('the ball clock', () => {
     expect(goneAt - upAt).toBeLessThan(RUNOUT_MAX + 0.1);
   });
 
-  it('a ball waiting in the plunger lane is not lost: it cannot be fired during the run-out, then it is a new ball on a new clock', () => {
+  it('one clock per ball you launch: a twin still waiting in the lane when the clock runs out leaves with the ball', () => {
     const sim = createSim(empty(), { ballClock: 0.5, mods: { twin: true } });
     sim.spawnBall();
     let launches = 0, sawUp = false;
@@ -174,39 +175,25 @@ describe('the ball clock', () => {
       }
     }
     expect(sawUp).toBe(true);
-    expect(launches).toBe(1);
+    expect(launches).toBe(1); // it could not be fired during the run-out
     expect(sim.timeUp).toBe(false);
-    expect(sim.ballStates().length).toBe(1);
-    expect(sim.ballStates()[0].inLane).toBe(true);
-    expect(sim.awaitingPlunge).toBe(true);
-    expect(sim.clockLeft).toBeNull();
-    for (let i = 0; i < 240 && launches < 2; i++) for (const e of sim.step({ ...NO_INPUT, plunge: i < 120 })) if (e.type === 'launch') launches++;
-    expect(launches).toBe(2);
+    expect(sim.ballCount).toBe(0); // and it never gets a clock of its own
+    expect(sim.awaitingPlunge).toBe(false);
   });
 });
 
 describe('the printer limit', () => {
-  it('prints at most 3 balls in one ball, and a new ball lets it print again', () => {
+  it('prints one ball a ball, then is off for 12 s', () => {
     const sim = createSim({ parts: [makePart('printer', 1, 12, 30, true)], gravity: 50, nextUid: 2 });
     sim.spawnBall();
-    let extras = 0;
-    for (let i = 0; i < 260; i++) sim.step({ ...NO_INPUT, plunge: i < 230 }); // fire the ball, so the table plays as it does in a round
-    const drop = (n: number) => {
-      for (let k = 0; k < n; k++) {
-        // let everything from the last drop drain first (firing any ball the printer threw into the plunger lane), so
-        // the 4-balls-on-the-table limit is not what stops the printer
-        for (let i = 0; i < 260; i++) for (const e of sim.step({ ...NO_INPUT, plunge: i < 230 })) if (e.type === 'extraBall') extras++;
-        for (let i = 0; i < 240 * 30 && sim.ballStates().some((b) => !b.inLane); i++) for (const e of sim.step(NO_INPUT)) if (e.type === 'extraBall') extras++;
-        sim.addBall(12, 33.5, 0, -20);
-        for (let i = 0; i < 240 * 1.2; i++) for (const e of sim.step(NO_INPUT)) if (e.type === 'extraBall') extras++;
-      }
-    };
-    drop(10);
-    expect(extras).toBe(3);
-    sim.spawnBall();
-    const before = extras;
-    drop(2);
-    expect(extras).toBeGreaterThan(before);
+    for (let i = 0; i < 260; i++) sim.step({ ...NO_INPUT, plunge: i < 230 });
+    const printedAt: number[] = [];
+    for (let k = 0; k < 40; k++) {
+      sim.addBall(12, 33.5, 0, -20);
+      for (let i = 0; i < 240; i++) for (const e of sim.step(NO_INPUT)) if (e.type === 'extraBall') printedAt.push(e.t);
+    }
+    expect(printedAt.length).toBe(1);
+    for (let i = 1; i < printedAt.length; i++) expect(printedAt[i] - printedAt[i - 1]).toBeGreaterThanOrEqual(12);
   });
 });
 

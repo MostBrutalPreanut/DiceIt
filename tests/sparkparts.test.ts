@@ -40,10 +40,14 @@ describe('The Whale', () => {
     expect(sim.sparkStates()).toHaveLength(0);
     const s = scorer([makePart('whale', 1, 12, 30, true)]);
     const w = PARTS.whale.recipe.whale!;
-    const out = [...Array(w.every * 4)].flatMap((_, i) => s.consume(hit(1, { t: i * 0.1, spark: true, swallow: true })));
+    const out = [...Array(w.every * 4)].flatMap((_, i) => s.consume(hit(1, { t: i, spark: true, swallow: true })));
     expect(out[0].base).toBe(w.swallow);
     const spouts = out.filter((e) => e.label === 'THAR SHE BLOWS!');
-    expect(spouts).toHaveLength(w.perBall);
+    expect(spouts).toHaveLength(4); // no limit a ball: every 6th, a second apart
+    // swallowed fast, the rest after a spout holds the next one back
+    const quick = scorer([makePart('whale', 1, 12, 30, true)]);
+    const fast = [...Array(w.every * 4)].flatMap((_, i) => quick.consume(hit(1, { t: i * 0.1, spark: true, swallow: true })));
+    expect(fast.filter((e) => e.label === 'THAR SHE BLOWS!')).toHaveLength(1);
     expect(spouts[0].sparks?.[0].n).toBe(w.sparks);
   });
 });
@@ -52,8 +56,8 @@ describe('Spider Nest', () => {
   it('a hit sometimes lays an egg; an egg hatches into three sparks on the first part it hits', () => {
     const s = scorer([makePart('nest', 1, 12, 30, true)]);
     const eggs = [...Array(200)].map((_, i) => s.consume(hit(1, { t: i }))[0].sparks?.[0]).filter((b) => b?.egg).length;
-    expect(eggs).toBeGreaterThan(30);
-    expect(eggs).toBeLessThan(80);
+    expect(eggs).toBeGreaterThan(70); // half the hits
+    expect(eggs).toBeLessThan(130);
     const sim = createSim(layoutOf(makePart('pop', 2, 12, 26, true)), { seed: 1 });
     sim.addSparks(1, 12, 29, 1, { aim: [-Math.PI / 2], egg: true });
     expect(sim.sparkStates()[0].egg).toBe(true);
@@ -64,10 +68,10 @@ describe('Spider Nest', () => {
 });
 
 describe('Marble Jar', () => {
-  it('every 25 hits add a marble for the run (up to 5); every ball launched brings a spark per marble', () => {
+  it('every 10 hits add a marble for the run (up to 5); every ball launched brings a spark per marble', () => {
     const jar = makePart('jar', 1, 12, 30, true);
     const s = scorer([jar]);
-    for (let i = 0; i < 24; i++) s.consume(hit(1, { t: i }));
+    for (let i = 0; i < 9; i++) s.consume(hit(1, { t: i }));
     expect(s.marblesOf(jar)).toBe(0);
     expect(s.consume(hit(1, { t: 30 }))[0].label).toBe('MARBLE 1!');
     expect(jar.marbles).toBeUndefined(); // a test ball's marbles stay in its scorer

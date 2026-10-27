@@ -23,9 +23,9 @@ export type DecalId =
   | 'overshoot' | 'goldenTicket' | 'collector' | 'savingsBond'
   // score
   | 'headStart' | 'lucky' | 'overclock' | 'levelUp' | 'lamps' | 'sets' | 'goldenAge' | 'glassCannon' | 'comboKing' | 'spinDoctor'
-  | 'multiball' | 'lastCall' | 'thrifty' | 'fanClub' | 'momentum' | 'afterglow'
+  | 'multiball' | 'lastCall' | 'thrifty' | 'fanClub' | 'momentum' | 'afterglow' | 'nestEgg'
   // ball
-  | 'rubber' | 'heavy' | 'glass' | 'gold' | 'twin' | 'extraBall' | 'safetyNet' | 'longFuse' | 'freeKick' | 'printerPlus'
+  | 'rubber' | 'heavy' | 'glass' | 'gold' | 'twin' | 'extraBall' | 'safetyNet' | 'longFuse' | 'freeKick' | 'printerPlus' | 'suddenDeath'
   // build
   | 'bumperCar' | 'targetPractice' | 'lightShow' | 'purist' | 'crowd' | 'minimalist';
 
@@ -40,7 +40,7 @@ export type DecalIcon =
   | 'shades' | 'crown' | 'magnifier' | 'scroll' | 'flag' | 'seven' | 'gauge' | 'chevrons' | 'bulb' | 'targets'
   | 'laurel' | 'cannon' | 'flame' | 'swirl' | 'balls' | 'mug' | 'purse' | 'bigboi' | 'trend' | 'sunset'
   | 'bounce' | 'anvil' | 'marble' | 'goldball' | 'twins' | 'plusball' | 'net' | 'fuse' | 'boot' | 'printer'
-  | 'car' | 'bullseye' | 'beams' | 'drop' | 'crowd' | 'empty';
+  | 'car' | 'bullseye' | 'beams' | 'drop' | 'crowd' | 'empty' | 'nestegg' | 'skull';
 
 export interface DecalLook {
   shape: DecalShape;
@@ -99,18 +99,20 @@ export const BOSS_EVERY = 3;
 
 // the numbers behind the effects and their sentences
 const N = {
-  sponsor: 2, interestPer: 5, interestCap: 5, coupon: 1, ballHog: 5, toolbox: 2, overshoot: 2, ticket: 8, collector: 1, bond: 1,
-  head: 0.5, lucky: 7, luckyX: 3, overclock: 0.5, lampRadius: 2, lampBonus: 0.04, glass: 1.5, combo: 2, spin: 2, spinBoost: 1.5,
-  multiball: 2, lastCall: 2, thriftyPer: 0.01, thriftyCap: 0.5, fanClub: 3, momentum: 0.5, afterglow: 0.15,
+  sponsor: 2, interestPer: 5, interestCap: 5, coupon: 1, ballHog: 3, toolbox: 2, overshoot: 2, ticket: 8, collector: 1, bond: 1,
+  head: 0.5, lucky: 7, luckyX: 3, overclock: 0.5, lampRadius: 2, lampBonus: 0.04, glass: 2, combo: 3, spin: 2, spinBoost: 1.5,
+  multiball: 2, lastCall: 2, thriftyPer: 0.01, thriftyCap: 0.5, fanClub: 2, momentum: 0.5, afterglow: 0.1,
   bounce: 0.3, heavyPoints: 0.25, heavyNudge: 0.6, glassGravity: 0.8, glassSpin: 1.5, goldEvery: 10, goldCap: 5, fuse: 20,
+  nestPer: 0.1, nestCap: 2, sudden: 20, suddenX: 1.5,
   bumper: 1.5, catch: 0.75, target: 2, targetEase: 0.8, lightShow: 1.5, purist: 2, puristTypes: 4, crowd: 0.04, empty: 0.25,
 } as const;
 
 const owns = (v: RunView, id: PartId) => v.owned.some((p) => p.def === id);
 const ownsAny = (v: RunView, ids: PartId[]) => ids.some((id) => owns(v, id));
 const ownedTypes = (v: RunView) => [...new Set(v.owned.map((p) => p.def))];
-const levelableTypes = (v: RunView) => ownedTypes(v).filter((id) => PARTS[id].recipe.perLevel);
-const scoringTypes = (v: RunView) => ownedTypes(v).filter((id) => PARTS[id].recipe.points || id === 'mega');
+// Overclock and Level Up never pick Big Boi (Fan Club is his)
+const levelableTypes = (v: RunView) => ownedTypes(v).filter((id) => id !== 'mega' && PARTS[id].recipe.perLevel);
+const scoringTypes = (v: RunView) => ownedTypes(v).filter((id) => id !== 'mega' && PARTS[id].recipe.points);
 const pct = (f: number) => `${Math.round(f * 100)}%`;
 const nm = (id?: PartId) => (id ? PARTS[id].name + 's' : 'a part type');
 const C = { gold: '#ffc43d', green: '#55d08f', teal: '#3cc3b1', blue: '#62b8ff', purple: '#8a63f2', pink: '#ff7fb0', red: '#ff6b6b', orange: '#ff9a3c', lime: '#a3d143', grey: '#b8b2cc' };
@@ -127,7 +129,7 @@ export const DECALS: Record<DecalId, DecalDef> = {
     mods: (m) => { m.couponOff += N.coupon; }, look: { shape: 'ticket', color: C.pink, icon: 'scissors' } },
   fullRefund: { id: 'fullRefund', name: 'Free Hands', kind: 'cash', rarity: 'uncommon', text: () => 'Moving and removing parts costs nothing, and a part the toolbox has no room for sells for its full price.',
     mods: (m) => { m.freeMoves = true; m.sellRate = 1; }, look: { shape: 'ticket', color: C.lime, icon: 'glove' } },
-  ballHog: { id: 'ballHog', name: 'Ball Hog', kind: 'cash', rarity: 'common', text: () => `Every ball you have left when you clear a round pays $${N.ballHog} instead of $3.`,
+  ballHog: { id: 'ballHog', name: 'Ball Hog', kind: 'cash', rarity: 'common', text: () => `Every ball you have left when you clear a round pays $${N.ballHog} instead of $${neutralMods().unusedBallPay}.`,
     mods: (m) => { m.unusedBallPay = N.ballHog; }, look: { shape: 'hex', color: C.orange, icon: 'pig' } },
   freeReroll: { id: 'freeReroll', name: 'Free Reroll', kind: 'cash', rarity: 'common', text: () => 'The first reroll in every shop is free.',
     mods: (m) => { m.freeRerolls += 1; }, look: { shape: 'circle', color: C.blue, icon: 'die' } },
@@ -182,8 +184,11 @@ export const DECALS: Record<DecalId, DecalDef> = {
     text: () => `Every round you clear adds +${N.momentum} to the Mult every ball starts at, for as long as this decal stays.`,
     mods: () => {}, look: { shape: 'banner', color: C.lime, icon: 'trend' } },
   afterglow: { id: 'afterglow', name: 'Afterglow', kind: 'score', rarity: 'rare', grows: 'peak',
-    text: () => `At the end of every round, this decal keeps ${pct(N.afterglow)} of the highest Mult you reached: every ball after starts that much higher.`,
+    text: () => `At the end of every round, this decal keeps ${pct(N.afterglow)} of the Mult you gained that round: every ball after starts that much higher.`,
     mods: () => {}, look: { shape: 'star', color: '#ff8fd0', icon: 'sunset' } },
+
+  nestEgg: { id: 'nestEgg', name: 'Nest Egg', kind: 'score', rarity: 'uncommon', text: () => `Every ball starts at +${N.nestPer} Mult for every $5 you hold (up to +${N.nestCap}).`,
+    mods: (m) => { m.startMultPerFive += N.nestPer; m.startMultPerFiveCap += N.nestCap; }, look: { shape: 'circle', color: C.gold, icon: 'nestegg' } },
 
   // ---- Ball: the ball and the table ----
   rubber: { id: 'rubber', name: 'Rubber Ball', kind: 'ball', rarity: 'common', text: () => 'The ball is bouncier: it rebounds harder off walls, parts and flippers.',
@@ -194,16 +199,18 @@ export const DECALS: Record<DecalId, DecalDef> = {
     mods: (m) => { m.ballGravity *= N.glassGravity; m.spinBoost *= N.glassSpin; }, look: { shape: 'circle', color: C.blue, icon: 'marble' } },
   gold: { id: 'gold', name: 'Gold Ball', kind: 'ball', rarity: 'common', text: () => `Every ${N.goldEvery}th scoring hit of a round pays $1, up to $${N.goldCap} a round.`,
     mods: (m) => { m.goldEvery = N.goldEvery; m.goldCap = N.goldCap; }, look: { shape: 'star', color: C.gold, icon: 'goldball' } },
-  twin: { id: 'twin', name: 'Twin Ball', kind: 'ball', rarity: 'legendary', text: () => 'Every ball arrives with a twin: two balls in the plunger lane.',
+  twin: { id: 'twin', name: 'Twin Ball', kind: 'ball', rarity: 'legendary', text: () => 'The first ball of every round arrives with a twin: two balls in the plunger lane, sharing one clock.',
     mods: (m) => { m.twin = true; }, look: { shape: 'banner', color: C.purple, icon: 'twins' } },
   extraBall: { id: 'extraBall', name: 'Extra Ball', kind: 'ball', rarity: 'rare', text: () => 'Every round gives you one more ball.',
     mods: (m) => { m.ballsPerRound += 1; }, look: { shape: 'circle', color: C.lime, icon: 'plusball' } },
   safetyNet: { id: 'safetyNet', name: 'Safety Net', kind: 'ball', rarity: 'uncommon', text: () => 'Every ball gets one save, as if a Ball Saver were on the table.',
     mods: (m) => { m.extraSaves += 1; }, look: { shape: 'shield', color: C.lime, icon: 'net' } },
-  longFuse: { id: 'longFuse', name: 'Long Fuse', kind: 'ball', rarity: 'common', text: () => `Every ball's countdown runs ${N.fuse} s longer before the ball times out.`,
+  longFuse: { id: 'longFuse', name: 'Long Fuse', kind: 'ball', rarity: 'common', text: () => `Every ball's clock runs ${N.fuse} s longer. One clock per ball you launch: extra balls share it, they never start a new one.`,
     mods: (m) => { m.ballClock += N.fuse; }, look: { shape: 'ticket', color: C.teal, icon: 'fuse' } },
   freeKick: { id: 'freeKick', name: 'Free Kick', kind: 'ball', rarity: 'common', worth: (v) => owns(v, 'kickback'),
     text: () => 'Kickbacks recharge twice as fast.', mods: (m) => { m.kickbackCooldown *= 0.5; }, look: { shape: 'banner', color: '#3050ff', icon: 'boot' } },
+  suddenDeath: { id: 'suddenDeath', name: 'Sudden Death', kind: 'ball', rarity: 'rare', text: () => `Every ball's clock is ${N.sudden} s shorter, but every hit pays ${N.suddenX}×.`,
+    mods: (m) => { m.ballClock -= N.sudden; m.pointsFactor *= N.suddenX; }, look: { shape: 'shield', color: C.red, icon: 'skull' } },
   printerPlus: { id: 'printerPlus', name: 'Printer Plus', kind: 'ball', rarity: 'rare', worth: (v) => owns(v, 'printer'),
     text: () => 'Ball Printers spit out one more ball every time they catch one.', mods: (m) => { m.printerExtra += 1; }, look: { shape: 'hex', color: C.blue, icon: 'printer' } },
 
@@ -278,10 +285,14 @@ export function rollDecalPick(seed: number, v: RunView, bossNo: number, count = 
 export const decalTitle = (o: DecalPick) => DECALS[o.id].name + (o.target ? ` · ${PARTS[o.target].name}s` : '');
 export const decalText = (o: DecalPick) => DECALS[o.id].text(o.target) + (o.grown ? ` Kept so far: +${Math.round(o.grown * 100) / 100} Mult.` : '');
 
-/** What a growing decal keeps at the end of a round: Momentum for a cleared round, Afterglow a share of the round's best Mult. */
-export function decalGrowth(o: DecalPick, cleared: boolean, peakMult: number): number {
+/**
+ * What a growing decal keeps at the end of a round: Momentum for a cleared round, Afterglow a share of the Mult gained
+ * that round (`peakGain`: the scorer's best gain in a ball, measured without the Mult the decals had already kept, so
+ * it is never counted again and cannot compound).
+ */
+export function decalGrowth(o: DecalPick, cleared: boolean, peakGain: number): number {
   const g = DECALS[o.id].grows;
   if (g === 'cleared') return cleared ? N.momentum : 0;
-  if (g === 'peak') return Math.round(N.afterglow * peakMult * 100) / 100;
+  if (g === 'peak') return Math.round(N.afterglow * Math.max(0, peakGain) * 100) / 100;
   return 0;
 }

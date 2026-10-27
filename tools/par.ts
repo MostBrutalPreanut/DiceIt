@@ -4,6 +4,7 @@ import { decalTitle, type DecalId } from '../src/data/decals';
 import { autoBuild, playRounds, type BuildOptions, type Levels, type RoundSample } from '../src/game/autobuild';
 import { Game, payoutFor } from '../src/game/game';
 import type { Layout } from '../src/sim/layout';
+import { Human, PROFILES } from './research/lib';
 
 /**
  * The par player: a sensible, unlucky-proof player that the goal curve is measured against. Each round it
@@ -24,7 +25,7 @@ export const PART_VALUE: Record<PartId, number> = {
   grape: 4, echo: 3, spot: 3, bonsai: 4, capsule: 0, ice: 4, well: 2,
   wreck: 10, broom: 6, bucket: 8, hutch: 0,
   split: 4, whale: 10, insure: 0, nest: 7, jar: 6,
-  gumball: 8, ring: 0, hand: 3, wheel: 7,
+  gumball: 8, ring: 0, hand: 3, wheel: 7, hourglass: 3, vault: 7,
 };
 /** How many of each it will own. (Level Lights need aiming in sets of two or more, which par does not do.) */
 export const PART_CAP: Record<PartId, number> = {
@@ -37,7 +38,7 @@ export const PART_CAP: Record<PartId, number> = {
   grape: 6, echo: 2, spot: 1, bonsai: 2, capsule: 0, ice: 1, well: 1,
   wreck: 1, broom: 1, bucket: 1, hutch: 0,
   split: 2, whale: 1, insure: 0, nest: 1, jar: 1,
-  gumball: 1, ring: 0, hand: 1, wheel: 1,
+  gumball: 1, ring: 0, hand: 1, wheel: 1, hourglass: 1, vault: 1,
 };
 /** The first decal of the three it is offered (or the shop's) that appears in this list is the one it takes. */
 export const DECAL_PRIORITY: DecalId[] = [
@@ -56,6 +57,8 @@ export interface ParOptions {
   failStart: number;
   failEnd: number;
   skill: number;
+  /** Who plays: the research players (pro, avg, poor: misses and reaction times like people), or the old per-frame Bot at `skill`. */
+  player?: 'bot' | 'pro' | 'avg' | 'poor';
   /** Simulated rounds the machine is measured over, each round. */
   measure: number;
   build: Omit<BuildOptions, 'seed' | 'skill'>;
@@ -204,6 +207,8 @@ export function runPar(o: ParOptions): ParRun {
   for (let i = 0; i < o.seed; i++) g.newRun((['factory', 'diner', 'castle'] as const)[o.seed % 3]);
   const upgrades: string[] = [];
   const rounds: ParRound[] = [];
+  const who = o.player ?? 'bot';
+  const player = who === 'bot' ? undefined : (seed: number) => new Human(seed, PROFILES[who]);
 
   for (let n = 1; n <= o.rounds; n++) {
     const moneyStart = g.money;
@@ -218,9 +223,9 @@ export function runPar(o: ParOptions): ParRun {
 
     // the machine is built and measured for the round it is about to play: a boss round with the boss's rules
     const mods = g.modsForRound;
-    const built = autoBuild({ layout: g.layout, mods, machine: g.machine, rings: g.rings }, { ...o.build, seed: o.seed * 100 + n, skill: o.skill });
+    const built = autoBuild({ layout: g.layout, mods, machine: g.machine, rings: g.rings }, { ...o.build, seed: o.seed * 100 + n, skill: o.skill, player });
     g.layout = built.machine.layout;
-    const samples = playRounds({ layout: g.layout, mods, machine: g.machine, rings: g.rings }, { rounds: o.measure, seed: o.seed * 10000 + n, skill: o.skill });
+    const samples = playRounds({ layout: g.layout, mods, machine: g.machine, rings: g.rings }, { rounds: o.measure, seed: o.seed * 10000 + n, skill: o.skill, player });
     // the measured rounds are copies, so the run's Old Bells get their notch here: when most rounds rang them
     if (samples.filter((s) => (s.points.bell ?? 0) > 0).length * 2 >= samples.length) {
       for (const p of g.layout.parts) if (p.placed && p.def === 'bell') g.notch(p, PARTS.bell.recipe.bell!.notches);
@@ -235,7 +240,7 @@ export function runPar(o: ParOptions): ParRun {
       if (!k) continue;
       payouts.push(payoutFor({ round: n, ballsLeft: balls - k, score: s.cumulative[k - 1], goal, coins: s.coins[k - 1], money: g.money, mods, boss: g.boss !== null, decals: g.decals.length }).total);
     }
-    const payout = Math.round(payouts.length ? payouts.reduce((a, b) => a + b, 0) / payouts.length : 3 + n);
+    const payout = Math.round(payouts.length ? payouts.reduce((a, b) => a + b, 0) / payouts.length : 4);
     const moneyHeld = g.money;
     g.money += payout;
 

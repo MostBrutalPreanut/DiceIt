@@ -223,7 +223,7 @@ describe('levels, Level Lights and drop-target banks', () => {
     const bank = makePart('bank', 30, 12, 30, true);
     const parts = [...starterLayout().parts, bank];
     const s = new Scorer(1e9, () => parts);
-    expect(s.consume(hit(30, { index: 0 }))[0].base).toBe(12);
+    expect(s.consume(hit(30, { index: 0 }))[0].base).toBe(10);
     s.consume(hit(30, { index: 1 }));
     const last = s.consume(hit(30, { index: 2 }));
     expect(last).toHaveLength(1);
@@ -260,24 +260,24 @@ describe('Vari-Target: harder hits pay more', () => {
 
   it('pays x1, x2, x4 or x8 of 40 by how fast the ball was going, and says which', () => {
     const v = vari();
-    expect([5, 15, 35, 70].map((sp) => score(v, sp).base)).toEqual([8, 16, 32, 64]);
-    expect(score(v, 70).notes).toEqual(['8 base', 'x8 smash hit']);
+    expect([5, 15, 35, 70].map((sp) => score(v, sp).base)).toEqual([10, 20, 40, 80]);
+    expect(score(v, 70).notes).toEqual(['10 base', 'x8 smash hit']);
     expect(score(v, 70).tier).toBe(3);
     expect(score(v, 5).tier).toBe(0);
   });
 
   it('a stiffer target needs a harder hit per tier but pays more', () => {
     const stiff = vari(2); // thresholds x2, payout x1.5
-    expect(score(stiff, 35).base).toBe(Math.round(8 * 2 * 1.5)); // 35 is only "firm" at stiffness 2 (needs 56 for hard)
-    expect(score(stiff, 120).base).toBe(Math.round(8 * 8 * 1.5));
+    expect(score(stiff, 35).base).toBe(Math.round(10 * 2 * 1.5)); // 35 is only "firm" at stiffness 2 (needs 56 for hard)
+    expect(score(stiff, 120).base).toBe(Math.round(10 * 8 * 1.5));
     const soft = vari(0.5); // thresholds x0.5, payout x0.75
-    expect(score(soft, 35).base).toBe(Math.round(8 * 8 * 0.75)); // 25 is already a smash
+    expect(score(soft, 35).base).toBe(Math.round(10 * 8 * 0.75)); // 25 is already a smash
   });
 
   it('the label on the part is the soft-to-smash range, and the description matches the dial', () => {
     const { s } = setup([vari()]);
     const part = vari();
-    expect(s.label(part)).toBe('8-64');
+    expect(s.label(part)).toBe('10-80');
     const text = describePart(PARTS.vari, part).map((l) => l.text).join(' ');
     expect(text).toContain('×8 at 50 (a smash)');
     part.dials.stiff = 2;

@@ -93,6 +93,9 @@ export interface Mods {
   startMultPerPart: number;
   /** Extra starting Mult for each empty toolbox slot (Minimalist). */
   startMultPerEmpty: number;
+  /** Extra starting Mult for every $5 you hold, up to the cap (Nest Egg). */
+  startMultPerFive: number;
+  startMultPerFiveCap: number;
   /** Multiplier on what a Hot Shot adds to the next hit. */
   hotFactor: number;
   /** Multiplier on the Mult a Spinner gives per spin. */
@@ -116,24 +119,24 @@ export interface Mods {
   /** Multiplier on everything Big Boi pays. */
   bigBoiX: number;
   // --- boss rules (Scorer) ---
-  /** Multiplier on every Mult gain (and on how far a ×Mult moves away from ×1). */
+  /** Multiplier on every Mult gain. */
   multGain: number;
   /** Parts pay no money this round. */
   noCoins: boolean;
-  /** Lights out: Lamps, lanes, Level Lights and X Lanes do nothing. */
-  lightsOut: boolean;
+  /** Night Shift: every light (Lamps, lanes, Level Lights, X Lanes, Disco Balls, Spotlights...) pays this much (1 = in full). */
+  lightsDim: number;
 }
 
 export function neutralMods(): Mods {
   return {
-    ballsPerRound: 3, interestPer: 0, interestCap: 0, roundBonus: 0, cabinetPay: 0, unusedBallPay: 3, couponOff: 0, sellRate: 0.5, freeMoves: false, shopSlots: 4,
+    ballsPerRound: 3, interestPer: 0, interestCap: 0, roundBonus: 0, cabinetPay: 0, unusedBallPay: 1, couponOff: 0, sellRate: 0.5, freeMoves: false, shopSlots: 4,
     toolboxSlots: 4, locks: 1, freeRerolls: 0, overshootFactor: 1, bossBonus: 0, perTypePay: 0, perDecalPay: 0, bargain: false, payCut: 0,
     ballBounce: 0, ballGravity: 1, nudge: 1, spinBoost: 1, twin: false, printerExtra: 0, kickFactor: 1, extraSaves: 0, kickbackCooldown: 1,
     ballClock: 60, swapFlippers: false, magnet: null,
     pointsFactor: 1, goldEvery: 0, goldCap: 0, luckyEvery: 0, luckyX: 2, overclock: {}, levelBonus: {}, levelAll: 0, lampRadius: 0, lampBonus: 0,
-    setFactor: 1, startMult: 1, startMultPerPart: 0, startMultPerEmpty: 0, hotFactor: 1, spinMult: 1, multiballX: 1, lastBallX: 1, cashPer: 0, cashCap: 0,
+    setFactor: 1, startMult: 1, startMultPerPart: 0, startMultPerEmpty: 0, startMultPerFive: 0, startMultPerFiveCap: 0, hotFactor: 1, spinMult: 1, multiballX: 1, lastBallX: 1, cashPer: 0, cashCap: 0,
     tagFactor: {}, untaggedFactor: 1, puristX: 1, puristTypes: 0, tierEase: 1, bigBoiX: 1,
-    multGain: 1, noCoins: false, lightsOut: false,
+    multGain: 1, noCoins: false, lightsDim: 1,
   };
 }
 

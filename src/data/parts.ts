@@ -24,7 +24,7 @@ export type PartId =
   | 'grape' | 'echo' | 'spot' | 'bonsai' | 'capsule' | 'ice' | 'well'
   | 'wreck' | 'broom' | 'bucket' | 'hutch'
   | 'split' | 'whale' | 'insure' | 'nest' | 'jar'
-  | 'gumball' | 'ring' | 'hand' | 'wheel';
+  | 'gumball' | 'ring' | 'hand' | 'wheel' | 'hourglass' | 'vault';
 export type PartKind = 'bumper' | 'kicker' | 'deflector' | 'spinner' | 'rollover' | 'saucer' | 'flipper' | 'lamp' | 'bank' | 'kickback' | 'saver' | 'target'
   | 'mover' | 'goal' | 'strip' | 'inlay' | 'decor';
 
@@ -39,10 +39,11 @@ export const RARITY_NAMES: Record<Rarity, string> = { common: 'Common', uncommon
 
 /**
  * What a part is, for the decals that care: Bumper Car pays every bumper more, Target Practice every target...
- * A part can carry several tags. Shown on every card, so a build can be read at a glance.
+ * A part can carry several tags. Shown on every card, so a build can be read at a glance. 'long' is for show only (no
+ * decal reads it): a big rail part that needs a wide free stretch of table.
  */
-export type PartTag = 'bigboi' | 'bumper' | 'target' | 'light' | 'kicker' | 'ball' | 'guard' | 'money';
-export const TAG_NAMES: Record<PartTag, string> = { bigboi: 'Big Boi', bumper: 'Bumper', target: 'Target', light: 'Light', kicker: 'Kicker', ball: 'Ball', guard: 'Guard', money: 'Money' };
+export type PartTag = 'bigboi' | 'bumper' | 'target' | 'light' | 'kicker' | 'ball' | 'guard' | 'money' | 'long';
+export const TAG_NAMES: Record<PartTag, string> = { bigboi: 'Big Boi', bumper: 'Bumper', target: 'Target', light: 'Light', kicker: 'Kicker', ball: 'Ball', guard: 'Guard', money: 'Money', long: 'Long' };
 /** A part sold several to an offer wears its pack size as a tag ("3-Pack"); null for a single part. */
 export const packTag = (def: { pack?: number }): string | null => (def.pack && def.pack > 1 ? `${def.pack}-Pack` : null);
 
@@ -88,9 +89,11 @@ export interface Recipe {
   mult?: number;
   /** The most Mult this part type can add in one ball (all parts of the type together). */
   multCap?: number;
-  /** Multiplies the Mult per event (x1.1 = +10% of the Mult you have). */
+  /** Never zapped (the Mult parts: a zap pays points, and their Mult stays a shot the ball has to make). */
+  noZap?: boolean;
+  /** The few ×Mult parts (rare, on a cooldown or once a ball): multiplies the Mult (×1.25 = +25% of the Mult you have). */
   xmult?: number;
-  /** The most this type's ×Mult can multiply the Mult in one ball. */
+  /** The most all parts of the type together multiply the Mult in one ball. */
   xmultCap?: number;
   /** +Mult per spin (Spinner), up to `spinMultCap` a ball from all of the type. */
   spinMult?: number;
@@ -104,6 +107,10 @@ export interface Recipe {
   setCap?: number;
   /** The most balls a Ball Printer prints in one ball. */
   printCap?: number;
+  /** Ball Printer: after printing it is off this long (it catches nothing, it bonks the ball lightly). */
+  printRest?: number;
+  /** Mag-Grab: it ignores the ball it just threw for this long. */
+  grabRest?: number;
   /** Lights up for the rest of the ball when rolled over. */
   lights?: boolean;
   /** When every light of this type on the board is lit. */
@@ -145,16 +152,16 @@ export interface Recipe {
   keep?: { per: number; cap: number };
   /** Duck Gallery: each hit on the duck makes it this much faster for the rest of the ball (up to `max` times its speed). */
   speedUp?: { by: number; max: number };
-  /** Goal: what a goal pays on top of its points (×Mult, capped a ball). */
-  goal?: { xmult: number; xmultCap: number };
+  /** Goal: what a goal pays on top of its points: +`mult` Mult, up to +`multCap` a ball. */
+  goal?: { mult: number; multCap: number };
   /** Roller Pop: a hit near either end of its rail (the outer `edge` of its travel) pays `x` times. */
   edgeShot?: { edge: number; x: number };
   /** Glow Strip: lights for `seconds` after any bonus anywhere, and while lit every part standing on it pays +`bonus`. */
   strip?: { seconds: number; bonus: number; reach: number };
   /** Power Plate: a floor plate; every bumper standing within `reach` of it pays `x` times (plates multiply). */
   plate?: { x: number; reach: number };
-  /** Hall of Fame: once a ball, the Mult is multiplied by (1 + typeX) for every different part type on the table. */
-  typeX?: number;
+  /** Hall of Fame: once a ball, +`typeMult` Mult for every different part type on the table (up to `multCap` from all of them). */
+  typeMult?: number;
   /**
    * Rank Lights: light every light of a pack and the ball that lit the last one ranks up a step: every hit it makes
    * pays `steps[rank - 1]` times, for `seconds`. Lighting the set again moves it up (or starts the time again at the
@@ -162,7 +169,7 @@ export interface Recipe {
    */
   rank?: { steps: number[]; seconds: number };
   /** Old Bell: its first hit each round pays `first` instead of its points and adds a notch; at `notches` it rings, and every ball's Mult is ×`x` for the rest of the run. */
-  bell?: { first: number; notches: number; x: number };
+  bell?: { first: number; notches: number; mult: number };
   /**
    * Tesla Coil: every hit arcs lightning to the `arcs` nearest parts that can be zapped (one more every `perLevels`
    * levels, up to `maxArcs`), and each scores as if the ball had hit it. A zap never arcs on.
@@ -193,7 +200,7 @@ export interface Recipe {
   /**
    * Wizard Lamp: a segment for every different part type the ball itself hits (one for each scoring type on the
    * table when the round starts, at most `max`). All lit: WIZARD MODE for `seconds`: `balls` more balls, every
-   * ×Mult cap lifted, every Lamp at full glow. Once a round.
+   * Mult cap of a part doubled, every Lamp at full glow. Once a round.
    */
   wizard?: { max: number; seconds: number; balls: number };
   /**
@@ -224,8 +231,8 @@ export interface Recipe {
   bucket?: boolean;
   /** Splitter: the ball's pass splits off `n` sparks, left and right; then it is dark for `cooldown` s. */
   split?: { n: number; cooldown: number };
-  /** The Whale: swallows every spark that touches it (`swallow` points each); every `every`th it spouts `sparks` sparks and `points`, up to `perBall` spouts a ball. */
-  whale?: { swallow: number; every: number; sparks: number; points: number; perBall: number };
+  /** The Whale: swallows every spark that touches it (`swallow` points each); every `every`th it spouts `sparks` sparks and `points`, then rests `rest` s (it keeps swallowing meanwhile). */
+  whale?: { swallow: number; every: number; sparks: number; points: number; rest: number };
   /** Insurance Policy: if the last ball of a round drains short of the goal, `sparks` sparks rain from the top, once; then it is used up. */
   insure?: { sparks: number };
   /** Spider Nest: each of the ball's hits has a `chance` of laying an egg, a spark that hatches into 3 on the first part it hits. */
@@ -240,6 +247,10 @@ export interface Recipe {
   hand?: boolean;
   /** Spider Wheel: a scoop that spins a wheel of awards (WHEEL); a flipper press stops it (or it stops by itself after `seconds`). `speed` segments a second. */
   wheel?: { seconds: number; speed: number };
+  /** Hourglass: a hit of a ball that touched a flipper in the last `window` s adds `per` s to the ball clock, up to `cap` s a ball. */
+  hourglass?: { per: number; cap: number; window: number };
+  /** Vault: every hit pays +`per` points for every $1 you hold, up to +`cap`. */
+  vault?: { per: number; cap: number };
   /** Gremlin Hutch (decor): this many gremlins wander the table (see GREMLIN). */
   gremlins?: number;
   /** Ritual Altar (decor): every `sets` sets completed start a `seconds` s ritual (see RITUALS). */
@@ -288,27 +299,29 @@ export const isDecor = (id: PartId) => PARTS[id].kind === 'decor';
 
 /** The parts a gem fits: any that scores when hit, one that fires once a ball, one that goes dark or recharges, one that grows. */
 export type GemFit = 'scoring' | 'onceABall' | 'cooldown' | 'growth';
-/** What the gems do: a Ruby's part pays ×1.5; a Garnet halves dark and recharge times; Gold Leaf adds +1 a score (up to 5× the part's points); a Red Seal's part is dark this long after its double. */
+/** What the gems do: a Ruby's part pays ×1.5; a Garnet halves dark and recharge times; Gold Leaf adds +2 a score (up to 5× the part's points); a Red Seal's part is dark this long after its double. */
 export const RUBY_X = 1.5;
 export const GARNET_X = 0.5;
 export const LEAF_CAP = 5;
+/** Gold Leaf: what every score adds to its part. */
+export const LEAF_STEP = 2;
 export const SEAL_DARK = 0.5;
 /** Topaz: the chance that a ball's hit on its part drops a spark. */
-export const TOPAZ_CHANCE = 0.15;
-/** The kinds of part a gem can be set into (never flippers, savers, the Kickback, bars, floor pieces, gems or Big Boi). */
-const INLAY_KINDS = new Set<PartKind>(['bumper', 'kicker', 'spinner', 'rollover', 'lamp', 'target', 'saucer', 'mover', 'goal', 'bank']);
+export const TOPAZ_CHANCE = 0.25;
+/** The kinds of part a gem can be set into (never flippers, savers, bars, floor pieces, gems or Big Boi; the Kickback takes a Garnet only). */
+const INLAY_KINDS = new Set<PartKind>(['bumper', 'kicker', 'spinner', 'rollover', 'lamp', 'target', 'saucer', 'mover', 'goal', 'bank', 'kickback']);
 const FIT_TEXT: Record<GemFit, string> = {
   scoring: 'any part that scores when the ball hits it (not Big Boi)',
   onceABall: 'a part that fires once a ball (the Disco Ball, Hall of Fame, the Firecracker)',
-  cooldown: 'a part that goes dark or recharges (X Lane, Goal!, the Laser Turret, the Powder Keg, the Sparkler, the Rock Pile)',
-  growth: 'a part that grows as it is hit (the Pop Bumper, the Duck Gallery, the Trophy Cup)',
+  cooldown: 'a part that goes dark or recharges (X Lane, Goal!, the Laser Turret, the Powder Keg, the Sparkler, the Rock Pile, the Splitter, the Kickback, the Tesla Coil)',
+  growth: 'a part that grows (the Pop Bumper, the Duck Gallery, the Trophy Cup, the Bonsai Bumper)',
 };
 const GEM_TEXT: Partial<Record<PartId, string>> = {
   ruby: `Its part pays ×${RUBY_X}.`,
-  garnet: 'Its part\'s dark or recharge time is halved (X Lane, Goal!, the Laser Turret\'s recharge, the Powder Keg\'s re-arm).',
+  garnet: 'Its part\'s dark or recharge time is halved (X Lane, Goal!, the Laser Turret\'s recharge, the Powder Keg\'s re-arm, the Sparkler, the Rock Pile, the Splitter, the Kickback, and the rest a Tesla Coil\'s zapped parts take).',
   emerald: 'Its part fires twice a ball instead of once.',
-  opal: 'Every hit on its part counts twice for its growth (the Pops\' growth, the Duck\'s points, the Trophy\'s polish).',
-  goldleaf: `Every time its part scores, it is worth +1 more, for the rest of the run (up to +${LEAF_CAP}× its points).`,
+  opal: 'Its part grows twice as fast: every hit counts twice (the Pops\' growth, the Duck\'s points, the Trophy\'s polish), and a Bonsai ages two rounds a round.',
+  goldleaf: `Every time its part scores, it is worth +${LEAF_STEP} more, for the rest of the run (up to +${LEAF_CAP}× its points).`,
   redseal: `Every hit on its part scores twice; then the part is dark for ${SEAL_DARK} s.`,
   topaz: `Every time the ball hits its part, there is a ${Math.round(TOPAZ_CHANCE * 100)}% chance it drops a spark.`,
 };
@@ -320,25 +333,31 @@ export const isInlay = (id: PartId) => PARTS[id].kind === 'inlay';
 export function gemFits(gem: PartId, part: PartId): boolean {
   const g = PARTS[gem].recipe.gem, d = PARTS[part], r = d.recipe;
   if (!g || part === 'mega' || !INLAY_KINDS.has(d.kind)) return false;
+  if (d.kind === 'kickback' && g !== 'cooldown') return false;
   switch (g) {
     case 'scoring': return !!r.points;
     case 'onceABall': return !!(r.perBall || r.rocket);
-    case 'cooldown': return !!(r.cooldown || r.beam || r.keg || r.sparks || r.rocks);
-    case 'growth': return !!(r.grow || r.keep);
+    case 'cooldown': return !!(r.cooldown || r.beam || r.keg || r.sparks || r.rocks || r.split || r.zap);
+    case 'growth': return !!(r.grow || r.keep || r.bonsai);
   }
 }
 
+/** Overheat (no self-playing loops): a catcher or a Tesla Coil that fires `n` times within `within` s rests `rest` s. */
+export const OVERHEAT = { n: 4, within: 6, rest: 5 };
+const OVERHEAT_TEXT = `Overheats: if it fires ${OVERHEAT.n} times in ${OVERHEAT.within} s, it rests ${OVERHEAT.rest} s.`;
+/** What every part that zaps says about it (Tesla Coil, Powder Keg, Laser Turret, Shockwave Gong, Ritual Altar). */
+export const ZAP_NO_MULT = 'Zapped parts score their points, but only the ball itself raises your Mult.';
 /** A zapped part cannot be zapped again for this long (seconds). */
 export const ZAP_COOLDOWN = 0.5;
 /**
  * The parts a zap can hit: the ones a ball scores on by touching them. Not saucers, the goal or the Kickback (they
  * need the ball itself), not a drop-target bank (a zap never moves anything), nor flippers, savers, bars or floor
- * pieces. And never a ×Mult part (X Lane, the Golden Bumper, the Disco Ball, Hall of Fame, Rank Lights): zaps pay
- * points, and a ×Mult stays a shot the ball has to make.
+ * pieces. And never a Mult part (X Lane, the Golden Bumper, the Disco Ball, Hall of Fame, Rank Lights) nor a Level
+ * Light: zaps pay points, and the Mult or a level stays a shot the ball has to make.
  */
 export const zappable = (id: PartId) => {
   const k = PARTS[id].kind, r = PARTS[id].recipe;
-  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule || r.bucket || r.insure || r.ring) return false;
+  if (r.noZap || r.typeMult || r.rank || r.spot || r.capsule || r.bucket || r.insure || r.ring || r.levelUp) return false;
   return k === 'bumper' || k === 'kicker' || k === 'spinner' || k === 'rollover' || k === 'lamp' || k === 'target' || k === 'mover';
 };
 
@@ -438,12 +457,12 @@ export const PARTS: Record<PartId, PartDef> = {
   coin: {
     id: 'coin', name: 'Cha-Ching Bumper', blurb: 'Pays $1 per bonk. Tips in points.', kind: 'bumper', rarity: 'common', tags: ['bumper', 'money'], cost: 4, weight: 2,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 12,
-    recipe: { points: 8, per: 'hit', money: 1, moneyCap: 5, perLevel: 2 }, dials: [kickDial(2)],
+    recipe: { points: 10, per: 'hit', money: 1, moneyCap: 5, perLevel: 2 }, dials: [kickDial(2)],
   },
   sling: {
     id: 'sling', name: 'Slingshot', blurb: 'Snaps the ball off, and its next hit pays extra. Has opinions.', kind: 'kicker', rarity: 'common', tags: ['kicker'], cost: 3, weight: 2,
     shape: { type: 'box', hw: 1.7, hh: 0.4 }, rotatable: true, kickUnit: 16,
-    recipe: { points: 6, per: 'hit', hot: 0.5, perLevel: 2 }, dials: [kickDial(3, 'How hard it snaps the ball away. Softer pays more per hit; harder throws it across the table.')],
+    recipe: { points: 5, per: 'hit', hot: 0.5, perLevel: 2 }, dials: [kickDial(3, 'How hard it snaps the ball away. Softer pays more per hit; harder throws it across the table.')],
   },
   spinner: {
     id: 'spinner', name: 'Spinner', blurb: 'Shoot the ball through it: points and Mult on every spin. Whee.', kind: 'spinner', rarity: 'common', tags: ['kicker'], cost: 3, weight: 2,
@@ -472,7 +491,7 @@ export const PARTS: Record<PartId, PartDef> = {
   vari: {
     id: 'vari', name: 'Vari-Target', blurb: 'A target. Tap it, get peanuts. Smash it, get paid.', kind: 'target', rarity: 'common', tags: ['target'], cost: 4, weight: 2,
     shape: { type: 'box', hw: 1.3, hh: 0.35 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 8, per: 'hit', tiers: VARI_TIERS, hot: 0.5, hotTier: 3, perLevel: 2 },
+    recipe: { points: 10, per: 'hit', tiers: VARI_TIERS, hot: 0.5, hotTier: 3, perLevel: 2 },
     dials: [{
       id: 'stiff', label: 'Stiffness', min: 0.5, max: 2, step: 0.25, default: 1,
       tradeoff: 'A stiffer target needs a faster ball for every step, but pays more once you get there.', ends: ['soft, easy steps', 'stiff, pays more'],
@@ -481,19 +500,19 @@ export const PARTS: Record<PartId, PartDef> = {
   },
   deflector: {
     id: 'deflector', name: 'Deflector', blurb: 'A bouncy bar to aim with. A ball off it pays extra next hit.', kind: 'deflector', rarity: 'common', tags: ['kicker'], cost: 1, weight: 2,
-    shape: { type: 'box', hw: 2.2, hh: 0.28 }, rotatable: true, kickUnit: 0, recipe: { hot: 0.25 }, dials: [],
+    shape: { type: 'box', hw: 2.2, hh: 0.28 }, rotatable: true, kickUnit: 0, recipe: { points: 5, per: 'hit', hot: 0.5 }, dials: [],
   },
   kickback: {
     id: 'kickback', name: 'Kickback', blurb: 'Fires a ball that rolls over it back out. Outlane? Denied.', kind: 'kickback', rarity: 'common', tags: ['kicker', 'guard'], cost: 4, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 30, per: 'kick', hot: 0.5, cooldown: 4, perLevel: 8 }, dials: [powerDial('kick')],
+    recipe: { points: 30, per: 'kick', hot: 0.5, cooldown: 4, perLevel: 10 }, dials: [powerDial('kick')],
   },
 
   // ---- uncommon: from round 2 ----
   bank: {
     id: 'bank', name: 'Drop-Target Bank', blurb: 'Drop all three targets for a bonus, and the Lamps cheer.', kind: 'bank', rarity: 'uncommon', tags: ['target'], cost: 5, weight: 2,
     shape: { type: 'box', hw: 2.6, hh: 0.45 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 12, per: 'target', setBonus: { points: 60, mult: 0.3 }, lightsLamps: LAMP_FLASH, perLevel: 3 }, dials: [],
+    recipe: { points: 10, per: 'target', setBonus: { points: 60, mult: 0.3 }, lightsLamps: LAMP_FLASH, perLevel: 3 }, dials: [],
   },
   uplight: {
     id: 'uplight', name: 'Level Light', blurb: 'Roll over both: the bumpers near them level up, for good.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 5, pack: 2, weight: 2,
@@ -505,17 +524,17 @@ export const PARTS: Record<PartId, PartDef> = {
     shape: { type: 'circle', r: 0.8 }, rotatable: false, kickUnit: 0, recipe: { unusedPay: 1 }, dials: [],
   },
   flipper: {
-    id: 'flipper', name: 'Left Flipper', blurb: 'An extra little flipper, on the left key. Put it anywhere.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 6, weight: 1,
+    id: 'flipper', name: 'Left Flipper', blurb: 'An extra little flipper, on the left key. Put it anywhere.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 4, weight: 1,
     shape: { type: 'circle', r: 2.0 }, rotatable: false, kickUnit: 0, recipe: {}, dials: [],
   },
   flipperR: {
-    id: 'flipperR', name: 'Right Flipper', blurb: 'An extra little flipper, on the right key. Put it anywhere.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 6, weight: 1,
+    id: 'flipperR', name: 'Right Flipper', blurb: 'An extra little flipper, on the right key. Put it anywhere.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 4, weight: 1,
     shape: { type: 'circle', r: 2.0 }, rotatable: false, kickUnit: 0, recipe: {}, dials: [],
   },
   ding: {
     id: 'ding', name: 'Ding-Dong Bell', blurb: 'Pays more for each kind of part this ball already hit. Ding!', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
     shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 11,
-    recipe: { points: 12, per: 'hit', variety: 8, perLevel: 3 }, dials: [kickDial(2)],
+    recipe: { points: 10, per: 'hit', variety: 10, perLevel: 3 }, dials: [kickDial(2)],
   },
   trophy: {
     id: 'trophy', name: 'Trophy Cup', blurb: 'Every hit adds a little Mult you keep for the whole run. Shiny.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 3,
@@ -530,7 +549,7 @@ export const PARTS: Record<PartId, PartDef> = {
   magnet: {
     id: 'magnet', name: 'Mag-Grab', blurb: 'Grabs the ball, adds Mult, throws it where it points. Rude.', kind: 'saucer', rarity: 'uncommon', tags: ['ball', 'guard'], cost: 6, weight: 1,
     shape: { type: 'circle', r: 1.3 }, rotatable: true, kickUnit: 0,
-    recipe: { points: 24, per: 'grab', mult: 0.25, multCap: 2, perLevel: 6 },
+    recipe: { points: 25, per: 'grab', mult: 0.25, multCap: 2, grabRest: 2, perLevel: 5 },
     dials: [
       { id: 'hold', label: 'Hold', min: 0.2, max: 1.5, step: 0.1, default: 0.5, tradeoff: 'Holding longer pays more, but that ball sits out of play meanwhile.', ends: ['quick, back in play', 'long, pays more'], payoff: (v) => 1 + 0.6 * (v - 0.5), fmt: (v) => `${v.toFixed(1)} s` },
       { ...powerDial('throw'), tradeoff: 'How hard it throws the ball, the way it faces (turn it when you place it).' },
@@ -547,17 +566,17 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { plate: { x: 1.5, reach: 3 } }, dials: [],
   },
   roller: {
-    id: 'roller', name: 'Roller Pop', blurb: 'A bumper on a rail. Hit it near the ends for triple points.', kind: 'mover', rarity: 'uncommon', tags: ['bumper'], cost: 6, weight: 2,
+    id: 'roller', name: 'Roller Pop', blurb: 'A bumper on a rail. Hit it near the ends for triple points.', kind: 'mover', rarity: 'uncommon', tags: ['bumper', 'long'], cost: 6, weight: 2,
     shape: { type: 'box', hw: 3.6, hh: 0.9 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 30, per: 'hit', edgeShot: { edge: 0.75, x: 3 }, perLevel: 8 }, dials: [],
+    recipe: { points: 30, per: 'hit', edgeShot: { edge: 0.75, x: 3 }, perLevel: 10 }, dials: [],
     mover: { travel: 2.6, speed: 3.2, shape: { type: 'circle', r: 0.85 }, y: 0, restitution: 0.45, kick: 26 },
   },
 
   // ---- rare: from round 4 ----
   printer: {
-    id: 'printer', name: 'Ball Printer', blurb: 'Catches a ball and spits out two. Multiball! Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 2,
+    id: 'printer', name: 'Ball Printer', blurb: 'Catches a ball and spits out two. Multiball! Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 10, weight: 1,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 3, perLevel: 10 },
+    recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 1, printRest: 12, perLevel: 10 },
     dials: [
       {
         id: 'hold', label: 'Hold', min: 0.2, max: 2, step: 0.1, default: 0.6,
@@ -575,13 +594,13 @@ export const PARTS: Record<PartId, PartDef> = {
   jackpot: {
     id: 'jackpot', name: 'Jackpot Scoop', blurb: 'Every hit anywhere fills the pot. Sink the ball in it to cash in.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.35 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 40, per: 'scoop', jackpot: { per: 8, cap: 3000 }, perLevel: 10 },
+    recipe: { points: 40, per: 'scoop', jackpot: { per: 10, cap: 3000 }, perLevel: 10 },
     dials: [{ id: 'hold', label: 'Hold', min: 0.4, max: 1.5, step: 0.1, default: 0.8, tradeoff: 'How long it keeps the ball before it fires it back out.', ends: ['quick', 'slow'], fmt: (v) => `${v.toFixed(1)} s` }, { ...powerDial('eject'), tradeoff: 'How hard it fires the ball back out.' }],
   },
   xlane: {
-    id: 'xlane', name: 'X Lane', blurb: 'Roll through it and your Mult multiplies.', kind: 'rollover', rarity: 'uncommon', tags: ['light'], cost: 7, weight: 2,
+    id: 'xlane', name: 'X Lane', blurb: 'Roll through it and your Mult multiplies. Then it rests.', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { xmult: 1.25, xmultCap: 3, cooldown: 3, lightsLane: true }, dials: [],
+    recipe: { xmult: 1.25, xmultCap: 2, noZap: true, cooldown: 10, lightsLane: true }, dials: [],
   },
   rank: {
     id: 'rank', name: 'Rank Lights', blurb: 'Roll over all three: that ball pays more for a while. Promoted!', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, pack: 3, weight: 2,
@@ -591,12 +610,12 @@ export const PARTS: Record<PartId, PartDef> = {
   bell: {
     id: 'bell', name: 'Old Bell', blurb: 'Ring it in three rounds: a bigger Mult for the rest of the run.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 10,
-    recipe: { points: 20, per: 'hit', bell: { first: 150, notches: 3, x: 1.2 }, perLevel: 5 }, dials: [kickDial(1.5)],
+    recipe: { points: 20, per: 'hit', bell: { first: 150, notches: 3, mult: 0.5 }, perLevel: 5 }, dials: [kickDial(1.5)],
   },
   tesla: {
     id: 'tesla', name: 'Tesla Coil', blurb: 'Every hit zaps the nearest parts, and they score too. Bzzt.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 9, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 12,
-    recipe: { points: 30, per: 'hit', zap: { arcs: 2, perLevels: 3, maxArcs: 4 }, perLevel: 8 }, dials: [kickDial(2)],
+    recipe: { points: 30, per: 'hit', zap: { arcs: 2, perLevels: 3, maxArcs: 4 }, perLevel: 10 }, dials: [kickDial(2)],
   },
   keg: {
     id: 'keg', name: 'Powder Keg', blurb: 'A hit lights the fuse. Boom: every part nearby scores. Stand back.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
@@ -611,10 +630,10 @@ export const PARTS: Record<PartId, PartDef> = {
   gong: {
     id: 'gong', name: 'Shockwave Gong', blurb: 'Every eighth hit, every part on the table scores at once. BWONG.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
     shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 11,
-    recipe: { points: 25, per: 'hit', boom: { every: 8 }, perLevel: 6 }, dials: [kickDial(2)],
+    recipe: { points: 25, per: 'hit', boom: { every: 8 }, perLevel: 5 }, dials: [kickDial(2)],
   },
   duck: {
-    id: 'duck', name: 'Duck Gallery', blurb: 'A tin duck on a rail. Each hit pays more and speeds it up. Quack.', kind: 'mover', rarity: 'rare', tags: ['target'], cost: 8, weight: 2,
+    id: 'duck', name: 'Duck Gallery', blurb: 'A tin duck on a rail. Each hit pays more and speeds it up. Quack.', kind: 'mover', rarity: 'rare', tags: ['target', 'long'], cost: 8, weight: 2,
     shape: { type: 'box', hw: 3.9, hh: 0.75 }, rotatable: false, kickUnit: 0,
     recipe: { points: 60, per: 'duck', grow: 20, growCap: 200, speedUp: { by: 0.15, max: 2 }, perLevel: 15 }, dials: [],
     mover: { travel: 3.1, speed: 3.5, shape: { type: 'circle', r: 0.6 }, y: 0, restitution: 0.6 },
@@ -622,24 +641,24 @@ export const PARTS: Record<PartId, PartDef> = {
 
   // ---- legendary: from round 7 ----
   golden: {
-    id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold: big points, ×Mult, and a bit of cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 2,
+    id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold: big points, Mult, and a bit of cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 2,
     shape: { type: 'circle', r: 1.5 }, rotatable: false, kickUnit: 15,
-    recipe: { points: 120, per: 'hit', xmult: 1.05, xmultCap: 3, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
+    recipe: { points: 120, per: 'hit', mult: 0.1, multCap: 3, noZap: true, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
   },
   fame: {
-    id: 'fame', name: 'Hall of Fame', blurb: 'Once a ball, roll over: ×Mult per kind of part on your table.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 2,
+    id: 'fame', name: 'Hall of Fame', blurb: 'Once a ball, roll over: Mult per kind of part on your table.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 2,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 150, per: 'pass', typeX: 0.1, perBall: 1, perLevel: 40 }, dials: [],
+    recipe: { points: 150, per: 'pass', typeMult: 0.2, multCap: 4, noZap: true, perBall: 1, perLevel: 40 }, dials: [],
   },
   disco: {
-    id: 'disco', name: 'Disco Ball', blurb: 'Roll over once a ball: huge ×Mult, and every Lamp lights. Boogie.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
+    id: 'disco', name: 'Disco Ball', blurb: 'Roll over once a ball: ×Mult, and every Lamp lights. Boogie.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 200, per: 'pass', xmult: 2.5, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
+    recipe: { points: 200, per: 'pass', xmult: 1.5, xmultCap: 2, noZap: true, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
   },
   goal: {
-    id: 'goal', name: 'Goal!', blurb: 'Shoot past the goalie for points and ×Mult. He is very serious.', kind: 'goal', rarity: 'legendary', tags: ['target'], cost: 12, weight: 2,
+    id: 'goal', name: 'Goal!', blurb: 'Shoot past the goalie for points and Mult. He is very serious.', kind: 'goal', rarity: 'legendary', tags: ['target', 'long'], cost: 12, weight: 2,
     shape: { type: 'box', hw: 3.4, hh: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 300, per: 'goal', goal: { xmult: 1.5, xmultCap: 4 }, cooldown: 1.5, perLevel: 75 }, dials: [],
+    recipe: { points: 300, per: 'goal', goal: { mult: 1, multCap: 4 }, cooldown: 1.5, perLevel: 75 }, dials: [],
     mover: { travel: 1.7, speed: 3, shape: { type: 'box', hw: 0.75, hh: 0.22 }, y: -0.45, restitution: 0.55 },
   },
 
@@ -647,7 +666,7 @@ export const PARTS: Record<PartId, PartDef> = {
   sparkler: {
     id: 'sparkler', name: 'Sparkler', blurb: 'Every bonk throws a spark: a little bonus ball that scores. Fizz.', kind: 'bumper', rarity: 'common', tags: ['bumper'], cost: 3, weight: 2,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 10,
-    recipe: { points: 8, per: 'hit', sparks: { n: 1, cooldown: 1 }, perLevel: 2 }, dials: [kickDial(2)],
+    recipe: { points: 10, per: 'hit', sparks: { n: 1, cooldown: 1 }, perLevel: 2 }, dials: [kickDial(2)],
   },
   rocks: {
     id: 'rocks', name: 'Rock Pile', blurb: 'Every hit sheds a spark per rock. More hits, more rocks.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 4, weight: 2,
@@ -693,7 +712,7 @@ export const PARTS: Record<PartId, PartDef> = {
   gumball: {
     id: 'gumball', name: 'Gumball Machine', blurb: 'Locks three balls one by one, then lets them all go: multiball!', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 1,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 30, per: 'lock', lock: { n: 3 }, perLevel: 6 }, dials: [],
+    recipe: { points: 30, per: 'lock', lock: { n: 3 }, perLevel: 5 }, dials: [],
   },
   ring: {
     id: 'ring', name: 'Bank Ring', blurb: 'Saves part of every hit. Roll through to cash it in, plus interest.', kind: 'rollover', rarity: 'rare', tags: ['money'], cost: 8, weight: 1,
@@ -701,8 +720,9 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { ring: { hold: 0.3, x: 1.5 } }, dials: [],
   },
   hand: {
-    id: 'hand', name: 'Helping Hand', blurb: 'A little flipper that flips itself when the ball comes near.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 7, weight: 1,
-    shape: { type: 'circle', r: 2.0 }, rotatable: false, kickUnit: 0, recipe: { hand: true }, dials: [],
+    id: 'hand', name: 'Helping Hand', blurb: 'A cheap little flipper, on the button of the way it faces.', kind: 'flipper', rarity: 'uncommon', tags: ['guard'], cost: 2, weight: 1,
+    shape: { type: 'circle', r: 2.0 }, rotatable: false, kickUnit: 0, recipe: { hand: true },
+    dials: [{ id: 'side', label: 'Faces', min: 0, max: 1, step: 1, default: 0, tradeoff: 'Which way it points, and so which button works it.', ends: ['left, the ← button', 'right, the → button'], fmt: (v) => (v >= 0.5 ? 'right (→)' : 'left (←)') }],
   },
   wheel: {
     id: 'wheel', name: 'Spider Wheel', blurb: 'Sink the ball to spin a prize wheel. Flip to stop it. Mostly prizes.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 8, weight: 1,
@@ -717,7 +737,7 @@ export const PARTS: Record<PartId, PartDef> = {
   whale: {
     id: 'whale', name: 'The Whale', blurb: 'Swallows sparks for points, then spouts a spray of new ones.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 12, weight: 1,
     shape: { type: 'circle', r: 1.6 }, rotatable: false, kickUnit: 12,
-    recipe: { points: 20, per: 'hit', whale: { swallow: 8, every: 6, sparks: 6, points: 300, perBall: 3 }, perLevel: 4 }, dials: [kickDial(1.5)],
+    recipe: { points: 20, per: 'hit', whale: { swallow: 10, every: 6, sparks: 6, points: 500, rest: 3 }, perLevel: 4 }, dials: [kickDial(1.5)],
   },
   insure: {
     id: 'insure', name: 'Insurance Policy', blurb: 'Last ball drained short of the goal? Sparks rain down. Once.', kind: 'target', rarity: 'uncommon', tags: ['guard'], cost: 5, weight: 1,
@@ -727,12 +747,12 @@ export const PARTS: Record<PartId, PartDef> = {
   nest: {
     id: 'nest', name: 'Spider Nest', blurb: 'Hits may lay an egg: a spark that hatches into three more. Ew.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 1,
     shape: { type: 'circle', r: 1.0 }, rotatable: false, kickUnit: 9,
-    recipe: { points: 15, per: 'hit', nest: { chance: 0.25 }, perLevel: 3 }, dials: [kickDial(1.5)],
+    recipe: { points: 15, per: 'hit', nest: { chance: 0.5 }, perLevel: 3 }, dials: [kickDial(1.5)],
   },
   jar: {
     id: 'jar', name: 'Marble Jar', blurb: 'Hits fill it with marbles. Each new ball brings a spark per marble.', kind: 'target', rarity: 'rare', tags: ['target'], cost: 8, weight: 1,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 10, per: 'hit', jar: { every: 25, max: 5 }, perLevel: 2 }, dials: [],
+    recipe: { points: 10, per: 'hit', jar: { every: 10, max: 5 }, perLevel: 2 }, dials: [],
   },
   wreck: {
     id: 'wreck', name: 'Wrecking Ball', blurb: 'Once a ball, a hit makes your ball huge: it pays double. Big ideas.', kind: 'bumper', rarity: 'legendary', tags: ['bumper'], cost: 11, weight: 1,
@@ -745,7 +765,7 @@ export const PARTS: Record<PartId, PartDef> = {
     recipe: { points: 20, per: 'roll-over', ride: { x: 2 }, perLevel: 4 }, dials: [],
   },
   bucket: {
-    id: 'bucket', name: 'Free Ball Bucket', blurb: 'Drop the ball in the sliding bucket to get it back. Free ball!', kind: 'mover', rarity: 'legendary', tags: ['guard'], cost: 11, weight: 1,
+    id: 'bucket', name: 'Free Ball Bucket', blurb: 'Drop the ball in the sliding bucket to get it back. Free ball!', kind: 'mover', rarity: 'legendary', tags: ['guard', 'long'], cost: 11, weight: 1,
     shape: { type: 'box', hw: 3.4, hh: 0.7 }, rotatable: false, kickUnit: 0,
     recipe: { points: 200, per: 'catch', bucket: true }, dials: [],
     mover: { travel: 2.5, speed: 2.6, shape: { type: 'box', hw: 0.85, hh: 0.45 }, y: 0, restitution: 0.3, sensor: true },
@@ -763,17 +783,17 @@ export const PARTS: Record<PartId, PartDef> = {
   spot: {
     id: 'spot', name: 'Spotlight', blurb: 'Parts near it pay more. Keep the ball off it or it goes dark.', kind: 'target', rarity: 'uncommon', tags: ['light'], cost: 6, weight: 2,
     shape: { type: 'circle', r: 0.75 }, rotatable: false, kickUnit: 0,
-    recipe: { spot: { reach: 5, x: 1.5, dark: 10 } }, dials: [],
+    recipe: { spot: { reach: 5, x: 1.5, dark: 4 } }, dials: [],
   },
   bonsai: {
     id: 'bonsai', name: 'Bonsai Bumper', blurb: 'Pays more every round you leave it where it is. It grows on you.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
     shape: { type: 'circle', r: 0.95 }, rotatable: false, kickUnit: 10,
-    recipe: { points: 10, per: 'hit', bonsai: 4, perLevel: 2 }, dials: [kickDial(2)],
+    recipe: { points: 10, per: 'hit', bonsai: 10, perLevel: 2 }, dials: [kickDial(2)],
   },
   capsule: {
-    id: 'capsule', name: 'Time Capsule', blurb: 'Leave it on the table six rounds, then dig it up: a free legendary.', kind: 'target', rarity: 'rare', tags: [], cost: 8, weight: 1,
+    id: 'capsule', name: 'Time Capsule', blurb: 'Leave it on the table four rounds, then dig it up: a free legendary.', kind: 'target', rarity: 'rare', tags: [], cost: 8, weight: 1,
     shape: { type: 'circle', r: 0.9 }, rotatable: false, kickUnit: 0,
-    recipe: { capsule: { rounds: 6, pick: 3 } }, dials: [],
+    recipe: { capsule: { rounds: 4, pick: 3 } }, dials: [],
   },
   ice: {
     id: 'ice', name: 'Ice Sculpture', blurb: 'Pays a fortune, but every flipper press melts it a bit.', kind: 'bumper', rarity: 'uncommon', tags: ['bumper'], cost: 5, weight: 2,
@@ -793,20 +813,31 @@ export const PARTS: Record<PartId, PartDef> = {
   wizard: {
     id: 'wizard', name: 'Wizard Lamp', blurb: 'Hit every kind of part on your table to start Wizard Mode. Magic!', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 1,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 30, per: 'roll-over', wizard: { max: 8, seconds: 30, balls: 2 }, perLevel: 5 }, dials: [],
+    recipe: { points: 30, per: 'roll-over', wizard: { max: 8, seconds: 20, balls: 2 }, perLevel: 5 }, dials: [],
+  },
+
+  hourglass: {
+    id: 'hourglass', name: 'Hourglass', blurb: 'Shoot it with a flipper shot: more time on the ball clock. Tick tock.', kind: 'target', rarity: 'uncommon', tags: ['target'], cost: 5, weight: 2,
+    shape: { type: 'circle', r: 0.85 }, rotatable: false, kickUnit: 0,
+    recipe: { points: 10, per: 'hit', hourglass: { per: 1, cap: 20, window: 1.5 }, perLevel: 2 }, dials: [],
+  },
+  vault: {
+    id: 'vault', name: 'The Vault', blurb: 'A bumper that pays more the more cash you hold. Save up.', kind: 'bumper', rarity: 'rare', tags: ['bumper', 'money'], cost: 8, weight: 2,
+    shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 10,
+    recipe: { points: 10, per: 'hit', vault: { per: 1, cap: 100 }, perLevel: 3 }, dials: [kickDial(2)],
   },
 
   // ---- decor: a flat picture in the decor screen at the head of the table (one at a time); the ball rolls over it ----
   clock: {
     id: 'clock', name: 'Midnight Clock', blurb: 'Every hit ticks it on. At midnight, hits pay double for a while.', kind: 'decor', rarity: 'uncommon', tags: [], cost: 6, weight: 1,
-    shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 0, recipe: { clock: { hits: 180, seconds: 20, x: 2 } }, dials: [],
+    shape: { type: 'circle', r: 1.15 }, rotatable: false, kickUnit: 0, recipe: { clock: { hits: 120, seconds: 20, x: 2 } }, dials: [],
   },
   altar: {
-    id: 'altar', name: 'Ritual Altar', blurb: 'Complete sets (lanes, drop targets...) to summon wild rituals.', kind: 'decor', rarity: 'legendary', tags: [], cost: 12, weight: 1,
+    id: 'altar', name: 'Ritual Altar', blurb: 'Complete sets (lanes, drop targets...) to summon wild rituals.', kind: 'decor', rarity: 'rare', tags: [], cost: 8, weight: 1,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0, recipe: { altar: { sets: 8, seconds: 15 } }, dials: [],
   },
   hutch: {
-    id: 'hutch', name: 'Gremlin Hutch', blurb: 'Two gremlins roam your table. Bonk them for points and cash.', kind: 'decor', rarity: 'legendary', tags: ['money'], cost: 12, weight: 1,
+    id: 'hutch', name: 'Gremlin Hutch', blurb: 'Two gremlins roam your table. Bonk them for points and cash.', kind: 'decor', rarity: 'rare', tags: ['money'], cost: 8, weight: 1,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0, recipe: { gremlins: 2 }, dials: [],
   },
   bulb: {
@@ -982,10 +1013,11 @@ export function grownPoints(r: Recipe, hits: number): number {
 
 /**
  * What the run's decals (and the boss) multiply a part's base points by: Overclock for its type, a heavy ball for
- * everything, a tag bonus (Bumper Car, Target Practice) or its catch, and Big Boi's fan club.
+ * everything, a tag bonus (Bumper Car, Target Practice) or its catch, Big Boi's fan club, and Night Shift's dim lights.
  */
-export function modFactor(id: PartId, mods: Pick<Mods, 'overclock' | 'pointsFactor' | 'tagFactor' | 'untaggedFactor' | 'bigBoiX'> = neutralMods()): number {
+export function modFactor(id: PartId, mods: Pick<Mods, 'overclock' | 'pointsFactor' | 'tagFactor' | 'untaggedFactor' | 'bigBoiX' | 'lightsDim'> = neutralMods()): number {
   let f = (1 + (mods.overclock[id] ?? 0)) * mods.pointsFactor;
+  if (PARTS[id].tags.includes('light')) f *= mods.lightsDim ?? 1; // Night Shift
   let tagged = false;
   for (const t of PARTS[id].tags) {
     const x = mods.tagFactor[t];
@@ -1050,6 +1082,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     if (r.altar) {
       const st = { sets: inst?.sets ?? 0, rituals: inst?.rituals ?? 0 }, s = Math.min(MAX_STRENGTH, st.rituals);
       lines.push({ tag: 'combo', text: `Every ${r.altar.sets} sets you complete (Lane Rollovers, drop-target banks, Level Lights, Rank Lights) start a ${r.altar.seconds} s ritual, in turn: Tempest (lightning strikes ${tempestRate(s)} random parts a second), Inferno (every hit of the ball also zaps the ${infernoReach(s)} parts nearest it), Swarm (${swarmSparks(s)} sparks rain down from the top).` });
+      lines.push({ tag: 'note', text: ZAP_NO_MULT });
       lines.push({ tag: 'grow', text: `Every ritual makes the next one stronger (up to ${MAX_STRENGTH} times). The count carries on from round to round${inst ? `: ${st.sets} of ${r.altar.sets} sets now, next a ${RITUAL_NAMES[RITUALS[st.rituals % RITUALS.length]]}` : ''}.` });
     }
     const c = r.cab;
@@ -1079,23 +1112,32 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     ? `Every hit adds +${num(r.grow * factor)} to the next one this ball, up to +${num((r.growCap ?? 0) * factor)}.`
     : `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it)${r.growCap ? `, up to +${num(r.growCap * factor)}` : ''}.` });
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
-  if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
-  if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
-  if (r.lock) lines.push({ tag: 'spawn', text: `A lock: a ball shot into it is held, and a new one comes to the plunger at no cost. The ${r.lock.n === 3 ? 'third' : `${r.lock.n}th`} lock lets all ${r.lock.n} loose at once: a real multiball. Once a round: after that, and in multiball, a ball rolls straight through for its points.` });
+  const allCap = (what: string) => (r.multCap ? ` (all ${what} together: up to +${mg(r.multCap)} a ball)` : '');
+  const allX = (what: string) => (r.xmultCap ? ` (all ${what} together: up to ×${xg(r.xmultCap)} a ball)` : '');
+  if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} the first time a ball rolls over it each ball${allX(`${def.name}s`)}.` });
+  else if (r.xmult) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${allX(`${def.name}s`)}.` });
+  if (r.mult && r.perBall) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} the first time a ball rolls over it each ball${allCap(`${def.name}s`)}.` });
+  else if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
+  if (r.lock) lines.push({ tag: 'spawn', text: `A lock: a ball shot into it is held, and a new one comes to the plunger at no cost. The ${r.lock.n === 3 ? 'third' : `${r.lock.n}th`} lock lets all ${r.lock.n} loose at once: a real multiball. Once a round: after that, and in multiball, a ball rolls straight through for its points. The new balls share the clock of the ball you launched.` });
   if (r.ring) lines.push({ tag: 'combo', text: `While it is on the table, ${Math.round(r.ring.hold * 100)}% of every hit is held back as heat. Roll the ball through it to bank that ball's heat at ×${r.ring.x}; a drain loses whatever is not banked.` }, { tag: 'note', text: 'It scores nothing itself, and a zap or a spark never banks: only the ball does.' });
-  if (r.hand) lines.push({ tag: 'note', text: `A small flipper that flips by itself when a ball comes near it from above. About half the time it means the shot: the ball goes straight at the nearest part that scores.` }, { tag: 'note', text: 'It needs no button, and it never flips on TILT.' });
-  if (r.wheel) lines.push({ tag: 'combo', text: `A scoop: it catches the ball and spins a wheel of ${WHEEL.length} awards. Press a flipper to stop it (or it stops by itself after ${r.wheel.seconds} s): ${WHEEL.map((w) => w.name.toLowerCase()).join(', ')}.` }, { tag: 'set', text: `Collect all ${WHEEL.length} in a run${inst?.spun?.length ? ` (${inst.spun.length} so far)` : ''} and the next spin is Wheel Mania: a 4-ball multiball, every hit ×2 for 20 s.` });
+  if (r.hand) {
+    const right = inst ? dialValue(inst, 'side') >= 0.5 : false;
+    lines.push({ tag: 'note', text: `A small flipper, smaller than the Left and Right Flippers, worked by the button of the way it faces: now ${right ? 'right, the → button' : 'left, the ← button'} (turn its Faces dial to swap). Scores nothing itself.` });
+  }
+  if (r.wheel) lines.push({ tag: 'combo', text: `A scoop: it catches the ball and spins a wheel of ${WHEEL.length} awards. Press a flipper to stop it (or it stops by itself after ${r.wheel.seconds} s, on ZILCH): ${WHEEL.map((w) => w.name.toLowerCase()).join(', ')}.` }, { tag: 'note', text: 'One spin a ball: after it, the ball rolls over it for its points until your next ball.' }, { tag: 'set', text: `Collect all ${WHEEL.length} in a run${inst?.spun?.length ? ` (${inst.spun.length} so far)` : ''} and the next spin is Wheel Mania: a 4-ball multiball, every hit ×2 for 20 s. At most once a round.` });
+  if (r.hourglass) lines.push({ tag: 'note', text: `A flipper shot into it (the ball touched a flipper in the last ${r.hourglass.window} s) adds +${r.hourglass.per} s to the ball clock, up to +${r.hourglass.cap} s a ball.` });
+  if (r.vault) lines.push({ tag: 'money', text: `+${f(r.vault.per)} points a hit for every $1 you hold, up to +${f(r.vault.cap)}. It spends nothing.` });
   if (r.split) lines.push({ tag: 'spawn', text: `When the ball rolls over it, ${r.split.n} sparks split off, one to each side. Then it needs ${r.split.cooldown} s.` });
-  if (r.whale) lines.push({ tag: 'spawn', text: `It swallows every spark that touches it (${r.whale.swallow} points each). Every ${r.whale.every}th it spouts: ${r.whale.sparks} sparks out of its blowhole and ${r.whale.points} points (${r.whale.perBall} spouts a ball at most).` });
+  if (r.whale) lines.push({ tag: 'spawn', text: `It swallows every spark that touches it (${r.whale.swallow} points each). Every ${r.whale.every}th it spouts: ${r.whale.sparks} sparks out of its blowhole and ${r.whale.points} points. After a spout it rests ${r.whale.rest} s (it still swallows, and the next spout waits).` });
   if (r.insure) lines.push({ tag: 'note', text: `Scores nothing. If the last ball of a round drains short of the goal, ${r.insure.sparks} sparks rain down from the top, once, for one last try. Then the policy is used up and leaves the table.` }, { tag: 'note', text: 'A comeback, never a crutch: it pays out only on the last ball of a round you have not cleared.' });
   if (r.nest) lines.push({ tag: 'spawn', text: `Every hit of the ball has a ${Math.round(r.nest.chance * 100)}% chance of laying an egg: a spark that hatches into 3 sparks on the first part it hits.` });
   if (r.jar) lines.push({ tag: 'spawn', text: `Every ${r.jar.every} hits of the ball on it add a marble, for the rest of the run (up to ${r.jar.max})${inst?.marbles ? `; ${inst.marbles} in it now` : ''}. Every ball you launch brings one spark per marble.` });
   if (r.wreck) lines.push({ tag: 'combo', text: `Once a ball, a hit makes the ball ${r.wreck.k}× bigger for ${r.wreck.seconds} s (it grows only where it has room): every hit it makes pays ×${r.wreck.x}, and the table shakes.` });
   if (r.ride) lines.push({ tag: 'combo', text: `The ball rides it: it flies straight the way the broom points, with no gravity, for ${RIDE_SECONDS} s or until it touches anything. Every part it flies past is zapped, paying ×${r.ride.x}. Turn it to aim.` });
-  if (r.bucket) lines.push({ tag: 'set', text: `A bucket slides along its rail. A ball that drops into it from above goes back to the plunger: it is not lost. Place the rail where it is a shot, not a gift.` });
+  if (r.bucket) lines.push({ tag: 'set', text: `A bucket slides along its rail. A ball that drops into it from above goes back to the plunger: it is not lost, but it keeps the clock it had (one clock per ball you launch), and the bucket is off once the clock has run out. Place the rail where it is a shot, not a gift.` });
   if (r.grape) lines.push({ tag: 'combo', text: `It pays once more for every Grape Bunch touching it (set snug against it). ${r.grape.golden} or more in one bunch turn golden: they all pay double.` });
   if (r.echo) lines.push({ tag: 'combo', text: `×2 for every other Echo Cave the ball went through just before it, with nothing else hit in between (up to ×${r.echo.cap}). Line them up along one shot.` });
-  if (r.spot) lines.push({ tag: 'lamp', text: `While it is lit, every part within ${r.spot.reach} units pays ×${r.spot.x} (Spotlights multiply). A hit of the ball knocks it dark for ${r.spot.dark} s: build round it, then keep the ball off it. It scores nothing itself.` });
+  if (r.spot) lines.push({ tag: 'lamp', text: `While it is lit, every part within ${r.spot.reach} units pays ×${r.spot.x} (Spotlights multiply, and a part counts at most 2). A hit of the ball knocks it dark for ${r.spot.dark} s: build round it, then keep the ball off it. It scores nothing itself.` });
   if (r.spot) lines.push({ tag: 'note', text: 'Zaps and sparks never knock it dark: only the ball itself does.' });
   if (r.bonsai) lines.push({ tag: 'grow', text: `+${r.bonsai} for every round it has stayed on the table without being moved${inst?.age ? ` (+${r.bonsai * inst.age} now)` : ''}. Moving it starts the count again.` });
   if (r.capsule) lines.push({ tag: 'note', text: `Scores nothing. After ${r.capsule.rounds} rounds on the table${inst ? ` (${Math.min(inst.age ?? 0, r.capsule.rounds)} so far)` : ''}, remove it: the next shop offers you one of ${r.capsule.pick} legendary parts, free. Removed earlier, it pays nothing back.` });
@@ -1110,10 +1152,9 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.wizard) {
     const need = ctx.wizardNeed;
     lines.push({ tag: 'combo', text: `It lights a segment for every different part type the ball itself hits this ball (zaps and sparks do not count): one segment for each part type on your table that scores, up to ${r.wizard.max}, counted when the round starts${need ? `. Right now: hit ${need} types` : ''}.` });
-    lines.push({ tag: 'spawn', text: `Light them all and WIZARD MODE starts: for ${r.wizard.seconds} s, ${r.wizard.balls} more balls fly out of it (they leave again when it ends), every ×Mult limit is lifted and every Lamp is at full glow. Once a round.` });
+    lines.push({ tag: 'spawn', text: `Light them all and WIZARD MODE starts: for ${r.wizard.seconds} s, ${r.wizard.balls} more balls fly out of it (they leave again when it ends), every +Mult limit is doubled (×Mult limits stay) and every Lamp is at full glow. Once a round. Its balls share your ball's clock.` });
   }
-  if (r.typeX) lines.push({ tag: 'mult', text: `The first time a ball rolls over it each ball: your Mult ×${xg(1 + r.typeX)} for every different part type on your table (Big Boi too)${ctx.types ? `, ×${num(Math.round((1 + (r.typeX) * mods.multGain) ** ctx.types * 100) / 100)} now` : ''}.` });
-  if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} the first time a ball rolls over it each ball.` });
+  if (r.typeMult) lines.push({ tag: 'mult', text: `The first time a ball rolls over it each ball: +${mg(r.typeMult)} Mult for every different part type on your table (Big Boi too)${ctx.types ? `, +${num(Math.round(r.typeMult * mods.multGain * ctx.types * 100) / 100)} now` : ''}${allCap('Halls of Fame')}.` });
   if (r.money && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.money} per ${per}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
   if (r.moneyEvery && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $1 every ${r.moneyEvery.n} hits, up to $${r.moneyEvery.cap} a round.` });
   if (r.variety) lines.push({ tag: 'grow', text: `+${f(r.variety)} for every different part type this ball has hit.` });
@@ -1135,7 +1176,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   }
   if (r.zap) {
     const at = (k: number) => k * r.zap!.perLevels;
-    lines.push({ tag: 'combo', text: `Every hit arcs lightning to the ${r.zap.arcs} nearest parts that score when the ball touches them (one more at level ${at(1)}${r.zap.maxArcs - r.zap.arcs > 1 ? ` and ${at(2)}` : ''}): each one scores as if the ball had hit it. A part can be zapped at most once every ${ZAP_COOLDOWN} s, a zap never arcs on, and saucers, the goal, the Kickback, drop targets and ×Mult parts cannot be zapped.` });
+    lines.push({ tag: 'combo', text: `Every hit arcs lightning to the ${r.zap.arcs} nearest parts that score when the ball touches them (one more at level ${at(1)}${r.zap.maxArcs - r.zap.arcs > 1 ? ` and ${at(2)}` : ''}): each one scores as if the ball had hit it. A part can be zapped at most once every ${ZAP_COOLDOWN} s, a zap never arcs on, and saucers, the goal, the Kickback, drop targets, Level Lights and the Mult parts (X Lane, Golden Bumper, Disco Ball, Hall of Fame) cannot be zapped.` }, { tag: 'note', text: ZAP_NO_MULT });
   }
   if (r.sparks || r.rocks || r.rocket || r.keg?.sparks) lines.push({ tag: 'note', text: `A spark: a little bonus ball that flies off, scores on what it touches (as the ball that made it), slips through the flippers and fades after ${SPARK_LIFE} s. It never costs a ball.` });
   if (r.sparks) lines.push({ tag: 'spawn', text: `Every hit of the ball shoots out ${r.sparks.n === 1 ? 'a spark' : `${r.sparks.n} sparks`}, then it needs ${r.sparks.cooldown} s.` });
@@ -1144,8 +1185,8 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.keg) lines.push({ tag: 'combo', text: `A hit lights the fuse. ${r.keg.fuse} s later it blows: ${f(r.keg.blast)} points, ${r.keg.sparks ? `a spark flies out, ` : ''}and every part within ${r.keg.radius} units is zapped (it scores as if the ball had hit it). A blast lights any other Powder Keg it reaches, up to ${r.keg.chain} kegs in a row. Then it is spent for ${r.keg.rearm} s.` });
   if (r.beam) lines.push({ tag: 'combo', text: `Every hit fires a laser beam through it in a random direction, right across the table: every part on the beam is zapped. Then it needs ${r.beam.cooldown} s to recharge.` });
   if (r.boom) lines.push({ tag: 'combo', text: `Every ${r.boom.every}th hit of a ball, it booms: every part on the table is zapped once. Nothing moves.` });
-  if (r.keg || r.beam || r.boom) lines.push({ tag: 'note', text: `A part can be zapped at most once every ${ZAP_COOLDOWN} s; saucers, the goal, the Kickback, drop targets and ×Mult parts cannot be zapped.` });
-  if (r.bell) lines.push({ tag: 'mult', text: `Its first hit each round pays ${f(r.bell.first)} instead, and adds a notch${inst?.notches ? ` (${inst.notches} of ${r.bell.notches} now)` : ''}. At ${r.bell.notches} notches it rings: your Mult ×${xg(r.bell.x)} on every ball for the rest of the run (rings stack), and the notches start again. Sell it and its notches go; the rings stay.` });
+  if (r.keg || r.beam || r.boom) lines.push({ tag: 'note', text: `A part can be zapped at most once every ${ZAP_COOLDOWN} s; saucers, the goal, the Kickback, drop targets, Level Lights and the Mult parts (X Lane, Golden Bumper, Disco Ball, Hall of Fame) cannot be zapped. ${ZAP_NO_MULT}` });
+  if (r.bell) lines.push({ tag: 'mult', text: `Its first hit each round pays ${f(r.bell.first)} instead, and adds a notch${inst?.notches ? ` (${inst.notches} of ${r.bell.notches} now)` : ''}. At ${r.bell.notches} notches it rings: +${mg(r.bell.mult)} Mult on every ball for the rest of the run (rings add up), and the notches start again. Sell it and its notches go; the rings stay.` });
   if (r.tiers && def.id === 'vari') {
     const stiff = (inst ? dialValue(inst, 'stiff') : 1) * mods.tierEase;
     const [, firm, hard, smash] = r.tiers;
@@ -1160,16 +1201,17 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.levelUp) lines.push({ tag: 'level', text: `Roll over to switch it on or off. It needs at least one more Level Light within ${LEVEL_RADIUS} of it. When it and every Level Light within ${LEVEL_RADIUS} are on, the bumpers within ${LEVEL_RADIUS} of those lights level up: +1 level for each light past the first.` });
   if (r.spawn) {
     const n = r.spawn + mods.printerExtra;
-    lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (at most ${r.printCap} printed in one ball, and 4 on the table).` });
+    lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (at most ${r.printCap === 1 ? 'one' : r.printCap} printed in one ball, and 4 on the table).${r.printRest ? ` After printing it is off for ${r.printRest} s: it catches nothing, it just bonks the ball lightly.` : ''} Printed balls share the clock of the ball you launched.` });
   }
+  if (def.kind === 'saucer' || r.zap) lines.push({ tag: 'note', text: OVERHEAT_TEXT });
   if (def.kind === 'saucer') {
     const hold = inst ? dialValue(inst, 'hold') : PARTS[def.id].dials[0]?.default ?? 0.6;
     lines.push({ tag: 'note', text: def.id === 'magnet'
-      ? `Grabs a ball that comes close, holds it ${num(hold)} s, then throws it the way it faces.`
-      : `Holds the ball ${num(hold)} s, then fires it out in a random direction.` });
+      ? `Grabs a ball that comes close, holds it ${num(hold)} s, then throws it the way it faces${r.grabRest ? `; then it ignores that ball for ${r.grabRest} s` : ''}.`
+      : r.wheel ? `Spins until you flip, or ${r.wheel.seconds} s.` : r.lock ? 'Fires the balls out in random directions.' : `Holds the ball ${num(hold)} s, then fires it out in a random direction.` });
   }
-  if (def.kind === 'flipper') lines.push({ tag: 'note', text: `A small flipper worked by the ${def.id === 'flipperR' ? 'Right (→)' : 'Left (←)'} key. Scores nothing itself.` });
-  if (def.kind === 'deflector') lines.push({ tag: 'note', text: 'Scores nothing itself. A bouncy bar that bends the ball\'s path.' });
+  if (def.kind === 'flipper' && !r.hand) lines.push({ tag: 'note', text: `A small flipper worked by the ${def.id === 'flipperR' ? 'Right (→)' : 'Left (←)'} key. Scores nothing itself.` });
+  if (def.kind === 'deflector') lines.push({ tag: 'note', text: 'A bouncy bar that bends the ball\'s path.' });
   if (def.kind === 'kickback') {
     const cd = Math.round((r.cooldown ?? 4) * mods.kickbackCooldown * 10) / 10;
     lines.push({ tag: 'note', text: `When a ball rolls over it, it fires the ball out the way it faces, then needs ${cd} s to recharge.` });
@@ -1181,11 +1223,11 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.speedUp) lines.push({ tag: 'combo', text: `The duck paddles along its rail. Every hit makes it ${Math.round(r.speedUp.by * 100)}% faster for the rest of the ball (up to ${r.speedUp.max}× its speed).` });
   if (r.edgeShot) lines.push({ tag: 'combo', text: `It rolls along its rail. Catch it near either end of the rail: ×${r.edgeShot.x}.` });
   if (r.goal) {
-    lines.push({ tag: 'score', text: `Score past the goalie: ${f((r.points ?? 0) + lvlBonus)} points and your Mult ×${xg(r.goal.xmult)} (up to ×${xg(r.goal.xmultCap)} a ball).` });
+    lines.push({ tag: 'score', text: `Score past the goalie: ${f((r.points ?? 0) + lvlBonus)} points and +${mg(r.goal.mult)} Mult (up to +${mg(r.goal.multCap)} a ball).` });
     lines.push({ tag: 'note', text: 'The goalie slides across the mouth of the goal and blocks the ball.' });
   }
   if (r.strip) lines.push({ tag: 'lamp', text: `Lies under the floor: other parts can stand on it. Every time anything pays a bonus (a set, a jackpot, a level up...), it lights for ${r.strip.seconds} s, and every part standing on it pays +${Math.round(r.strip.bonus * 100)}%.` });
-  if (r.plate) lines.push({ tag: 'score', text: `Lies in the floor: other parts can stand on it. Every bumper within ${num(r.plate.reach)} of it (Big Boi too) pays ×${num(r.plate.x)}, and plates multiply.` });
+  if (r.plate) lines.push({ tag: 'score', text: `Lies in the floor: other parts can stand on it. Every bumper within ${num(r.plate.reach)} of it (Big Boi too) pays ×${num(r.plate.x)}, and plates multiply: a part counts at most 2 plates.` });
   if (def.id === 'mega') lines.push(...bigBoiLines(ctx.machine, factor, mods));
   if (inst?.inlay && PARTS[inst.inlay]) {
     // the gem's own sentence, about "its part", said of this part: "every time it scores..."

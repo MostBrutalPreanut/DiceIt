@@ -37,13 +37,13 @@ describe('each part type does its job in the physics', () => {
     void sim;
   });
 
-  it('a deflector bounces the ball and reports the bounce (for its bank shot), but scores nothing', () => {
+  it('a deflector bounces the ball and reports the bounce (for its bank shot and its 5 points)', () => {
     const d = makePart('deflector', 1, 12, 30, true);
     d.angle = Math.PI / 4;
     const { events, sim } = drop(layoutOf(d), 12, 34, 0, -10, 1);
     expect(hitsOf(events, 1).length).toBeGreaterThan(0);
     const s = new Scorer(1e9, () => [d]);
-    expect(hitsOf(events, 1).flatMap((e) => s.consume(e))).toEqual([]);
+    expect(hitsOf(events, 1).flatMap((e) => s.consume(e)).every((e) => e.base === 5)).toBe(true);
     expect(Math.abs(sim.ballStates()[0].x - 12)).toBeGreaterThan(1); // it was steered sideways
   });
 

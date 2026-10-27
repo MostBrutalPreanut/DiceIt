@@ -8,8 +8,8 @@ import type { SimEvent } from '../src/sim/sim';
 const hit = (uid: number, extra: Partial<Extract<SimEvent, { type: 'partHit' }>> = {}): SimEvent =>
   ({ type: 'partHit', t: 0, uid, ballId: 1, x: 0, y: 0, speed: 10, ...extra });
 const at = (id: PartId, uid: number, x: number, y: number): PartInstance => makePart(id, uid, x, y, true);
-/** The lamp, Big Boi, a Pop, a Slingshot and a Deflector (which scores nothing, so it is no segment). */
-const table = () => [at('wizard', 1, 12, 20), at('mega', 2, 12, 36), at('pop', 3, 6, 30), at('pop', 4, 18, 30), at('sling', 5, 5, 20), at('deflector', 6, 19, 20), at('xlane', 7, 12, 44)];
+/** The lamp, Big Boi, a Pop, a Slingshot and a Lamp (no points of its own, so it is no segment). */
+const table = () => [at('wizard', 1, 12, 20), at('mega', 2, 12, 36), at('pop', 3, 6, 30), at('pop', 4, 18, 30), at('sling', 5, 5, 20), at('lamp', 6, 19, 20), at('xlane', 7, 12, 44)];
 const scorer = (parts: PartInstance[]) => {
   const s = new Scorer(1e9, () => parts);
   s.resetRound();
@@ -18,7 +18,7 @@ const scorer = (parts: PartInstance[]) => {
 
 describe('Wizard Lamp', () => {
   it('has one segment for every scoring part type on the table, up to 8', () => {
-    expect(wizardNeed(table())).toBe(4); // the lamp, Big Boi, the Pops, the Slingshot (not the Deflector, nor the X Lane: no points)
+    expect(wizardNeed(table())).toBe(4); // the lamp, Big Boi, the Pops, the Slingshot (not the Lamp, nor the X Lane: no points)
     const many: PartInstance[] = (['pop', 'coin', 'sling', 'spinner', 'lane', 'ding', 'vari', 'thunder', 'golden', 'wizard'] as PartId[]).map((id, i) => at(id, i + 1, 0, 0));
     expect(wizardNeed(many)).toBe(PARTS.wizard.recipe.wizard!.max);
     expect(wizardNeed([...table(), makePart('coin', 9)])).toBe(4); // in the toolbox: no segment
@@ -44,15 +44,18 @@ describe('Wizard Lamp', () => {
     expect(s.consume(hit(5, { t: 51 })).some((e) => e.label === 'WIZARD MODE!')).toBe(true);
   });
 
-  it('in WIZARD MODE no ×Mult limit holds', () => {
-    const passes = (s: Scorer, t0: number) => { for (let i = 0; i < 8; i++) s.consume(hit(7, { t: t0 + i * 3.1 })); return s.mult; };
-    const plain = scorer(table());
-    const capped = passes(plain, 0);
-    expect(capped).toBeCloseTo(PARTS.xlane.recipe.xmultCap!, 2);
-    const s = scorer(table());
+  it('in WIZARD MODE every part\'s Mult limit is doubled, never lifted', () => {
+    const gold = () => [...table(), at('golden', 8, 6, 40)];
+    const hits = (s: Scorer, t0: number) => { for (let i = 0; i < 100; i++) s.consume(hit(8, { t: t0 + i * 0.1 })); return s.mult; };
+    const plain = scorer(gold());
+    const start = plain.mult;
+    expect(hits(plain, 0) - start).toBeCloseTo(PARTS.golden.recipe.multCap!, 2); // +2 a ball
+    const s = scorer(gold());
     for (const uid of [1, 2, 3, 5]) s.consume(hit(uid));
+    const out = s.consume(hit(8));
+    expect(out.some((e) => e.label === 'WIZARD MODE!') || s.wizardState().left > 0).toBe(true);
     const before = s.mult;
-    expect(passes(s, 0.1) / before).toBeGreaterThan(PARTS.xlane.recipe.xmultCap! + 0.5);
+    expect(hits(s, 0.1) - before).toBeCloseTo(PARTS.golden.recipe.multCap! * 2 - 0.05, 1); // doubled
   });
 
   it('the balls fly out of the lamp, never more than the table holds, and leave when WIZARD MODE ends', () => {

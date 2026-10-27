@@ -36,6 +36,6 @@ describe('part data', () => {
     expect(lampBonus(5)).toBe(0.1);
     expect(lampBonus(3)).toBeGreaterThan(lampBonus(8));
     expect(sellPrice(PARTS.pop)).toBe(1);
-    expect(sellPrice(PARTS.printer)).toBe(4);
+    expect(sellPrice(PARTS.printer)).toBe(5);
   });
 });

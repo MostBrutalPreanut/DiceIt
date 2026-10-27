@@ -515,9 +515,9 @@ export class Renderer {
       case 'rocks': return { hit: pulse > 0.35, seg: game.scorer.rocksOf(p) };
       case 'firecracker': return { hit: pulse > 0.35, armed: !game.scorer.rocketSpent(p) };
       case 'piggy': return { hit: pulse > 0.35, seg: game.scorer.piggies.get(p.uid) ?? 0 };
-      case 'xlane': return { lit: !tilted && !game.mods.lightsOut && !game.scorer.coolingDown(p.uid, game.sim.time) };
-      case 'fame': return { lit: !tilted && !game.mods.lightsOut && !this.discoFired(game, p.uid) };
-      case 'disco': return { lit: !tilted && !game.mods.lightsOut && game.scorer.label(p) !== null && !this.discoFired(game, p.uid) };
+      case 'xlane': return { lit: !tilted && !game.scorer.coolingDown(p.uid, game.sim.time) };
+      case 'fame': return { lit: !tilted && !this.discoFired(game, p.uid) };
+      case 'disco': return { lit: !tilted && game.scorer.label(p) !== null && !this.discoFired(game, p.uid) };
       case 'magnet': case 'jackpot': return { busy: heldNear(p.x, p.y) };
       case 'lane': return { lit, letter: lanes.get(p.uid) };
       case 'rank': return { lit };
@@ -575,6 +575,9 @@ export class Renderer {
     for (const p of game.placed) if (p.def === 'lane') packs.set(p.group, [...(packs.get(p.group) ?? []), p]);
     for (const ls of packs.values()) ls.sort((a, b) => a.x - b.x || a.y - b.y).forEach((p, i) => lanes.set(p.uid, t.laneWord[i % t.laneWord.length]));
     const tilted = game.sim.tilted;
+    // closing time: the table's lights go out part by part over the first 3 s of the run-out
+    const ro = game.sim.runoutFor;
+    const closed = (uid: number) => ro !== null && ((uid * 0.6180339887) % 1) < ro / 3;
     const wizard = !this.calm && game.scorer.wizardState(game.sim.time).left > 0;
     const seenEyes = new Set<number>();
     this.twinkleClock -= dt;
@@ -600,19 +603,21 @@ export class Renderer {
       if (p.inlay) ps.gem = p.inlay;
       // glows live on the floor, under every part: lamps, lit inserts, armed kickbacks, a ready saver
       const r = footprint(def);
-      if (!tilted && !decor) {
-        if (p.def === 'lamp' && ps.bright) this.glow(p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, 0.12 + 0.09 * ps.bright);
-        if (p.def === 'strip' && ps.lit) this.glow(p.x, p.y, 4.6, t.role.strip, 0.5 + 0.2 * Math.sin(this.time * 10));
-        if (p.def === 'lane' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.lane, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.7, p.y + 0.5, 0.3, 0.7, false, true); }
-        if (p.def === 'uplight' && ps.lit) this.glow(p.x, p.y, r * 2.3, t.role.pop, 0.7);
-        if (p.def === 'rank' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.rank, 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.5, p.y + 0.6, 0.3, 0.6, false, true); }
+      const dark = closed(p.uid) || (def.kind === 'saucer' && game.sim.restLeft(p.uid) > 0); // closing time, or a catcher that is off
+      const night = def.tags.includes('light') ? game.mods.lightsDim : 1; // Night Shift: the lights glow dimmer
+      if (!tilted && !decor && !dark) {
+        if (p.def === 'lamp' && ps.bright) this.glow(p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, night * (0.12 + 0.09 * ps.bright));
+        if (p.def === 'strip' && ps.lit) this.glow(p.x, p.y, 4.6, t.role.strip, night * (0.5 + 0.2 * Math.sin(this.time * 10)));
+        if (p.def === 'lane' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.lane, night * 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.7, p.y + 0.5, 0.3, 0.7, false, true); }
+        if (p.def === 'uplight' && ps.lit) this.glow(p.x, p.y, r * 2.3, t.role.pop, night * 0.7);
+        if (p.def === 'rank' && ps.lit) { this.glow(p.x, p.y, r * 2.1, t.role.rank, night * 0.65); if (twinkle && Math.random() < 0.5) this.particles.sparkle(p.x + 0.5, p.y + 0.6, 0.3, 0.6, false, true); }
         if (p.def === 'kickback' && ps.armed) this.glow(p.x, p.y, r * 1.7, t.role.kickback, 0.45);
         if (p.def === 'saver' && ps.armed) this.glow(p.x, p.y, r * 2, t.role.saver, 0.55);
-        if ((p.def === 'xlane' || p.def === 'disco') && ps.lit) this.glow(p.x, p.y, r * 2, t.role[p.def], 0.6);
+        if ((p.def === 'xlane' || p.def === 'disco') && ps.lit) this.glow(p.x, p.y, r * 2, t.role[p.def], night * 0.6);
         if (p.def === 'golden') this.glow(p.x, p.y, r * 1.8, t.role.golden, 0.35);
         if (p.def === 'keg' && ps.lit) this.glow(p.x, p.y, r * 2.2, t.role.coin, 0.4 + 0.25 * Math.sin(this.time * 30));
         if (p.def === 'laser' && ps.lit) this.glow(p.x, p.y, r * 1.6, t.role.laser, 0.3);
-        if (p.def === 'spot' && ps.lit) this.glow(p.x, p.y, PARTS.spot.recipe.spot!.reach, t.role.spot, 0.18);
+        if (p.def === 'spot' && ps.lit) this.glow(p.x, p.y, PARTS.spot.recipe.spot!.reach, t.role.spot, night * 0.18);
         // WIZARD MODE: a light show, every part on the table glowing in a colour that cycles round the table
         if (wizard) this.glow(p.x, p.y, r * 2, WIZARD_SHOW[Math.floor(this.time * 6 + p.x * 0.3 + p.y * 0.2) % WIZARD_SHOW.length], 0.45);
         // the Cook's order: the one part he lit glows until it is hit
@@ -652,9 +657,9 @@ export class Renderer {
       }
       pv.sprite.position.set(X + jx, Y + jy);
       pv.sprite.zIndex = decor ? -1e7 : -p.y * 100; // the decor screen is under everything on the table
-      const jammed = game.scorer.jammed.has(p.def);
+      const jammed = game.scorer.isJammed(p);
       pv.sprite.alpha = jammed ? 0.45 : 1;
-      pv.sprite.tint = jammed ? num(mix(t.shadeTint, '#ffffff', 0.4)) : 0xffffff;
+      pv.sprite.tint = jammed ? num(mix(t.shadeTint, '#ffffff', 0.4)) : dark && !decor ? num(mix(t.shadeTint, '#ffffff', 0.62)) : 0xffffff;
       // a hit squashes a bumper for a moment (presentation only)
       const sq = def.kind === 'bumper' && p.def !== 'mega' ? pulse * 0.12 : 0;
       pv.sprite.scale.set(1 + sq, 1 - sq);
@@ -1011,6 +1016,12 @@ export class Renderer {
       this.tiltStamp = c;
     }
     if (!on && this.tiltStamp) { this.tiltStamp.destroy({ children: true }); this.tiltStamp = null; }
+    // Night Shift: the board darkens a little (the lights are dimmed, not out)
+    if (!on && game.mode === 'round' && game.mods.lightsDim < 1) {
+      const v = this.view, zt = CAB.wallH;
+      const rim = [P(v, RIM.cx - RIM.hw, RIM.cy - RIM.hh, zt), P(v, RIM.cx + RIM.hw, RIM.cy - RIM.hh, zt), P(v, RIM.cx + RIM.hw, RIM.cy + RIM.hh, zt), P(v, RIM.cx - RIM.hw, RIM.cy + RIM.hh, zt)];
+      this.topG.poly(flat(rim)).fill({ color: mix(this.theme.ink, '#000000', 0.5), alpha: 0.14 });
+    }
     if (on) {
       const v = this.view;
       const zt = CAB.wallH;

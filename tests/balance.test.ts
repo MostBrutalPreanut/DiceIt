@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GOALS, GOAL_GROWTH } from '../src/data/goals';
+import { ENDLESS_GOALS, GOALS, GOAL_GROWTH, LAST_ROUND } from '../src/data/goals';
 import { neutralMods } from '../src/data/mods';
 import { PARTS, type PartId } from '../src/data/parts';
 import type { RoundSample } from '../src/game/autobuild';
@@ -66,12 +66,15 @@ describe('balance statistics', () => {
 });
 
 describe('the goal table', () => {
-  it('rises every round, reads cleanly, and the game uses it, then grows past its end', () => {
+  it('rises every round, reads cleanly, and the game uses it, then endless\'s list to round 30', () => {
     expect(GOALS.length).toBeGreaterThanOrEqual(15);
-    for (let i = 1; i < GOALS.length; i++) expect(GOALS[i]).toBeGreaterThan(GOALS[i - 1]);
-    for (const g of GOALS) expect(niceGoal(g)).toBe(g);
-    for (let r = 1; r <= GOALS.length; r++) expect(goalFor(r)).toBe(GOALS[r - 1]);
-    expect(goalFor(GOALS.length + 2)).toBe(niceGoal(GOALS[GOALS.length - 1] * GOAL_GROWTH ** 2));
+    const all = [...GOALS, ...ENDLESS_GOALS];
+    for (let i = 1; i < all.length; i++) expect(all[i]).toBeGreaterThan(all[i - 1]);
+    for (const g of all) expect(niceGoal(g)).toBe(g);
+    for (let r = 1; r <= LAST_ROUND; r++) expect(goalFor(r)).toBe(all[r - 1]);
+    expect(LAST_ROUND).toBe(30);
+    expect(GOALS[GOALS.length - 1]).toBe(600000);
+    expect(goalFor(LAST_ROUND + 2)).toBe(niceGoal(all[all.length - 1] * GOAL_GROWTH ** 2)); // tools only
     expect(goalFor(0)).toBe(GOALS[0]);
     expect(GOAL_GROWTH).toBeGreaterThan(1.2);
   });
@@ -92,12 +95,13 @@ describe('the payout formula the tool shares with the game', () => {
   it('pays the base, unused balls, overshoot, coins and the run\'s upgrades', () => {
     const lines = (over: object = {}) => payoutFor({ round: 3, ballsLeft: 1, score: 9000, goal: 2000, coins: 2, money: 12, mods: neutralMods(), ...over });
     const p = lines();
-    expect(p.lines.map((l) => l.amount)).toEqual([6, 3, 4, 2]); // round 3 base, 1 unused ball, 2 doublings (4.5x), 2 coins
-    expect(p.total).toBe(15);
-    expect(lines({ ballsLeft: 0, score: 2000, coins: 0 }).total).toBe(6);
+    expect(p.lines.map((l) => l.amount)).toEqual([5, 1, 4, 2]); // the flat $5, 1 unused ball, 2 doublings (4.5x), 2 coins
+    expect(p.total).toBe(12);
+    expect(lines({ ballsLeft: 0, score: 2000, coins: 0 }).total).toBe(5);
+    expect(lines({ round: 12, ballsLeft: 0, score: 2000, coins: 0 }).total).toBe(5); // the same in every round
     const rich = lines({ mods: { ...neutralMods(), roundBonus: 3, interestPer: 1, interestCap: 5 } });
-    expect(rich.total).toBe(15 + 3 + 2); // sponsor, and $12 held is $2 of interest ($1 per $5)
-    expect(lines({ boss: true }).total).toBe(15 + 2); // beating a boss pays $2 more
+    expect(rich.total).toBe(12 + 3 + 2); // sponsor, and $12 held is $2 of interest ($1 per $5)
+    expect(lines({ boss: true }).total).toBe(12 + 2); // beating a boss pays $2 more
   });
 });
 

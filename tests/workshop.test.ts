@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_LEVEL, PARTS, sellPrice } from '../src/data/parts';
-import { Game, HEAT_W } from '../src/game/game';
+import { Game, HEAT_W, START_MONEY } from '../src/game/game';
 import { NO_INPUT } from '../src/sim/sim';
 
 const lab = () => {
@@ -38,7 +38,7 @@ describe('undo and redo', () => {
     expect(g.part(2)!.x).toBe(11);
     g.undo(); // the sale
     expect(g.part(1)).toBeDefined();
-    expect(g.money).toBe(6);
+    expect(g.money).toBe(START_MONEY);
   });
 
   it('a new change throws away the redo stack, and nothing can be undone mid-round', () => {

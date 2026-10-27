@@ -308,7 +308,7 @@ async function main() {
       : `${price! < def.cost ? `<s>$${def.cost}</s>` : ''}<button class="buy" data-buy="${index}" ${game.canAfford(price!) && game.editable && game.hasRoomFor(id) ? '' : 'disabled'}>$${price}</button>`;
     const lock = index === null ? '' : `<button class="lock ${locked ? 'on' : ''}" data-lock="${index}" title="${locked ? 'Locked: it stays for the next round. Click to unlock' : 'Lock it: it stays for the next round (and through rerolls)'}">${locked ? 'LOCKED' : 'LOCK'}</button>`;
     return `<div class="offer r-${def.rarity} ${locked ? 'locked' : ''}" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}${packTag(def) ? `<span class="pack" title="One offer: a pack of ${def.pack}">${packTag(def)}</span>` : ''}</div>
-      <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}</div></div>`;
+      <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}${def.tags.includes('long') && !game.tableRoomFor(id) ? '<span class="room">Needs room: move or scrap a part first.</span>' : ''}</div></div>`;
   }
 
   /**
@@ -1067,6 +1067,10 @@ async function main() {
         if (game.mode === 'round' && game.sim.ballCount === 0) renderer.bigBoiMood('sad', 2.2); // a bad shot: Big Boi is sad
         if (ev.reason !== 'timeout' && game.mode !== 'workshop') sayKey('drain');
         break;
+      case 'cashIn':
+        audio.gulp();
+        if (game.mode === 'round') renderer.bigBoiMood('happy', 1.5);
+        break;
       case 'timeUp':
         audio.timeUp();
         renderer.flashDmd();
@@ -1125,6 +1129,7 @@ async function main() {
       board.noteBest(game.scorer.score);
       audio.roundWon(g.runWon);
       renderer.bigBoiMood('cool', 6);
+      if (g.allDone) { say('YOU BEAT IT ALL. WELL DONE!'); renderer.bigBoiMood('cool', 30); board.noteBest(game.scorer.score); showOverlay('done'); endRun('won'); return; }
       if (g.runWon) { say('THE FINAL BOSS IS DOWN. YOU WIN. FREE PLAY!'); renderer.bigBoiMood('cool', 30); board.record(game, 'won', game.sandbox); } else sayKey('roundWon');
       showOverlay(g.runWon ? 'champ' : 'won', g.payout); persist();
     }
@@ -1139,9 +1144,10 @@ async function main() {
    * the score counts up, the rest prints line by line, and the buttons pop up last. A click (or Enter) skips to the end.
    *  - won: ROUND CLEARED, with the payout, coin by coin
    *  - champ: the final boss is down, YOU WIN: keep playing (endless, every boss back in the draw) or start again
+   *  - done: round 30, the last of endless, cleared: you beat it all, and the run is over
    *  - over: GAME OVER: how far along the map you got, your points, what your machine became
    */
-  function showOverlay(kind: 'won' | 'champ' | 'over', payout?: Payout) {
+  function showOverlay(kind: 'won' | 'champ' | 'done' | 'over', payout?: Payout) {
     overlayEl.hidden = false;
     overlayEl.onpointerdown = null;
     clearReveal = null;
@@ -1173,6 +1179,16 @@ async function main() {
         </div></div>`;
       $('btnEndless').onclick = () => { overlayEl.hidden = true; overlayEl.onpointerdown = null; game.continueAfterRound(); sayKey(game.pending ? 'upgrade' : 'workshop'); refreshWorkshop(); persist(); };
       $('btnAgain').onclick = () => { overlayEl.hidden = true; overlayEl.onpointerdown = null; openMenu('picker'); };
+    } else if (kind === 'done') {
+      overlayEl.innerHTML = `<div class="card clear summary win">${confetti(80)}${head(`Round ${game.round}`, 'You beat it all', 'cool')}
+        <div class="cl-body">${scoreRow}
+          <p class="cl-sub cl-step">Every round there is, cleared: the final boss and all of endless. Well done!</p>
+          ${stats([[game.round, 'rounds cleared'], [fmt(game.runScore), 'total points'], [game.decals.length, 'decals']])}
+          <div class="btnrow cl-step cl-btns"><button class="primary disp cl-next" id="btnAgain">New run</button><button class="disp" id="btnToMenu">Main menu</button></div>
+          <div class="cl-skip">click to skip</div>
+        </div></div>`;
+      $('btnAgain').onclick = () => { overlayEl.hidden = true; overlayEl.onpointerdown = null; openMenu('picker'); };
+      $('btnToMenu').onclick = () => { overlayEl.hidden = true; overlayEl.onpointerdown = null; openMenu(); };
     } else {
       const short = Math.max(0, game.scorer.goal - score);
       overlayEl.innerHTML = `<div class="card clear summary lose">${head(`Round ${game.round}`, 'Game over', 'sad')}

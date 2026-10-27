@@ -80,9 +80,10 @@ describe('zaps and the Tesla Coil', () => {
 
   it('a jammed part type is not zapped', () => {
     const parts = [at('tesla', 1, 12, 30), at('pop', 2, 14, 30), at('sling', 3, 12, 34)];
-    const s = new Scorer(1e9, () => parts, { jam: 'mostNumerous' });
+    const s = new Scorer(1e9, () => parts, { jam: 'randomEachRound' });
     s.resetRound();
     const jammed = [...s.jammed][0];
+    expect(jammed).toBeDefined();
     expect(s.consume(hit(1)).filter((e) => e.zap).some((e) => e.def === jammed)).toBe(false);
   });
 
@@ -90,7 +91,7 @@ describe('zaps and the Tesla Coil', () => {
     const text = describePart(PARTS.tesla).map((l) => l.text).join(' ');
     expect(text).toContain('2 nearest parts');
     expect(text).toContain(`once every ${ZAP_COOLDOWN} s`);
-    expect(text).toContain('×Mult parts cannot be zapped');
+    expect(text).toContain('the Mult parts (X Lane, Golden Bumper, Disco Ball, Hall of Fame) cannot be zapped');
   });
 });
 

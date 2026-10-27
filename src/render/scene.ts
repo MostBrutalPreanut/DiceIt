@@ -745,6 +745,22 @@ function decalIcon(g: Graphics, c: Container, t: Theme, icon: DecalIcon, R: numb
       g.roundRect(0.52 * s, -0.28 * s, 0.46 * s, 0.63 * s, 0.06 * s).fill(paper).stroke({ ...st, width: lw * 0.8 });
       text('+', 0.75, 0.05, 0.7, t.ink);
       break;
+    case 'nestegg':
+      // a golden egg in a little nest of coins
+      g.ellipse(0, 0.55 * s, 0.9 * s, 0.32 * s).fill(mix('#b07a3a', paper, 0.2)).stroke(st);
+      for (const x of [-0.55, 0, 0.55]) g.ellipse(x * s, 0.5 * s, 0.25 * s, 0.1 * s).fill(coin).stroke(thin);
+      g.ellipse(0, -0.15 * s, 0.5 * s, 0.68 * s).fill('#ffd23f').stroke(st);
+      g.ellipse(-0.17 * s, -0.42 * s, 0.12 * s, 0.2 * s).fill(WHITE);
+      break;
+    case 'skull':
+      // Sudden Death: a skull with a lit fuse
+      g.circle(0, -0.1 * s, 0.72 * s).fill(paper).stroke(st);
+      g.roundRect(-0.38 * s, 0.35 * s, 0.76 * s, 0.4 * s, 0.1 * s).fill(paper).stroke(st);
+      for (const k of [-1, 1]) g.ellipse(k * 0.28 * s, -0.12 * s, 0.17 * s, 0.2 * s).fill(t.ink);
+      for (const x of [-0.18, 0, 0.18]) g.moveTo(x * s, 0.45 * s).lineTo(x * s, 0.72 * s).stroke(thin);
+      g.moveTo(0.45 * s, -0.65 * s).quadraticCurveTo(0.8 * s, -0.9 * s, 0.7 * s, -1.05 * s).stroke({ ...st, width: lw * 1.3 });
+      g.star(0.7 * s, -1.05 * s, 7, 0.28 * s, 0.12 * s).fill('#ffd23f').stroke(thin);
+      break;
     case 'sprout':
       for (let i = 0; i < 3; i++) { g.ellipse(0, (0.75 - i * 0.24) * s, 0.62 * s, 0.2 * s).fill(coin).stroke(st); }
       g.moveTo(0, 0.2 * s).quadraticCurveTo(0.05 * s, -0.3 * s, 0, -0.55 * s).stroke({ ...st, width: lw * 1.2, color: '#3f8f3a' });
