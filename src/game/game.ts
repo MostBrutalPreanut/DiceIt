@@ -31,7 +31,7 @@ export interface Payout {
 }
 
 export const BALLS_PER_ROUND = 3; // the base; Extra Ball decals add to it (Game.ballsPerRound)
-export const START_MONEY = 6;
+export const START_MONEY = 5;
 export const SHOP_SLOTS = 4;
 /** The toolbox holds this many parts off the board (Big Toolbox adds more); anything stored in a full toolbox is sold for its sell price. */
 export const TOOLBOX_SLOTS = 4;
@@ -1369,7 +1369,7 @@ export function migrateParts(l: Layout, typeLevels?: Partial<Record<PartId, numb
 }
 
 /** A cleared round pays this, flat, whatever the round (every purchase should count). */
-export const ROUND_PAY = 4;
+export const ROUND_PAY = 5;
 
 /** What a cleared round pays. One formula, used by the game and by the balance tool's economy check. */
 export function payoutFor(i: { round: number; ballsLeft: number; score: number; goal: number; coins: number; money: number; mods: Mods; boss?: boolean; types?: number; decals?: number; unusedSavers?: number }): Payout {

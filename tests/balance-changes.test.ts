@@ -17,34 +17,34 @@ const scorer = (parts: PartInstance[], opts = {}) => {
 };
 
 describe('phase 1: the ceilings', () => {
-  it('Disco Balls: ×1.5 each, all of them together at most ×3 a ball', () => {
-    const parts = [1, 2, 3].map((uid) => makePart('disco', uid, 4 * uid, 30, true));
+  it('Disco Balls: +0.5 Mult each, all of them together at most +2 a ball (every Mult part adds, none multiplies)', () => {
+    const parts = [1, 2, 3, 4, 5].map((uid) => makePart('disco', uid, 4 * uid, 30, true));
     const s = scorer(parts);
     s.consume(hit(1));
     expect(s.mult).toBeCloseTo(1.5);
     s.consume(hit(2));
-    expect(s.mult).toBeCloseTo(2.25);
-    s.consume(hit(3));
-    expect(s.mult).toBeCloseTo(3); // the third only reaches the cap
+    expect(s.mult).toBeCloseTo(2);
+    for (const uid of [3, 4, 5]) s.consume(hit(uid));
+    expect(s.mult).toBeCloseTo(3); // capped at +2
   });
 
-  it('Halls of Fame share one ×3 cap a ball', () => {
+  it('Halls of Fame: +0.1 a part type, all of them together at most +2 a ball', () => {
     const parts: PartInstance[] = [makePart('fame', 1, 4, 30, true), makePart('fame', 2, 8, 30, true)];
     const kinds = ['pop', 'sling', 'lane', 'lamp', 'vari', 'spinner', 'coin', 'ding', 'bank', 'thunder', 'golden', 'tesla', 'keg', 'gong'] as const;
     kinds.forEach((id, i) => parts.push(makePart(id, 10 + i, 1 + i, 20, true)));
     const s = scorer(parts);
     s.consume(hit(1));
-    expect(s.mult).toBeCloseTo(3); // 15 types: ×4.18 alone, capped
+    expect(s.mult).toBeCloseTo(2.5); // 15 types: +1.5
     s.consume(hit(2));
-    expect(s.mult).toBeCloseTo(3);
+    expect(s.mult).toBeCloseTo(3); // the second only reaches the +2 cap
   });
 
-  it('Afterglow measures the gain without the Mult the decals kept: a ×Mult on a big kept Mult does not compound', () => {
+  it('Afterglow measures the gain without the Mult the decals kept', () => {
     const s = new Scorer(1e18, () => [makePart('xlane', 1, 4, 30, true)], { baseMult: 51, decalKept: 50 });
     s.resetRound();
     s.consume(hit(1));
-    expect(s.mult).toBeCloseTo(63.75); // the ball really is at 51 × 1.25
-    expect(s.peakGain).toBeCloseTo(0.25); // but Afterglow counts only what a fresh ball would have gained
+    expect(s.mult).toBeCloseTo(51.25);
+    expect(s.peakGain).toBeCloseTo(0.25);
   });
 
   it('the score guard: an absurd Mult never makes the score infinite', () => {
@@ -131,16 +131,17 @@ describe('phase 3: the strongest parts', () => {
     expect(describePart(PARTS.wheel).map((l) => l.text).join(' ')).toContain('Spins until you flip, or 3 s.');
   });
 
-  it('a Ball Printer prints at most 1 a ball and rests 3 s after printing (balls roll over it)', () => {
-    expect(PARTS.printer.recipe.printCap).toBe(1);
+  it('a Ball Printer prints one ball, then is off for 12 s: it catches nothing and bonks the ball lightly', () => {
+    expect(PARTS.printer.recipe.printRest).toBe(12);
     const sim = createSim(layoutOf(makePart('printer', 1, 12, 30, true)), { seed: 1 });
     sim.addBall(12, 31.5, 0, -6);
-    const first = run(sim, 1.2);
-    expect(first.some((e) => e.type === 'extraBall')).toBe(true);
-    sim.addBall(12, 31.5, 0, -6);
+    expect(run(sim, 1.2).some((e) => e.type === 'extraBall')).toBe(true);
+    expect(sim.restLeft(1)).toBeGreaterThan(10);
+    const id = sim.addBall(12, 31.5, 0, -6);
     const resting = run(sim, 0.4);
     expect(resting.some((e) => e.type === 'partHit' && e.uid === 1 && !e.caught)).toBe(true);
     expect(resting.some((e) => e.type === 'partHit' && e.caught)).toBe(false);
+    expect(sim.ballStates().find((b) => b.id === id)?.held).toBeFalsy();
   });
 
   it('a Mag-Grab ignores the ball it just threw for 2 s', () => {

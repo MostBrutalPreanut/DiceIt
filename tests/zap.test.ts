@@ -91,7 +91,7 @@ describe('zaps and the Tesla Coil', () => {
     const text = describePart(PARTS.tesla).map((l) => l.text).join(' ');
     expect(text).toContain('2 nearest parts');
     expect(text).toContain(`once every ${ZAP_COOLDOWN} s`);
-    expect(text).toContain('×Mult parts cannot be zapped');
+    expect(text).toContain('the Mult parts (X Lane, Golden Bumper, Disco Ball, Hall of Fame) cannot be zapped');
   });
 });
 

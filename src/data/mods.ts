@@ -119,7 +119,7 @@ export interface Mods {
   /** Multiplier on everything Big Boi pays. */
   bigBoiX: number;
   // --- boss rules (Scorer) ---
-  /** Multiplier on every Mult gain (and on how far a ×Mult moves away from ×1). */
+  /** Multiplier on every Mult gain. */
   multGain: number;
   /** Parts pay no money this round. */
   noCoins: boolean;

@@ -44,17 +44,18 @@ describe('Wizard Lamp', () => {
     expect(s.consume(hit(5, { t: 51 })).some((e) => e.label === 'WIZARD MODE!')).toBe(true);
   });
 
-  it('in WIZARD MODE every ×Mult limit is doubled, never lifted', () => {
-    const passes = (s: Scorer, t0: number) => { for (let i = 0; i < 8; i++) s.consume(hit(7, { t: t0 + i * 3.1 })); return s.mult; };
-    const plain = scorer(table());
-    const capped = passes(plain, 0);
-    expect(capped).toBeCloseTo(PARTS.xlane.recipe.xmultCap!, 2);
-    const s = scorer(table());
+  it('in WIZARD MODE every part\'s Mult limit is doubled, never lifted', () => {
+    const gold = () => [...table(), at('golden', 8, 6, 40)];
+    const hits = (s: Scorer, t0: number) => { for (let i = 0; i < 100; i++) s.consume(hit(8, { t: t0 + i * 0.1 })); return s.mult; };
+    const plain = scorer(gold());
+    const start = plain.mult;
+    expect(hits(plain, 0) - start).toBeCloseTo(PARTS.golden.recipe.multCap!, 2); // +2 a ball
+    const s = scorer(gold());
     for (const uid of [1, 2, 3, 5]) s.consume(hit(uid));
+    const out = s.consume(hit(8));
+    expect(out.some((e) => e.label === 'WIZARD MODE!') || s.wizardState().left > 0).toBe(true);
     const before = s.mult;
-    const wiz = passes(s, 0.1) / before;
-    expect(wiz).toBeGreaterThan(PARTS.xlane.recipe.xmultCap! + 0.5);
-    expect(wiz).toBeLessThanOrEqual(PARTS.xlane.recipe.xmultCap! * 2 + 0.01);
+    expect(hits(s, 0.1) - before).toBeCloseTo(PARTS.golden.recipe.multCap! * 2 - 0.05, 1); // doubled
   });
 
   it('the balls fly out of the lamp, never more than the table holds, and leave when WIZARD MODE ends', () => {

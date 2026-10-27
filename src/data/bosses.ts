@@ -52,7 +52,7 @@ export const BOSSES: Record<BossId, BossDef> = {
   jammer: { id: 'jammer', name: 'The Jammer', final: false, shout: 'THE JAMMER GOT IN',
     text: 'Your best part from last round (Big Boi aside) is jammed: it scores nothing.', jam: 'topPart' },
   flatRate: { id: 'flatRate', name: 'Flat Rate', final: false, shout: 'FLAT RATE. NO BIG MULTS',
-    text: 'Every Mult gain is 30% smaller (and ×Mults move 30% less far).', mods: (m) => { m.multGain *= 0.7; } },
+    text: 'Every Mult gain is 30% smaller.', mods: (m) => { m.multGain *= 0.7; } },
   magnet: { id: 'magnet', name: 'The Magnet', final: false, shout: 'THE MAGNET IS ON',
     text: 'A magnet under the drain pulls every ball towards it.', mods: (m) => { m.magnet = { ...DRAIN, strength: 22, radius: 16 }; } },
 

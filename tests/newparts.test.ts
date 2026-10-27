@@ -210,14 +210,14 @@ describe('the new parts', () => {
     expect(alone.mult).toBeCloseTo(3);
   });
 
-  it('a Golden Bumper multiplies the Mult and pays $1 every fifth hit', () => {
+  it('a Golden Bumper adds +0.05 Mult a hit and pays $1 every fifth hit', () => {
     const s = scorer([makePart('golden', 1, 6, 30, true)]);
     const ev = Array.from({ length: 10 }, () => s.consume(hit(1))[0]);
     expect(ev.map((e) => e.money)).toEqual([0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-    expect(s.mult).toBeCloseTo(1.05 ** 10, 1);
+    expect(s.mult).toBeCloseTo(1.5, 2);
   });
 
-  it('a Disco Ball multiplies the Mult by 1.5 and lights every Lamp, once a ball', () => {
+  it('a Disco Ball adds +0.5 Mult and lights every Lamp, once a ball', () => {
     const parts = [makePart('disco', 1, 6, 30, true), makePart('lamp', 2, 12, 30, true)];
     const s = scorer(parts);
     const e = s.consume(hit(1))[0];

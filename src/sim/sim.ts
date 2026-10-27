@@ -184,6 +184,8 @@ export const GREMLIN_OUT = 10;
 const GREMLIN_R = 0.6;
 /** A gremlin's path at time t: two slow, different sines, so the pair never walk in step. */
 const gremlinAt = (t: number, ph: number) => ({ x: 12 + 8.5 * Math.sin(t * 0.31 + ph), y: 31 + 13.5 * Math.sin(t * 0.19 + ph * 1.7) });
+/** A resting catcher's light bonk: the ball speed it adds, away from its middle. */
+const REST_BONK = 6;
 /** Helping Hand: how long it is next to an extra flipper. */
 const HAND_SIZE = 0.75;
 /** Broomstick: how long a ride lasts at most, and how fast it flies. */
@@ -611,8 +613,7 @@ export class Sim {
     for (const p of this.parts.values()) {
       if (p.armed !== undefined) { p.armed = true; p.readyAt = 0; }
       if (p.mover) p.mover.speedX = 1; // a new ball: the duck calms down
-      p.spunBall = false; // and a Spider Wheel may spin again
-      p.restUntil = 0;
+      p.spunBall = false; // and a Spider Wheel may spin again (a resting catcher keeps resting: its rest is on the clock, not per ball)
     }
   }
 
@@ -694,6 +695,11 @@ export class Sim {
 
   get ballCount() {
     return this.balls.length;
+  }
+
+  /** Seconds a catcher still rests (a Printer after printing, an overheated catcher), 0 if it is on. */
+  restLeft(uid: number): number {
+    return Math.max(0, (this.parts.get(uid)?.restUntil ?? 0) - this.time);
   }
 
   /** Balls in play: on the table, not one waiting in the plunger lane (Multiball Madness counts these). */
@@ -1346,7 +1352,15 @@ export class Sim {
       } else if (def.kind === 'saucer') {
         if (br.ignore?.uid === pr.inst.uid && this.time < br.ignore.until) continue; // a Mag-Grab ignores the ball it just threw
         // closing time (the ball clock ran out), a resting catcher, a wheel that has spun this ball: the ball rolls over it for its points
-        if (this.timeUp || this.time < (pr.restUntil ?? 0) || (def.recipe.wheel && pr.spunBall)) { this.events.push(hit); continue; }
+        if (this.timeUp || this.time < (pr.restUntil ?? 0) || (def.recipe.wheel && pr.spunBall)) {
+          // a resting catcher (a Printer after printing, an overheated one) is off: it bonks the ball lightly away
+          if (!this.timeUp && this.time < (pr.restUntil ?? 0)) {
+            const bp = B.b2Body_GetPosition(br.body), dx = bp.x - pr.inst.x, dy = bp.y - pr.inst.y, len = Math.hypot(dx, dy) || 1;
+            B.b2Body_SetLinearVelocity(br.body, V(vel.x + (dx / len) * REST_BONK, vel.y + (dy / len) * REST_BONK));
+          }
+          this.events.push(hit);
+          continue;
+        }
         if ([...this.balls].some((o) => o.held?.uid === pr.inst.uid)) continue; // one at a time
         // Overheat: a catcher that has caught OVERHEAT.n times within OVERHEAT.within s rests (no self-playing loops)
         pr.fired = [...(pr.fired ?? []).filter((at) => this.time - at < OVERHEAT.within), this.time];

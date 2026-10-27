@@ -87,10 +87,8 @@ export interface Recipe {
   mult?: number;
   /** The most Mult this part type can add in one ball (all parts of the type together). */
   multCap?: number;
-  /** Multiplies the Mult per event (x1.1 = +10% of the Mult you have). */
-  xmult?: number;
-  /** The most this type's ×Mult can multiply the Mult in one ball. */
-  xmultCap?: number;
+  /** Never zapped (the Mult parts: a zap pays points, and their Mult stays a shot the ball has to make). */
+  noZap?: boolean;
   /** +Mult per spin (Spinner), up to `spinMultCap` a ball from all of the type. */
   spinMult?: number;
   spinMultCap?: number;
@@ -103,7 +101,7 @@ export interface Recipe {
   setCap?: number;
   /** The most balls a Ball Printer prints in one ball. */
   printCap?: number;
-  /** Ball Printer: after printing it rests this long (balls roll over it for its points). */
+  /** Ball Printer: after printing it is off this long (it catches nothing, it bonks the ball lightly). */
   printRest?: number;
   /** Mag-Grab: it ignores the ball it just threw for this long. */
   grabRest?: number;
@@ -148,16 +146,16 @@ export interface Recipe {
   keep?: { per: number; cap: number };
   /** Duck Gallery: each hit on the duck makes it this much faster for the rest of the ball (up to `max` times its speed). */
   speedUp?: { by: number; max: number };
-  /** Goal: what a goal pays on top of its points (×Mult, capped a ball). */
-  goal?: { xmult: number; xmultCap: number };
+  /** Goal: what a goal pays on top of its points: +`mult` Mult, up to +`multCap` a ball. */
+  goal?: { mult: number; multCap: number };
   /** Roller Pop: a hit near either end of its rail (the outer `edge` of its travel) pays `x` times. */
   edgeShot?: { edge: number; x: number };
   /** Glow Strip: lights for `seconds` after any bonus anywhere, and while lit every part standing on it pays +`bonus`. */
   strip?: { seconds: number; bonus: number; reach: number };
   /** Power Plate: a floor plate; every bumper standing within `reach` of it pays `x` times (plates multiply). */
   plate?: { x: number; reach: number };
-  /** Hall of Fame: once a ball, the Mult is multiplied by (1 + typeX) for every different part type on the table. */
-  typeX?: number;
+  /** Hall of Fame: once a ball, +`typeMult` Mult for every different part type on the table (up to `multCap` from all of them). */
+  typeMult?: number;
   /**
    * Rank Lights: light every light of a pack and the ball that lit the last one ranks up a step: every hit it makes
    * pays `steps[rank - 1]` times, for `seconds`. Lighting the set again moves it up (or starts the time again at the
@@ -165,7 +163,7 @@ export interface Recipe {
    */
   rank?: { steps: number[]; seconds: number };
   /** Old Bell: its first hit each round pays `first` instead of its points and adds a notch; at `notches` it rings, and every ball's Mult is ×`x` for the rest of the run. */
-  bell?: { first: number; notches: number; x: number };
+  bell?: { first: number; notches: number; mult: number };
   /**
    * Tesla Coil: every hit arcs lightning to the `arcs` nearest parts that can be zapped (one more every `perLevels`
    * levels, up to `maxArcs`), and each scores as if the ball had hit it. A zap never arcs on.
@@ -196,7 +194,7 @@ export interface Recipe {
   /**
    * Wizard Lamp: a segment for every different part type the ball itself hits (one for each scoring type on the
    * table when the round starts, at most `max`). All lit: WIZARD MODE for `seconds`: `balls` more balls, every
-   * ×Mult cap doubled, every Lamp at full glow. Once a round.
+   * Mult cap of a part doubled, every Lamp at full glow. Once a round.
    */
   wizard?: { max: number; seconds: number; balls: number };
   /**
@@ -348,12 +346,12 @@ export const ZAP_COOLDOWN = 0.5;
 /**
  * The parts a zap can hit: the ones a ball scores on by touching them. Not saucers, the goal or the Kickback (they
  * need the ball itself), not a drop-target bank (a zap never moves anything), nor flippers, savers, bars or floor
- * pieces. And never a ×Mult part (X Lane, the Golden Bumper, the Disco Ball, Hall of Fame, Rank Lights) nor a Level
- * Light: zaps pay points, and a ×Mult or a level stays a shot the ball has to make.
+ * pieces. And never a Mult part (X Lane, the Golden Bumper, the Disco Ball, Hall of Fame, Rank Lights) nor a Level
+ * Light: zaps pay points, and the Mult or a level stays a shot the ball has to make.
  */
 export const zappable = (id: PartId) => {
   const k = PARTS[id].kind, r = PARTS[id].recipe;
-  if (r.xmult || r.typeX || r.rank || r.spot || r.capsule || r.bucket || r.insure || r.ring || r.levelUp) return false;
+  if (r.noZap || r.typeMult || r.rank || r.spot || r.capsule || r.bucket || r.insure || r.ring || r.levelUp) return false;
   return k === 'bumper' || k === 'kicker' || k === 'spinner' || k === 'rollover' || k === 'lamp' || k === 'target' || k === 'mover';
 };
 
@@ -572,7 +570,7 @@ export const PARTS: Record<PartId, PartDef> = {
   printer: {
     id: 'printer', name: 'Ball Printer', blurb: 'Catches a ball and spits out two. Multiball! Allegedly legal.', kind: 'saucer', rarity: 'rare', tags: ['ball'], cost: 9, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 1, printRest: 3, perLevel: 10 },
+    recipe: { points: 40, per: 'ball caught', spawn: 1, printCap: 3, printRest: 12, perLevel: 10 },
     dials: [
       {
         id: 'hold', label: 'Hold', min: 0.2, max: 2, step: 0.1, default: 0.6,
@@ -594,9 +592,9 @@ export const PARTS: Record<PartId, PartDef> = {
     dials: [{ id: 'hold', label: 'Hold', min: 0.4, max: 1.5, step: 0.1, default: 0.8, tradeoff: 'How long it keeps the ball before it fires it back out.', ends: ['quick', 'slow'], fmt: (v) => `${v.toFixed(1)} s` }, { ...powerDial('eject'), tradeoff: 'How hard it fires the ball back out.' }],
   },
   xlane: {
-    id: 'xlane', name: 'X Lane', blurb: 'Roll through it and your Mult multiplies.', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, weight: 2,
+    id: 'xlane', name: 'X Lane', blurb: 'Roll through it: a quick shot of Mult.', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { xmult: 1.25, xmultCap: 3, cooldown: 3, lightsLane: true }, dials: [],
+    recipe: { mult: 0.25, multCap: 2, noZap: true, cooldown: 3, lightsLane: true }, dials: [],
   },
   rank: {
     id: 'rank', name: 'Rank Lights', blurb: 'Roll over all three: that ball pays more for a while. Promoted!', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, pack: 3, weight: 2,
@@ -606,7 +604,7 @@ export const PARTS: Record<PartId, PartDef> = {
   bell: {
     id: 'bell', name: 'Old Bell', blurb: 'Ring it in three rounds: a bigger Mult for the rest of the run.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 10,
-    recipe: { points: 20, per: 'hit', bell: { first: 150, notches: 3, x: 1.2 }, perLevel: 5 }, dials: [kickDial(1.5)],
+    recipe: { points: 20, per: 'hit', bell: { first: 150, notches: 3, mult: 0.2 }, perLevel: 5 }, dials: [kickDial(1.5)],
   },
   tesla: {
     id: 'tesla', name: 'Tesla Coil', blurb: 'Every hit zaps the nearest parts, and they score too. Bzzt.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 9, weight: 2,
@@ -637,24 +635,24 @@ export const PARTS: Record<PartId, PartDef> = {
 
   // ---- legendary: from round 7 ----
   golden: {
-    id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold: big points, ×Mult, and a bit of cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 2,
+    id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold: big points, Mult, and a bit of cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 2,
     shape: { type: 'circle', r: 1.5 }, rotatable: false, kickUnit: 15,
-    recipe: { points: 120, per: 'hit', xmult: 1.05, xmultCap: 3, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
+    recipe: { points: 120, per: 'hit', mult: 0.05, multCap: 2, noZap: true, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
   },
   fame: {
-    id: 'fame', name: 'Hall of Fame', blurb: 'Once a ball, roll over: ×Mult per kind of part on your table.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 2,
+    id: 'fame', name: 'Hall of Fame', blurb: 'Once a ball, roll over: Mult per kind of part on your table.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 2,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 150, per: 'pass', typeX: 0.1, xmultCap: 3, perBall: 1, perLevel: 40 }, dials: [],
+    recipe: { points: 150, per: 'pass', typeMult: 0.1, multCap: 2, noZap: true, perBall: 1, perLevel: 40 }, dials: [],
   },
   disco: {
-    id: 'disco', name: 'Disco Ball', blurb: 'Roll over once a ball: ×Mult, and every Lamp lights. Boogie.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
+    id: 'disco', name: 'Disco Ball', blurb: 'Roll over once a ball: big Mult, and every Lamp lights. Boogie.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 200, per: 'pass', xmult: 1.5, xmultCap: 3, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
+    recipe: { points: 200, per: 'pass', mult: 0.5, multCap: 2, noZap: true, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
   },
   goal: {
-    id: 'goal', name: 'Goal!', blurb: 'Shoot past the goalie for points and ×Mult. He is very serious.', kind: 'goal', rarity: 'legendary', tags: ['target', 'long'], cost: 12, weight: 2,
+    id: 'goal', name: 'Goal!', blurb: 'Shoot past the goalie for points and Mult. He is very serious.', kind: 'goal', rarity: 'legendary', tags: ['target', 'long'], cost: 12, weight: 2,
     shape: { type: 'box', hw: 3.4, hh: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 300, per: 'goal', goal: { xmult: 1.5, xmultCap: 4 }, cooldown: 1.5, perLevel: 75 }, dials: [],
+    recipe: { points: 300, per: 'goal', goal: { mult: 0.5, multCap: 3 }, cooldown: 1.5, perLevel: 75 }, dials: [],
     mover: { travel: 1.7, speed: 3, shape: { type: 'box', hw: 0.75, hh: 0.22 }, y: -0.45, restitution: 0.55 },
   },
 
@@ -1108,8 +1106,9 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     ? `Every hit adds +${num(r.grow * factor)} to the next one this ball, up to +${num((r.growCap ?? 0) * factor)}.`
     : `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it)${r.growCap ? `, up to +${num(r.growCap * factor)}` : ''}.` });
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
-  if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
-  if (r.xmult && !r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${r.xmultCap ? `, up to ×${xg(r.xmultCap)} a ball from all ${def.name}s` : ''}.` });
+  const allCap = (what: string) => (r.multCap ? ` (all ${what} together: up to +${mg(r.multCap)} a ball)` : '');
+  if (r.mult && r.perBall) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} the first time a ball rolls over it each ball${allCap(`${def.name}s`)}.` });
+  else if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
   if (r.lock) lines.push({ tag: 'spawn', text: `A lock: a ball shot into it is held, and a new one comes to the plunger at no cost. The ${r.lock.n === 3 ? 'third' : `${r.lock.n}th`} lock lets all ${r.lock.n} loose at once: a real multiball. Once a round: after that, and in multiball, a ball rolls straight through for its points. The new balls share the clock of the ball you launched.` });
   if (r.ring) lines.push({ tag: 'combo', text: `While it is on the table, ${Math.round(r.ring.hold * 100)}% of every hit is held back as heat. Roll the ball through it to bank that ball's heat at ×${r.ring.x}; a drain loses whatever is not banked.` }, { tag: 'note', text: 'It scores nothing itself, and a zap or a spark never banks: only the ball does.' });
   if (r.hand) {
@@ -1144,11 +1143,9 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.wizard) {
     const need = ctx.wizardNeed;
     lines.push({ tag: 'combo', text: `It lights a segment for every different part type the ball itself hits this ball (zaps and sparks do not count): one segment for each part type on your table that scores, up to ${r.wizard.max}, counted when the round starts${need ? `. Right now: hit ${need} types` : ''}.` });
-    lines.push({ tag: 'spawn', text: `Light them all and WIZARD MODE starts: for ${r.wizard.seconds} s, ${r.wizard.balls} more balls fly out of it (they leave again when it ends), every ×Mult limit is doubled and every Lamp is at full glow. Once a round. Its balls share your ball's clock.` });
+    lines.push({ tag: 'spawn', text: `Light them all and WIZARD MODE starts: for ${r.wizard.seconds} s, ${r.wizard.balls} more balls fly out of it (they leave again when it ends), every part's Mult limit is doubled and every Lamp is at full glow. Once a round. Its balls share your ball's clock.` });
   }
-  const allCap = (what: string) => (r.xmultCap ? ` (all ${what} together: up to ×${xg(r.xmultCap)} a ball)` : '');
-  if (r.typeX) lines.push({ tag: 'mult', text: `The first time a ball rolls over it each ball: your Mult ×${xg(1 + r.typeX)} for every different part type on your table (Big Boi too)${ctx.types ? `, ×${num(Math.round((1 + (r.typeX) * mods.multGain) ** ctx.types * 100) / 100)} now` : ''}${allCap('Halls of Fame')}.` });
-  if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} the first time a ball rolls over it each ball${allCap(`${def.name}s`)}.` });
+  if (r.typeMult) lines.push({ tag: 'mult', text: `The first time a ball rolls over it each ball: +${mg(r.typeMult)} Mult for every different part type on your table (Big Boi too)${ctx.types ? `, +${num(Math.round(r.typeMult * mods.multGain * ctx.types * 100) / 100)} now` : ''}${allCap('Halls of Fame')}.` });
   if (r.money && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.money} per ${per}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });
   if (r.moneyEvery && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $1 every ${r.moneyEvery.n} hits, up to $${r.moneyEvery.cap} a round.` });
   if (r.variety) lines.push({ tag: 'grow', text: `+${f(r.variety)} for every different part type this ball has hit.` });
@@ -1170,7 +1167,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   }
   if (r.zap) {
     const at = (k: number) => k * r.zap!.perLevels;
-    lines.push({ tag: 'combo', text: `Every hit arcs lightning to the ${r.zap.arcs} nearest parts that score when the ball touches them (one more at level ${at(1)}${r.zap.maxArcs - r.zap.arcs > 1 ? ` and ${at(2)}` : ''}): each one scores as if the ball had hit it. A part can be zapped at most once every ${ZAP_COOLDOWN} s, a zap never arcs on, and saucers, the goal, the Kickback, drop targets, Level Lights and ×Mult parts cannot be zapped.` }, { tag: 'note', text: ZAP_NO_MULT });
+    lines.push({ tag: 'combo', text: `Every hit arcs lightning to the ${r.zap.arcs} nearest parts that score when the ball touches them (one more at level ${at(1)}${r.zap.maxArcs - r.zap.arcs > 1 ? ` and ${at(2)}` : ''}): each one scores as if the ball had hit it. A part can be zapped at most once every ${ZAP_COOLDOWN} s, a zap never arcs on, and saucers, the goal, the Kickback, drop targets, Level Lights and the Mult parts (X Lane, Golden Bumper, Disco Ball, Hall of Fame) cannot be zapped.` }, { tag: 'note', text: ZAP_NO_MULT });
   }
   if (r.sparks || r.rocks || r.rocket || r.keg?.sparks) lines.push({ tag: 'note', text: `A spark: a little bonus ball that flies off, scores on what it touches (as the ball that made it), slips through the flippers and fades after ${SPARK_LIFE} s. It never costs a ball.` });
   if (r.sparks) lines.push({ tag: 'spawn', text: `Every hit of the ball shoots out ${r.sparks.n === 1 ? 'a spark' : `${r.sparks.n} sparks`}, then it needs ${r.sparks.cooldown} s.` });
@@ -1179,8 +1176,8 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.keg) lines.push({ tag: 'combo', text: `A hit lights the fuse. ${r.keg.fuse} s later it blows: ${f(r.keg.blast)} points, ${r.keg.sparks ? `a spark flies out, ` : ''}and every part within ${r.keg.radius} units is zapped (it scores as if the ball had hit it). A blast lights any other Powder Keg it reaches, up to ${r.keg.chain} kegs in a row. Then it is spent for ${r.keg.rearm} s.` });
   if (r.beam) lines.push({ tag: 'combo', text: `Every hit fires a laser beam through it in a random direction, right across the table: every part on the beam is zapped. Then it needs ${r.beam.cooldown} s to recharge.` });
   if (r.boom) lines.push({ tag: 'combo', text: `Every ${r.boom.every}th hit of a ball, it booms: every part on the table is zapped once. Nothing moves.` });
-  if (r.keg || r.beam || r.boom) lines.push({ tag: 'note', text: `A part can be zapped at most once every ${ZAP_COOLDOWN} s; saucers, the goal, the Kickback, drop targets, Level Lights and ×Mult parts cannot be zapped. ${ZAP_NO_MULT}` });
-  if (r.bell) lines.push({ tag: 'mult', text: `Its first hit each round pays ${f(r.bell.first)} instead, and adds a notch${inst?.notches ? ` (${inst.notches} of ${r.bell.notches} now)` : ''}. At ${r.bell.notches} notches it rings: your Mult ×${xg(r.bell.x)} on every ball for the rest of the run (rings stack), and the notches start again. Sell it and its notches go; the rings stay.` });
+  if (r.keg || r.beam || r.boom) lines.push({ tag: 'note', text: `A part can be zapped at most once every ${ZAP_COOLDOWN} s; saucers, the goal, the Kickback, drop targets, Level Lights and the Mult parts (X Lane, Golden Bumper, Disco Ball, Hall of Fame) cannot be zapped. ${ZAP_NO_MULT}` });
+  if (r.bell) lines.push({ tag: 'mult', text: `Its first hit each round pays ${f(r.bell.first)} instead, and adds a notch${inst?.notches ? ` (${inst.notches} of ${r.bell.notches} now)` : ''}. At ${r.bell.notches} notches it rings: +${mg(r.bell.mult)} Mult on every ball for the rest of the run (rings add up), and the notches start again. Sell it and its notches go; the rings stay.` });
   if (r.tiers && def.id === 'vari') {
     const stiff = (inst ? dialValue(inst, 'stiff') : 1) * mods.tierEase;
     const [, firm, hard, smash] = r.tiers;
@@ -1195,7 +1192,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.levelUp) lines.push({ tag: 'level', text: `Roll over to switch it on or off. It needs at least one more Level Light within ${LEVEL_RADIUS} of it. When it and every Level Light within ${LEVEL_RADIUS} are on, the bumpers within ${LEVEL_RADIUS} of those lights level up: +1 level for each light past the first.` });
   if (r.spawn) {
     const n = r.spawn + mods.printerExtra;
-    lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (at most ${r.printCap === 1 ? 'one' : r.printCap} printed in one ball, and 4 on the table).${r.printRest ? ` After printing it rests ${r.printRest} s: balls roll over it.` : ''} Printed balls share the clock of the ball you launched.` });
+    lines.push({ tag: 'spawn', text: `Prints ${n === 1 ? 'a second ball' : `${n} more balls`} when it catches one (at most ${r.printCap === 1 ? 'one' : r.printCap} printed in one ball, and 4 on the table).${r.printRest ? ` After printing it is off for ${r.printRest} s: it catches nothing, it just bonks the ball lightly.` : ''} Printed balls share the clock of the ball you launched.` });
   }
   if (def.kind === 'saucer' || r.zap) lines.push({ tag: 'note', text: OVERHEAT_TEXT });
   if (def.kind === 'saucer') {
@@ -1217,7 +1214,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.speedUp) lines.push({ tag: 'combo', text: `The duck paddles along its rail. Every hit makes it ${Math.round(r.speedUp.by * 100)}% faster for the rest of the ball (up to ${r.speedUp.max}× its speed).` });
   if (r.edgeShot) lines.push({ tag: 'combo', text: `It rolls along its rail. Catch it near either end of the rail: ×${r.edgeShot.x}.` });
   if (r.goal) {
-    lines.push({ tag: 'score', text: `Score past the goalie: ${f((r.points ?? 0) + lvlBonus)} points and your Mult ×${xg(r.goal.xmult)} (up to ×${xg(r.goal.xmultCap)} a ball).` });
+    lines.push({ tag: 'score', text: `Score past the goalie: ${f((r.points ?? 0) + lvlBonus)} points and +${mg(r.goal.mult)} Mult (up to +${mg(r.goal.multCap)} a ball).` });
     lines.push({ tag: 'note', text: 'The goalie slides across the mouth of the goal and blocks the ball.' });
   }
   if (r.strip) lines.push({ tag: 'lamp', text: `Lies under the floor: other parts can stand on it. Every time anything pays a bonus (a set, a jackpot, a level up...), it lights for ${r.strip.seconds} s, and every part standing on it pays +${Math.round(r.strip.bonus * 100)}%.` });

@@ -600,7 +600,7 @@ export class Renderer {
       if (p.inlay) ps.gem = p.inlay;
       // glows live on the floor, under every part: lamps, lit inserts, armed kickbacks, a ready saver
       const r = footprint(def);
-      const dark = closed(p.uid);
+      const dark = closed(p.uid) || (def.kind === 'saucer' && game.sim.restLeft(p.uid) > 0); // closing time, or a catcher that is off
       const night = def.tags.includes('light') ? game.mods.lightsDim : 1; // Night Shift: the lights glow dimmer
       if (!tilted && !decor && !dark) {
         if (p.def === 'lamp' && ps.bright) this.glow(p.x, p.y, lampStats(dialValue(p, 'radius'), game.mods).radius, t.role.lamp, night * (0.12 + 0.09 * ps.bright));
