@@ -41,8 +41,8 @@ export const TOOLBOX_SLOTS = 4;
  * what it cost.
  */
 export const UPKEEP = { move: 1, scrap: 1 } as const;
-/** Moving parts costs nothing in the workshop up to this round (round 1, and the visit after it). */
-export const FREE_MOVES_UNTIL = 2;
+/** Moving parts costs nothing in the workshop up to this round: while the board is first set up, before round 1. */
+export const FREE_MOVES_UNTIL = 1;
 
 /** Two significant figures: goals read as 4,300 or 12,000, not 4,312. */
 /** A new part's angle: only parts that turn keep the one they were aimed at while carried. */
@@ -1078,7 +1078,7 @@ export class Game {
     return true;
   }
 
-  /** Moving parts is free until round 1 has been played and the workshop after it is done: try spots out, then shuffle. */
+  /** Moving parts is free while the board is first set up, before round 1 is played: try spots out, then shuffle. */
   get movesFree(): boolean {
     return this.round <= FREE_MOVES_UNTIL;
   }

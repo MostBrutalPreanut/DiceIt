@@ -1437,7 +1437,7 @@ async function main() {
       { say: 'This is your <b>route</b>: 15 rounds to clear, each with a bigger goal. Some of them have their own nasty rules. Those are the <b>bosses</b>, and this box warns you which one is next.', at: () => [...around('#roundMap'), ...around('#bossBox')], scroll: '#roundMap' },
       { say: 'This is the <b>score</b> to beat. It grows every round.', at: () => around('#score', '#left .goalrow', '#left .tube'), scroll: '#score' },
       { say: `This is your <b>toolbox</b>. Right now it holds ${n} bumper${n === 1 ? '' : 's'}. Press one, then press the table to put it there.`, at: () => around('#invWrap'), scroll: '#invWrap' },
-      { say: `Moving parts is <b>free</b> for now, and still free after round 1: see where the ball goes, then shuffle things around. After that, every move costs <b>$${UPKEEP.move}</b>.`, mood: 'cool', at: () => around('#invWrap'), scroll: '#invWrap' },
+      { say: `Moving parts is <b>free</b> while you set up, before round 1: shoot some test balls and shuffle things around. Once the round starts, every move costs <b>$${UPKEEP.move}</b>.`, mood: 'cool', at: () => around('#invWrap'), scroll: '#invWrap' },
       { say: 'This is your <b>money</b>. Every round you clear pays, every ball you did not need pays extra, and some parts cough up coins when you hit them.', at: () => around('#right .money'), scroll: '#right .moneyrow' },
       { say: 'This is the <b>shop</b>. After every round you can buy new parts for the machine here.', at: () => around('#shopBox'), scroll: '#shopBox' },
       {
