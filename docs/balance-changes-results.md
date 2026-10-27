@@ -52,7 +52,7 @@ Every item of phases 1-9 is in, with its card sentence changed in the same place
 | 9.2 | Endless as a list to round 30, "You beat it all. Well done!" | yes | |
 | 9.3 | Round numbers | partly | base points are multiples of 5 now (Cha-Ching, Slingshot, Vari-Target, Drop-Target, Ding-Dong, Mag-Grab, Sparkler, Whale's swallow, Jackpot's pot), and so are the bigger per-level steps; the hover card rounds what it shows (to 5 up to 100, two figures above). Per-level steps of 1-3 on cheap parts were left alone (rounding them to 5 would double those parts' late value). |
 
-After the first re-measure (below), four more changes went in, all from what the census measured:
+After the first re-measure (below), six more changes went in, all from what was measured:
 
 | Change | Why |
 |---|---|
@@ -60,6 +60,8 @@ After the first re-measure (below), four more changes went in, all from what the
 | Wizard Mode lasts **20 s** (was 30) | +154% / +173% on the mid table in both passes |
 | The Whale's spout pays **500** (was 300) | the plan's own fallback (7.3): still a net loss on the late table in both passes |
 | Bonsai Bumper **+10** a round (was +6) | the plan's own fallback (7.7): a net loss on the late table in both passes |
+| Wizard Mode **doubles** every ×Mult limit (was: lifts them) | the build trials: inside Wizard Mode the Golden Bumper's ×1.05 a hit had no cap, and the singularity build reached a 2 billion Mult |
+| **Overheat**: a catcher or a Tesla Coil that fires 4 times in 6 s rests 5 s | the plan's 10.2 rule: with the clock off, some builds still kept balls up 4-8 minutes |
 
 ## 2. The part census (both passes)
 
@@ -144,3 +146,25 @@ The plan's targets were pro 30-50%, avg 15-30%, poor rarely. **None of these com
 - Bosses (rounds that met them, $5 run): The Jammer 35% lost, Flat Rate 29%, Cheap Rubber 27%, The Magnet 24%, Night
   Shift 19%, Short Fuse 35% in the $4 run. No regular boss is a run-ender any more; the final bosses could not be judged
   (1-3 runs reached them).
+
+## 5. Decals and bosses
+
+The late table plus four build tables, 6 rounds a cell
+([balance-research/after/rules-report.txt](balance-research/after/rules-report.txt)). On the build tables only the avg
+player plays and the noise is about ±30% (the cash decals, which cannot change a score, read -8% to +34% there): read the
+late column first.
+
+- **Decals, late table (avg)**: Glass Cannon +61% (×2 now, one ball less), Twin Ball +39% (first ball only), Bumper Car
+  +36%, Lucky Seven +27%, Heavy Ball +25%, **Sudden Death +25% (pro 0%, poor +43%)**, Bright Lamps +23%, Glass Ball
+  +23%, Jackpot Sets +22%, Overclock +21%, Minimalist +20%, Last Call +19%, Combo King +18% (×3 now; +34% on the cook
+  banks table). Afterglow is now +10% late (it is linear) and still +126% to +228% on the ×Mult tables. **Nest Egg +6%**
+  (with $15 held it is +0.3 Mult) and Spin Doctor +7% (no Spinner on the late table) are the weakest score decals.
+- **Bosses, late table (pass rate of a goal the table clears 83% of the time, avg)**: Tax Man 83%, Night Shift 83% (but
+  0-17% on the light builds, as intended), Short Fuse 67% (40 s), Overlord 67% (now once a round), Slippery Slope 33%,
+  The Magnet 33%, Whirlpool 17%, **Cheap Rubber 0% (×0.42 of the score), The Jammer 0% (×0.51), The Auditor 0%** (and
+  0-33% on every build table, ×0.16-0.6). Crossed Wires: a player who presses the wrong hand 30% of the time gets 0%
+  everywhere; the bot that swaps hands perfectly reads 17% on the late table but 50-83% on the build tables (noise of 6
+  rounds); it still needs a human playtest.
+- Big Boi unzappable (a variant, not in the game): on the six Big Boi builds his share falls from 76-92% to 56-74%, but the
+  builds collapse from round 13 to rounds 6-11
+  ([balance-research/after/variant-bigboi-unzappable.txt](balance-research/after/variant-bigboi-unzappable.txt)).
