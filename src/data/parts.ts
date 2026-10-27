@@ -1127,7 +1127,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     const lamp = lampStats(inst ? dialValue(inst, 'radius') : 5, mods), b = r.brighten!;
     lines.push({ tag: 'lamp', text: `Every hit brightens it a step (up to ${b.steps}) and pays ${f(b.points)}. Each step gives every scoring part within ${num(lamp.radius)} units +${Math.round(lamp.bonus * 100)}%, up to +${Math.round(lamp.full * 100)}%. It goes dark at the end of the ball.` });
   }
-  if (def.pack && def.pack > 1) lines.push({ tag: 'note', text: `Comes as a pack of ${def.pack}. Drop one on the table and the next comes to hand; a right-click sends the rest to the toolbox.` });
+  if (def.pack && def.pack > 1) lines.push({ tag: 'note', text: `Comes as a pack of ${def.pack}. Dropped on the table, the rest land beside the first (its ghost shows where), or in the toolbox if there is no room.` });
   if (r.lights && def.kind === 'rollover') lines.push({ tag: 'note', text: r.rank ? 'Lights up when the ball rolls over it. It goes dark at the end of the ball.' : 'Lights up when the ball rolls over it. The lanes of a pack spell the machine\'s word.' });
   if (r.rank) {
     const steps = r.rank.steps.map((x, i) => `${RANK_NAMES[i]} (×${xg(x)})`);

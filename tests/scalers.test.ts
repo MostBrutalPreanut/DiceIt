@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { footprint, makePart, PARTS, type PartId, type PartInstance } from '../src/data/parts';
+import { makePart, PARTS, type PartId, type PartInstance } from '../src/data/parts';
 import { Game } from '../src/game/game';
 import { Scorer } from '../src/game/scoring';
-import { WALL_GAP } from '../src/sim/layout';
 import type { SimEvent } from '../src/sim/sim';
 
 const hit = (uid: number, extra: Partial<Extract<SimEvent, { type: 'partHit' }>> = {}): SimEvent =>
@@ -27,13 +26,14 @@ describe('Grape Bunch', () => {
     expect(base(scorer([at('grape', 1, 10, 30), at('grape', 2, 16, 30)]), 1)).toBe(g); // too far apart
   });
 
-  it('a pack set down piece by piece, snug, pays for touching', () => {
+  it('a pack set down on the table lands snug, the pieces touching', () => {
     const g = new Game();
+    g.sandbox = true;
+    g.toWorkshop();
     g.shop.offers = ['grape', null, null, null];
     g.money = 50;
-    const first = g.buyAndPlace(0, 12, 30)!;
-    const step = 2 * footprint(PARTS.grape) + WALL_GAP + 0.05;
-    g.packRest(first).forEach((p, i) => expect(g.place(p.uid, 12 + (i + 1) * step, 30, true)).toBe(true));
+    g.sandbox = false;
+    g.buyAndPlace(0, 12, 30);
     const grapes = g.placed.filter((p) => p.def === 'grape');
     expect(grapes).toHaveLength(3);
     expect(g.scorer.grapeX(grapes[0])).toBeGreaterThan(1);

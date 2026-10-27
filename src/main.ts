@@ -307,7 +307,7 @@ async function main() {
       ? `<button class="buy" data-add="${id}">Add</button>`
       : `${price! < def.cost ? `<s>$${def.cost}</s>` : ''}<button class="buy" data-buy="${index}" ${game.canAfford(price!) && game.editable && game.hasRoomFor(id) ? '' : 'disabled'}>$${price}</button>`;
     const lock = index === null ? '' : `<button class="lock ${locked ? 'on' : ''}" data-lock="${index}" title="${locked ? 'Locked: it stays for the next round. Click to unlock' : 'Lock it: it stays for the next round (and through rerolls)'}">${locked ? 'LOCKED' : 'LOCK'}</button>`;
-    return `<div class="offer r-${def.rarity} ${locked ? 'locked' : ''}" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}${packTag(def) ? `<span class="pack" title="One offer: a pack of ${def.pack}, placed one after the other">${packTag(def)}</span>` : ''}</div>
+    return `<div class="offer r-${def.rarity} ${locked ? 'locked' : ''}" data-id="${id}"${index === null ? '' : ` data-slot="${index}"`}><div class="plinth" style="background:var(--role-${id}-tint)"><img alt="" src="${iconURL(id, 64, 64)}">${rarityChip(def.rarity)}${packTag(def) ? `<span class="pack" title="One offer: a pack of ${def.pack}">${packTag(def)}</span>` : ''}</div>
       <div class="name">${def.name}</div><div class="buyrow">${btn}</div>${lock}<div class="blurb">${def.blurb}</div></div>`;
   }
 
@@ -633,7 +633,6 @@ async function main() {
   }
 
   function refreshWorkshop() {
-    if (armed === null) game.enforceToolbox(); // pieces of a pack left past the toolbox's last slot go back for what they cost
     reportSold();
     noteFound();
     if (carry && !game.part(carry.uid)?.placed) carry = null; // the part in hand was stored, sold or undone away
@@ -654,7 +653,7 @@ async function main() {
     if (over === canvas) {
       const p = spotFor(d.id, cx, cy);
       part = d.slot === null ? game.grantAndPlace(d.id, p.x, p.y, d.angle) : game.buyAndPlace(d.slot, p.x, p.y, d.angle);
-      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); if (!armNext(part)) sayKey('place'); placedTip(part.uid); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? (game.decor.length ? 'ONE DECOR AT A TIME: STORE THE OTHER FIRST' : 'DECOR GOES IN THE SCREEN UP TOP') : 'NO ROOM THERE'); return false; }
+      if (part) { selected = part.uid; if (d.slot !== null) audio.buy(); audio.place(); sayKey('place'); placedTip(part.uid); } else { say(isInlay(d.id) ? 'DROP IT ON A PART IT FITS' : isDecor(d.id) ? (game.decor.length ? 'ONE DECOR AT A TIME: STORE THE OTHER FIRST' : 'DECOR GOES IN THE SCREEN UP TOP') : 'NO ROOM THERE'); return false; }
     } else if (over?.closest('#inventoryBox')) {
       part = d.slot === null ? game.grant(d.id, d.angle) : game.buy(d.slot, d.angle);
       if (part) { selected = part.uid; audio.buy(); sayKey('buy'); } else { say(d.slot !== null && !game.hasRoomFor(d.id) ? 'TOOLBOX FULL. DROP IT ON THE TABLE' : 'CANNOT AFFORD IT'); return false; }
@@ -662,6 +661,22 @@ async function main() {
     persist();
     return true;
   };
+  /**
+   * Where a pack carried from the shop would spread if it were dropped here: the spots of the other pieces on the
+   * table and how many go to the toolbox; null if some piece fits nowhere (the drop would be refused). Worked out
+   * again only when the spot or the machine changes.
+   */
+  let spreadKey = '', spreadAt: { table: { x: number; y: number }[]; toolbox: number } | null | undefined;
+  function packPreview(d: NonNullable<typeof shopDrag>, at: { x: number; y: number }) {
+    if (d.slot === null || (PARTS[d.id].pack ?? 1) < 2 || !game.canDropAt(d.id, at.x, at.y)) return undefined;
+    const key = `${d.id}|${at.x.toFixed(2)}|${at.y.toFixed(2)}|${game.historyDepth}|${game.inventory.length}`;
+    if (key !== spreadKey) {
+      spreadKey = key;
+      const spots = game.packSpots(d.id, at.x, at.y);
+      spreadAt = spots && { table: spots.slice(1).filter((s): s is { x: number; y: number } => !!s), toolbox: spots.filter((s) => !s).length };
+    }
+    return spreadAt;
+  }
   const endShop = () => {
     if (!shopDrag) return;
     shopDrag.el.classList.remove('dragging');
@@ -718,23 +733,8 @@ async function main() {
   function cancelHold() {
     if (shopDrag) { endShop(); audio.remove(); }
     if (carry) { dropCarry(); audio.remove(); }
-    const piece = armed !== null ? game.part(armed) : undefined;
-    if (piece?.fresh && piece.group !== undefined && PARTS[piece.def].pack) say(game.packRest(piece).length ? 'THE REST WAIT IN THE TOOLBOX' : 'IT WAITS IN THE TOOLBOX');
     armed = null;
     refreshWorkshop();
-  }
-
-  /**
-   * A piece of a pack just went on the table: the next piece bought with it comes to hand at once, to be placed
-   * with the next click. A right-click (or Esc) leaves the rest in the toolbox. False if there is no next piece.
-   */
-  function armNext(put: PartInstance | undefined): boolean {
-    const rest = put ? game.packRest(put) : [];
-    if (!rest.length) return false;
-    const n = PARTS[rest[0].def].pack ?? rest.length + 1;
-    armed = selected = rest[0].uid;
-    say(`NEXT ONE: ${Math.max(2, n - rest.length + 1)} OF ${n}. RIGHT-CLICK: REST TO THE TOOLBOX`);
-    return true;
   }
 
   // ---- pointer: place, select, drag, store -------------------------------------------------------
@@ -778,11 +778,10 @@ async function main() {
     if (armed !== null) {
       const a = spotFor(game.part(armed)?.def ?? 'pop', e.clientX, e.clientY);
       if (game.place(armed, a.x, a.y, true)) {
-        const put = game.part(armed);
-        selected = put ? armed : game.lastInlaid; // a gem went into a part: select the part
+        selected = game.part(armed) ? armed : game.lastInlaid; // a gem went into a part: select the part
         armed = null;
         audio.place();
-        if (!armNext(put)) sayKey('place');
+        sayKey('place');
         persist();
         if (selected !== null) placedTip(selected);
       } else if (isInlay(game.part(armed)?.def ?? 'pop')) say('DROP IT ON A PART IT FITS');
@@ -855,11 +854,10 @@ async function main() {
     if (e.target === canvas) {
       const p = spotFor(game.part(armed)?.def ?? 'pop', e.clientX, e.clientY);
       if (game.place(armed, p.x, p.y, true)) {
-        const put = game.part(armed);
-        selected = put ? armed : game.lastInlaid;
+        selected = game.part(armed) ? armed : game.lastInlaid;
         armed = null;
         audio.place();
-        if (!armNext(put)) sayKey('place');
+        sayKey('place');
         persist();
         refreshWorkshop();
         if (selected !== null) placedTip(selected);
@@ -1683,11 +1681,21 @@ async function main() {
     const armedPart = armed != null ? game.part(armed) : undefined;
     const ptr = (id: PartId) => (isDecor(id) ? pointerDecor : pointer);
     const sp = shopDrag ? ptr(shopDrag.id) : null, ap = armedPart ? ptr(armedPart.def) : null;
+    const spread = shopDrag && sp ? packPreview(shopDrag, sp) : undefined;
     drawState.ghost = game.editable && (shopDrag?.moving || shopDrag?.carry) && sp
-      ? { def: shopDrag.id, x: sp.x, y: sp.y, angle: PARTS[shopDrag.id].rotatable ? shopDrag.angle : 0, valid: game.canDropAt(shopDrag.id, sp.x, sp.y) }
+      ? {
+        def: shopDrag.id, x: sp.x, y: sp.y, angle: PARTS[shopDrag.id].rotatable ? shopDrag.angle : 0,
+        valid: game.canDropAt(shopDrag.id, sp.x, sp.y) && spread !== null, pack: spread?.table,
+      }
       : game.editable && armedPart && ap
         ? { def: armedPart.def, x: ap.x, y: ap.y, angle: armedPart.angle, valid: game.canDropAt(armedPart.def, ap.x, ap.y) }
         : null;
+    // the pieces of a pack that will find no room on the table: the toolbox says how many are coming its way
+    const incoming = drawState.ghost && spread ? spread.toolbox : 0;
+    $('inventoryBox').classList.toggle('incoming', incoming > 0);
+    const tag = $('toolIncoming');
+    tag.hidden = !incoming;
+    if (incoming) tag.textContent = `+${incoming} HERE`;
     renderer.draw(game, dt, drawState);
     updateHud(dt);
     placeInspect();

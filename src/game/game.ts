@@ -7,7 +7,7 @@ import {
 } from '../data/decals';
 import { BOSSES, bossOf, FINAL_ROUND, planBosses, type BossDef, type BossId } from '../data/bosses';
 import type { MachineId } from '../data/bigboi';
-import { canPlace, canPlaceLedge, decorParts, ensureBigBoi, inventoryParts, loadLayout, placedParts, settleDecor, starterLayout, type Layout } from '../sim/layout';
+import { canPlace, canPlaceLedge, decorParts, WALL_GAP, ensureBigBoi, inventoryParts, loadLayout, placedParts, settleDecor, starterLayout, type Layout } from '../sim/layout';
 import { decorSpot } from '../sim/cabinet';
 import { MAX_BALLS, TABLE_H, TABLE_W } from '../sim/constants';
 import { clampLedge, LEDGE } from '../sim/table';
@@ -322,8 +322,7 @@ export class Game {
 
   /** Sells a part the toolbox has no room for, at its sell price, and remembers it for the UI. */
   private sellOverflow(inst: PartInstance): number {
-    // a part bought this visit goes back for what it cost (the piece of a pack that found no room); any other sells
-    const refund = this.sandbox ? 0 : inst.loose && inst.paid !== undefined ? inst.paid : this.sellValue(PARTS[inst.def]);
+    const refund = this.sandbox ? 0 : this.sellValue(PARTS[inst.def]);
     this.money += refund;
     this.layout.parts = this.layout.parts.filter((q) => q.uid !== inst.uid);
     if (inst.placed) this.sim.removePart(inst.uid);
@@ -455,7 +454,6 @@ export class Game {
 
   startRound() {
     if (!this.canStart) return;
-    this.enforceToolbox(); // pieces of a pack left waiting past the toolbox's last slot go back
     for (const p of this.layout.parts) { delete p.fresh; delete p.loose; delete p.paid; } // anything bought is no longer new, and moving it costs from now on
     const boss = this.boss;
     this.mods = boss?.decalsOffUntilHalf && !this.fixedMods ? this.roundMods(false) : this.roundMods();
@@ -926,6 +924,28 @@ export class Game {
     });
   }
 
+  /**
+   * Where the rest of a pack goes when its first piece is dropped on the table at (x, y): the nearest free spots
+   * beside it, in a row first (lanes side by side), or the toolbox. null if some piece fits nowhere. The ghost of
+   * an offer in hand shows these spots, so the pack lands where it said it would.
+   */
+  packSpots(id: PartId, x: number, y: number): ({ x: number; y: number } | null)[] | null {
+    const n = PARTS[id].pack ?? 1;
+    const probe: Layout = { ...this.layout, parts: [...this.layout.parts, makePart(id, -1, x, y, true)] };
+    const spots: ({ x: number; y: number } | null)[] = [{ x, y }];
+    // a pack's pieces go side by side; a Grape Bunch's snug against each other (they pay for touching)
+    const step = PARTS[id].recipe.grape ? 2 * footprint(PARTS[id]) + WALL_GAP + 0.05 : 2.4;
+    const offsets = [[1, 0], [-1, 0], [2, 0], [-2, 0], [0, -1], [0, 1], [1, -1], [-1, -1], [1, 1], [-1, 1], [0, -2], [0, 2]];
+    let toolbox = this.sandbox ? Infinity : this.toolboxSlots - this.inventory.length;
+    for (let k = 1; k < n; k++) {
+      const at = offsets.map(([dx, dy]) => ({ x: x + dx * step, y: y + dy * step })).find((p) => canPlace(probe, id, p.x, p.y));
+      if (at) { probe.parts.push(makePart(id, -1 - k, at.x, at.y, true)); spots.push(at); }
+      else if (toolbox-- > 0) spots.push(null);
+      else return null;
+    }
+    return spots;
+  }
+
   // ---- gems (inlays): set into a part on the table, one each ----------------------------------------------
 
   /** The part a gem dropped at (x, y) goes into: the nearest placed part under the point that it fits. */
@@ -980,18 +1000,19 @@ export class Game {
     const cost = this.priceAt(slot);
     if (isDecor(id)) ({ x, y } = decorSpot(x, y)); // decor drops into the decor screen
     if (!this.canAfford(cost) || !canPlace(this.layout, id, x, y)) return null;
+    const spots = this.packSpots(id, x, y);
+    if (!spots) return null;
     this.checkpoint();
     if (!this.sandbox) this.money -= cost;
     this.sold(slot);
-    // the first piece lands where it was dropped; the rest of a pack wait in the toolbox, to be placed one by one
-    // (even past its last slot for now: enforceToolbox returns what is left over once you are done)
     const pack = this.makePack(id, cost, angle);
     pack.forEach((inst, i) => {
-      if (i === 0) Object.assign(inst, { x, y, placed: true });
+      const at = spots[i];
+      if (at) Object.assign(inst, { x: at.x, y: at.y, placed: true });
       else inst.fresh = true;
       this.layout.parts.push(inst);
+      if (at) this.sim.updatePart(inst);
     });
-    this.sim.updatePart(pack[0]);
     this.clearHeat();
     this.decorChanged(id);
     return pack[0];
@@ -1065,11 +1086,6 @@ export class Game {
   /** What moving this part costs right now (0 if it was bought this visit, its move is paid, or moves are free). */
   moveFee(p: PartInstance): number {
     return this.sandbox || p.loose || this.mods.freeMoves || this.movesFree ? 0 : UPKEEP.move;
-  }
-
-  /** The other pieces of this part's pack bought this visit and still waiting in the toolbox, to be placed next. */
-  packRest(p: PartInstance): PartInstance[] {
-    return p.group === undefined ? [] : this.inventory.filter((q) => q.group === p.group && q.uid !== p.uid && q.fresh);
   }
 
   /** What removing this part does to your money: a part bought this visit goes back for what it cost; any other costs the scrap fee. */

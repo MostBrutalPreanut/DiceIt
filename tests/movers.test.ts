@@ -139,26 +139,23 @@ describe('packs: Lane Rollovers come in threes, Level Lights in twos', () => {
     expect(g.inventory.filter((p) => p.def === 'uplight')).toHaveLength(0);
   });
 
-  it('dropped on the table, the first piece lands there and the rest wait to be placed one by one', () => {
+  it('dropped on the table, the rest of the pack lands beside the first piece', () => {
     const g = new Game();
     const first = g.buyAndPlace(offer(g, 'lane'), 12, 30)!;
-    expect(g.placed.filter((p) => p.def === 'lane')).toEqual([first]);
+    const lanes = g.placed.filter((p) => p.def === 'lane');
+    expect(lanes).toHaveLength(3);
+    for (const p of lanes) expect(Math.hypot(p.x - first.x, p.y - first.y)).toBeLessThan(5);
     expect(g.money).toBe(50 - PARTS.lane.cost);
-    const rest = g.packRest(first);
-    expect(rest).toHaveLength(2);
-    expect(g.place(rest[0].uid, 15, 30, true)).toBe(true);
-    expect(g.packRest(g.part(rest[0].uid)!)).toEqual([rest[1]]); // the last one is next
-    expect(rest.every((p) => p.group === first.group)).toBe(true);
   });
 
-  it('pieces with no room left in the toolbox go back for what they cost once you are done', () => {
-    const g = new Game();
-    for (let i = 0; g.inventory.length < g.toolboxSlots; i++) { g.shop.offers[1] = 'pop'; g.money = 50; g.buy(1); }
-    const first = g.buyAndPlace(offer(g, 'lane'), 12, 30)!;
-    expect(g.inventory.length).toBe(g.toolboxSlots + 2); // still to place
-    g.enforceToolbox(); // right-clicked: the rest go to the toolbox, and there is no room
-    expect(g.inventory.length).toBe(g.toolboxSlots);
-    expect(g.money).toBe(50 - PARTS.lane.cost + (PARTS.lane.cost - first.paid!));
+  it('the spread shown while the pack is carried is where it lands', () => {
+    for (const [x, y] of [[3.2, 34], [12, 22]]) {
+      const g = new Game();
+      expect(g.canDropAt('lane', x, y)).toBe(true);
+      const shown = g.packSpots('lane', x, y)!;
+      g.buyAndPlace(offer(g, 'lane'), x, y);
+      expect(g.layout.parts.filter((p) => p.def === 'lane').map((p) => (p.placed ? { x: p.x, y: p.y } : null))).toEqual(shown);
+    }
   });
 
   it('a set is all three lanes of one pack: three lit lanes from two packs are not a set', () => {
