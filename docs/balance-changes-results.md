@@ -90,3 +90,57 @@ plan expected (the shop card now says "Needs room"). The new parts: Hourglass -6
 
 Gems: the Emerald and the Red Seal (in a Thunder) are the only ones that matter (+30-40%). Gold Leaf at +2 a score is +5%
 late, +20% mid; **Opal and Garnet still do nothing measurable (0-6%)**, as before.
+
+## 3. Builds, the clock and the run-out
+
+The build finder's 21 builds (full, partial, auto-placed) × 3 players × 2 seeds, rounds 10-15 against the new goals then
+endless: [balance-research/after/builds-and-clock-report.txt](balance-research/after/builds-and-clock-report.txt).
+
+- **Ordinary builds ($50-130) now stop at rounds 13-14**; before, a $53 Big Boi build reached round 18-20. Only the
+  expensive dream builds ($150-300: Hall of Fame zoo, broom runway, dragon apocalypse, supernova, bell tower, overdrive)
+  beat round 15 and go on into endless.
+- **The singularity build still ran away** (peak Mult 2 billion): Wizard Mode lifted every ×Mult cap, and the Golden
+  Bumper's ×1.05 a hit compounds without one. Fixed afterwards: **Wizard Mode doubles the ×Mult caps instead of lifting
+  them**. (Every other ceiling held: Afterglow, Disco, Hall of Fame.)
+- **Big Boi still takes 76-92% of the points on the Big Boi builds** (foreman-elevator 92%, dragon-purist 88%, budget
+  grape 88%, cook-autopilot 76%), with zaps 60-72% of all points. Zaps no longer give Mult, but Tesla Coils still zap
+  him for his points (×2 Fan Club, ×2.25 from two Plates). See the flags.
+- Other one-part builds: the Drop-Target Bank 72% (Target Practice), the Echo Cave 46%, the Golden Bumper 44%.
+
+**Clock off** (every ball out, cut at 10 min): no build reaches the 10-minute cut any more (before: three did). But the
+multiball castle still kept a ball alive 499 s, the Diner autopilot 420 s and the Hall of Fame zoo 236 s, past the plan's
+2-minute line. So, as the plan says, **Overheat is in**: a catcher (Mag-Grab, Jackpot Scoop, Printer, Wheel) or a Tesla Coil
+that fires 4 times in 6 s rests 5 s.
+
+**The run-out** (closing time): 196 run-outs, 98% rolled out by themselves, 2% a stuck ball taken, **0 cut at 15 s, 0
+fresh clocks**; median 2.5 s, 90th percentile 3.7 s. Exactly what the harness variant promised.
+
+## 4. Whole runs (the campaigns)
+
+The real run: shop rolls, decal picks, bosses and money; 4 shopping strategies (par, seeker, casual, meta) × 3 players
+(pro, avg, poor); a lost round ends the run. Reports in [balance-research/after/](balance-research/after/).
+
+| Campaign | Runs | Pro won | Avg won | Poor won | Pro median round | Avg median round |
+|---|---|---|---|---|---|---|
+| Before the changes (research) | 120 | 15% | 2.5% | 0% | 8.5-9 | 3-7.5 |
+| **As planned**: $4 a round, 1M final (5 seeds) | 60 | 0% | 0% | 0% | 1-8 | 1-7 |
+| $4 a round, softer late curve (600k final) (10 seeds) | 120 | 2.5% | 0% | 0% | 6-9 | 1.5-6.5 |
+| $5 a round, 1M final (10 seeds) | 120 | 2.5% | 0% | 0% | 2.5-11 | 1.5-8 |
+
+The plan's targets were pro 30-50%, avg 15-30%, poor rarely. **None of these comes near.** What the numbers say:
+
+- **Money is where the plan wanted it.** Cash at the shop is $6-12 a round through round 12, spending $7-9 (about two
+  cheap parts or one good one), no pile-up (the old $47 → $138 is gone). With $5 a round it is $9-12, still no pile-up.
+- **Rounds 1-10 are fine for a pro, a bit harsh for the rest.** With $5 a round the pro par and seeker players fail 0-2% of
+  rounds 1-5 and 7-8% of rounds 6-10, about the research's numbers before the changes. At $4 it is 5-9% and 7-23%.
+  Average players lose 15-25% a round from round 3 on; poor players 30-50% a round from round 1 (round 1 is the bare
+  starter, unchanged: poor players score 0.24-2.6× the 1,000 goal).
+- **The late game is a wall.** From round 12 the pro loses 38-67% of every round it plays (score/goal median falls to
+  1.1 at round 12 and 0.8 at round 14). The exploits used to carry the late game (Afterglow compounding, the Printer, the
+  Wheel, twin multiball); with them closed, an honestly built table grows about ×1.4-1.5 a round from round 10 while the
+  curve asks ×1.7. Peak Mult at round 14 is 11; kept Mult 3.4; the bots take no levels (median 0).
+- What wins in normal play now: Pops (top part in 23-37 of the late rounds), Ding-Dong Bells, then Big Boi. The top part
+  takes 42-44% of a late round: no single part carries a normal table any more.
+- Bosses (rounds that met them, $5 run): The Jammer 35% lost, Flat Rate 29%, Cheap Rubber 27%, The Magnet 24%, Night
+  Shift 19%, Short Fuse 35% in the $4 run. No regular boss is a run-ender any more; the final bosses could not be judged
+  (1-3 runs reached them).
