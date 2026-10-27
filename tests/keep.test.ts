@@ -136,14 +136,14 @@ describe('Power Plate', () => {
 });
 
 describe('Hall of Fame', () => {
-  it('once a ball, adds +0.1 Mult for every different part type on the table', async () => {
+  it('once a ball, adds +0.2 Mult for every different part type on the table', async () => {
     const { Scorer } = await import('../src/game/scoring');
     const parts = [makePart('fame', 1, 12, 30, true), makePart('pop', 2, 6, 30, true), makePart('pop', 3, 18, 30, true), makePart('lane', 4, 12, 40, true)];
     const s = new Scorer(1e9, () => parts);
     s.startBall();
     const e = s.consume(hit(1))[0];
-    expect(e.label).toBe('+0.3 MULT'); // fame, pop and lane
-    expect(s.mult).toBeCloseTo(1.3, 2);
+    expect(e.label).toBe('+0.6 MULT'); // fame, pop and lane
+    expect(s.mult).toBeCloseTo(1.6, 2);
     expect(s.consume(hit(1))).toEqual([]); // once a ball
     s.startBall();
     expect(s.consume(hit(1))[0].kind).toBe('bonus');

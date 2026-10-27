@@ -89,6 +89,10 @@ export interface Recipe {
   multCap?: number;
   /** Never zapped (the Mult parts: a zap pays points, and their Mult stays a shot the ball has to make). */
   noZap?: boolean;
+  /** The few ×Mult parts (rare, on a cooldown or once a ball): multiplies the Mult (×1.25 = +25% of the Mult you have). */
+  xmult?: number;
+  /** The most all parts of the type together multiply the Mult in one ball. */
+  xmultCap?: number;
   /** +Mult per spin (Spinner), up to `spinMultCap` a ball from all of the type. */
   spinMult?: number;
   spinMultCap?: number;
@@ -592,9 +596,9 @@ export const PARTS: Record<PartId, PartDef> = {
     dials: [{ id: 'hold', label: 'Hold', min: 0.4, max: 1.5, step: 0.1, default: 0.8, tradeoff: 'How long it keeps the ball before it fires it back out.', ends: ['quick', 'slow'], fmt: (v) => `${v.toFixed(1)} s` }, { ...powerDial('eject'), tradeoff: 'How hard it fires the ball back out.' }],
   },
   xlane: {
-    id: 'xlane', name: 'X Lane', blurb: 'Roll through it: a quick shot of Mult.', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, weight: 2,
+    id: 'xlane', name: 'X Lane', blurb: 'Roll through it and your Mult multiplies. Then it rests.', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { mult: 0.25, multCap: 2, noZap: true, cooldown: 3, lightsLane: true }, dials: [],
+    recipe: { xmult: 1.25, xmultCap: 2, noZap: true, cooldown: 10, lightsLane: true }, dials: [],
   },
   rank: {
     id: 'rank', name: 'Rank Lights', blurb: 'Roll over all three: that ball pays more for a while. Promoted!', kind: 'rollover', rarity: 'rare', tags: ['light'], cost: 8, pack: 3, weight: 2,
@@ -604,7 +608,7 @@ export const PARTS: Record<PartId, PartDef> = {
   bell: {
     id: 'bell', name: 'Old Bell', blurb: 'Ring it in three rounds: a bigger Mult for the rest of the run.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 8, weight: 2,
     shape: { type: 'circle', r: 1.1 }, rotatable: false, kickUnit: 10,
-    recipe: { points: 20, per: 'hit', bell: { first: 150, notches: 3, mult: 0.2 }, perLevel: 5 }, dials: [kickDial(1.5)],
+    recipe: { points: 20, per: 'hit', bell: { first: 150, notches: 3, mult: 0.5 }, perLevel: 5 }, dials: [kickDial(1.5)],
   },
   tesla: {
     id: 'tesla', name: 'Tesla Coil', blurb: 'Every hit zaps the nearest parts, and they score too. Bzzt.', kind: 'bumper', rarity: 'rare', tags: ['bumper'], cost: 9, weight: 2,
@@ -637,22 +641,22 @@ export const PARTS: Record<PartId, PartDef> = {
   golden: {
     id: 'golden', name: 'Golden Bumper', blurb: 'Solid gold: big points, Mult, and a bit of cash.', kind: 'bumper', rarity: 'legendary', tags: ['bumper', 'money'], cost: 12, weight: 2,
     shape: { type: 'circle', r: 1.5 }, rotatable: false, kickUnit: 15,
-    recipe: { points: 120, per: 'hit', mult: 0.05, multCap: 2, noZap: true, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
+    recipe: { points: 120, per: 'hit', mult: 0.1, multCap: 3, noZap: true, moneyEvery: { n: 5, cap: 5 }, perLevel: 30 }, dials: [kickDial(2)],
   },
   fame: {
     id: 'fame', name: 'Hall of Fame', blurb: 'Once a ball, roll over: Mult per kind of part on your table.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 13, weight: 2,
     shape: { type: 'circle', r: 1.3 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 150, per: 'pass', typeMult: 0.1, multCap: 2, noZap: true, perBall: 1, perLevel: 40 }, dials: [],
+    recipe: { points: 150, per: 'pass', typeMult: 0.2, multCap: 4, noZap: true, perBall: 1, perLevel: 40 }, dials: [],
   },
   disco: {
-    id: 'disco', name: 'Disco Ball', blurb: 'Roll over once a ball: big Mult, and every Lamp lights. Boogie.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
+    id: 'disco', name: 'Disco Ball', blurb: 'Roll over once a ball: ×Mult, and every Lamp lights. Boogie.', kind: 'rollover', rarity: 'legendary', tags: ['light'], cost: 11, weight: 2,
     shape: { type: 'circle', r: 1.25 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 200, per: 'pass', mult: 0.5, multCap: 2, noZap: true, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
+    recipe: { points: 200, per: 'pass', xmult: 1.5, xmultCap: 2, noZap: true, perBall: 1, lightsLamps: 8, perLevel: 50 }, dials: [],
   },
   goal: {
     id: 'goal', name: 'Goal!', blurb: 'Shoot past the goalie for points and Mult. He is very serious.', kind: 'goal', rarity: 'legendary', tags: ['target', 'long'], cost: 12, weight: 2,
     shape: { type: 'box', hw: 3.4, hh: 1.1 }, rotatable: false, kickUnit: 0,
-    recipe: { points: 300, per: 'goal', goal: { mult: 0.5, multCap: 3 }, cooldown: 1.5, perLevel: 75 }, dials: [],
+    recipe: { points: 300, per: 'goal', goal: { mult: 1, multCap: 4 }, cooldown: 1.5, perLevel: 75 }, dials: [],
     mover: { travel: 1.7, speed: 3, shape: { type: 'box', hw: 0.75, hh: 0.22 }, y: -0.45, restitution: 0.55 },
   },
 
@@ -1107,6 +1111,9 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
     : `Grows: +${num(r.grow * factor)} for every ${def.name} hit this ball (all ${def.name}s share it)${r.growCap ? `, up to +${num(r.growCap * factor)}` : ''}.` });
   if (r.feeds) lines.push({ tag: 'grow', text: `Every hit counts as ${r.feeds.n} ${PARTS[r.feeds.id].name} hits for their growth this ball.` });
   const allCap = (what: string) => (r.multCap ? ` (all ${what} together: up to +${mg(r.multCap)} a ball)` : '');
+  const allX = (what: string) => (r.xmultCap ? ` (all ${what} together: up to ×${xg(r.xmultCap)} a ball)` : '');
+  if (r.xmult && r.perBall) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} the first time a ball rolls over it each ball${allX(`${def.name}s`)}.` });
+  else if (r.xmult) lines.push({ tag: 'mult', text: `Multiplies your Mult by ×${xg(r.xmult)} per ${per}${allX(`${def.name}s`)}.` });
   if (r.mult && r.perBall) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} the first time a ball rolls over it each ball${allCap(`${def.name}s`)}.` });
   else if (r.mult) lines.push({ tag: 'mult', text: `Raises your Mult by +${mg(r.mult)} per ${per}${r.multCap ? `, up to +${mg(r.multCap)} a ball${one ? '' : ` from all ${def.name}s`}` : ''}.` });
   if (r.lock) lines.push({ tag: 'spawn', text: `A lock: a ball shot into it is held, and a new one comes to the plunger at no cost. The ${r.lock.n === 3 ? 'third' : `${r.lock.n}th`} lock lets all ${r.lock.n} loose at once: a real multiball. Once a round: after that, and in multiball, a ball rolls straight through for its points. The new balls share the clock of the ball you launched.` });
@@ -1143,7 +1150,7 @@ export function describe(def: PartDef, inst?: PartInstance, ctx: DescribeCtx = {
   if (r.wizard) {
     const need = ctx.wizardNeed;
     lines.push({ tag: 'combo', text: `It lights a segment for every different part type the ball itself hits this ball (zaps and sparks do not count): one segment for each part type on your table that scores, up to ${r.wizard.max}, counted when the round starts${need ? `. Right now: hit ${need} types` : ''}.` });
-    lines.push({ tag: 'spawn', text: `Light them all and WIZARD MODE starts: for ${r.wizard.seconds} s, ${r.wizard.balls} more balls fly out of it (they leave again when it ends), every part's Mult limit is doubled and every Lamp is at full glow. Once a round. Its balls share your ball's clock.` });
+    lines.push({ tag: 'spawn', text: `Light them all and WIZARD MODE starts: for ${r.wizard.seconds} s, ${r.wizard.balls} more balls fly out of it (they leave again when it ends), every +Mult limit is doubled (×Mult limits stay) and every Lamp is at full glow. Once a round. Its balls share your ball's clock.` });
   }
   if (r.typeMult) lines.push({ tag: 'mult', text: `The first time a ball rolls over it each ball: +${mg(r.typeMult)} Mult for every different part type on your table (Big Boi too)${ctx.types ? `, +${num(Math.round(r.typeMult * mods.multGain * ctx.types * 100) / 100)} now` : ''}${allCap('Halls of Fame')}.` });
   if (r.money && !mods.noCoins) lines.push({ tag: 'money', text: `Pays $${r.money} per ${per}${r.moneyCap ? `, up to $${r.moneyCap} a round from all ${def.name}s` : ''}.` });

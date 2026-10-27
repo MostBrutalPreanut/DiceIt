@@ -98,12 +98,12 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
 
   // real shop: buy the first affordable offer, place it, then undo and redo both steps
   let s = await state();
-  check(s.placed === 1 && s.inv === 3 && s.money === 6, 'a run starts with Big Boi on the table, the 3 starting bumpers in the toolbox, $6');
+  check(s.placed === 1 && s.inv === 3 && s.money === 5, 'a run starts with Big Boi on the table, the 3 starting bumpers in the toolbox, $5');
   await page.click('#inventory .item');
   const seat = await at(17, 44.5);
   await page.mouse.move(seat.x, seat.y);
   await page.mouse.click(seat.x, seat.y);
-  check((await state()).money === 6 && (await state()).placed === 2, 'placing a starting bumper is free');
+  check((await state()).money === 5 && (await state()).placed === 2, 'placing a starting bumper is free');
   await page.waitForSelector('.tut .tut-bub');
   await page.waitForTimeout(500);
   check(/press any part/i.test(await page.innerText('.tut .tut-txt')), 'after the tour, the first part placed gets Big Boi\'s word on part cards');
@@ -114,10 +114,10 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   await page.keyboard.press('Escape');
   await page.evaluate(() => { const g = window.__pinball.game; g.place(1, 17, 44.5); window.__pinball.seatStarters(); });
   s = await state();
-  check(s.placed === 4 && s.inv === 0 && s.money === 6, 'with all three placed: 3 bumpers and Big Boi on the table, $6');
+  check(s.placed === 4 && s.inv === 0 && s.money === 5, 'with all three placed: 3 bumpers and Big Boi on the table, $5');
   await page.click('button[data-buy]:not([disabled])');
   s = await state();
-  check(s.inv === 1 && s.money < 6, 'buying puts the part in the inventory and costs money');
+  check(s.inv === 1 && s.money < 5, 'buying puts the part in the inventory and costs money');
   const p = await at(12, 28);
   await page.mouse.move(p.x, p.y);
   await page.mouse.click(p.x, p.y);
@@ -132,7 +132,7 @@ const check = (cond, m) => { if (!cond) fail(m); else console.log('ok: ' + m); }
   check(s.placed === 4 && s.inv === 1, 'undo takes the placement back');
   await page.click('#btnUndo');
   s = await state();
-  check(s.inv === 0 && s.money === 6, 'undo takes the purchase back and refunds the money');
+  check(s.inv === 0 && s.money === 5, 'undo takes the purchase back and refunds the money');
   await page.click('#btnRedo');
   await page.click('#btnRedo');
   s = await state();

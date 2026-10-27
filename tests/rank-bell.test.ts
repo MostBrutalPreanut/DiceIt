@@ -115,7 +115,7 @@ describe('Old Bell', () => {
     expect(bell.notches).toBe(1);
   });
 
-  it('three rounds of notches ring it: +0.2 Mult on this ball at once, and every ball after starts +0.2 higher', () => {
+  it('three rounds of notches ring it: +0.5 Mult on this ball at once, and every ball after starts +0.5 higher', () => {
     const g = new Game();
     const bell = makePart('bell', 50, 12, 28, true);
     g.layout.parts.push(bell);
@@ -129,14 +129,14 @@ describe('Old Bell', () => {
         expect(g.scorer.consume(hit(50))[0].base).toBe(20); // the toll is paid: an ordinary hit now
       } else {
         expect(bell.notches).toBe(0);
-        expect(out.at(-1)!.label).toBe('THE BELL RINGS! +0.2');
-        expect(g.scorer.mult).toBeCloseTo(before + 0.2, 3);
+        expect(out.at(-1)!.label).toBe('THE BELL RINGS! +0.5');
+        expect(g.scorer.mult).toBeCloseTo(before + 0.5, 3);
       }
       g.toWorkshop();
     }
     expect(g.rings).toBe(1);
     g.startRound();
-    expect(g.scorer.mult).toBeCloseTo(1.2, 3);
+    expect(g.scorer.mult).toBeCloseTo(1.5, 3);
   });
 
   it('a ring adds to the Mult every ball starts at (it never multiplies what the ball gains)', () => {
@@ -144,19 +144,19 @@ describe('Old Bell', () => {
     const plain = new Scorer(1e9, () => parts);
     const rung = new Scorer(1e9, () => parts, { rings: 1 });
     for (const s of [plain, rung]) { s.resetRound(); s.consume(hit(6)); s.consume(hit(6)); }
-    expect(rung.mult).toBeCloseTo(plain.mult + 0.2, 3);
+    expect(rung.mult).toBeCloseTo(plain.mult + 0.5, 3);
   });
 
   it('rings stack, Flat Rate shrinks them, and selling the bell keeps them', () => {
-    expect(new Scorer(1e9, () => [], { rings: 2 }).ringBonus).toBe(0.4);
-    expect(new Scorer(1e9, () => [], { rings: 1, mods: { ...neutralMods(), multGain: 0.7 } }).ringBonus).toBe(0.14);
+    expect(new Scorer(1e9, () => [], { rings: 2 }).ringBonus).toBe(1);
+    expect(new Scorer(1e9, () => [], { rings: 1, mods: { ...neutralMods(), multGain: 0.7 } }).ringBonus).toBe(0.35);
     const g = new Game();
     g.layout.parts.push(makePart('bell', 50, 12, 28, true));
     g.rings = 1;
     g.money = 10;
     g.sell(50);
     g.startRound();
-    expect(g.scorer.mult).toBeCloseTo(1.2, 3);
+    expect(g.scorer.mult).toBeCloseTo(1.5, 3);
   });
 
   it('the rings are saved with the run', () => {

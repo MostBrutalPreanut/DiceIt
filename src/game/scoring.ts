@@ -352,6 +352,19 @@ export class Scorer {
     return this.take(this.multPaid, key, want, cap !== undefined && this.now < this.wizUntil ? cap * 2 : cap);
   }
 
+  /**
+   * The few ×Mult parts (X Lane, the Disco Ball): how much of `x` the cap on the product lets through. WIZARD MODE does
+   * not raise these caps (it doubles the +Mult caps only): ×Mults multiply each other and would run away.
+   */
+  private takeX(key: string, x: number, cap: number | undefined): number {
+    if (x <= 1) return 1;
+    const used = this.xPaid.get(key) ?? 1;
+    const got = cap === undefined ? x : Math.max(1, Math.min(x, cap / used));
+    this.xPaid.set(key, used * got);
+    return got;
+  }
+  private xPaid = new Map<string, number>();
+
   /** The Old Bells' rings, after the boss's Flat Rate: +0.2 each, on every ball's Mult. */
   private refreshRings() {
     this.ringBonus = Math.round(this.gain(PARTS.bell.recipe.bell!.mult) * this.rings * 1000) / 1000;
@@ -400,6 +413,7 @@ export class Scorer {
     this.gongHits.clear();
     this.ballHits = 0;
     this.multPaid.clear();
+    this.xPaid.clear();
     this.setsPaid.clear();
     this.hitsByType.clear();
     this.typesHit.clear();
@@ -628,6 +642,7 @@ export class Scorer {
     if (r.boom && !this.isJammed(inst)) return `${(this.gongHits.get(inst.uid) ?? 0) % r.boom.every}/${r.boom.every}`; // hits towards the boom
     if (r.bell && !this.firedThisRoundOf(inst.uid) && !this.isJammed(inst)) return String(this.baseNow(inst, 1, 1, r.bell.first)); // its toll is waiting
     if (r.typeMult) return `+${this.typeMultNow(r.typeMult).toFixed(1)}`;
+    if (r.xmult && !r.points) return `x${this.dimX(this.gainX(r.xmult)).toFixed(2)}`;
     if (r.mult && !r.points) return `+${this.lightGain(inst.def, this.gain(r.mult))}`;
     const n = this.baseNow(inst);
     if (n === null) return null;
@@ -701,6 +716,7 @@ export class Scorer {
   private dimX(x: number) { return 1 + (x - 1) * this.mods.lightsDim; }
   private isLight(id: PartId) { return PARTS[id].tags.includes('light'); }
   private lightGain(id: PartId, n: number) { return this.isLight(id) ? n * this.mods.lightsDim : n; }
+  private dimFor(id: PartId, x: number) { return this.isLight(id) ? this.dimX(x) : x; }
 
   /** Turn one physical event into zero or more attributed score events. */
   consume(ev: SimEvent): ScoreEvent[] {
@@ -816,12 +832,18 @@ export class Scorer {
       return out;
     }
 
-    // X Lane and other Mult lights without points
-    if (!r.points && r.mult) {
+    // X Lane and other Mult lights without points (×Mult or +Mult)
+    if (!r.points && (r.mult || r.xmult)) {
       if (ev.zap || this.coolingDown(inst.uid, ev.t)) return out;
       if (r.cooldown) this.coolUntil.set(inst.uid, ev.t + r.cooldown * this.coolX(inst));
-      const add = this.lightGain(inst.def, this.gain(this.takeMult(inst.def, r.mult, r.multCap)));
-      out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, add, 0, [], add > 0.0001 ? `+${Math.round(add * 100) / 100} MULT` : 'X LANE MAXED'));
+      if (r.xmult) {
+        const x = this.takeX(inst.def, this.dimFor(inst.def, this.gainX(r.xmult)), r.xmultCap ? this.gainX(r.xmultCap) : undefined);
+        out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, 0, 0, [], x > 1.0001 ? `MULT x${x.toFixed(2)}` : 'X LANE MAXED', undefined, x));
+        if (r.lightsLane) { const lane = this.lightNextLane(); if (lane) out.push(...this.checkLaneSet(lane, ev, inst)); }
+        return out;
+      }
+      const add = this.lightGain(inst.def, this.gain(this.takeMult(inst.def, r.mult ?? 0, r.multCap)));
+      out.push(this.award(inst, ev.t, ev.x, ev.y, 'bonus', 0, add, 0, [], add > 0.0001 ? `+${Math.round(add * 100) / 100} MULT` : 'MULT MAXED'));
       if (r.lightsLane) { const lane = this.lightNextLane(); if (lane) out.push(...this.checkLaneSet(lane, ev, inst)); }
       return out;
     }
@@ -919,6 +941,7 @@ export class Scorer {
       if (r.well && inst.well && !zapped) multGain += this.gain(this.take(this.multPaid, 'well', r.well.mult * inst.well, r.well.multCap));
       if (r.spinMult && !zapped) multGain += this.gain(this.take(this.multPaid, 'spin', r.spinMult * m.spinMult * spins, (r.spinMultCap ?? 0) * m.spinMult));
       if (zapped && (r.mult || r.spinMult || (r.well && inst.well))) notes.push('zapped: no Mult');
+      const xmult = zapped || !r.xmult ? 1 : this.takeX(inst.def, this.dimFor(inst.def, this.gainX(r.xmult)), r.xmultCap ? this.gainX(r.xmultCap) : undefined);
       const base = Math.round((pts + leaf + level + grown + variety + pot + bonsai + well) * spins * tierX * factor * mf * ruby * (1 + lamp.sum) * (1 + strip) * plate * edge * bunch * echo * spot * (lucky ? m.luckyX : 1) * (1 + hotBonus) * order * situ.x);
       const twice = gem === 'opal' ? 2 : 1; // an Opal counts every hit twice for growth
       this.hitsByType.set(inst.def, this.hitsOf(inst.def) + twice);
@@ -935,8 +958,8 @@ export class Scorer {
       const rang = toll && r.bell ? this.notch(inst, r.bell.notches) : false;
       if (toll && r.bell) notes.push(rang ? 'the bell rings' : `notch ${this.notchesOf(inst)}/${r.bell.notches}`);
       if (r.lightsLamps) this.flashLamps(ev.t, r.lightsLamps);
-      const label = ev.time ? `+${ev.time} S` : r.perBall && multGain > 0 ? `+${Math.round(multGain * 100) / 100} MULT` : r.jackpot && pot ? 'JACKPOT!' : edge > 1 ? 'EDGE SHOT!' : undefined;
-      const scored = this.award(inst, ev.t, ev.x, ev.y, r.perBall || (r.jackpot && pot) ? 'bonus' : 'hit', base, multGain, money, notes, label, ev.spins);
+      const label = ev.time ? `+${ev.time} S` : r.perBall && xmult > 1 ? `MULT x${xmult.toFixed(2)}` : r.perBall && multGain > 0 ? `+${Math.round(multGain * 100) / 100} MULT` : r.jackpot && pot ? 'JACKPOT!' : edge > 1 ? 'EDGE SHOT!' : undefined;
+      const scored = this.award(inst, ev.t, ev.x, ev.y, r.perBall || (r.jackpot && pot) ? 'bonus' : 'hit', base, multGain, money, notes, label, ev.spins, xmult);
       if (tier && inst.def === 'vari') scored.tier = r.tiers!.indexOf(tier);
       if (hotBonus) scored.hot = true;
       out.push(scored);
@@ -1152,7 +1175,7 @@ export class Scorer {
     return this.award(clock, ev.t, clock.x, clock.y, 'bonus', 0, 0, 0, [`every hit x${c.x} for ${c.seconds} s`], 'MIDNIGHT MADNESS!');
   }
 
-  /** All the Wizard Lamp's segments lit (once a round): WIZARD MODE, more balls, every Mult limit doubled, every Lamp ablaze. */
+  /** All the Wizard Lamp's segments lit (once a round): WIZARD MODE, more balls, every +Mult limit doubled, every Lamp ablaze. */
   private wizardCheck(ev: { t: number }): ScoreEvent | null {
     const need = this.wizardNeedNow();
     if (this.wizFired || need === 0 || this.wizTypes.size < need) return null;
@@ -1162,7 +1185,7 @@ export class Scorer {
     this.wizFired = true;
     this.wizUntil = ev.t + w.seconds;
     this.flashLamps(ev.t, w.seconds);
-    const e = this.award(lamp, ev.t, lamp.x, lamp.y, 'bonus', 0, 0, 0, [`${w.balls} more balls, Mult limits doubled for ${w.seconds} s`], 'WIZARD MODE!');
+    const e = this.award(lamp, ev.t, lamp.x, lamp.y, 'bonus', 0, 0, 0, [`${w.balls} more balls, +Mult limits doubled for ${w.seconds} s`], 'WIZARD MODE!');
     e.balls = { n: w.balls, x: lamp.x, y: lamp.y, uid: lamp.uid };
     return e;
   }

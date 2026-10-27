@@ -197,27 +197,27 @@ describe('the new parts', () => {
     expect(s.consume(hit(1, { caught: true }))[0].base).toBe(40);
   });
 
-  it('an X Lane multiplies the Mult by 1.25, goes dark for 3 s, lights a lane, and stops at x3 a ball', () => {
+  it('an X Lane multiplies the Mult by 1.25, goes dark for 10 s, lights a lane, and stops at x2 a ball', () => {
     const parts = [makePart('xlane', 1, 6, 30, true), makePart('lane', 2, 12, 30, true), makePart('lane', 3, 18, 30, true)];
     const s = scorer(parts);
     s.consume(hit(1, { t: 0 }));
     expect(s.mult).toBeCloseTo(1.25);
     expect(s.isLit(2)).toBe(true);
-    s.consume(hit(1, { t: 1 }));
+    s.consume(hit(1, { t: 9 }));
     expect(s.mult).toBeCloseTo(1.25); // still dark
     const alone = scorer([makePart('xlane', 1, 6, 30, true)]);
-    for (let i = 0; i < 10; i++) alone.consume(hit(1, { t: i * 4 }));
-    expect(alone.mult).toBeCloseTo(3);
+    for (let i = 0; i < 10; i++) alone.consume(hit(1, { t: i * 11 }));
+    expect(alone.mult).toBeCloseTo(2);
   });
 
-  it('a Golden Bumper adds +0.05 Mult a hit and pays $1 every fifth hit', () => {
+  it('a Golden Bumper adds +0.1 Mult a hit and pays $1 every fifth hit', () => {
     const s = scorer([makePart('golden', 1, 6, 30, true)]);
     const ev = Array.from({ length: 10 }, () => s.consume(hit(1))[0]);
     expect(ev.map((e) => e.money)).toEqual([0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-    expect(s.mult).toBeCloseTo(1.5, 2);
+    expect(s.mult).toBeCloseTo(2, 2);
   });
 
-  it('a Disco Ball adds +0.5 Mult and lights every Lamp, once a ball', () => {
+  it('a Disco Ball multiplies the Mult by 1.5 and lights every Lamp, once a ball', () => {
     const parts = [makePart('disco', 1, 6, 30, true), makePart('lamp', 2, 12, 30, true)];
     const s = scorer(parts);
     const e = s.consume(hit(1))[0];

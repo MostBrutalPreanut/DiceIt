@@ -62,13 +62,13 @@ describe('the moving parts: Rubber Duck, Roller, Goal', () => {
     expect(edge.label).toBe('EDGE SHOT!');
   });
 
-  it('the goal pays only for a ball past the goalie: 1500 and Mult ×1.5, then a short cooldown', () => {
+  it('the goal pays only for a ball past the goalie: 1500 and +1 Mult, then a short cooldown', () => {
     const s = scorer([makePart('goal', 1, 12, 40, true)]);
     expect(s.consume(hit(1, { mover: true }))).toEqual([]); // the goalie saved it
     const g = s.consume(hit(1, { goal: true, t: 1 }))[0];
     expect(g.label).toBe('GOAL!');
     expect(g.base).toBe(300);
-    expect(s.mult).toBeCloseTo(1.5);
+    expect(s.mult).toBeCloseTo(2);
     expect(s.consume(hit(1, { goal: true, t: 1.5 }))).toEqual([]);
     expect(s.consume(hit(1, { goal: true, t: 3 }))[0].label).toBe('GOAL!');
   });

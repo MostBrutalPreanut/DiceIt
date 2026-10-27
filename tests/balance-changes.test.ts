@@ -17,34 +17,34 @@ const scorer = (parts: PartInstance[], opts = {}) => {
 };
 
 describe('phase 1: the ceilings', () => {
-  it('Disco Balls: +0.5 Mult each, all of them together at most +2 a ball (every Mult part adds, none multiplies)', () => {
-    const parts = [1, 2, 3, 4, 5].map((uid) => makePart('disco', uid, 4 * uid, 30, true));
+  it('Disco Balls: ×1.5 each, all of them together at most ×2 a ball (a rare ×Mult)', () => {
+    const parts = [1, 2, 3].map((uid) => makePart('disco', uid, 4 * uid, 30, true));
     const s = scorer(parts);
     s.consume(hit(1));
     expect(s.mult).toBeCloseTo(1.5);
     s.consume(hit(2));
+    expect(s.mult).toBeCloseTo(2); // the second only reaches the cap
+    s.consume(hit(3));
     expect(s.mult).toBeCloseTo(2);
-    for (const uid of [3, 4, 5]) s.consume(hit(uid));
-    expect(s.mult).toBeCloseTo(3); // capped at +2
   });
 
-  it('Halls of Fame: +0.1 a part type, all of them together at most +2 a ball', () => {
+  it('Halls of Fame: +0.2 a part type, all of them together at most +4 a ball', () => {
     const parts: PartInstance[] = [makePart('fame', 1, 4, 30, true), makePart('fame', 2, 8, 30, true)];
     const kinds = ['pop', 'sling', 'lane', 'lamp', 'vari', 'spinner', 'coin', 'ding', 'bank', 'thunder', 'golden', 'tesla', 'keg', 'gong'] as const;
     kinds.forEach((id, i) => parts.push(makePart(id, 10 + i, 1 + i, 20, true)));
     const s = scorer(parts);
     s.consume(hit(1));
-    expect(s.mult).toBeCloseTo(2.5); // 15 types: +1.5
+    expect(s.mult).toBeCloseTo(4); // 15 types: +3
     s.consume(hit(2));
-    expect(s.mult).toBeCloseTo(3); // the second only reaches the +2 cap
+    expect(s.mult).toBeCloseTo(5); // the second only reaches the +4 cap
   });
 
-  it('Afterglow measures the gain without the Mult the decals kept', () => {
+  it('Afterglow measures the gain without the Mult the decals kept: a ×Mult on a big kept Mult does not compound', () => {
     const s = new Scorer(1e18, () => [makePart('xlane', 1, 4, 30, true)], { baseMult: 51, decalKept: 50 });
     s.resetRound();
     s.consume(hit(1));
-    expect(s.mult).toBeCloseTo(51.25);
-    expect(s.peakGain).toBeCloseTo(0.25);
+    expect(s.mult).toBeCloseTo(63.75); // the ball really is at 51 × 1.25
+    expect(s.peakGain).toBeCloseTo(0.25); // but Afterglow counts only what a fresh ball would have gained
   });
 
   it('the score guard: an absurd Mult never makes the score infinite', () => {
