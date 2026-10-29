@@ -20,7 +20,7 @@ export type Mode = 'workshop' | 'round' | 'roundEnd' | 'runOver';
 
 export type GameEvent =
   | { type: 'goal' }
-  | { type: 'ballEnd'; ballsLeft: number }
+  | { type: 'ballEnd'; ballsLeft: number; free?: boolean }
   | { type: 'roundWon'; payout: Payout; runWon: boolean; allDone?: boolean }
   | { type: 'runOver' }
   | { type: 'tilt' };
@@ -472,10 +472,12 @@ export class Game {
     this.resetSim();
     this.mode = 'round';
     this.ballsLeft = this.ballsPerRound;
+    this.freeBallUsed = false;
     this.payout = null;
     const goal = this.goalOverride ?? Math.round(goalFor(this.round) * (boss?.goalX ?? 1));
     this.scorer = this.newScorer(goal, true);
     this.scorer.resetRound();
+    this.ballStart = 0;
     this.sim.spawnBall();
   }
 
@@ -1228,14 +1230,6 @@ export class Game {
     this.sim.setGravity(g);
   }
 
-  /** Free practice ball in the workshop; scored into a throwaway ledger. */
-  testBall() {
-    if (this.mode !== 'workshop' || this.sim.ballCount > 0) return;
-    this.scorer = this.newScorer(Infinity);
-    this.scorer.resetRound();
-    this.sim.spawnBall();
-  }
-
   /** Game events from outside a step (Cash Out ends the round between steps): the next step reports them. */
   private queued: GameEvent[] = [];
 
@@ -1273,7 +1267,7 @@ export class Game {
     this.spawnSparks(result.score);
     if (!wasGoal && this.scorer.goalReached) result.game.push({ type: 'goal' });
     // a ball ends when the LAST ball on the table is gone (the Ball Printer makes multiball)
-    if (this.mode === 'round' && this.sim.ballCount === 0 && !this.sim.awaitingPlunge && !this.insured(result)) this.endBall(false, result);
+    if (this.mode === 'round' && this.sim.ballCount === 0 && !this.sim.awaitingPlunge && (this.freeBallDue || !this.insured(result))) this.endBall(false, result);
     return result;
   }
 
@@ -1311,11 +1305,25 @@ export class Game {
     }
   }
 
+  /**
+   * The first ball of a round that drains without scoring a point is given back, once a round: a bad plunge or a
+   * straight drain should not cost a third of the round. It comes before an Insurance Policy, which is kept for later.
+   */
+  private get freeBallDue(): boolean {
+    return !this.freeBallUsed && !this.claim && !this.scorer.goalReached && this.scorer.score <= this.ballStart;
+  }
+  /** This round's free ball (for a ball that scored nothing) has been given. */
+  freeBallUsed = false;
+  /** The round's score when the ball in play was launched. */
+  private ballStart = 0;
+
   private endBall(forced: boolean, result?: StepResult) {
     const out: GameEvent[] = result ? result.game : this.queued;
     if (forced) this.sim.reset(this.layout, { seed: this.seed++, mods: simModsOf(this.mods), ballClock: this.mods.ballClock }); // Cash Out: clear the table at once
-    this.ballsLeft--;
-    out.push({ type: 'ballEnd', ballsLeft: this.ballsLeft });
+    const free = !forced && this.freeBallDue;
+    if (free) this.freeBallUsed = true;
+    else this.ballsLeft--;
+    out.push({ type: 'ballEnd', ballsLeft: this.ballsLeft, ...(free ? { free } : {}) });
     this.sim.clearSparks(); // a ball's sparks go out with it
     this.pendingSparks = [];
     this.claim = false;
@@ -1341,6 +1349,7 @@ export class Game {
       out.push({ type: 'runOver' });
     } else {
       this.scorer.startBall();
+      this.ballStart = this.scorer.score;
       this.sim.spawnBall(false); // a Twin Ball comes with the first ball of a round only
     }
   }

@@ -74,7 +74,7 @@ export function playRounds(m: Machine, o: PlayOptions): RoundSample[] {
     for (let guard = 0; g.mode === 'round' && guard < 240 * 60 * 30; guard++) {
       const res = g.step(bot.decide(g.sim));
       for (const e of res.sim) if (e.type === 'ballSearch') searches++;
-      if (res.game.some((e) => e.type === 'ballEnd')) {
+      if (res.game.some((e) => e.type === 'ballEnd' && !e.free)) { // a free ball (one that scored nothing) is not one of the round's balls
         cumulative.push(g.scorer.score);
         coins.push(g.scorer.money);
       }

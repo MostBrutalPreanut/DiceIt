@@ -154,20 +154,20 @@ function kept(layer: string, v: View, t: Theme, draw: (g: Graphics) => void): Gr
 }
 
 /**
- * The decor screen at the head of the table, empty: a metal bezel round dark glass dotted like the DMD, with a faint
- * plus in the middle. Decor put in it draws its own picture over the glass (props.ts decorScreen).
+ * The decor screen at the head of the table, empty: just the floor, a shade darker, inside a dashed outline with a
+ * faint plus in the middle, so it reads as a free spot on the board rather than a dark hole. Decor put in it draws
+ * its own bezel and glass over it (props.ts decorScreen).
  */
 function decorScreenFrame(g: Graphics, v: View, t: Theme) {
-  const pts = (inset: number) => flat(decorPanel(undefined, undefined, inset).map(([x, y]) => P(v, x, y, 0.005)));
-  g.poly(pts(-0.3)).fill(mix(t.metal, t.shadeTint, 0.15)).stroke({ width: v.lw * 0.9, color: t.ink, join: 'round' });
-  g.poly(pts(0.12)).fill(t.screen).stroke({ width: v.lw * 0.6, color: t.ink, join: 'round' });
-  for (let x = DECOR_SLOT.x - 7; x <= DECOR_SLOT.x + 7; x += 0.55) for (let y = DECOR_SLOT.y - 1.4; y <= DECOR_SLOT.y + 2; y += 0.55) {
-    if (Math.hypot((x - DECOR_SLOT.x) / 11.75, (y - (DECOR_SLOT.y - 9.7)) / 11.2) > 1 || y < DECOR_SLOT.y - 1.0) continue;
-    const [X, Y] = P(v, x, y, 0.01);
-    g.circle(X, Y, Math.max(0.6, v.S * 0.07)).fill({ color: t.dmd, alpha: 0.16 });
+  const pts = decorPanel(undefined, undefined, 0.1).map(([x, y]) => P(v, x, y, 0.005));
+  g.poly(flat(pts)).fill({ color: t.shadeTint, alpha: 0.1 });
+  for (let i = 0; i < pts.length; i += 2) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    g.moveTo(a[0], a[1]).lineTo(b[0], b[1]);
   }
+  g.stroke({ width: v.lw * 0.8, color: t.ink, alpha: 0.3, cap: 'round' });
   const [cx, cy] = P(v, DECOR_SLOT.x, DECOR_SLOT.y + 0.05, 0.01), r = v.S * 0.45;
-  g.moveTo(cx - r, cy).lineTo(cx + r, cy).moveTo(cx, cy - r * v.k).lineTo(cx, cy + r * v.k).stroke({ width: v.S * 0.14, color: t.dmd, alpha: 0.35, cap: 'round' });
+  g.moveTo(cx - r, cy).lineTo(cx + r, cy).moveTo(cx, cy - r * v.k).lineTo(cx, cy + r * v.k).stroke({ width: v.S * 0.14, color: t.ink, alpha: 0.25, cap: 'round' });
 }
 
 function floorArt(g: Graphics, v: View, t: Theme) {

@@ -95,7 +95,6 @@ body.still #backdrop { animation-play-state: paused; }
 .tray { margin-top: 14px; display: flex; gap: 4px; padding: 4px 6px; border-radius: 17px; background: var(--tray); border: var(--lw-widget) solid var(--ink); }
 .tray img, .tray i { width: 24px; height: 24px; display: block; }
 .tray i { border-radius: 50%; border: 2.2px dashed var(--paper); opacity: .9; }
-.tray.inf { font: 400 20px/24px var(--display); color: var(--paper); padding: 4px 14px; }
 
 .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .gauge .lbl { margin-bottom: 4px; }

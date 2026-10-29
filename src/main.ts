@@ -925,7 +925,6 @@ async function main() {
     if (e.code === 'Enter' && game.canStart && overlayEl.hidden) startRound();
     else if (e.code === 'Enter' && !overlayEl.hidden) { if (clearReveal) clearReveal(); else overlayEl.querySelector<HTMLButtonElement>('#btnNext, #btnEndless, #btnAgain')?.click(); }
     if (e.code === 'KeyM') say(audio.toggleMute() ? 'SOUND OFF. THE SILENCE IS LOUD' : 'SOUND ON');
-    if (e.code === settings.keys.launch && game.mode === 'workshop' && game.sim.ballCount === 0) { game.testBall(); sayKey('start'); }
     if (e.code === 'KeyR' && game.editable) turn(e.shiftKey ? -1 : 1);
     if ((e.code === 'Delete' || e.code === 'Backspace') && game.editable && !carry) storeSelected();
     if (e.code === 'Escape') {
@@ -972,7 +971,6 @@ async function main() {
   }
   $('btnStart').onclick = startRound;
   $('btnCash').onclick = () => game.cashOut();
-  $('btnTest').onclick = () => { audio.unlock(); game.testBall(); sayKey('start'); };
   $('btnReset').onclick = () => { openMenu(); menu.askNewGame(); }; // a new run starts with picking its machine
   $('btnPause').onclick = () => openPause();
   $('btnSettings').onclick = () => { openPause(); menu.showSettings(); };
@@ -1135,6 +1133,7 @@ async function main() {
     }
     if (g.type === 'runOver') { board.noteBest(game.scorer.score); endRun('lost'); sayKey('runOver'); audio.gameOver(); renderer.bigBoiMood('sad', 30); showOverlay('over'); }
     if (g.type === 'ballEnd') lastMultBand = 1;
+    if (g.type === 'ballEnd' && g.free) { sayKey('freeBall'); renderer.bigBoiMood('cool', 2); }
   };
 
   /** While an end-of-round card is still counting in: call it to skip to the end. */
@@ -1287,22 +1286,21 @@ async function main() {
     const k = (key: string, what: string) => `<kbd>${key}</kbd><span>${what}</span>`;
     $('keys').innerHTML = mode === 'play'
       ? [k(keyLabel(bound.left), ''), k(keyLabel(bound.right), 'flippers'), k(keyLabel(bound.launch), 'shoot'), k('Z', ''), k('X', 'nudge'), k('Tab', 'cash out'), k('Esc', 'pause'), k('P', 'feedback')].join(' ')
-      : [k('Enter', 'play round'), k(keyLabel(bound.launch), 'test ball'), k('R', 'rotate'), k('Del', 'to toolbox'), k('Ctrl+Z', 'undo'), k('Esc', 'pause'), k('P', 'feedback')].join(' ');
+      : [k('Enter', 'play round'), k('R', 'rotate'), k('Del', 'to toolbox'), k('Ctrl+Z', 'undo'), k('Esc', 'pause'), k('P', 'feedback')].join(' ');
   }
 
   let ballsKey = '';
   let receiptScorer: unknown = null;
   let receiptOrder: PartId[] = [];
   function updateBalls(inRound: boolean) {
-    const key = inRound ? `${game.ballsLeft}/${game.ballsPerRound}` : 'inf';
+    // between rounds the tray shows the balls the next round brings (no balls are played in the workshop)
+    const left = inRound ? game.ballsLeft : game.ballsPerRound;
+    const key = `${inRound}:${left}/${game.ballsPerRound}`;
     if (key === ballsKey) return;
     ballsKey = key;
-    const tray = $('ballTray');
-    tray.classList.toggle('inf', !inRound);
-    if (!inRound) { tray.textContent = 'FREE'; $('balls').textContent = 'PRACTICE'; return; }
     const ball = iconURL('ball', 24, 24);
-    tray.innerHTML = Array.from({ length: game.ballsPerRound }, (_, i) => (i < game.ballsLeft ? `<img alt="" src="${ball}">` : '<i></i>')).join('');
-    $('balls').textContent = `${Math.max(0, game.ballsLeft)} LEFT`;
+    $('ballTray').innerHTML = Array.from({ length: game.ballsPerRound }, (_, i) => (i < left ? `<img alt="" src="${ball}">` : '<i></i>')).join('');
+    $('balls').textContent = inRound ? `${Math.max(0, left)} LEFT` : `${left} READY`;
   }
 
   /** The mark of the last tick of the ball clock's countdown (null outside its last 10 s). */
@@ -1453,14 +1451,14 @@ async function main() {
       { say: 'This is your <b>route</b>: 15 rounds to clear, each with a bigger goal. Some of them have their own nasty rules. Those are the <b>bosses</b>, and this box warns you which one is next.', at: () => [...around('#roundMap'), ...around('#bossBox')], scroll: '#roundMap' },
       { say: 'This is the <b>score</b> to beat. It grows every round.', at: () => around('#score', '#left .goalrow', '#left .tube'), scroll: '#score' },
       { say: `This is your <b>toolbox</b>. Right now it holds ${n} bumper${n === 1 ? '' : 's'}. Press one, then press the table to put it there.`, at: () => around('#invWrap'), scroll: '#invWrap' },
-      { say: `Moving parts is <b>free</b> while you set up, before round 1: shoot some test balls and shuffle things around. Once the round starts, every move costs <b>$${UPKEEP.move}</b>.`, mood: 'cool', at: () => around('#invWrap'), scroll: '#invWrap' },
+      { say: `Moving parts is <b>free</b> while you set up, before round 1: shuffle things around as much as you like. Once the round starts, every move costs <b>$${UPKEEP.move}</b>.`, mood: 'cool', at: () => around('#invWrap'), scroll: '#invWrap' },
       { say: 'This is your <b>money</b>. Every round you clear pays, every ball you did not need pays extra, and some parts cough up coins when you hit them.', at: () => around('#right .money'), scroll: '#right .moneyrow' },
       { say: 'This is the <b>shop</b>. After every round you can buy new parts for the machine here.', at: () => around('#shopBox'), scroll: '#shopBox' },
       {
-        say: `These are your <b>flippers</b>: <kbd>${keyLabel(k.left)}</kbd> and <kbd>${keyLabel(k.right)}</kbd>. Hold <kbd>${keyLabel(k.launch)}</kbd> to pull the plunger, let go to shoot. Until the round starts, balls are free: shoot as many as you like.`,
+        say: `These are your <b>flippers</b>: <kbd>${keyLabel(k.left)}</kbd> and <kbd>${keyLabel(k.right)}</kbd>. Hold <kbd>${keyLabel(k.launch)}</kbd> to pull the plunger, let go to shoot. The ball comes out once the round starts.`,
         at: () => [...tableBox(L.x - 1, L.y - 2.4, R.x + 1, L.y + 1, 0.5), ...tableBox(LANE_WALL_X, 0, TABLE_W, 7, 0.5)], scroll: '#stage',
       },
-      { say: `When you're ready, hit <b>Play Round</b>. Then it counts: ${game.ballsPerRound} balls to reach the goal.`, at: () => around('#btnStart'), scroll: '#actions' },
+      { say: `When you're ready, hit <b>Play Round</b>: you get ${game.ballsPerRound} balls to reach the goal.`, at: () => around('#btnStart'), scroll: '#actions' },
       {
         say: 'During the round this turns into <b>Cash Out</b>. Once the goal is hit you can bank the round any time: handy if a ball gets stuck, or you just want out.',
         at: () => around('#btnCash'), scroll: '#actions',

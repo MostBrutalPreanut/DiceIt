@@ -91,6 +91,7 @@ describe('Insurance Policy', () => {
     g.layout.parts.push(makePart('insure', 61, 12, 30, true));
     g.startRound();
     g.ballsLeft = 1;
+    g.freeBallUsed = true; // the round's free ball (for a ball that scores nothing) is spent
     const lane = g.sim.ballStates()[0].id;
     g.sim.addBall(12, 1.5, 0, -5);
     g.sim.retireBall(lane);

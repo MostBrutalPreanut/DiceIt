@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makePart, MAX_LEVEL, PARTS, sellPrice } from '../src/data/parts';
-import { Game, rollOffers, START_MONEY, UPKEEP } from '../src/game/game';
+import { Game, rollOffers, START_MONEY, UPKEEP, type GameEvent } from '../src/game/game';
 import { Rng } from '../src/sim/rng';
 import { NO_INPUT } from '../src/sim/sim';
 
@@ -134,11 +134,11 @@ describe('levels', () => {
   };
   const hit = (uid: number) => ({ type: 'partHit' as const, t: 0, uid, ballId: 1, x: 0, y: 0, speed: 10 });
 
-  it('a test ball in the workshop cannot level up your machine, a real round can', () => {
+  it('a Test Lab ball in the workshop cannot level up your machine, a real round can', () => {
     const g = new Game();
     const lights = withLights(g);
     const pop = g.placed.find((p) => p.def === 'pop')!;
-    g.testBall();
+    g.labBalls(1);
     for (const l of lights) g.scorer.consume(hit(l.uid));
     expect(g.scorer.levelOf(pop)).toBe(1); // the test ball's scorer levelled it up...
     expect(pop.level ?? 0).toBe(0); // ...but the machine did not
@@ -246,6 +246,54 @@ describe('ball saver in a round', () => {
     expect(g.ballsLeft).toBe(3);
     expect(g.mode).toBe('round');
     expect(g.sim.awaitingPlunge).toBe(true);
+  });
+});
+
+describe('the free ball', () => {
+  /** Drop the ball in play straight down the drain, as if it had been launched and missed everything. */
+  const drainNow = (g: Game) => {
+    const lane = g.sim.ballStates()[0].id;
+    g.sim.addBall(12, 1.5, 0, -5);
+    g.sim.retireBall(lane);
+    (g.sim as unknown as { awaitingPlunge: boolean }).awaitingPlunge = false;
+    const ends: GameEvent[] = [];
+    for (let i = 0; i < 240 && ends.length === 0; i++) ends.push(...g.step(NO_INPUT).game.filter((e) => e.type === 'ballEnd'));
+    return ends;
+  };
+
+  it('the first ball of a round that scores nothing is given back, once a round', () => {
+    const g = new Game();
+    g.goalOverride = 1e9;
+    g.startRound();
+    expect(drainNow(g)).toEqual([{ type: 'ballEnd', ballsLeft: 3, free: true }]);
+    expect(g.ballsLeft).toBe(3);
+    expect(g.freeBallUsed).toBe(true);
+    expect(drainNow(g)).toEqual([{ type: 'ballEnd', ballsLeft: 2 }]); // the second one costs a ball
+    g.toWorkshop();
+    g.startRound();
+    expect(g.freeBallUsed).toBe(false); // a new round brings a new one
+    expect(drainNow(g)).toEqual([{ type: 'ballEnd', ballsLeft: 3, free: true }]);
+  });
+
+  it('a ball that scored anything costs a ball as usual', () => {
+    const g = new Game();
+    g.goalOverride = 1e9;
+    g.startRound();
+    g.scorer.score = 40;
+    expect(drainNow(g)).toEqual([{ type: 'ballEnd', ballsLeft: 2 }]);
+    g.scorer.score = 90; // the next ball scored too
+    expect(drainNow(g)).toEqual([{ type: 'ballEnd', ballsLeft: 1 }]);
+    expect(g.freeBallUsed).toBe(false);
+  });
+
+  it('comes before an Insurance Policy, which is kept for later', () => {
+    const g = new Game();
+    g.goalOverride = 1e9;
+    g.layout.parts.push(makePart('insure', 61, 12, 30, true));
+    g.startRound();
+    g.ballsLeft = 1;
+    expect(drainNow(g)).toEqual([{ type: 'ballEnd', ballsLeft: 1, free: true }]);
+    expect(g.part(61)).toBeDefined();
   });
 });
 

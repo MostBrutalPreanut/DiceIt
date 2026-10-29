@@ -151,7 +151,7 @@ export const HUD_TIPS: Record<string, string> = {
   score: '<b>Score</b>: every hit adds its points × your Mult. Hover any part to see exactly what its next hit pays.',
   goal: '<b>Goal</b>: reach it before your balls run out to clear the round. Cash out (Tab) once it is hit, or keep playing for overshoot money.',
   mult: '<b>Mult</b>: multiplies every hit. It starts each ball at ×1.00 (plus decals like Head Start), Big Boi, sets, Spinners and X Lanes raise it, and it resets when the ball ends.',
-  balls: '<b>Balls</b>: the balls left this round. Each ball lasts until it drains; a Ball Printer adds balls to the table, not to this count.',
+  balls: '<b>Balls</b>: the balls left this round. Each ball lasts until it drains; a Ball Printer adds balls to the table, not to this count. The first ball of a round that drains without scoring a point is given back, once a round.',
   money: '<b>Money</b>: spend it in the shop between rounds. Cha-Ching Bumpers pay coins during play (they land here), and every unused ball pays when you clear a round.',
   tilt: '<b>Tilt</b>: every nudge fills it and it drains slowly. Fill it and the machine tilts: lights out, flippers dead, the ball drains.',
   map: '<b>The run</b>: fifteen rounds on the path, a boss every third (the big stops) and the final boss at the end. The lit stop is where you are; the next boss is named below.',
